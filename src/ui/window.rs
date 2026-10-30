@@ -6,20 +6,20 @@
 use std::{
     any::Any,
     cell::{Cell, RefCell},
-    sync::Once,
+    ffi::{CString, c_void},
+    sync::{Once, OnceLock},
 };
 
 use windows_sys::Win32::{
     Foundation::{HWND, LPARAM, LRESULT, RECT, SIZE, WPARAM},
     Graphics::Gdi::{
-        CreateFontIndirectW, DeleteObject, FW_BOLD, FillRect, GetDC, GetMonitorInfoW,
-        GetTextExtentPoint32W, HDC, HFONT, MONITOR_DEFAULTTONEAREST, MONITORINFO,
-        MonitorFromWindow, ReleaseDC, SelectObject,
+        CreateFontIndirectW, DeleteObject, FW_BOLD, FillRect, GetDC, GetDeviceCaps,
+        GetMonitorInfoW, GetTextExtentPoint32W, HDC, HFONT, LOGPIXELSX, MONITOR_DEFAULTTONEAREST,
+        MONITORINFO, MonitorFromWindow, ReleaseDC, SelectObject,
     },
-    System::LibraryLoader::GetModuleHandleW,
+    System::LibraryLoader::{GetModuleHandleW, GetProcAddress},
     UI::{
         Controls::NMHDR,
-        HiDpi::{AdjustWindowRectExForDpi, GetDpiForWindow, SystemParametersInfoForDpi},
         Input::KeyboardAndMouse::{
             EnableWindow, GetFocus, IsWindowEnabled, SetActiveWindow, SetFocus,
         },
@@ -89,6 +89,71 @@ struct State {
 
 thread_local! {
     static TOP_LEVEL: RefCell<Vec<HWND>> = const { RefCell::new(Vec::new()) };
+}
+
+type RawProc = unsafe extern "system" fn() -> isize;
+type GetDpiForWindowFn = unsafe extern "system" fn(HWND) -> u32;
+type SystemParametersInfoForDpiFn =
+    unsafe extern "system" fn(u32, u32, *mut c_void, u32, u32) -> i32;
+type AdjustWindowRectExForDpiFn = unsafe extern "system" fn(*mut RECT, u32, i32, u32, u32) -> i32;
+
+/// The per-window DPI functions, which exist from Windows 10 version 1607 on.
+/// They are looked up at run time (never imported statically) so that the
+/// program also starts on Windows 7, 8 and 8.1, where every window uses the
+/// system DPI and the fallbacks below are exact.
+struct DpiApi {
+    get_dpi_for_window: Option<GetDpiForWindowFn>,
+    system_parameters_info_for_dpi: Option<SystemParametersInfoForDpiFn>,
+    adjust_window_rect_ex_for_dpi: Option<AdjustWindowRectExForDpiFn>,
+}
+
+fn dpi_api() -> &'static DpiApi {
+    static API: OnceLock<DpiApi> = OnceLock::new();
+    API.get_or_init(|| {
+        // user32 is loaded for the lifetime of the process; nothing to free.
+        let user32 = unsafe { GetModuleHandleW(wide("user32.dll").as_ptr()) };
+        // DODAVO_LEGACY_DPI=1 pretends the functions are missing, to test the
+        // Windows 7/8 code path on a current Windows.
+        let legacy = std::env::var_os("DODAVO_LEGACY_DPI").is_some_and(|v| v == "1");
+        let find = |name: &str| -> Option<RawProc> {
+            if user32.is_null() || legacy {
+                return None;
+            }
+            let name = CString::new(name).expect("static name");
+            unsafe { GetProcAddress(user32, name.as_ptr() as *const u8) }
+        };
+        // SAFETY: each pointer is transmuted to the documented signature of
+        // the function it was looked up by name.
+        unsafe {
+            DpiApi {
+                get_dpi_for_window: find("GetDpiForWindow")
+                    .map(|f| std::mem::transmute::<RawProc, GetDpiForWindowFn>(f)),
+                system_parameters_info_for_dpi: find("SystemParametersInfoForDpi")
+                    .map(|f| std::mem::transmute::<RawProc, SystemParametersInfoForDpiFn>(f)),
+                adjust_window_rect_ex_for_dpi: find("AdjustWindowRectExForDpi")
+                    .map(|f| std::mem::transmute::<RawProc, AdjustWindowRectExForDpiFn>(f)),
+            }
+        }
+    })
+}
+
+/// The system DPI (that of the primary monitor), which Windows before 8.1
+/// uses for every window.
+fn system_dpi() -> u32 {
+    unsafe {
+        let dc = GetDC(std::ptr::null_mut());
+        let dpi = GetDeviceCaps(dc, LOGPIXELSX as i32);
+        ReleaseDC(std::ptr::null_mut(), dc);
+        dpi.max(96) as u32
+    }
+}
+
+/// The DPI a window is drawn at.
+fn window_dpi(hwnd: HWND) -> u32 {
+    match dpi_api().get_dpi_for_window {
+        Some(f) => unsafe { f(hwnd) }.max(96),
+        None => system_dpi(),
+    }
 }
 
 /// All top-level windows created by the framework.
@@ -201,7 +266,7 @@ pub fn create(opts: CreateOptions, handler: Box<dyn Handler>) -> HWND {
 
     with_state(hwnd, |s| {
         let w = &s.win;
-        w.dpi.set(unsafe { GetDpiForWindow(hwnd) }.max(96));
+        w.dpi.set(window_dpi(hwnd));
         w.update_fonts();
         w.set_client_size(opts.client.0, opts.client.1);
         if let Ok(mut h) = s.handler.try_borrow_mut() {
@@ -256,7 +321,7 @@ pub fn with_handler<T: Handler, R>(hwnd: HWND, f: impl FnOnce(&mut T, &Window) -
 }
 
 fn with_state<R>(hwnd: HWND, f: impl FnOnce(&State) -> R) -> Option<R> {
-    let ptr = unsafe { GetWindowLongPtrW(hwnd, GWLP_USERDATA) } as *mut State;
+    let ptr = unsafe { GetWindowLongPtrW(hwnd, GWLP_USERDATA) } as usize as *mut State;
     if ptr.is_null() {
         return None;
     }
@@ -294,13 +359,33 @@ impl Window {
         unsafe {
             let mut ncm: NONCLIENTMETRICSW = std::mem::zeroed();
             ncm.cbSize = size_of::<NONCLIENTMETRICSW>() as u32;
-            SystemParametersInfoForDpi(
-                SPI_GETNONCLIENTMETRICS,
-                ncm.cbSize,
-                &mut ncm as *mut _ as _,
-                0,
-                self.dpi.get(),
-            );
+            let dpi = self.dpi.get();
+            match dpi_api().system_parameters_info_for_dpi {
+                Some(f) => {
+                    f(
+                        SPI_GETNONCLIENTMETRICS,
+                        ncm.cbSize,
+                        &mut ncm as *mut _ as _,
+                        0,
+                        dpi,
+                    );
+                }
+                None => {
+                    SystemParametersInfoW(
+                        SPI_GETNONCLIENTMETRICS,
+                        ncm.cbSize,
+                        &mut ncm as *mut _ as _,
+                        0,
+                    );
+                    // The metrics are for the system DPI; scale the font to
+                    // this window's DPI (they differ only on Windows 8.1).
+                    let system = system_dpi();
+                    if system != dpi {
+                        let h = ncm.lfMessageFont.lfHeight as i64 * dpi as i64 / system as i64;
+                        ncm.lfMessageFont.lfHeight = h as i32;
+                    }
+                }
+            }
             self.free_fonts();
             self.font.set(CreateFontIndirectW(&ncm.lfMessageFont));
             let mut bold = ncm.lfMessageFont;
@@ -514,7 +599,14 @@ impl Window {
                 right: self.px(cx),
                 bottom: self.px(cy),
             };
-            AdjustWindowRectExForDpi(&mut rc, style, has_menu as i32, ex, self.dpi.get());
+            match dpi_api().adjust_window_rect_ex_for_dpi {
+                Some(f) => {
+                    f(&mut rc, style, has_menu as i32, ex, self.dpi.get());
+                }
+                None => {
+                    AdjustWindowRectEx(&mut rc, style, has_menu as i32, ex);
+                }
+            }
             SetWindowPos(
                 self.hwnd,
                 std::ptr::null_mut(),
@@ -673,10 +765,10 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) 
             let cs = &*(lp as *const CREATESTRUCTW);
             let state = cs.lpCreateParams as *mut State;
             (*state).win.hwnd = hwnd;
-            SetWindowLongPtrW(hwnd, GWLP_USERDATA, state as isize);
+            SetWindowLongPtrW(hwnd, GWLP_USERDATA, state as _);
             return DefWindowProcW(hwnd, msg, wp, lp);
         }
-        let ptr = GetWindowLongPtrW(hwnd, GWLP_USERDATA) as *mut State;
+        let ptr = GetWindowLongPtrW(hwnd, GWLP_USERDATA) as usize as *mut State;
         if ptr.is_null() {
             return DefWindowProcW(hwnd, msg, wp, lp);
         }

@@ -1,11 +1,22 @@
 ﻿; Inno Setup script for the Dodavo installer.
 ;
-; Build it with installer\build.ps1, which builds the release program, passes
-; the version from Cargo.toml and signs everything when a certificate is set.
-; Compiling this file directly with ISCC works too, once
-; target\release\Dodavo.exe exists; the version is then read from the program.
+; Build it with installer\build.ps1, which builds the program for every
+; supported Windows version and architecture, passes the version from
+; Cargo.toml and signs everything when a certificate is set. One installer
+; carries up to four builds of Dodavo.exe and installs the one that fits
+; (see [Files]):
 ;
-; Needs Inno Setup 6.6 or later (for "WizardStyle=modern dynamic").
+;   AppExe         x64, Windows 10 and later (stable Rust)
+;   AppExeX86      x86, Windows 10 and later (stable Rust)
+;   AppExeX64Win7  x64, Windows 7 SP1 to 8.1 (Tier 3 win7 target)
+;   AppExeX86Win7  x86, Windows 7 SP1 to 8.1 (Tier 3 win7 target)
+;
+; Compiling this file directly with ISCC works too, once
+; target\release\Dodavo.exe exists; that gives an installer for 64-bit
+; Windows 10 and later only, and the version is read from the program.
+;
+; Needs Inno Setup 6.6 or later (for "WizardStyle=modern dynamic"), and the
+; 32-bit edition of Inno Setup, whose Setup program also runs on 32-bit Windows.
 
 #if Ver < EncodeVer(6, 6, 0)
   #error Inno Setup 6.6 or later is required
@@ -16,6 +27,15 @@
 ; build.ps1 passes a staged (and possibly signed) copy of the program.
 #ifndef AppExe
   #define AppExe SourcePath + "..\target\release\" + AppExeName
+#endif
+
+#ifdef AppExeX64Win7
+  #ifndef AppExeX86Win7
+    #error Give both Windows 7 builds (AppExeX64Win7 and AppExeX86Win7) or neither
+  #endif
+  #ifndef AppExeX86
+    #error The Windows 7 builds need the 32-bit Windows 10 build (AppExeX86) too
+  #endif
 #endif
 
 #ifndef AppVersion
@@ -47,9 +67,20 @@ DisableProgramGroupPage=yes
 ; The uninstall step below touches HKCU, also in an all-users install.
 UsedUserAreasWarning=no
 
+; With a 32-bit build, Setup runs on every architecture (ArchitecturesAllowed
+; is left at its default, like in Inno Setup's own 64BitTwoArch example) and
+; installs in 64-bit mode on x64 and on Windows 11 on ARM, in 32-bit mode
+; elsewhere.
+#ifndef AppExeX86
 ArchitecturesAllowed=x64compatible
+#endif
 ArchitecturesInstallIn64BitMode=x64compatible
+; Windows 7 SP1 when the win7 builds are included, else Windows 10.
+#ifdef AppExeX64Win7
+MinVersion=6.1sp1
+#else
 MinVersion=10.0
+#endif
 
 ; Every running instance (of any profile) holds this mutex, so Setup and the
 ; uninstaller ask the user to close Dodavo first. See src/main.rs.
@@ -89,7 +120,18 @@ Name: "slovenian"; MessagesFile: "compiler:Languages\Slovenian.isl"
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 
 [Files]
-Source: "{#AppExe}"; DestDir: "{app}"; Flags: ignoreversion
+; Exactly one of these is installed as Dodavo.exe, chosen by the Windows
+; version (MinVersion / OnlyBelowVersion: 10.0 means Windows 10 and later)
+; and by the install mode (64-bit or 32-bit, see above). 'solidbreak' lets
+; Setup skip the builds it doesn't need without decompressing them.
+Source: "{#AppExe}"; DestDir: "{app}"; DestName: "{#AppExeName}"; Check: Is64BitInstallMode; MinVersion: 10.0; Flags: ignoreversion
+#ifdef AppExeX86
+Source: "{#AppExeX86}"; DestDir: "{app}"; DestName: "{#AppExeName}"; Check: not Is64BitInstallMode; MinVersion: 10.0; Flags: ignoreversion solidbreak
+#endif
+#ifdef AppExeX64Win7
+Source: "{#AppExeX64Win7}"; DestDir: "{app}"; DestName: "{#AppExeName}"; Check: Is64BitInstallMode; OnlyBelowVersion: 10.0; Flags: ignoreversion solidbreak
+Source: "{#AppExeX86Win7}"; DestDir: "{app}"; DestName: "{#AppExeName}"; Check: not Is64BitInstallMode; OnlyBelowVersion: 10.0; Flags: ignoreversion solidbreak
+#endif
 
 [Icons]
 Name: "{autoprograms}\{#AppName}"; Filename: "{app}\{#AppExeName}"

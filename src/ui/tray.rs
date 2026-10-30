@@ -55,7 +55,10 @@ pub fn add(hwnd: HWND) {
             GetSystemMetrics(SM_CYSMICON),
             LR_DEFAULTCOLOR,
         ) as _;
-        copy_into(&mut nid.szTip, APP_NAME);
+        // The struct is packed on 32-bit Windows: fill the arrays through copies.
+        let mut tip = nid.szTip;
+        copy_into(&mut tip, APP_NAME);
+        nid.szTip = tip;
         Shell_NotifyIconW(NIM_ADD, &nid);
     }
 }
@@ -71,7 +74,11 @@ pub fn balloon(hwnd: HWND, title: &str, text: &str, path: Option<PathBuf>) {
     let mut nid = base(hwnd);
     nid.uFlags = NIF_INFO;
     nid.dwInfoFlags = NIIF_INFO;
-    copy_into(&mut nid.szInfoTitle, title);
-    copy_into(&mut nid.szInfo, text);
+    let mut info_title = nid.szInfoTitle;
+    copy_into(&mut info_title, title);
+    nid.szInfoTitle = info_title;
+    let mut info = nid.szInfo;
+    copy_into(&mut info, text);
+    nid.szInfo = info;
     unsafe { Shell_NotifyIconW(NIM_MODIFY, &nid) };
 }

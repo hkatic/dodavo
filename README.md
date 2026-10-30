@@ -14,6 +14,12 @@ Send files and folders directly from one Windows computer to another. You don't 
 - Full help for keyboard and screen reader users (Help → View Help, or F1), in every supported language.
 - Available in English, Croatian, Serbian (Latin) and Slovenian. It follows the Windows display language, and you can choose another one in Settings.
 
+## System requirements
+
+Windows 7 with Service Pack 1, Windows 8.1, Windows 10 and Windows 11, 32-bit and 64-bit (Windows on ARM runs the x64 or x86 build through its emulation). One setup program installs the build that fits the Windows version and architecture.
+
+Windows 10 and 11 are what Dodavo is developed and tested on. Windows 7 and 8.1 are no longer supported by Microsoft and get a separate build (see [Building](#building)); it starts and runs there as far as can be checked without those systems, but it is provided as is. On Windows 7 without the SHA-2 code signing updates from 2019 (KB4474419 and KB4490628), Windows cannot verify SHA-256 signatures and shows the setup program as coming from an unknown publisher.
+
 ## How connections work
 
 Every installation has a permanent **Contact ID** (a public key). You share that instead of an IP address: click **Copy My Contact ID** and send it to the other person, and they add you with **Add Recipient**.
@@ -33,7 +39,22 @@ The public relays are free and need no registration, but they are rate-limited a
 cargo build --release
 ```
 
-The program is `target\release\Dodavo.exe`, a single file with no runtime dependencies, which also runs without being installed. Building needs the MSVC toolchain and the Windows SDK (for `rc.exe`). The version shown in the program's file properties comes from `Cargo.toml`.
+The program is `target\release\Dodavo.exe`, a single file with no runtime dependencies (the C runtime is linked statically, see `.cargo\config.toml`), which also runs without being installed. Building needs the MSVC toolchain and the Windows SDK (for `rc.exe`). The version shown in the program's file properties comes from `Cargo.toml`. For 32-bit Windows, add `--target i686-pc-windows-msvc` (`rustup target add i686-pc-windows-msvc` once).
+
+### Windows 7 and 8.1 builds
+
+Since Rust 1.78, the normal `*-pc-windows-msvc` targets require Windows 10: their standard library imports Windows 8 functions, and a program built with them does not start on Windows 7. Windows 7 lives on in the Tier 3 targets `x86_64-win7-windows-msvc` and `i686-win7-windows-msvc`, which rustup does not ship. `installer\build.ps1` builds them from source with a pinned nightly toolchain and `-Zbuild-std` (`cargo +nightly-… build --release -Zbuild-std --target x86_64-win7-windows-msvc`), in its own `target\win7` directory. The stable toolchain stays the default for everything else, and the Windows 10/11 builds never touch the nightly.
+
+Two rules keep every build starting on its oldest Windows version:
+
+- Never import a Win32 function statically that is newer than Windows 7 SP1. Look it up at run time with `GetProcAddress` and fall back, as `src\ui\window.rs` does for the per-monitor DPI functions (Windows 10 version 1607) and `src\ui\theme.rs` for dark mode. The `windows` and `windows-sys` crates bind some functions to DLLs that only exist from Windows 8 on (for example `CoTaskMemFree` to `combase.dll`); `src\ui\shell.rs` declares such functions itself.
+- `installer\check-imports.ps1` reads an executable's import table and fails on anything newer than its Windows baseline (`-Profile win10` or `win7`). `build.ps1` runs it on every build before packaging; run it yourself after changing Win32 calls or dependencies:
+
+```
+powershell -ExecutionPolicy Bypass -File installer\check-imports.ps1 target\release\Dodavo.exe
+```
+
+Windows 7 cannot be tested here; the import check proves that the program loads, and the builds are tried on Windows 11.
 
 ### Installer
 
@@ -43,8 +64,9 @@ For distribution there is an [Inno Setup](https://jrsoftware.org/isinfo.php) ins
 powershell -ExecutionPolicy Bypass -File installer\build.ps1
 ```
 
-This builds the release program and writes `target\installer\Dodavo-<version>-setup.exe`, plus a `.sha256` file to publish next to it. Add `-Test` to run `cargo test` first.
+This builds the program four times (x64 and x86, each for Windows 10 and later with stable Rust and for Windows 7 SP1 to 8.1 with the pinned nightly, see above), checks their imports, and writes `target\installer\Dodavo-<version>-setup.exe`, plus a `.sha256` file to publish next to it. Add `-Test` to run `cargo test` first, and `-SkipWin7` to build only the Windows 10 programs and an installer that requires Windows 10. The installer needs the 32-bit edition of Inno Setup, whose setup program also runs on 32-bit Windows.
 
+- Setup carries all four builds (about 20 MB) and installs the one for the running Windows: by version (`MinVersion`/`OnlyBelowVersion: 10.0`) and by install mode (64-bit on x64 and on Windows 11 on ARM, 32-bit otherwise).
 - By default Dodavo is installed for the current user (`%LOCALAPPDATA%\Programs\Dodavo`) without administrator rights. Setup also offers to install for all users.
 - Setup runs in English, Croatian, Serbian (Latin) or Slovenian, following the Windows display language. Croatian and Serbian come from `installer\languages`, which are adapted copies of the user-contributed Inno Setup translations.
 - Running a newer setup upgrades in place. Setup and the uninstaller ask you to close Dodavo first.
@@ -66,7 +88,7 @@ If none is set, the installer is built unsigned.
 
 - `cargo test` runs the unit tests and an end-to-end transfer test between two endpoints in one process. That test needs internet access for address lookup.
 - `--profile <name>` uses a separate identity and settings folder, so two instances can run side by side: `Dodavo.exe --profile alice` and `--profile bob`.
-- The environment variable `DODAVO_THEME=dark` or `DODAVO_THEME=light` overrides the system app mode, for testing. Likewise, `DODAVO_LANG=en`, `hr`, `sr-Latn` or `sl` overrides the language.
+- The environment variable `DODAVO_THEME=dark` or `DODAVO_THEME=light` overrides the system app mode, for testing. Likewise, `DODAVO_LANG=en`, `hr`, `sr-Latn` or `sl` overrides the language, and `DODAVO_LEGACY_DPI=1` makes the program scale as on Windows 7 and 8 (system DPI only, no per-monitor functions).
 - Settings and the identity key are stored in `%APPDATA%\Dodavo` (an existing `%APPDATA%\QuickAndEasyFileTransfer` folder from before the rename is moved there automatically).
 
 ### Source layout
@@ -80,4 +102,4 @@ If none is set, the installer is built unsigned.
 | `src/ui/window.rs` | small framework over raw Win32 windows (DPI scaling, fonts, modal loops) |
 | `src/ui/theme.rs` | light/dark mode for title bar, menus, and controls |
 | `src/ui/*.rs` | main window, incoming dialog, progress, recipient and settings dialogs, tray |
-| `installer/` | Inno Setup script, build script and Setup translations |
+| `installer/` | Inno Setup script, build script, import check and Setup translations |

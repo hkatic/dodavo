@@ -1,0 +1,17 @@
+# Every build links the C runtime statically, so Dodavo.exe does not depend on
+# vcruntime140.dll or the Universal CRT (which Windows 7 only has after an
+# update, and which even a fresh Windows 10/11 may lack without a Visual C++
+# redistributable). The win7 targets are Tier 3 and are built by
+# installer\build.ps1 with a pinned nightly and -Zbuild-std; see README.md.
+
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]
+
+[target.i686-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]
+
+[target.x86_64-win7-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]
+
+[target.i686-win7-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]

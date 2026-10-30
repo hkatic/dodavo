@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use windows::{
     Win32::{
         Foundation::HWND as WHWND,
-        System::Com::{CLSCTX_INPROC_SERVER, CoCreateInstance, CoTaskMemFree},
+        System::Com::{CLSCTX_INPROC_SERVER, CoCreateInstance},
         UI::Shell::{
             FOS_FILEMUSTEXIST, FOS_FORCEFILESYSTEM, FOS_PICKFOLDERS, FileOpenDialog,
             IFileOpenDialog, IShellItem, SHCreateItemFromParsingName, SIGDN_FILESYSPATH,
@@ -30,6 +30,13 @@ use windows_sys::Win32::{
 
 use super::{from_wide_ptr, wide};
 
+// The `windows` crates bind CoTaskMemFree to combase.dll, which Windows 7
+// doesn't have. ole32.dll exports it on every Windows version.
+#[link(name = "ole32")]
+unsafe extern "system" {
+    fn CoTaskMemFree(pv: *mut std::ffi::c_void);
+}
+
 const CF_UNICODETEXT: u32 = 13;
 const RUN_KEY: &str = r"Software\Microsoft\Windows\CurrentVersion\Run";
 const RUN_VALUE: &str = "Dodavo";
@@ -41,7 +48,7 @@ pub fn downloads_dir() -> PathBuf {
         let mut p = std::ptr::null_mut();
         if SHGetKnownFolderPath(&FOLDERID_Downloads, 0, std::ptr::null_mut(), &mut p) == 0 {
             let s = from_wide_ptr(p);
-            windows_sys::Win32::System::Com::CoTaskMemFree(p as _);
+            CoTaskMemFree(p as _);
             return PathBuf::from(s);
         }
     }
@@ -72,7 +79,7 @@ fn pick(owner: HWND, title: &str, folder: bool, initial: Option<&Path>) -> Optio
         let item = dlg.GetResult().ok()?;
         let name = item.GetDisplayName(SIGDN_FILESYSPATH).ok()?;
         let path = name.to_string().ok();
-        CoTaskMemFree(Some(name.0 as _));
+        CoTaskMemFree(name.0 as _);
         path.map(PathBuf::from)
     }
 }

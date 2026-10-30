@@ -60,6 +60,8 @@
 <section aria-labelledby="installing">
 <h2 id="installing">Namestitev in odstranitev</h2>
 <p>Dodavo namestite z namestitvenim programom z imenom <code>Dodavo-<var>različica</var>-setup.exe</code>. Namestitveni program je standardni čarovnik sistema Windows: <kbd>Tab</kbd> premika fokus med kontrolkami na strani, <kbd>preslednica</kbd> potrdi ali počisti potrditveno polje, <kbd>Enter</kbd> vas premakne na naslednjo stran, <kbd>Alt</kbd>+<kbd>Z</kbd> na prejšnjo, <kbd>Esc</kbd> pa prekliče namestitev. Bralniki zaslona preberejo naslov in besedilo vsake strani, ko se odpre. Namestitveni program uporablja jezik prikaza sistema Windows; če Dodavo v tem jeziku ni na voljo, vas najprej prosi, da izberete jezik.</p>
+<h3 id="requirements">Sistemske zahteve</h3>
+<p>Dodavo deluje v sistemih Windows 7 s servisnim paketom 1, Windows 8.1, Windows 10 in Windows 11, v 32-bitnih in 64-bitnih izdajah (v računalnikih s procesorjem ARM prek emulacije, vgrajene v Windows). Namestitveni program sam namesti različico, ki ustreza vašemu sistemu Windows. Microsoft sistemov Windows 7 in 8.1 ne podpira več; Dodavo je preizkušen v sistemih Windows 10 in 11, v starejših različicah pa je na voljo tak, kakršen je. V sistemu Windows 7 brez posodobitev sistema Windows iz leta 2019 za podpise SHA-2 Windows ne more preveriti podpisa namestitvenega programa in sporoči neznanega izdajatelja.</p>
 <h3 id="install">Nameščanje programa Dodavo</h3>
 <ol>
 <li>Zaženite namestitveni program, na primer tako, da ga odprete iz mape Prenosi.</li>
@@ -76,8 +78,8 @@
 <h3 id="uninstall">Odstranjevanje programa Dodavo</h3>
 <ol>
 <li>Zaprite Dodavo.</li>
-<li>Odprite nastavitve sistema Windows (<kbd>Windows</kbd>+<kbd>I</kbd>) in pojdite na <span class="ui">Aplikacije</span>, nato na <span class="ui">Nameščene aplikacije</span> (v sistemu Windows 10: <span class="ui">Aplikacije in funkcije</span>).</li>
-<li>V iskalno polje vnesite <kbd>Dodavo</kbd>, da ga najdete na seznamu. V sistemu Windows 11 pritisnite <kbd>Tab</kbd>, da pridete do gumba s tremi pikami ob njem, pritisnite <kbd>Enter</kbd> in izberite <span class="ui">Odstrani</span>. V sistemu Windows 10 izberite Dodavo na seznamu in izberite <span class="ui">Odstrani</span>.</li>
+<li>Odprite nastavitve sistema Windows (<kbd>Windows</kbd>+<kbd>I</kbd>) in pojdite na <span class="ui">Aplikacije</span>, nato na <span class="ui">Nameščene aplikacije</span> (v sistemu Windows 10: <span class="ui">Aplikacije in funkcije</span>). V sistemih Windows 7 in 8.1 odprite element <span class="ui">Nadzorna plošča</span> in izberite <span class="ui">Programi in funkcije</span>.</li>
+<li>V iskalno polje vnesite <kbd>Dodavo</kbd>, da ga najdete na seznamu. V sistemu Windows 11 pritisnite <kbd>Tab</kbd>, da pridete do gumba s tremi pikami ob njem, pritisnite <kbd>Enter</kbd> in izberite <span class="ui">Odstrani</span>. V sistemih Windows 10, 8.1 in 7 izberite Dodavo na seznamu in izberite <span class="ui">Odstrani</span>.</li>
 <li>Potrdite z izbiro <span class="ui">Odstrani</span> in nato <span class="ui">Da</span>.</li>
 </ol>
 <p>Odstranitev izbriše program, njegove bližnjice in vnos za možnost <span class="ui">Zaženi ob vpisu v Windows</span>. Vaše nastavitve, seznam prejemnikov in ID stika ostanejo v mapi, opisani v razdelku <a href="#your-data">Vaše nastavitve in identiteta</a>, zato je po ponovni namestitvi vse kot prej. Če jih želite odstraniti, po odstranitvi izbrišite to mapo; vaš ID stika je tedaj za vedno izgubljen.</p>

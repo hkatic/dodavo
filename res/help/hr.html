@@ -60,6 +60,8 @@
 <section aria-labelledby="installing">
 <h2 id="installing">Instalacija i deinstalacija</h2>
 <p>Dodavo se instalira programom za instalaciju naziva <code>Dodavo-<var>verzija</var>-setup.exe</code>. Instalacija je standardni čarobnjak sustava Windows: <kbd>Tab</kbd> premješta fokus između kontrola na stranici, <kbd>razmaknica</kbd> potvrđuje ili poništava potvrdni okvir, <kbd>Enter</kbd> vodi na sljedeću stranicu, <kbd>Alt</kbd>+<kbd>T</kbd> vraća na prethodnu, a <kbd>Esc</kbd> prekida instalaciju. Čitači zaslona pročitaju naslov i tekst svake stranice kada se otvori. Instalacija koristi jezik prikaza sustava Windows; ako Dodavo nije dostupan na tom jeziku, instalacija najprije traži da odaberete jezik.</p>
+<h3 id="requirements">Preduvjeti sustava</h3>
+<p>Dodavo radi u sustavima Windows 7 sa servisnim paketom 1, Windows 8.1, Windows 10 i Windows 11, u 32-bitnim i 64-bitnim izdanjima (na računalima s procesorom ARM putem emulacije ugrađene u Windows). Instalacija sama instalira verziju koja odgovara vašem sustavu Windows. Microsoft više ne podržava sustave Windows 7 i 8.1; Dodavo se testira u sustavima Windows 10 i 11, a u starijim se verzijama isporučuje takav kakav jest. U sustavu Windows 7 bez ažuriranja sustava Windows iz 2019. za potpise SHA-2 Windows ne može provjeriti potpis programa za instalaciju i prijavljuje nepoznatog izdavača.</p>
 <h3 id="install">Instaliranje programa Dodavo</h3>
 <ol>
 <li>Pokrenite program za instalaciju, na primjer tako da ga otvorite iz mape Preuzimanja.</li>
@@ -76,8 +78,8 @@
 <h3 id="uninstall">Deinstaliranje programa Dodavo</h3>
 <ol>
 <li>Zatvorite Dodavo.</li>
-<li>Otvorite Postavke sustava Windows (<kbd>Windows</kbd>+<kbd>I</kbd>) i idite na <span class="ui">Aplikacije</span>, a zatim na <span class="ui">Instalirane aplikacije</span> (u sustavu Windows 10: <span class="ui">Aplikacije i značajke</span>).</li>
-<li>Upišite <kbd>Dodavo</kbd> u okvir za pretraživanje da biste ga pronašli na popisu. U sustavu Windows 11 pritisnite <kbd>Tab</kbd> da biste došli do gumba s tri točke pokraj njega, pritisnite <kbd>Enter</kbd> i odaberite <span class="ui">Deinstaliraj</span>. U sustavu Windows 10 odaberite Dodavo na popisu i odaberite <span class="ui">Deinstaliraj</span>.</li>
+<li>Otvorite Postavke sustava Windows (<kbd>Windows</kbd>+<kbd>I</kbd>) i idite na <span class="ui">Aplikacije</span>, a zatim na <span class="ui">Instalirane aplikacije</span> (u sustavu Windows 10: <span class="ui">Aplikacije i značajke</span>). U sustavima Windows 7 i 8.1 otvorite stavku <span class="ui">Upravljačka ploča</span> i odaberite <span class="ui">Programi i značajke</span>.</li>
+<li>Upišite <kbd>Dodavo</kbd> u okvir za pretraživanje da biste ga pronašli na popisu. U sustavu Windows 11 pritisnite <kbd>Tab</kbd> da biste došli do gumba s tri točke pokraj njega, pritisnite <kbd>Enter</kbd> i odaberite <span class="ui">Deinstaliraj</span>. U sustavima Windows 10, 8.1 i 7 odaberite Dodavo na popisu i odaberite <span class="ui">Deinstaliraj</span>.</li>
 <li>Potvrdite odabirom <span class="ui">Deinstaliraj</span>, a zatim <span class="ui">Da</span>.</li>
 </ol>
 <p>Deinstalacija uklanja program, njegove prečace i unos za mogućnost <span class="ui">Pokreni pri prijavi u sustav Windows</span>. Vaše postavke, popis primatelja i ID kontakta ostaju u mapi opisanoj u odjeljku <a href="#your-data">Vaše postavke i identitet</a>, pa je nakon ponovne instalacije sve kao prije. Ako ih želite ukloniti, nakon deinstalacije izbrišite tu mapu; vaš ID kontakta tada je trajno izgubljen.</p>

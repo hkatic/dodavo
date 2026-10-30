@@ -60,6 +60,8 @@
 <section aria-labelledby="installing">
 <h2 id="installing">Installing and uninstalling</h2>
 <p>Dodavo is installed with a setup program named <code>Dodavo-<var>version</var>-setup.exe</code>. Setup is a standard Windows wizard: <kbd>Tab</kbd> moves between the controls on a page, <kbd>Space</kbd> selects or clears a check box, <kbd>Enter</kbd> goes to the next page, <kbd>Alt</kbd>+<kbd>B</kbd> goes back a page, and <kbd>Esc</kbd> cancels. Screen readers read the title and text of each page when it opens. Setup uses your Windows display language; if Dodavo is not available in it, Setup first asks you to choose a language.</p>
+<h3 id="requirements">System requirements</h3>
+<p>Dodavo runs on Windows 7 with Service Pack 1, Windows 8.1, Windows 10 and Windows 11, both 32-bit and 64-bit (on ARM computers through the emulation built into Windows). Setup installs the right version for your Windows by itself. Microsoft no longer supports Windows 7 and 8.1; Dodavo is tested on Windows 10 and 11 and is provided as is on older versions. On Windows 7 without the Windows updates from 2019 for SHA-2 signatures, Windows cannot check the signature of the setup program and reports an unknown publisher.</p>
 <h3 id="install">Installing Dodavo</h3>
 <ol>
 <li>Run the setup program, for example by opening it from your Downloads folder.</li>
@@ -76,8 +78,8 @@
 <h3 id="uninstall">Uninstalling Dodavo</h3>
 <ol>
 <li>Exit Dodavo.</li>
-<li>Open Windows Settings (<kbd>Windows</kbd>+<kbd>I</kbd>) and go to <span class="ui">Apps</span>, then <span class="ui">Installed apps</span> (on Windows 10: <span class="ui">Apps &amp; features</span>).</li>
-<li>Type <kbd>Dodavo</kbd> in the search box to find it in the list. In Windows 11, press <kbd>Tab</kbd> to reach its <span class="ui">More options</span> button, press <kbd>Enter</kbd> and choose <span class="ui">Uninstall</span>. In Windows 10, select Dodavo in the list and choose <span class="ui">Uninstall</span>.</li>
+<li>Open Windows Settings (<kbd>Windows</kbd>+<kbd>I</kbd>) and go to <span class="ui">Apps</span>, then <span class="ui">Installed apps</span> (on Windows 10: <span class="ui">Apps &amp; features</span>). On Windows 7 and 8.1, open <span class="ui">Control Panel</span> and choose <span class="ui">Programs and Features</span>.</li>
+<li>Type <kbd>Dodavo</kbd> in the search box to find it in the list. In Windows 11, press <kbd>Tab</kbd> to reach its <span class="ui">More options</span> button, press <kbd>Enter</kbd> and choose <span class="ui">Uninstall</span>. In Windows 10, 8.1 and 7, select Dodavo in the list and choose <span class="ui">Uninstall</span>.</li>
 <li>Confirm with <span class="ui">Uninstall</span> and then <span class="ui">Yes</span>.</li>
 </ol>
 <p>Uninstalling removes the program, its shortcuts and the <span class="ui">Start with Windows</span> entry. Your settings, your recipient list and your Contact ID stay in the folder described in <a href="#your-data">Your settings and identity</a>, so if you install Dodavo again, everything is as before. If you want to remove them as well, delete that folder after uninstalling; your Contact ID is then lost for good.</p>
