@@ -1,0 +1,230 @@
+//! The help: one HTML page per language (`res/help/`), built into the program
+//! and opened in the default web browser in the language of the user interface.
+
+use std::{io, path::PathBuf};
+
+use windows_sys::Win32::Foundation::HWND;
+
+use super::{error, shell};
+use crate::{
+    archive,
+    i18n::{self, Lang, tr},
+};
+
+const STYLE: &str = include_str!("../../res/help/help.css");
+
+fn page(lang: Lang) -> &'static str {
+    match lang {
+        Lang::En => include_str!("../../res/help/en.html"),
+        Lang::Hr => include_str!("../../res/help/hr.html"),
+        Lang::SrLatn => include_str!("../../res/help/sr-Latn.html"),
+        Lang::Sl => include_str!("../../res/help/sl.html"),
+    }
+}
+
+/// Writes the page of the current language and its style sheet to the
+/// temporary folder (every time, so they match this version of the program).
+fn write_page() -> io::Result<PathBuf> {
+    let dir = archive::temp_dir()?.join("help");
+    std::fs::create_dir_all(&dir)?;
+    std::fs::write(dir.join("help.css"), STYLE)?;
+    let lang = i18n::lang();
+    let path = dir.join(format!("{}.html", lang.code()));
+    std::fs::write(&path, page(lang))?;
+    Ok(path)
+}
+
+/// Opens the help in the default web browser.
+pub fn show(owner: HWND) {
+    let result = write_page().and_then(|path| {
+        if shell::open_path(&path) {
+            Ok(())
+        } else {
+            Err(io::Error::last_os_error())
+        }
+    });
+    if let Err(e) = result {
+        error(owner, &tr!(help_failed, error = e));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::BTreeSet;
+
+    /// The values of `attr="…"` in `html`.
+    fn attributes<'a>(html: &'a str, attr: &str) -> Vec<&'a str> {
+        let pattern = format!(" {attr}=\"");
+        html.match_indices(&pattern)
+            .map(|(i, _)| {
+                let rest = &html[i + pattern.len()..];
+                &rest[..rest.find('"').unwrap()]
+            })
+            .collect()
+    }
+
+    /// The levels of the `<h1>`…`<h6>` elements, in document order.
+    fn heading_levels(html: &str) -> Vec<u8> {
+        html.match_indices("<h")
+            .filter_map(|(i, _)| {
+                let b = html.as_bytes();
+                let level = b.get(i + 2)?;
+                let after = b.get(i + 3)?;
+                ((b'1'..=b'6').contains(level) && matches!(after, b'>' | b' '))
+                    .then(|| level - b'0')
+            })
+            .collect()
+    }
+
+    /// A menu or button text as it reads on screen, without the access key
+    /// marker, the shortcut and a trailing ellipsis.
+    fn visible(text: &str) -> String {
+        let text = text.split('\t').next().unwrap();
+        text.replace('&', "").trim_end_matches('…').to_string()
+    }
+
+    #[test]
+    fn pages_are_well_formed() {
+        for lang in Lang::ALL {
+            let html = page(lang);
+            let name = lang.code();
+            assert!(html.starts_with("<!DOCTYPE html>"), "{name}: doctype");
+            assert!(
+                html.contains(&format!("<html lang=\"{}\">", lang.code())),
+                "{name}: the page language must match"
+            );
+            assert!(html.contains("<meta charset=\"utf-8\">"), "{name}: charset");
+            assert!(html.contains("<title>"), "{name}: title");
+            assert!(html.contains("<main id=\"main\""), "{name}: main landmark");
+            assert!(html.contains("href=\"#main\""), "{name}: skip link");
+
+            let ids = attributes(html, "id");
+            let unique: BTreeSet<_> = ids.iter().collect();
+            assert_eq!(unique.len(), ids.len(), "{name}: ids must be unique");
+            for href in attributes(html, "href") {
+                if let Some(target) = href.strip_prefix('#') {
+                    assert!(ids.contains(&target), "{name}: link to missing #{target}");
+                }
+            }
+            for label in attributes(html, "aria-labelledby") {
+                assert!(ids.contains(&label), "{name}: label #{label} is missing");
+            }
+
+            let levels = heading_levels(html);
+            assert_eq!(levels.first(), Some(&1), "{name}: starts with <h1>");
+            assert_eq!(levels.iter().filter(|&&l| l == 1).count(), 1, "{name}: one <h1>");
+            for pair in levels.windows(2) {
+                assert!(pair[1] <= pair[0] + 1, "{name}: heading levels skip");
+            }
+
+            for tag in ["section", "table", "dl", "ol", "ul", "nav", "main"] {
+                assert_eq!(
+                    html.matches(&format!("<{tag}")).count(),
+                    html.matches(&format!("</{tag}>")).count(),
+                    "{name}: unbalanced <{tag}>"
+                );
+            }
+        }
+    }
+
+    /// Every page has the same sections, so the languages cannot drift apart.
+    #[test]
+    fn pages_have_the_same_structure() {
+        let en_ids = attributes(page(Lang::En), "id");
+        for lang in Lang::ALL {
+            assert_eq!(attributes(page(lang), "id"), en_ids, "{lang:?}: ids differ");
+            assert_eq!(
+                heading_levels(page(lang)),
+                heading_levels(page(Lang::En)),
+                "{lang:?}: headings differ"
+            );
+        }
+    }
+
+    /// The help names controls exactly as the program shows them.
+    #[test]
+    fn pages_use_the_program_texts() {
+        for lang in Lang::ALL {
+            let s = lang.strings();
+            let html = page(lang);
+            let texts = [
+                s.menu_file,
+                s.menu_help,
+                s.menu_view_help,
+                s.menu_how,
+                s.menu_about,
+                s.menu_send_file,
+                s.menu_send_folder,
+                s.menu_add,
+                s.menu_edit,
+                s.menu_remove,
+                s.menu_copy_id,
+                s.menu_settings,
+                s.menu_exit,
+                s.ctx_edit,
+                s.ctx_remove,
+                s.tray_open,
+                s.add_recipient_title,
+                s.edit_recipient_title,
+                s.col_name,
+                s.col_contact_id,
+                s.status_connecting,
+                s.status_online,
+                s.status_offline,
+                s.incoming_title,
+                s.incoming_balloon_title,
+                s.receiving_balloon_title,
+                s.save_to,
+                s.browse,
+                s.accept,
+                s.decline,
+                s.phase_preparing,
+                s.phase_sending,
+                s.phase_receiving,
+                s.phase_unpacking,
+                s.row_transferred,
+                s.row_processed,
+                s.row_speed,
+                s.row_remaining,
+                s.connection_direct,
+                s.connection_relay,
+                s.cancel,
+                s.close,
+                s.continue_background,
+                s.cancel_transfer,
+                s.dont_ask_again,
+                s.open_file,
+                s.open_containing_folder,
+                s.open_received_folder,
+                s.ok,
+                s.my_name_label,
+                s.receiving_heading,
+                s.always_save,
+                s.always_save_folder_label,
+                s.auto_accept,
+                s.ask_after_receive,
+                s.general_heading,
+                s.start_with_windows,
+                s.start_minimized,
+                s.keep_in_tray,
+                s.close_ask,
+                s.close_background,
+                s.close_cancel,
+                s.language_default,
+                s.copy,
+                s.close_running_label,
+                s.language_label,
+                s.cancelled,
+            ];
+            for text in texts {
+                let text = visible(text);
+                let text = text.trim_end_matches(':');
+                assert!(html.contains(text), "{lang:?}: the help does not mention {text:?}");
+            }
+            for lang in Lang::ALL {
+                assert!(html.contains(lang.native_name()), "{lang:?}: language list");
+            }
+        }
+    }
+}

@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dodavo Help</title>
+<link rel="stylesheet" href="help.css">
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to main content</a>
+
+<header>
+<h1>Dodavo Help</h1>
+<p class="intro">Dodavo sends files and folders directly from one Windows computer to another. You don't need an account, a cloud service or a link.</p>
+</header>
+
+<nav aria-labelledby="contents">
+<h2 id="contents">Contents</h2>
+<ol>
+<li><a href="#using-help">Using this help</a></li>
+<li><a href="#how-it-works">How Dodavo works</a></li>
+<li><a href="#installing">Installing and uninstalling</a></li>
+<li><a href="#getting-started">Getting started</a></li>
+<li><a href="#main-window">The main window</a></li>
+<li><a href="#recipients">Managing recipients</a></li>
+<li><a href="#sending">Sending files and folders</a></li>
+<li><a href="#receiving">Receiving files and folders</a></li>
+<li><a href="#progress">Following a transfer</a></li>
+<li><a href="#background">Running in the notification area</a></li>
+<li><a href="#settings">Settings</a></li>
+<li><a href="#shortcuts">Keyboard shortcuts</a></li>
+<li><a href="#connections">Connections and security</a></li>
+<li><a href="#troubleshooting">Troubleshooting</a></li>
+</ol>
+</nav>
+
+<main id="main" tabindex="-1">
+
+<section aria-labelledby="using-help">
+<h2 id="using-help">Using this help</h2>
+<p>This help opens in your web browser, in the language Dodavo is using. To open it again, press <kbd>F1</kbd> in any Dodavo window, or choose <span class="ui">View Help</span> from the <span class="ui">Help</span> menu.</p>
+<p>Each topic is a level 2 heading. With a screen reader you can move from topic to topic with heading navigation (for example, the <kbd>H</kbd> key in browse mode in NVDA and JAWS, or in scan mode in Narrator). The contents list at the top links to every topic.</p>
+<p>Names of menus, buttons and other controls are written exactly as they appear in Dodavo. Every task can be done with the keyboard alone; the keys are given in each topic and collected in <a href="#shortcuts">Keyboard shortcuts</a>.</p>
+</section>
+
+<section aria-labelledby="how-it-works">
+<h2 id="how-it-works">How Dodavo works</h2>
+<p>Every computer running Dodavo has a permanent <strong>Contact ID</strong>: a code of 64 characters made of the digits 0–9 and the letters a–f. The Contact ID works like a phone number for Dodavo. To send files to someone, you need their Contact ID; to receive files, you give your Contact ID to the people who will send them.</p>
+<ol>
+<li>You copy your Contact ID and send it to the other person, for example by e-mail or in a chat message.</li>
+<li>The other person adds you to their recipient list, and you add them to yours.</li>
+<li>To send something, you select the person in your recipient list and choose a file or a folder.</li>
+<li>The other person is asked whether to accept the transfer and where to save it.</li>
+<li>The file goes directly from your computer to theirs, end-to-end encrypted.</li>
+</ol>
+<p>Dodavo has to be running on both computers. When you close its window, Dodavo keeps running in the notification area so that it can receive files (you can change this in <a href="#settings">Settings</a>).</p>
+<p>Folders are packed automatically, sent as one item and unpacked again on the other computer. You don't have to create a ZIP file yourself.</p>
+</section>
+
+<section aria-labelledby="installing">
+<h2 id="installing">Installing and uninstalling</h2>
+<p>Dodavo is installed with a setup program named <code>Dodavo-<var>version</var>-setup.exe</code>. Setup is a standard Windows wizard: <kbd>Tab</kbd> moves between the controls on a page, <kbd>Space</kbd> selects or clears a check box, <kbd>Enter</kbd> goes to the next page, <kbd>Alt</kbd>+<kbd>B</kbd> goes back a page, and <kbd>Esc</kbd> cancels. Screen readers read the title and text of each page when it opens. Setup uses your Windows display language; if Dodavo is not available in it, Setup first asks you to choose a language.</p>
+<h3 id="install">Installing Dodavo</h3>
+<ol>
+<li>Run the setup program, for example by opening it from your Downloads folder.</li>
+<li>Setup asks how to install. <span class="ui">Install for me only (recommended)</span> installs Dodavo just for you and does not need administrator rights. <span class="ui">Install for all users</span> installs it for everyone who uses the computer; Windows then asks for administrator permission. Choose one with the arrow keys and press <kbd>Enter</kbd>.</li>
+<li>On the <span class="ui">Select Destination Location</span> page you can change the folder Dodavo is installed in. The suggested folder is fine for most people; press <kbd>Enter</kbd>.</li>
+<li>On the <span class="ui">Select Additional Tasks</span> page, press <kbd>Space</kbd> if you also want <span class="ui">Create a desktop shortcut</span>, then press <kbd>Enter</kbd>.</li>
+<li>On the <span class="ui">Ready to Install</span> page, press <kbd>Enter</kbd> to choose <span class="ui">Install</span>. Installing takes only a few seconds.</li>
+<li>On the last page, <span class="ui">Launch Dodavo</span> is selected. Press <kbd>Enter</kbd> to choose <span class="ui">Finish</span>; Setup closes and Dodavo starts.</li>
+</ol>
+<p>Dodavo is then in the Start menu: press the <kbd>Windows</kbd> key, type <kbd>Dodavo</kbd> and press <kbd>Enter</kbd>.</p>
+<p>If Dodavo is running when you install, update or uninstall it, Setup says so and waits. Exit Dodavo (<span class="ui">File</span> menu, <span class="ui">Exit</span>, or <span class="ui">Exit</span> on the notification area icon's menu), then choose <span class="ui">OK</span>.</p>
+<h3 id="update">Updating Dodavo</h3>
+<p>To update, run the setup program of the new version. It replaces the program in the same place. Your settings, your recipient list and your Contact ID are kept.</p>
+<h3 id="uninstall">Uninstalling Dodavo</h3>
+<ol>
+<li>Exit Dodavo.</li>
+<li>Open Windows Settings (<kbd>Windows</kbd>+<kbd>I</kbd>) and go to <span class="ui">Apps</span>, then <span class="ui">Installed apps</span> (on Windows 10: <span class="ui">Apps &amp; features</span>).</li>
+<li>Type <kbd>Dodavo</kbd> in the search box to find it in the list. In Windows 11, press <kbd>Tab</kbd> to reach its <span class="ui">More options</span> button, press <kbd>Enter</kbd> and choose <span class="ui">Uninstall</span>. In Windows 10, select Dodavo in the list and choose <span class="ui">Uninstall</span>.</li>
+<li>Confirm with <span class="ui">Uninstall</span> and then <span class="ui">Yes</span>.</li>
+</ol>
+<p>Uninstalling removes the program, its shortcuts and the <span class="ui">Start with Windows</span> entry. Your settings, your recipient list and your Contact ID stay in the folder described in <a href="#your-data">Your settings and identity</a>, so if you install Dodavo again, everything is as before. If you want to remove them as well, delete that folder after uninstalling; your Contact ID is then lost for good.</p>
+</section>
+
+<section aria-labelledby="getting-started">
+<h2 id="getting-started">Getting started</h2>
+<ol>
+<li>Start Dodavo. Its main window opens with your recipient list, which is empty at first.</li>
+<li>Check your name: open the <span class="ui">File</span> menu (<kbd>Alt</kbd>+<kbd>F</kbd>) and choose <span class="ui">Settings…</span>. The first field, <span class="ui">Your name (shown to the people you send files to)</span>, is filled in with your Windows user name. Change it if you like, then press <kbd>Enter</kbd> to save.</li>
+<li>Share your Contact ID: choose <span class="ui">Copy My Contact ID</span> from the <span class="ui">File</span> menu, or activate the <span class="ui">Copy My Contact ID</span> button. Dodavo copies the ID to the clipboard and shows it in a message. Paste it into an e-mail or chat message to the people who should be able to send you files.</li>
+<li>Add the people you want to send files to, as described in <a href="#add-recipient">Adding a recipient</a>.</li>
+</ol>
+<p class="note"><strong>Note:</strong> Your Contact ID is not secret. Anyone who has it can offer you files, but nothing is ever saved on your computer without your consent unless you turn on <span class="ui">Start transfers automatically, without asking</span>, and even then only for people in your recipient list.</p>
+</section>
+
+<section aria-labelledby="main-window">
+<h2 id="main-window">The main window</h2>
+<p>The main window contains, in Tab order:</p>
+<dl>
+<dt>Recipients list</dt>
+<dd>The people you can send files to. It has two columns: <span class="ui">Name</span> and <span class="ui">Contact ID</span>. The Contact ID is shortened to its first eight and last six characters. Move through the list with the arrow keys. When the list is empty, it says so and tells you how to add someone.</dd>
+<dt><span class="ui">Send File…</span> and <span class="ui">Send Folder…</span> buttons</dt>
+<dd>Send something to the selected person.</dd>
+<dt><span class="ui">Add Recipient…</span> button</dt>
+<dd>Adds a new person to the list.</dd>
+<dt><span class="ui">Copy My Contact ID</span> button</dt>
+<dd>Copies your own Contact ID to the clipboard.</dd>
+</dl>
+<p>At the bottom of the window, a status line tells you whether Dodavo is connected:</p>
+<ul>
+<li><span class="ui">Connecting to the network…</span> while Dodavo starts.</li>
+<li><span class="ui">Online – ready to send and receive files.</span></li>
+<li><span class="ui">Offline – check your internet connection. Transfers within your local network still work.</span></li>
+</ul>
+<p>The status line cannot receive keyboard focus. To hear it, use your screen reader's command for reading the whole window: <kbd>NVDA</kbd>+<kbd>B</kbd> in NVDA, <kbd>Insert</kbd>+<kbd>B</kbd> in JAWS, or <kbd>Narrator</kbd>+<kbd>W</kbd> in Narrator.</p>
+<p>The menu bar has two menus. The <span class="ui">File</span> menu (<kbd>Alt</kbd>+<kbd>F</kbd>) contains <span class="ui">Send File…</span>, <span class="ui">Send Folder…</span>, <span class="ui">Add Recipient…</span>, <span class="ui">Edit Recipient…</span>, <span class="ui">Remove Recipient</span>, <span class="ui">Copy My Contact ID</span>, <span class="ui">Settings…</span> and <span class="ui">Exit</span>. The <span class="ui">Help</span> menu (<kbd>Alt</kbd>+<kbd>H</kbd>) contains <span class="ui">View Help</span>, <span class="ui">How It Works</span> (a short summary) and <span class="ui">About</span> (the version number).</p>
+<p>When a person is selected in the list, the context menu (<kbd>Shift</kbd>+<kbd>F10</kbd> or the Menu key, or a right-click) offers <span class="ui">Send File…</span>, <span class="ui">Send Folder…</span>, <span class="ui">Edit…</span> and <span class="ui">Remove</span>.</p>
+</section>
+
+<section aria-labelledby="recipients">
+<h2 id="recipients">Managing recipients</h2>
+
+<h3 id="add-recipient">Adding a recipient</h3>
+<ol>
+<li>Ask the person to choose <span class="ui">Copy My Contact ID</span> in their copy of Dodavo and send you the code.</li>
+<li>Press <kbd>Ctrl</kbd>+<kbd>N</kbd>, or activate the <span class="ui">Add Recipient…</span> button. The <span class="ui">Add Recipient</span> dialog opens.</li>
+<li>In <span class="ui">Name (only used so you can recognise the person)</span>, type a name. Only you see this name.</li>
+<li>Press <kbd>Tab</kbd> and paste the code into <span class="ui">Contact ID</span> with <kbd>Ctrl</kbd>+<kbd>V</kbd>.</li>
+<li>Press <kbd>Enter</kbd> or activate <span class="ui">OK</span>.</li>
+</ol>
+<p>Dodavo checks what you entered. If something is wrong, a message explains it and you stay in the dialog to correct it:</p>
+<ul>
+<li>The name is empty, or another recipient already has that name.</li>
+<li>The code is not a valid Contact ID (it must be exactly 64 characters, digits 0–9 and letters a–f). Make sure you copied all of it.</li>
+<li>The code is your own Contact ID.</li>
+<li>The Contact ID already belongs to another recipient.</li>
+</ul>
+<p>The list is sorted alphabetically by name, and the new person is selected.</p>
+
+<h3 id="edit-recipient">Editing or removing a recipient</h3>
+<p>Select the person in the list, then:</p>
+<ul>
+<li>To change the name or the Contact ID, press <kbd>F2</kbd> or choose <span class="ui">Edit Recipient…</span> from the <span class="ui">File</span> menu. The <span class="ui">Edit Recipient</span> dialog works like <span class="ui">Add Recipient</span>.</li>
+<li>To remove the person, press <kbd>Delete</kbd> or choose <span class="ui">Remove Recipient</span> from the <span class="ui">File</span> menu, then confirm with <span class="ui">Yes</span>.</li>
+</ul>
+</section>
+
+<section aria-labelledby="sending">
+<h2 id="sending">Sending files and folders</h2>
+<p>The other person must have Dodavo running. They don't need to have you in their recipient list, but if you are not in it, they will see a warning that the sender is unknown.</p>
+
+<h3 id="send-file">Sending a file</h3>
+<ol>
+<li>Select the person in the recipient list.</li>
+<li>Press <kbd>Ctrl</kbd>+<kbd>O</kbd>, or activate the <span class="ui">Send File…</span> button. A standard Windows Open dialog appears.</li>
+<li>Choose the file and press <kbd>Enter</kbd>.</li>
+</ol>
+<p>A progress window opens and the transfer starts. See <a href="#progress">Following a transfer</a>.</p>
+<p>With the mouse, you can also double-click the person to send a file.</p>
+
+<h3 id="send-folder">Sending a folder</h3>
+<ol>
+<li>Select the person in the recipient list.</li>
+<li>Press <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>O</kbd>, or activate the <span class="ui">Send Folder…</span> button.</li>
+<li>Choose the folder and activate <span class="ui">Select Folder</span>.</li>
+</ol>
+<p>Dodavo first packs the folder, with all its subfolders, and then sends it. The other computer unpacks it again, so the person receives an ordinary folder.</p>
+
+<h3 id="drag-and-drop">Dragging items onto a person</h3>
+<p>You can drag files and folders from File Explorer and drop them onto a person in the recipient list. If you drop several items at once, Dodavo asks you to confirm; each item is then sent as a separate transfer with its own progress window.</p>
+<p>You can start as many transfers as you like at the same time, to the same person or to different people.</p>
+</section>
+
+<section aria-labelledby="receiving">
+<h2 id="receiving">Receiving files and folders</h2>
+<p>When someone sends you something, Dodavo shows a notification, <span class="ui">Incoming transfer</span>, and opens the <span class="ui">Incoming Transfer</span> window in front of other windows. If Windows keeps the window in the background, its taskbar button flashes; press <kbd>Alt</kbd>+<kbd>Tab</kbd> to reach it.</p>
+
+<h3 id="incoming-window">The Incoming Transfer window</h3>
+<p>The window starts with a bold line saying who wants to send you a file or a folder, followed by the name and size of the item. For a folder, it also says how many files it contains. Then come:</p>
+<dl>
+<dt>Unknown sender warning</dt>
+<dd>Only shown when the sender is not in your recipient list. It shows the sender's shortened Contact ID and reminds you to accept files only from people you know. The name in the window is the name the sender gave themselves, so it cannot prove who they are. A check box, <span class="ui">Add “…” to my recipients</span>, lets you add the sender to your list when you accept.</dd>
+<dt><span class="ui">Save to:</span> (<kbd>Alt</kbd>+<kbd>S</kbd>)</dt>
+<dd>The folder the item will be saved in. It is the folder from <span class="ui">Always save received files to this folder</span> if you set one in Settings, otherwise the folder you used last time, or your Downloads folder. You can type a different folder, or use <span class="ui">Browse…</span> (<kbd>Alt</kbd>+<kbd>B</kbd>) to choose one.</dd>
+<dt>Free disk space</dt>
+<dd>A sentence below the folder says whether there is enough free space on that drive, how much is needed and how much is available. Folders need room both for the download and for unpacking. The sentence is updated when you choose a folder with Browse or leave the folder field.</dd>
+<dt><span class="ui">Accept</span> (<kbd>Alt</kbd>+<kbd>A</kbd>) and <span class="ui">Decline</span> (<kbd>Alt</kbd>+<kbd>D</kbd>)</dt>
+<dd>When the window opens, the focus is on <span class="ui">Accept</span>, so pressing <kbd>Enter</kbd> accepts. Pressing <kbd>Esc</kbd> or closing the window declines.</dd>
+</dl>
+<p>If there is not enough free space, Dodavo asks whether you want to accept anyway. If the sender cancels before you answer, the window closes and a notification tells you so.</p>
+<p>After you accept, a progress window shows the transfer. If an item with the same name already exists in the folder, the new one is saved with a number added, for example <code>Report (2).pdf</code>; nothing is overwritten.</p>
+
+<h3 id="after-receiving">When the transfer is complete</h3>
+<p>Dodavo asks what you want to do with what you received:</p>
+<ul>
+<li>For a file: <span class="ui">Open the file</span> opens it in its default program, and <span class="ui">Open the folder</span> opens File Explorer with the file selected.</li>
+<li>For a folder: <span class="ui">Open the folder</span> opens it in File Explorer.</li>
+<li><span class="ui">Close</span> does neither.</li>
+</ul>
+<p>If you select <span class="ui">Don't ask me again</span>, Dodavo shows a notification instead next time. Selecting the notification shows the item in File Explorer. You can turn the question back on in Settings with <span class="ui">After receiving, ask whether to open the file or folder</span>.</p>
+
+<h3 id="auto-accept">Receiving without being asked</h3>
+<p>If you turn on <span class="ui">Start transfers automatically, without asking</span> in Settings, transfers from people in your recipient list start immediately, without the Incoming Transfer window. Dodavo shows a notification, <span class="ui">Receiving</span>, and saves the item in the folder from <span class="ui">Always save received files to this folder</span>, or in Downloads if that option is off. Transfers from unknown senders, and transfers that would not fit on the disk, are still asked about.</p>
+</section>
+
+<section aria-labelledby="progress">
+<h2 id="progress">Following a transfer</h2>
+<p>Every transfer, sent or received, has its own progress window. Its title says what is happening, for example “Sending file to Ana”. The window shows:</p>
+<ul>
+<li>A bold line with the person and the name of the item.</li>
+<li>The current step: <span class="ui">Packing the folder…</span>, <span class="ui">Connecting to …</span>, <span class="ui">Waiting for … to accept…</span>, <span class="ui">Sending…</span>, <span class="ui">Receiving…</span> or <span class="ui">Unpacking the folder…</span>.</li>
+<li>A progress bar.</li>
+<li><span class="ui">Transferred:</span> (or <span class="ui">Processed:</span> while a folder is packed or unpacked) with the amount done, the total and the percentage.</li>
+<li><span class="ui">Speed:</span> and <span class="ui">Time remaining:</span>, updated once a second.</li>
+<li>The type of connection: <span class="ui">Connection: direct (computer to computer)</span> or <span class="ui">Connection: through a relay server (end-to-end encrypted)</span>.</li>
+<li>The <span class="ui">Cancel</span> button, which asks for confirmation before it cancels the transfer.</li>
+</ul>
+<p>Only the <span class="ui">Cancel</span> button can receive keyboard focus. To hear the progress, use your screen reader's command for reading the whole window: <kbd>NVDA</kbd>+<kbd>B</kbd> in NVDA, <kbd>Insert</kbd>+<kbd>B</kbd> in JAWS, or <kbd>Narrator</kbd>+<kbd>W</kbd> in Narrator.</p>
+<p>When the transfer ends, the step line says how it ended, for example <span class="ui">Done! Ana has received the file.</span> or <span class="ui">The transfer was cancelled.</span> If something went wrong, the line below gives the reason. The <span class="ui">Cancel</span> button becomes <span class="ui">Close</span>. When you have received an item, the progress window closes by itself once the item is saved (see <a href="#after-receiving">When the transfer is complete</a>).</p>
+
+<h3 id="closing-progress">Closing a progress window during a transfer</h3>
+<p>If you close a progress window (with <kbd>Esc</kbd>, <kbd>Alt</kbd>+<kbd>F4</kbd> or the window's Close button) while the transfer is still running, Dodavo asks what to do:</p>
+<ul>
+<li><span class="ui">Continue in the background</span> hides the window. The transfer goes on, and a notification tells you when it is finished.</li>
+<li><span class="ui">Cancel the transfer</span> stops it after you confirm.</li>
+</ul>
+<p>Select <span class="ui">Don't ask me again</span> to always do the same. You can change the choice later in Settings, under <span class="ui">When closing the window of a running transfer</span>.</p>
+</section>
+
+<section aria-labelledby="background">
+<h2 id="background">Running in the notification area</h2>
+<p>When you close the main window, Dodavo keeps running in the notification area at the end of the taskbar, so that it can receive files. The first time this happens, a notification explains it.</p>
+<ul>
+<li>To show the main window again, start Dodavo again (for example, from the Start menu), or select its notification area icon.</li>
+<li>To reach the icon with the keyboard, press <kbd>Windows</kbd>+<kbd>B</kbd>, then use the arrow keys to move to <span class="ui">Dodavo</span>. If it is not there, it may be among the hidden icons: select the <span class="ui">Show hidden icons</span> button first. Press <kbd>Enter</kbd> to open the window, or <kbd>Shift</kbd>+<kbd>F10</kbd> or the Menu key for the icon's menu.</li>
+<li>The icon's menu contains <span class="ui">Open</span>, <span class="ui">Copy My Contact ID</span> and <span class="ui">Exit</span>.</li>
+</ul>
+<p>To quit Dodavo completely, choose <span class="ui">Exit</span> from the <span class="ui">File</span> menu or from the icon's menu. If transfers are still running, Dodavo asks you to confirm, because they will be cancelled. After exiting, you can no longer receive files until you start Dodavo again.</p>
+<p>Dodavo reports finished transfers, incoming transfers and other events with Windows notifications, which screen readers usually announce. If you miss one, or if Do not disturb is on, you can find it in the Windows notification center (<kbd>Windows</kbd>+<kbd>N</kbd> in Windows 11).</p>
+</section>
+
+<section aria-labelledby="settings">
+<h2 id="settings">Settings</h2>
+<p>Choose <span class="ui">Settings…</span> from the <span class="ui">File</span> menu. Press <kbd>Enter</kbd> or activate <span class="ui">OK</span> to save your changes, or press <kbd>Esc</kbd> or activate <span class="ui">Cancel</span> to discard them. The settings, in Tab order:</p>
+<dl>
+<dt><span class="ui">Your name (shown to the people you send files to)</span></dt>
+<dd>The name the other person sees when you send them something. If they have you in their recipient list, they see the name they gave you instead. This field must not be empty.</dd>
+</dl>
+<h3 id="settings-receiving">Receiving files</h3>
+<dl>
+<dt><span class="ui">Always save received files to this folder</span></dt>
+<dd>When selected, the folder in the <span class="ui">Folder</span> field below (which you can choose with <span class="ui">Browse…</span>) is always suggested for received items and used for automatic transfers. When cleared, Dodavo suggests the folder you used last, or Downloads.</dd>
+<dt><span class="ui">Start transfers automatically, without asking</span></dt>
+<dd>Accepts transfers from people in your recipient list without asking. See <a href="#auto-accept">Receiving without being asked</a>.</dd>
+<dt><span class="ui">After receiving, ask whether to open the file or folder</span></dt>
+<dd>Asks what to do after an item has been received. See <a href="#after-receiving">When the transfer is complete</a>.</dd>
+</dl>
+<h3 id="settings-general">General</h3>
+<dl>
+<dt><span class="ui">Start with Windows</span></dt>
+<dd>Starts Dodavo in the notification area when you sign in to Windows, so that you can always receive files.</dd>
+<dt><span class="ui">Always start minimized to the notification area</span></dt>
+<dd>Dodavo starts without showing its main window.</dd>
+<dt><span class="ui">Keep running in the notification area when the window is closed</span></dt>
+<dd>When cleared, closing the main window exits Dodavo.</dd>
+<dt><span class="ui">When closing the window of a running transfer</span></dt>
+<dd>A list with <span class="ui">Ask every time</span>, <span class="ui">Continue in the background</span> and <span class="ui">Cancel the transfer</span>. See <a href="#closing-progress">Closing a progress window during a transfer</a>.</dd>
+<dt><span class="ui">Language</span></dt>
+<dd>The language of Dodavo and of this help: <span class="ui">Windows default</span>, <span lang="en">English</span>, <span lang="hr">Hrvatski</span>, <span lang="sr-Latn">Srpski (latinica)</span> or <span lang="sl">Slovenščina</span>. With <span class="ui">Windows default</span>, Dodavo uses the first of your Windows display languages that it supports, or English. A new language is used after Dodavo is restarted.</dd>
+<dt><span class="ui">Your Contact ID</span></dt>
+<dd>A read-only field with your full Contact ID, followed by a <span class="ui">Copy</span> button.</dd>
+</dl>
+</section>
+
+<section aria-labelledby="shortcuts">
+<h2 id="shortcuts">Keyboard shortcuts</h2>
+<table>
+<caption>Main window</caption>
+<thead>
+<tr><th scope="col">Keys</th><th scope="col">Action</th></tr>
+</thead>
+<tbody>
+<tr><td><kbd>Ctrl</kbd>+<kbd>O</kbd></td><td>Send a file to the selected person</td></tr>
+<tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>O</kbd></td><td>Send a folder to the selected person</td></tr>
+<tr><td><kbd>Ctrl</kbd>+<kbd>N</kbd></td><td>Add a recipient</td></tr>
+<tr><td><kbd>F2</kbd></td><td>Edit the selected recipient</td></tr>
+<tr><td><kbd>Delete</kbd></td><td>Remove the selected recipient</td></tr>
+<tr><td><kbd>Shift</kbd>+<kbd>F10</kbd> or the Menu key</td><td>Open the context menu of the selected recipient</td></tr>
+<tr><td><kbd>Alt</kbd>+<kbd>F</kbd></td><td>Open the File menu</td></tr>
+<tr><td><kbd>Alt</kbd>+<kbd>H</kbd></td><td>Open the Help menu</td></tr>
+<tr><td><kbd>Tab</kbd> and <kbd>Shift</kbd>+<kbd>Tab</kbd></td><td>Move between the list and the buttons</td></tr>
+</tbody>
+</table>
+<table>
+<caption>All Dodavo windows</caption>
+<thead>
+<tr><th scope="col">Keys</th><th scope="col">Action</th></tr>
+</thead>
+<tbody>
+<tr><td><kbd>F1</kbd></td><td>Open this help</td></tr>
+<tr><td><kbd>Enter</kbd></td><td>Activate the default button (OK or Accept)</td></tr>
+<tr><td><kbd>Esc</kbd></td><td>Cancel or close the window (in the Incoming Transfer window, this declines; the main window ignores it)</td></tr>
+<tr><td><kbd>Alt</kbd> + underlined letter</td><td>Move to or activate the control with that letter</td></tr>
+</tbody>
+</table>
+<table>
+<caption>Incoming Transfer window</caption>
+<thead>
+<tr><th scope="col">Keys</th><th scope="col">Action</th></tr>
+</thead>
+<tbody>
+<tr><td><kbd>Alt</kbd>+<kbd>A</kbd></td><td>Accept</td></tr>
+<tr><td><kbd>Alt</kbd>+<kbd>D</kbd></td><td>Decline</td></tr>
+<tr><td><kbd>Alt</kbd>+<kbd>S</kbd></td><td>Move to the Save to field</td></tr>
+<tr><td><kbd>Alt</kbd>+<kbd>B</kbd></td><td>Browse for a folder</td></tr>
+<tr><td><kbd>Alt</kbd>+<kbd>M</kbd></td><td>Add the unknown sender to my recipients</td></tr>
+</tbody>
+</table>
+<table>
+<caption>Windows</caption>
+<thead>
+<tr><th scope="col">Keys</th><th scope="col">Action</th></tr>
+</thead>
+<tbody>
+<tr><td><kbd>Windows</kbd>+<kbd>B</kbd></td><td>Move to the notification area, where the Dodavo icon is</td></tr>
+<tr><td><kbd>Windows</kbd>+<kbd>N</kbd></td><td>Open the notification center (Windows 11)</td></tr>
+<tr><td><kbd>Alt</kbd>+<kbd>Tab</kbd></td><td>Switch to another window, for example an Incoming Transfer window</td></tr>
+</tbody>
+</table>
+</section>
+
+<section aria-labelledby="connections">
+<h2 id="connections">Connections and security</h2>
+<p>Dodavo connects computers with <a href="https://iroh.computer">iroh</a>, using Contact IDs instead of IP addresses. You don't need to set up your router or firewall.</p>
+<dl>
+<dt>Direct connection</dt>
+<dd>Usually the two computers connect directly, even when both are behind a home router.</dd>
+<dt>Local network</dt>
+<dd>Computers on the same network find each other there, so they can exchange files even without an internet connection.</dd>
+<dt>Relay server</dt>
+<dd>When a direct connection is not possible, for example on strict company networks, the data goes through a public relay server. It stays end-to-end encrypted, so the relay cannot read it. The progress window tells you which kind of connection is used.</dd>
+<dt>Encryption and integrity</dt>
+<dd>All transfers are end-to-end encrypted. Every transfer is also checked with a checksum, so a damaged file is never saved as if it were complete. A file being received is first written with the extension <code>.part</code> and gets its real name only when it is complete; if a transfer fails, the incomplete data is removed.</dd>
+<dt>Folders</dt>
+<dd>Dodavo refuses to unpack a received folder that contains unsafe paths, such as paths that would write outside the destination folder.</dd>
+</dl>
+<h3 id="your-data">Your settings and identity</h3>
+<p>Dodavo stores its settings, your recipient list and your secret key in the folder <code>%APPDATA%\Dodavo</code>. The secret key is what makes your Contact ID yours. Don't share the contents of this folder. If you move to another computer and want to keep your Contact ID, copy this folder to the same place on the new computer while Dodavo is not running there. If the folder is deleted, Dodavo creates a new Contact ID, and everyone has to add you again.</p>
+</section>
+
+<section aria-labelledby="troubleshooting">
+<h2 id="troubleshooting">Troubleshooting</h2>
+<dl>
+<dt>“Could not connect to …”</dt>
+<dd>Dodavo is not running on the other computer, or one of you is offline. Ask the other person to start Dodavo and check the status line at the bottom of both main windows, then try again. Also check that you have the right Contact ID for them.</dd>
+<dt>The status line says Offline</dt>
+<dd>Check your internet connection. Transfers to computers on your local network still work.</dd>
+<dt>“This is not a valid Contact ID.”</dt>
+<dd>Part of the code is missing or has extra characters. Ask the person to choose <span class="ui">Copy My Contact ID</span> and send it again, then paste the whole code.</dd>
+<dt>The other person never sees my transfer</dt>
+<dd>Check that Dodavo is running on their computer; it may be in the notification area. Their Incoming Transfer window may be behind other windows; they can reach it with <kbd>Alt</kbd>+<kbd>Tab</kbd>.</dd>
+<dt>“Not enough free disk space”</dt>
+<dd>Choose a folder on another drive with <span class="ui">Browse…</span>, or free up space and try again. Remember that folders need room for the download and for unpacking.</dd>
+<dt>“The received data is damaged (checksum mismatch)”</dt>
+<dd>The data was changed on the way, and the item was not saved. Ask the sender to send it again.</dd>
+<dt>“The clipboard is in use by another program.”</dt>
+<dd>Wait a moment and try copying your Contact ID again.</dd>
+<dt>Dodavo does not start a second time</dt>
+<dd>Only one copy of Dodavo runs at a time. Starting it again brings the existing window to the front.</dd>
+</dl>
+</section>
+
+</main>
+</body>
+</html>
