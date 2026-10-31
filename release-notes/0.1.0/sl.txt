@@ -1,0 +1,7 @@
+Prva javna izdaja programa Dodavo.
+
+- Pošilja datoteke in mape neposredno z enega računalnika z Windows na drugega, celovito šifrirano, s trajnim ID-jem stika namesto naslovov IP.
+- Prenosi se nadaljujejo po prekinjeni povezavi, spanju in vnovičnem zagonu.
+- Polna podpora za tipkovnico in bralnike zaslona, svetli in temni način ter pomoč v angleščini, hrvaščini, srbščini (latinica) in slovenščini.
+- Enkrat na dan preveri, ali so na voljo nove različice, in jih na zahtevo namesti.
+- Deluje v sistemih od Windows 7 SP1 do Windows 11, 32- in 64-bitnih.

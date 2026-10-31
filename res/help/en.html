@@ -77,7 +77,17 @@
 <p>Dodavo is then in the Start menu: press the <kbd>Windows</kbd> key, type <kbd>Dodavo</kbd> and press <kbd>Enter</kbd>.</p>
 <p>If Dodavo is running when you install, update or uninstall it, Setup says so and waits. Exit Dodavo (<span class="ui">File</span> menu, <span class="ui">Exit</span>, or <span class="ui">Exit</span> on the notification area icon's menu), then choose <span class="ui">OK</span>.</p>
 <h3 id="update">Updating Dodavo</h3>
-<p>To update, run the setup program of the new version. It replaces the program in the same place. Your settings, your recipient list and your Contact ID are kept.</p>
+<p>Dodavo updates itself. Once a day, about 15 seconds after it has started and is online, it asks the Dodavo page on GitHub whether a newer version has been published. When there is one, a notification <span class="ui">Update available</span> appears and the <span class="ui">Update Available</span> window opens in the background; selecting the notification, or <kbd>Alt</kbd>+<kbd>Tab</kbd>, brings it to the front. The window says which version is available and which one you have, followed by:</p>
+<dl>
+<dt><span class="ui">Release notes</span></dt>
+<dd>A read-only text field with what is new. Read it with the arrow keys; <kbd>Tab</kbd> moves on to the buttons.</dd>
+<dt><span class="ui">Install Update</span> (<kbd>Alt</kbd>+<kbd>I</kbd>; it is the default button, so <kbd>Enter</kbd> chooses it too)</dt>
+<dd>Downloads the new setup program and installs it, as described below.</dd>
+<dt><span class="ui">Remind Me Later</span> (<kbd>Alt</kbd>+<kbd>L</kbd>, or <kbd>Esc</kbd>)</dt>
+<dd>Closes the window. Dodavo reminds you again a day later; until then you can still install the update from the <span class="ui">Help</span> menu.</dd>
+</dl>
+<p>When you choose <span class="ui">Install Update</span>, Dodavo first asks what to do with transfers that are still running, with the same three choices as when exiting: <span class="ui">Don't exit</span>, <span class="ui">Exit and continue the transfers later</span> and <span class="ui">Cancel the transfers and exit</span>. Then it downloads the setup program; a line in the window shows the progress, and the focus moves to <span class="ui">Cancel Download</span> (<kbd>Alt</kbd>+<kbd>C</kbd>), which stops the download after a confirmation. The downloaded file is accepted only if its size, its checksum and its digital signature match what the Dodavo authors published; otherwise an error message says so and nothing is installed. Then Setup starts; if Dodavo is installed for all users, Windows first asks for administrator permission. As soon as Setup is ready, Dodavo closes, Setup installs the new version silently in the same place and with the same choice between “for me only” and “for all users”, and Dodavo starts again by itself with the notification <span class="ui">Dodavo was updated</span>. Your settings, your recipient list and your Contact ID are kept, and interrupted transfers continue as after any other restart. If you run Dodavo with several profiles, the other profiles are closed as well and have to be started again by hand.</p>
+<p>To check at any time, choose <span class="ui">Check for Updates…</span> from the <span class="ui">Help</span> menu. When there is nothing new, a message says that you have the latest version; when the check fails, for example without an Internet connection, the message says why. To stop the daily check, clear <span class="ui">Check for updates automatically (once a day)</span> in the settings; checks you start from the <span class="ui">Help</span> menu still work. You can also update by hand at any time: run the setup program of the new version from the <a href="https://github.com/hkatic/dodavo/releases">Dodavo page on GitHub</a>. It replaces the program in the same place and keeps your settings, your recipient list and your Contact ID.</p>
 <h3 id="uninstall">Uninstalling Dodavo</h3>
 <ol>
 <li>Exit Dodavo.</li>
@@ -119,7 +129,7 @@
 <li><span class="ui">Offline – check your internet connection. Transfers within your local network still work.</span></li>
 </ul>
 <p>The status line cannot receive keyboard focus. To hear it, use your screen reader's command for reading the whole window: <kbd>NVDA</kbd>+<kbd>B</kbd> in NVDA, <kbd>Insert</kbd>+<kbd>B</kbd> in JAWS, or <kbd>Narrator</kbd>+<kbd>W</kbd> in Narrator.</p>
-<p>The menu bar has three menus. The <span class="ui">File</span> menu (<kbd>Alt</kbd>+<kbd>F</kbd>) contains <span class="ui">Send File…</span>, <span class="ui">Send Folder…</span>, <span class="ui">Add Recipient…</span>, <span class="ui">Edit Recipient…</span>, <span class="ui">Remove Recipient</span>, <span class="ui">Copy My Contact ID</span>, <span class="ui">Settings…</span> and <span class="ui">Exit</span>. The <span class="ui">Transfers</span> menu (<kbd>Alt</kbd>+<kbd>T</kbd>) lists every transfer in progress, with the person, the item and the state, and ends with <span class="ui">Show All Transfers</span> (<kbd>Ctrl</kbd>+<kbd>T</kbd>); when nothing is running, it says <span class="ui">No transfers in progress</span>. See <a href="#finding-transfers">Finding a transfer that runs in the background</a>. The <span class="ui">Help</span> menu (<kbd>Alt</kbd>+<kbd>H</kbd>) contains <span class="ui">View Help</span>, <span class="ui">How It Works</span> (a short summary) and <span class="ui">About</span> (the version number).</p>
+<p>The menu bar has three menus. The <span class="ui">File</span> menu (<kbd>Alt</kbd>+<kbd>F</kbd>) contains <span class="ui">Send File…</span>, <span class="ui">Send Folder…</span>, <span class="ui">Add Recipient…</span>, <span class="ui">Edit Recipient…</span>, <span class="ui">Remove Recipient</span>, <span class="ui">Copy My Contact ID</span>, <span class="ui">Settings…</span> and <span class="ui">Exit</span>. The <span class="ui">Transfers</span> menu (<kbd>Alt</kbd>+<kbd>T</kbd>) lists every transfer in progress, with the person, the item and the state, and ends with <span class="ui">Show All Transfers</span> (<kbd>Ctrl</kbd>+<kbd>T</kbd>); when nothing is running, it says <span class="ui">No transfers in progress</span>. See <a href="#finding-transfers">Finding a transfer that runs in the background</a>. The <span class="ui">Help</span> menu (<kbd>Alt</kbd>+<kbd>H</kbd>) contains <span class="ui">View Help</span>, <span class="ui">How It Works</span> (a short summary), <span class="ui">Check for Updates…</span> (see <a href="#update">Updating Dodavo</a>) and <span class="ui">About</span> (the version number).</p>
 <p>When a person is selected in the list, the menu of actions (<kbd>Enter</kbd>, a double-click, <kbd>Shift</kbd>+<kbd>F10</kbd> or the Menu key, or a right-click) offers <span class="ui">Send File…</span>, <span class="ui">Send Folder…</span>, <span class="ui">Show Transfer</span> (only while a transfer with that person is running; <span class="ui">Show Transfers</span> when there are several), <span class="ui">Edit…</span> and <span class="ui">Remove</span>.</p>
 </section>
 
@@ -267,7 +277,7 @@
 <li>While transfers run, the icon shows their number in a small badge, and its tooltip (what a screen reader reads when you move to the icon) says what is going on, refreshed about once a second: for example <span class="ui">Dodavo – Sending – “report.pdf” (45%), 12.3 MB/s</span>, or <span class="ui">Dodavo – 2 transfers in progress, 45%, 12.3 MB/s</span> when there are several.</li>
 </ul>
 <p>To quit Dodavo completely, choose <span class="ui">Exit</span> from the <span class="ui">File</span> menu or from the icon's menu. If transfers are still running, Dodavo asks first and offers three choices: <span class="ui">Don't exit</span> (the default, so <kbd>Enter</kbd> or <kbd>Esc</kbd> keeps Dodavo running), <span class="ui">Exit and continue the transfers later</span> (they are interrupted and continue the next time Dodavo and the other computer are both running) and <span class="ui">Cancel the transfers and exit</span>. When you log off or shut down Windows, Dodavo does not ask; the transfers continue the next time. After exiting, you can no longer receive files until you start Dodavo again.</p>
-<p>Dodavo reports finished transfers, incoming transfers, pauses by the other side, lost and restored connections and other events with Windows notifications, also while a progress window is minimized to the background. Screen readers usually announce them. Selecting a notification about a transfer brings its window to the front. If you miss one, or if Do not disturb is on, you can find it in the Windows notification center (<kbd>Windows</kbd>+<kbd>N</kbd> in Windows 11).</p>
+<p>Dodavo reports finished transfers, incoming transfers, pauses by the other side, lost and restored connections, available updates and other events with Windows notifications, also while a progress window is minimized to the background. Screen readers usually announce them. Selecting a notification about a transfer brings its window to the front. If you miss one, or if Do not disturb is on, you can find it in the Windows notification center (<kbd>Windows</kbd>+<kbd>N</kbd> in Windows 11).</p>
 </section>
 
 <section aria-labelledby="settings">
@@ -294,6 +304,8 @@
 <dd>Dodavo starts without showing its main window.</dd>
 <dt><span class="ui">Keep running in the notification area when the window is closed</span></dt>
 <dd>When cleared, closing the main window exits Dodavo.</dd>
+<dt><span class="ui">Check for updates automatically (once a day)</span></dt>
+<dd>Dodavo asks the Dodavo page on GitHub once a day whether a newer version is available and offers to install it. See <a href="#update">Updating Dodavo</a>.</dd>
 <dt><span class="ui">When closing the window of a running transfer</span></dt>
 <dd>A list with <span class="ui">Ask every time</span>, <span class="ui">Continue in the background</span> and <span class="ui">Cancel the transfer</span>. See <a href="#closing-progress">Closing a progress window during a transfer</a>.</dd>
 <dt><span class="ui">If the connection is lost during a transfer</span></dt>
@@ -362,6 +374,17 @@
 <tr><td><kbd>Alt</kbd>+<kbd>R</kbd></td><td>Resume the transfer</td></tr>
 <tr><td><kbd>Alt</kbd>+<kbd>B</kbd></td><td>Minimize to background</td></tr>
 <tr><td><kbd>Esc</kbd></td><td>Close the window (asks whether to continue in the background or cancel)</td></tr>
+</tbody>
+</table>
+<table>
+<caption>Update Available window</caption>
+<thead>
+<tr><th scope="col">Keys</th><th scope="col">Action</th></tr>
+</thead>
+<tbody>
+<tr><td><kbd>Alt</kbd>+<kbd>I</kbd> or <kbd>Enter</kbd></td><td>Install the update</td></tr>
+<tr><td><kbd>Alt</kbd>+<kbd>L</kbd> or <kbd>Esc</kbd></td><td>Remind me later (close the window)</td></tr>
+<tr><td><kbd>Alt</kbd>+<kbd>C</kbd></td><td>Cancel the download</td></tr>
 </tbody>
 </table>
 <table>
@@ -451,7 +474,7 @@
 <p>The Contact ID is not secret; it works like a phone number. Anyone who has it can offer you a file, but nothing is saved on your computer until you choose <span class="ui">Accept</span>, and offers from people who are not in your recipient list are marked with an unknown sender warning. Even with <span class="ui">Start transfers automatically, without asking</span> turned on, only transfers from people in your recipient list start by themselves. See <a href="#auto-accept">Receiving without being asked</a>.</p>
 
 <h3 id="faq-servers">What does Dodavo send to servers on the Internet?</h3>
-<p>Only what is needed for other computers to find yours. Dodavo publishes the addresses at which your computer can currently be reached under your Contact ID, to the lookup service of the iroh network, and keeps a connection to a relay server so that a transfer can be set up even when a direct connection is not possible. The names and contents of your files travel only inside the encrypted connection to the other computer. Dodavo has no accounts and sends no usage statistics.</p>
+<p>Only what is needed for other computers to find yours. Dodavo publishes the addresses at which your computer can currently be reached under your Contact ID, to the lookup service of the iroh network, and keeps a connection to a relay server so that a transfer can be set up even when a direct connection is not possible. The names and contents of your files travel only inside the encrypted connection to the other computer. Once a day, when <span class="ui">Check for updates automatically (once a day)</span> is on, Dodavo also fetches from the Dodavo page on GitHub (github.com) a small file that describes the latest version, and it downloads the setup program from there when you choose to install an update; see <a href="#update">Updating Dodavo</a>. Dodavo has no accounts and sends no usage statistics.</p>
 
 <h3 id="faq-intact">How do I know that a received file is intact?</h3>
 <p>Every transfer ends with a checksum over the whole item, which the receiving side verifies. While a file is being received, it has the extension <code>.part</code>; it gets its real name only after the checksum has been confirmed. Data that does not match is never saved as a complete file: the transfer reports <span class="ui">The received data is damaged (checksum mismatch)</span>, and the sender simply sends the item again.</p>
@@ -499,6 +522,14 @@
 <dd>The data was changed on the way, and the item was not saved. Ask the sender to send it again.</dd>
 <dt>“The clipboard is in use by another program.”</dt>
 <dd>Wait a moment and try copying your Contact ID again.</dd>
+<dt>“The update information is not signed by the Dodavo authors, so it is ignored.”</dt>
+<dd>The file that describes the latest version was changed on its way to you, or it was not made by the Dodavo authors. Nothing is installed. Try again later; if it keeps happening, download the setup program by hand from the Dodavo page on GitHub and compare its checksum with the published one.</dd>
+<dt>“Setup ended before the update was installed”</dt>
+<dd>Setup was closed right after it started, usually because the request for administrator permission was declined (an installation for all users needs it). Choose <span class="ui">Check for Updates…</span> from the <span class="ui">Help</span> menu and try again.</dd>
+<dt>Dodavo did not start again after an update</dt>
+<dd>Start it from the Start menu. If the message “The update to Dodavo … was not installed” appears, Setup did not finish; run <span class="ui">Check for Updates…</span> again, or install the new version by hand.</dd>
+<dt>Other Dodavo profiles were closed by the update</dt>
+<dd>An update closes every running copy of Dodavo and starts only the one that installed it again. Start the other profiles by hand; their transfers continue.</dd>
 <dt>Dodavo does not start a second time</dt>
 <dd>Only one copy of Dodavo runs at a time. Starting it again brings the existing window to the front.</dd>
 </dl>

@@ -13,6 +13,7 @@ Send files and folders directly from one Windows computer to another. You don't 
 - A transfer survives a lost Internet connection, sleep, a crash, a shutdown and even a power cut on either computer: it waits and continues where it stopped as soon as both are online again, and the whole item is still checked with a checksum at the end. Received data is flushed to disk regularly, a receiver stopped during its last step finishes on its own after a restart, and the computer is kept from sleeping automatically while data flows. Dodavo asks whether to wait or to cancel; the answer can be made permanent in Settings.
 - A classic Win32 interface that follows the Windows light/dark app mode.
 - Minimizes to the notification area so files can be received in the background, with an optional "Start with Windows" and "Always start minimized". Notifications report finished, paused and interrupted transfers, also while their windows are hidden.
+- Checks once a day whether a newer version has been released and installs it on request: the release notes are shown, the setup program is downloaded, checked against its published size, SHA-256 and Ed25519 signature, and run silently, and Dodavo starts again by itself. Help → Check for Updates… checks at any time; the daily check can be turned off in Settings.
 - Full help for keyboard and screen reader users (Help → View Help, or F1), in every supported language.
 - Available in English, Croatian, Serbian (Latin) and Slovenian. It follows the Windows display language, and you can choose another one in Settings.
 
@@ -92,11 +93,24 @@ The four programs are also left in `target\installer\staging\<x64|x86|x64-win7|x
 
 If none is set, the installer is built unsigned, which is fine for testing; [System requirements](#system-requirements) describes the warnings Windows then shows and how to verify the file.
 
+### Releasing an update
+
+Installed copies look for new versions on GitHub: once a day they fetch `https://github.com/hkatic/dodavo/releases/latest/download/update.json`, the update manifest attached to the latest published release (drafts and pre-releases are skipped by GitHub's `latest`). The manifest names the version, the installer's URL, size and SHA-256, the release notes per language, and an Ed25519 signature over those facts, made with a key that is kept outside the repository; the matching public key is compiled into the program (`src\update\keys.rs`), so a tampered manifest or installer is never run.
+
+A release therefore consists of three files on the GitHub release `v<version>`: `Dodavo-<version>-setup.exe`, its `.sha256`, and `update.json`. The steps:
+
+1. Set the new version in `Cargo.toml` and write the release notes as plain text in `release-notes\<version>\en.txt` (required), `hr.txt`, `sr-Latn.txt` and `sl.txt`; the program shows the user's language and falls back to English.
+2. Commit, tag `v<version>`, and build the installer with `installer\build.ps1`.
+3. Run `installer\publish.ps1` (with the signing key in `DODAVO_UPDATE_KEY_FILE` or `-KeyFile`). It builds the release tool (`cargo build --release --features release-tool --bin dodavo-release`), writes and verifies `target\installer\update.json`, and with `-Publish` creates the GitHub release as a draft with `gh` and publishes it after a confirmation. Without `gh`, upload the three files by hand.
+
+`dodavo-release keygen` makes the key pair once; `dodavo-release verify` checks a manifest against an installer and the built-in keys. How Dodavo and Setup hand over to each other is described in `installer\Dodavo.iss` (`[Code]`) and `src\update\mod.rs`.
+
 ## Development
 
 - `cargo test` runs the unit tests and an end-to-end transfer test between two endpoints in one process. That test needs internet access for address lookup.
 - `--profile <name>` uses a separate identity and settings folder, so two instances can run side by side: `Dodavo.exe --profile alice` and `--profile bob`.
 - The environment variable `DODAVO_THEME=dark` or `DODAVO_THEME=light` overrides the system app mode, for testing. Likewise, `DODAVO_LANG=en`, `hr`, `sr-Latn` or `sl` overrides the language, and `DODAVO_LEGACY_DPI=1` makes the program scale as on Windows 7 and 8 (system DPI only, no per-monitor functions).
+- To test updates against a local web server, `DODAVO_UPDATE_URL` replaces the manifest URL (plain `http://` is allowed) and `DODAVO_UPDATE_KEY` replaces the trusted public keys (hex, several separated by `;`), for example with a key pair made by `dodavo-release keygen`. `--updated` is the argument Setup starts Dodavo with after an update.
 - Settings and the identity key are stored in `%APPDATA%\Dodavo` (an existing `%APPDATA%\QuickAndEasyFileTransfer` folder from before the rename is moved there automatically).
 
 ### Source layout
@@ -106,8 +120,11 @@ If none is set, the installer is built unsigned, which is fine for testing; [Sys
 | `src/net/` | iroh endpoint, transfer protocol, sending and receiving |
 | `src/archive.rs` | zipping and unzipping folders (rejects unsafe paths), safe file names |
 | `src/i18n/` | user interface translations, one string table per language |
-| `src/app.rs` | application state; passes network events to the UI thread |
+| `src/app.rs` | application state; passes network and update events to the UI thread |
+| `src/update/` | update check and download: manifest, version comparison, signature check, handing over to Setup |
+| `src/bin/dodavo-release.rs` | release tool (signing key, update manifest), built with `--features release-tool` |
+| `release-notes/` | release notes per version and language, embedded in the update manifest |
 | `src/ui/window.rs` | small framework over raw Win32 windows (DPI scaling, fonts, modal loops) |
 | `src/ui/theme.rs` | light/dark mode for title bar, menus, and controls |
-| `src/ui/*.rs` | main window, incoming dialog, progress, recipient and settings dialogs, tray |
-| `installer/` | Inno Setup script, build script, import check and Setup translations |
+| `src/ui/*.rs` | main window, incoming dialog, progress, recipient, settings and update dialogs, tray |
+| `installer/` | Inno Setup script, build script, publish script, import check and Setup translations |

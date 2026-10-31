@@ -1,0 +1,7 @@
+First public release of Dodavo.
+
+- Sends files and folders directly from one Windows computer to another, end-to-end encrypted, with a permanent Contact ID instead of IP addresses.
+- Transfers continue after lost connections, sleep and restarts.
+- Full keyboard and screen reader support, light and dark mode, and help in English, Croatian, Serbian (Latin) and Slovenian.
+- Checks for new versions once a day and installs them on request.
+- Runs on Windows 7 SP1 to Windows 11, 32-bit and 64-bit.

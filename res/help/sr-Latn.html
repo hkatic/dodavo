@@ -77,7 +77,17 @@
 <p>Dodavo se zatim nalazi u meniju Start: pritisnite taster <kbd>Windows</kbd>, otkucajte <kbd>Dodavo</kbd> i pritisnite <kbd>Enter</kbd>.</p>
 <p>Ako je Dodavo pokrenut dok ga instalirate, ažurirate ili deinstalirate, instalacioni program vas na to upozorava i čeka. Zatvorite Dodavo (meni <span class="ui">Datoteka</span>, <span class="ui">Izlaz</span> ili <span class="ui">Izlaz</span> u meniju ikone u oblasti za obaveštenja), a zatim izaberite <span class="ui">U redu</span>.</p>
 <h3 id="update">Ažuriranje programa Dodavo</h3>
-<p>Da biste ažurirali Dodavo, pokrenite instalacioni program nove verzije. On zamenjuje program na istom mestu. Vaše postavke, lista primalaca i ID kontakta ostaju sačuvani.</p>
+<p>Dodavo se ažurira sam. Jednom dnevno, otprilike 15 sekundi nakon što se pokrene i poveže sa mrežom, na stranici programa Dodavo na GitHub-u proverava da li je objavljena novija verzija. Kada jeste, pojavljuje se obaveštenje <span class="ui">Dostupno je ažuriranje</span>, a u pozadini se otvara prozor <span class="ui">Dostupno ažuriranje</span>; izborom obaveštenja ili tasterima <kbd>Alt</kbd>+<kbd>Tab</kbd> dolazi u prvi plan. U prozoru piše koja je verzija dostupna i koju imate, a zatim slede:</p>
+<dl>
+<dt><span class="ui">Napomene uz izdanje</span></dt>
+<dd>Tekstualno polje samo za čitanje sa opisom novina. Čitajte ga tasterima sa strelicama; taster <kbd>Tab</kbd> vodi dalje na dugmad.</dd>
+<dt><span class="ui">Instaliraj ažuriranje</span> (<kbd>Alt</kbd>+<kbd>I</kbd>; to je podrazumevano dugme, pa ga bira i <kbd>Enter</kbd>)</dt>
+<dd>Preuzima novi instalacioni program i instalira ga, kao što je opisano u nastavku.</dd>
+<dt><span class="ui">Podseti me kasnije</span> (<kbd>Alt</kbd>+<kbd>K</kbd> ili <kbd>Esc</kbd>)</dt>
+<dd>Zatvara prozor. Dodavo vas ponovo podseća dan kasnije; do tada ažuriranje i dalje možete da instalirate iz menija <span class="ui">Pomoć</span>.</dd>
+</dl>
+<p>Kada izaberete <span class="ui">Instaliraj ažuriranje</span>, Dodavo najpre pita šta da uradi sa prenosima koji su još u toku, sa ista tri izbora kao pri izlasku: <span class="ui">Ne izlazi</span>, <span class="ui">Izađi i nastavi prenose kasnije</span> i <span class="ui">Otkaži prenose i izađi</span>. Zatim preuzima instalacioni program; red u prozoru prikazuje napredak, a fokus prelazi na dugme <span class="ui">Otkaži preuzimanje</span> (<kbd>Alt</kbd>+<kbd>O</kbd>), koje posle potvrde zaustavlja preuzimanje. Preuzeta datoteka se prihvata samo ako se njena veličina, kontrolni zbir i digitalni potpis podudaraju sa onim što su objavili autori programa Dodavo; u suprotnom poruka o grešci to javlja i ništa se ne instalira. Zatim se pokreće instalacioni program; ako je Dodavo instaliran za sve korisnike, Windows najpre traži dozvolu administratora. Čim je instalacioni program spreman, Dodavo se zatvara, instalacioni program tiho instalira novu verziju na isto mesto i sa istim izborom između „samo za mene“ i „za sve korisnike“, a Dodavo se sam ponovo pokreće uz obaveštenje <span class="ui">Dodavo je ažuriran</span>. Vaše postavke, lista primalaca i ID kontakta ostaju sačuvani, a prekinuti prenosi se nastavljaju kao i posle svakog drugog ponovnog pokretanja. Ako Dodavo koristite sa više profila, zatvaraju se i ostali profili i morate ih ponovo pokrenuti ručno.</p>
+<p>Da biste proverili u bilo kom trenutku, izaberite <span class="ui">Proveri da li ima ažuriranja…</span> u meniju <span class="ui">Pomoć</span>. Kada nema ničega novog, poruka javlja da imate najnoviju verziju; kada provera ne uspe, na primer bez internet veze, poruka objašnjava zašto. Da biste isključili dnevnu proveru, u postavkama opozovite izbor <span class="ui">Automatski proveravaj da li ima ažuriranja (jednom dnevno)</span>; provere koje pokrenete iz menija <span class="ui">Pomoć</span> i dalje rade. Možete da ažurirate i ručno u bilo kom trenutku: pokrenite instalacioni program nove verzije sa <a href="https://github.com/hkatic/dodavo/releases">stranice programa Dodavo na GitHub-u</a>. On zamenjuje program na istom mestu, a vaše postavke, lista primalaca i ID kontakta ostaju sačuvani.</p>
 <h3 id="uninstall">Deinstaliranje programa Dodavo</h3>
 <ol>
 <li>Zatvorite Dodavo.</li>
@@ -119,7 +129,7 @@
 <li><span class="ui">Van mreže – proverite internet vezu. Prenosi unutar lokalne mreže i dalje rade.</span></li>
 </ul>
 <p>Red statusa ne može da dobije fokus tastature. Da biste ga čuli, upotrebite komandu čitača ekrana za čitanje celog prozora: <kbd>NVDA</kbd>+<kbd>B</kbd> u čitaču NVDA, <kbd>Insert</kbd>+<kbd>B</kbd> u čitaču JAWS ili <kbd>Narator</kbd>+<kbd>W</kbd> u Naratoru.</p>
-<p>Traka menija ima tri menija. Meni <span class="ui">Datoteka</span> (<kbd>Alt</kbd>+<kbd>D</kbd>) sadrži opcije <span class="ui">Pošalji datoteku…</span>, <span class="ui">Pošalji fasciklu…</span>, <span class="ui">Dodaj primaoca…</span>, <span class="ui">Uredi primaoca…</span>, <span class="ui">Ukloni primaoca</span>, <span class="ui">Kopiraj moj ID kontakta</span>, <span class="ui">Postavke…</span> i <span class="ui">Izlaz</span>. Meni <span class="ui">Prenosi</span> (<kbd>Alt</kbd>+<kbd>R</kbd>) navodi sve prenose u toku, sa osobom, stavkom i stanjem, a na kraju sadrži opciju <span class="ui">Prikaži sve prenose</span> (<kbd>Ctrl</kbd>+<kbd>T</kbd>); kada ništa nije u toku, u njemu piše <span class="ui">Nema prenosa u toku</span>. Pogledajte <a href="#finding-transfers">Pronalaženje prenosa koji se odvija u pozadini</a>. Meni <span class="ui">Pomoć</span> (<kbd>Alt</kbd>+<kbd>P</kbd>) sadrži opcije <span class="ui">Prikaži pomoć</span>, <span class="ui">Kako funkcioniše</span> (kratak pregled) i <span class="ui">O programu</span> (broj verzije).</p>
+<p>Traka menija ima tri menija. Meni <span class="ui">Datoteka</span> (<kbd>Alt</kbd>+<kbd>D</kbd>) sadrži opcije <span class="ui">Pošalji datoteku…</span>, <span class="ui">Pošalji fasciklu…</span>, <span class="ui">Dodaj primaoca…</span>, <span class="ui">Uredi primaoca…</span>, <span class="ui">Ukloni primaoca</span>, <span class="ui">Kopiraj moj ID kontakta</span>, <span class="ui">Postavke…</span> i <span class="ui">Izlaz</span>. Meni <span class="ui">Prenosi</span> (<kbd>Alt</kbd>+<kbd>R</kbd>) navodi sve prenose u toku, sa osobom, stavkom i stanjem, a na kraju sadrži opciju <span class="ui">Prikaži sve prenose</span> (<kbd>Ctrl</kbd>+<kbd>T</kbd>); kada ništa nije u toku, u njemu piše <span class="ui">Nema prenosa u toku</span>. Pogledajte <a href="#finding-transfers">Pronalaženje prenosa koji se odvija u pozadini</a>. Meni <span class="ui">Pomoć</span> (<kbd>Alt</kbd>+<kbd>P</kbd>) sadrži opcije <span class="ui">Prikaži pomoć</span>, <span class="ui">Kako funkcioniše</span> (kratak pregled), <span class="ui">Proveri da li ima ažuriranja…</span> (pogledajte <a href="#update">Ažuriranje programa Dodavo</a>) i <span class="ui">O programu</span> (broj verzije).</p>
 <p>Kada je na listi izabrana osoba, meni radnji (<kbd>Enter</kbd>, dvostruki klik, <kbd>Shift</kbd>+<kbd>F10</kbd>, taster kontekstualnog menija ili desni klik) nudi opcije <span class="ui">Pošalji datoteku…</span>, <span class="ui">Pošalji fasciklu…</span>, <span class="ui">Prikaži prenos</span> (samo dok sa tom osobom traje prenos; <span class="ui">Prikaži prenose</span> kada ih ima više), <span class="ui">Uredi…</span> i <span class="ui">Ukloni</span>.</p>
 </section>
 
@@ -267,7 +277,7 @@
 <li>Dok prenosi traju, ikona u maloj znački prikazuje njihov broj, a njen opis alatke (ono što čitač ekrana pročita kada dođete do ikone) govori šta se dešava, osvežen otprilike svake sekunde: na primer <span class="ui">Dodavo – Slanje – „izveštaj.pdf“ (45 %), 12,3 MB/s</span> ili, kada ih ima više, <span class="ui">Dodavo – 2 prenosa u toku, 45 %, 12,3 MB/s</span>.</li>
 </ul>
 <p>Da biste potpuno zatvorili Dodavo, izaberite <span class="ui">Izlaz</span> u meniju <span class="ui">Datoteka</span> ili u meniju ikone. Ako su prenosi još u toku, Dodavo prvo pita i nudi tri opcije: <span class="ui">Ne izlazi</span> (podrazumevana opcija, pa <kbd>Enter</kbd> ili <kbd>Esc</kbd> ostavlja Dodavo pokrenutim), <span class="ui">Izađi i nastavi prenose kasnije</span> (prenosi se prekidaju i nastavljaju kada Dodavo ponovo bude pokrenut na oba računara) i <span class="ui">Otkaži prenose i izađi</span>. Pri odjavljivanju ili isključivanju sistema Windows Dodavo ne pita; prenosi se nastavljaju sledeći put. Posle izlaza ne možete da primate datoteke dok ponovo ne pokrenete Dodavo.</p>
-<p>Dodavo o završenim prenosima, dolaznim prenosima, pauziranju na drugoj strani, prekinutim i ponovo uspostavljenim vezama i drugim događajima izveštava obaveštenjima sistema Windows, i dok je prozor napretka umanjen u pozadinu. Čitači ekrana ih obično najavljuju. Izbor obaveštenja o prenosu dovodi njegov prozor u prednji plan. Ako neko propustite ili je uključena opcija Ne uznemiravaj, pronaći ćete ga u centru za obaveštenja sistema Windows (<kbd>Windows</kbd>+<kbd>N</kbd> u sistemu Windows 11).</p>
+<p>Dodavo o završenim prenosima, dolaznim prenosima, pauziranju na drugoj strani, prekinutim i ponovo uspostavljenim vezama, dostupnim ažuriranjima i drugim događajima izveštava obaveštenjima sistema Windows, i dok je prozor napretka umanjen u pozadinu. Čitači ekrana ih obično najavljuju. Izbor obaveštenja o prenosu dovodi njegov prozor u prednji plan. Ako neko propustite ili je uključena opcija Ne uznemiravaj, pronaći ćete ga u centru za obaveštenja sistema Windows (<kbd>Windows</kbd>+<kbd>N</kbd> u sistemu Windows 11).</p>
 </section>
 
 <section aria-labelledby="settings">
@@ -294,6 +304,8 @@
 <dd>Dodavo se pokreće bez prikazivanja glavnog prozora.</dd>
 <dt><span class="ui">Nastavi rad u oblasti za obaveštenja kada se prozor zatvori</span></dt>
 <dd>Kada nije izabrano, zatvaranjem glavnog prozora izlazite iz programa Dodavo.</dd>
+<dt><span class="ui">Automatski proveravaj da li ima ažuriranja (jednom dnevno)</span></dt>
+<dd>Dodavo jednom dnevno na stranici programa Dodavo na GitHub-u proverava da li je dostupna novija verzija i nudi da je instalira. Pogledajte <a href="#update">Ažuriranje programa Dodavo</a>.</dd>
 <dt><span class="ui">Pri zatvaranju prozora prenosa koji je u toku</span></dt>
 <dd>Lista sa opcijama <span class="ui">Pitaj svaki put</span>, <span class="ui">Nastavi u pozadini</span> i <span class="ui">Otkaži prenos</span>. Pogledajte <a href="#closing-progress">Zatvaranje prozora napretka tokom prenosa</a>.</dd>
 <dt><span class="ui">Ako se veza prekine tokom prenosa</span></dt>
@@ -362,6 +374,17 @@
 <tr><td><kbd>Alt</kbd>+<kbd>N</kbd></td><td>Nastavljanje prenosa</td></tr>
 <tr><td><kbd>Alt</kbd>+<kbd>Z</kbd></td><td>Umanjivanje u pozadinu</td></tr>
 <tr><td><kbd>Esc</kbd></td><td>Zatvaranje prozora (pita da li želite da nastavite u pozadini ili da otkažete)</td></tr>
+</tbody>
+</table>
+<table>
+<caption>Prozor Dostupno ažuriranje</caption>
+<thead>
+<tr><th scope="col">Tasteri</th><th scope="col">Radnja</th></tr>
+</thead>
+<tbody>
+<tr><td><kbd>Alt</kbd>+<kbd>I</kbd> ili <kbd>Enter</kbd></td><td>Instaliranje ažuriranja</td></tr>
+<tr><td><kbd>Alt</kbd>+<kbd>K</kbd> ili <kbd>Esc</kbd></td><td>Podseti me kasnije (zatvaranje prozora)</td></tr>
+<tr><td><kbd>Alt</kbd>+<kbd>O</kbd></td><td>Otkazivanje preuzimanja</td></tr>
 </tbody>
 </table>
 <table>
@@ -451,7 +474,7 @@
 <p>ID kontakta nije tajan; funkcioniše kao broj telefona. Svako ko ga ima može da vam ponudi datoteku, ali na vašem računaru se ništa ne čuva dok ne izaberete <span class="ui">Prihvati</span>, a ponude osoba koje nisu na vašoj listi primalaca označene su upozorenjem o nepoznatom pošiljaocu. Čak i kada je uključeno <span class="ui">Prenose pokreći automatski, bez pitanja</span>, sami se pokreću samo prenosi osoba sa vaše liste primalaca. Pogledajte <a href="#auto-accept">Primanje bez pitanja</a>.</p>
 
 <h3 id="faq-servers">Šta Dodavo šalje serverima na internetu?</h3>
-<p>Samo ono što je potrebno da bi drugi računari pronašli vaš. Dodavo pod vašim ID-om kontakta objavljuje adrese na kojima je vaš računar trenutno dostupan u usluzi za pronalaženje adresa mreže iroh i održava vezu sa posredničkim serverom kako bi prenos mogao da se uspostavi i kada direktna veza nije moguća. Nazivi i sadržaj vaših datoteka putuju samo unutar šifrovane veze sa drugim računarom. Dodavo nema korisničke naloge i ne šalje statistiku korišćenja.</p>
+<p>Samo ono što je potrebno da bi drugi računari pronašli vaš. Dodavo pod vašim ID-om kontakta objavljuje adrese na kojima je vaš računar trenutno dostupan u usluzi za pronalaženje adresa mreže iroh i održava vezu sa posredničkim serverom kako bi prenos mogao da se uspostavi i kada direktna veza nije moguća. Nazivi i sadržaj vaših datoteka putuju samo unutar šifrovane veze sa drugim računarom. Jednom dnevno, kada je uključena postavka <span class="ui">Automatski proveravaj da li ima ažuriranja (jednom dnevno)</span>, Dodavo sa stranice programa Dodavo na GitHub-u (github.com) preuzima i malu datoteku koja opisuje najnoviju verziju, a kada odlučite da instalirate ažuriranje, odatle preuzima instalacioni program; pogledajte <a href="#update">Ažuriranje programa Dodavo</a>. Dodavo nema korisničke naloge i ne šalje statistiku korišćenja.</p>
 
 <h3 id="faq-intact">Kako znam da je primljena datoteka neoštećena?</h3>
 <p>Svaki prenos se završava kontrolnim zbirom cele stavke, koji strana koja prima proverava. Dok se datoteka prima, ima oznaku tipa <code>.part</code>; svoj pravi naziv dobija tek nakon što je kontrolni zbir potvrđen. Podaci koji se ne podudaraju nikada se ne čuvaju kao celovita datoteka: prenos javlja <span class="ui">Primljeni podaci su oštećeni (kontrolni zbir se ne podudara)</span>, a pošiljalac jednostavno ponovo pošalje stavku.</p>
@@ -499,6 +522,14 @@
 <dd>Podaci su se promenili na putu i stavka nije sačuvana. Zamolite pošiljaoca da je ponovo pošalje.</dd>
 <dt>„Ostavu trenutno koristi drugi program.“</dt>
 <dd>Sačekajte trenutak i ponovo pokušajte da kopirate svoj ID kontakta.</dd>
+<dt>„Podatke o ažuriranju nisu potpisali autori programa Dodavo, pa se zanemaruju.“</dt>
+<dd>Datoteka koja opisuje najnoviju verziju promenjena je na putu do vas ili je nisu napravili autori programa Dodavo. Ništa se ne instalira. Pokušajte ponovo kasnije; ako se to ponavlja, ručno preuzmite instalacioni program sa stranice programa Dodavo na GitHub-u i uporedite njegov kontrolni zbir sa objavljenim.</dd>
+<dt>„Instalacioni program je završio pre nego što je ažuriranje instalirano“</dt>
+<dd>Instalacioni program je zatvoren odmah posle pokretanja, obično zato što je zahtev za dozvolu administratora odbijen (instalaciji za sve korisnike je potrebna). Izaberite <span class="ui">Proveri da li ima ažuriranja…</span> u meniju <span class="ui">Pomoć</span> i pokušajte ponovo.</dd>
+<dt>Dodavo se posle ažuriranja nije ponovo pokrenuo</dt>
+<dd>Pokrenite ga iz menija Start. Ako se pojavi poruka „Ažuriranje na Dodavo … nije instalirano“, instalacioni program nije završio; ponovo pokrenite <span class="ui">Proveri da li ima ažuriranja…</span> ili ručno instalirajte novu verziju.</dd>
+<dt>Ažuriranje je zatvorilo ostale profile programa Dodavo</dt>
+<dd>Ažuriranje zatvara svaku pokrenutu instancu programa Dodavo, a ponovo pokreće samo onu koja ga je instalirala. Ostale profile pokrenite ručno; njihovi prenosi se nastavljaju.</dd>
 <dt>Dodavo se ne pokreće drugi put</dt>
 <dd>Istovremeno može da radi samo jedna instanca programa Dodavo. Ponovnim pokretanjem postojeći prozor dolazi u prvi plan.</dd>
 </dl>

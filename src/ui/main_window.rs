@@ -39,7 +39,12 @@ const ID_VIEW_HELP: u16 = 112;
 const ID_SHOW_TRANSFERS: u16 = 113;
 /// Shows the running transfers with the selected recipient.
 const ID_SHOW_CONTACT_TRANSFERS: u16 = 114;
+const ID_CHECK_UPDATES: u16 = 115;
 const ID_LIST: u16 = 200;
+/// The first automatic update check, shortly after the start.
+const TIMER_UPDATE_START: usize = 1;
+/// Looks regularly whether the daily update check is due.
+const TIMER_UPDATE_TICK: usize = 2;
 /// The running transfers listed in the Transfers menu, in menu order.
 const ID_TRANSFER_FIRST: u16 = 300;
 const ID_TRANSFER_LAST: u16 = 349;
@@ -57,6 +62,7 @@ thread_local! {
     static ACCEL: Cell<HACCEL> = const { Cell::new(std::ptr::null_mut()) };
     static MSG_TASKBAR_CREATED: Cell<u32> = const { Cell::new(0) };
     static MSG_SHOW: Cell<u32> = const { Cell::new(0) };
+    static MSG_EXIT_FOR_UPDATE: Cell<u32> = const { Cell::new(0) };
     static LIST: Cell<HWND> = const { Cell::new(std::ptr::null_mut()) };
     static STATUS: Cell<HWND> = const { Cell::new(std::ptr::null_mut()) };
 }
@@ -64,6 +70,12 @@ thread_local! {
 /// The window message another instance posts to bring this one to the front.
 pub fn show_message_id() -> u32 {
     unsafe { RegisterWindowMessageW(wide("Dodavo_Show").as_ptr()) }
+}
+
+/// The window message the instance that installs an update posts to the
+/// others (other profiles): exit now, with the transfers suspended.
+pub fn exit_for_update_message_id() -> u32 {
+    unsafe { RegisterWindowMessageW(wide("Dodavo_ExitForUpdate").as_ptr()) }
 }
 
 pub fn window_title(profile: Option<&str>) -> String {
@@ -160,6 +172,9 @@ fn build_menu() -> (HMENU, HMENU) {
     let help = unsafe { CreatePopupMenu() };
     menu_item(help, ID_VIEW_HELP, tr!(menu_view_help));
     menu_item(help, ID_HELP, tr!(menu_how));
+    menu_separator(help);
+    menu_item(help, ID_CHECK_UPDATES, tr!(menu_check_updates));
+    menu_separator(help);
     menu_item(help, ID_ABOUT, tr!(menu_about));
     menu_popup(bar, help, tr!(menu_help));
     (bar, transfers)
@@ -205,6 +220,7 @@ fn build_accelerators() -> HACCEL {
 pub fn create(profile: Option<&str>, start_hidden: bool) -> HWND {
     MSG_TASKBAR_CREATED.set(unsafe { RegisterWindowMessageW(wide("TaskbarCreated").as_ptr()) });
     MSG_SHOW.set(show_message_id());
+    MSG_EXIT_FOR_UPDATE.set(exit_for_update_message_id());
     ACCEL.set(build_accelerators());
     let (menu, transfers_menu) = build_menu();
     let handler = MainWindow {
@@ -234,6 +250,20 @@ pub fn create(profile: Option<&str>, start_hidden: bool) -> HWND {
     );
     MAIN.set(hwnd);
     app::set_main_window(hwnd);
+    unsafe {
+        SetTimer(
+            hwnd,
+            TIMER_UPDATE_START,
+            crate::update::START_DELAY.as_millis() as u32,
+            None,
+        );
+        SetTimer(
+            hwnd,
+            TIMER_UPDATE_TICK,
+            crate::update::TICK.as_millis() as u32,
+            None,
+        );
+    }
     // The list view is created outside of the handler so that the notifications
     // it sends while being created (e.g. for the empty-list text) reach the handler.
     let list = window::with_window(hwnd, create_list).unwrap();
@@ -341,6 +371,11 @@ pub fn set_status(text: &str) {
 
 pub fn set_online(online: bool) {
     set_text(STATUS.get(), status_text(Some(online)));
+}
+
+/// Shows the connection state again after a temporary status text.
+pub fn restore_status() {
+    set_text(STATUS.get(), status_text(app::with(|a| a.online)));
 }
 
 fn status_text(online: Option<bool>) -> &'static str {
@@ -604,6 +639,7 @@ impl MainWindow {
             ID_TRAY_OPEN => window::bring_to_front(w.hwnd),
             ID_VIEW_HELP => super::help::show(w.hwnd),
             ID_HELP => info(w.hwnd, tr!(help_text)),
+            ID_CHECK_UPDATES => super::update::check_now(w.hwnd),
             ID_ABOUT => info(
                 w.hwnd,
                 &tr!(
@@ -723,34 +759,49 @@ impl MainWindow {
     }
 }
 
-/// Exits the application. While transfers run, the user is asked first; the
-/// default is to stay. Suspended transfers continue at the next start,
-/// unless the user chooses to cancel them.
-fn quit(w: &Window) {
+/// Asks whether to exit while transfers run; the default is to stay.
+/// Returns `None` to stay, otherwise whether the transfers are to be
+/// cancelled (suspended transfers continue at the next start). Without
+/// running transfers there is nothing to ask.
+pub fn confirm_exit(owner: HWND) -> Option<bool> {
     let active = app::active_transfer_count();
-    if active > 0 {
-        let (choice, _) = ask(
-            w.hwnd,
-            &trn!(exit_instruction, active),
-            tr!(exit_text),
-            &[
-                (CHOICE_EXIT_STAY, tr!(exit_stay)),
-                (CHOICE_EXIT_KEEP, tr!(exit_keep)),
-                (CHOICE_EXIT_CANCEL, tr!(exit_cancel_transfers)),
-            ],
-            false,
-            None,
-        );
-        match choice {
-            CHOICE_EXIT_KEEP => {}
-            CHOICE_EXIT_CANCEL => app::cancel_all_transfers(),
-            // "Don't exit", Escape or the dialog's close button.
-            _ => return,
-        }
+    if active == 0 {
+        return Some(false);
+    }
+    let (choice, _) = ask(
+        owner,
+        &trn!(exit_instruction, active),
+        tr!(exit_text),
+        &[
+            (CHOICE_EXIT_STAY, tr!(exit_stay)),
+            (CHOICE_EXIT_KEEP, tr!(exit_keep)),
+            (CHOICE_EXIT_CANCEL, tr!(exit_cancel_transfers)),
+        ],
+        false,
+        None,
+    );
+    match choice {
+        CHOICE_EXIT_KEEP => Some(false),
+        CHOICE_EXIT_CANCEL => Some(true),
+        // "Don't exit", Escape or the dialog's close button.
+        _ => None,
+    }
+}
+
+fn exit(main: HWND, cancel_transfers: bool) {
+    if cancel_transfers {
+        app::cancel_all_transfers();
     }
     // While the window still exists, so the icon is reliably removed.
-    tray::remove(w.hwnd);
-    unsafe { DestroyWindow(w.hwnd) };
+    tray::remove(main);
+    unsafe { DestroyWindow(main) };
+}
+
+/// Exits the application. While transfers run, the user is asked first.
+fn quit(w: &Window) {
+    if let Some(cancel_transfers) = confirm_exit(w.hwnd) {
+        exit(w.hwnd, cancel_transfers);
+    }
 }
 
 impl Handler for MainWindow {
@@ -915,6 +966,29 @@ impl Handler for MainWindow {
             }
             m if m == MSG_SHOW.get() => {
                 window::bring_to_front(w.hwnd);
+                Some(0)
+            }
+            // The Setup of an update is ready and asks every instance to leave
+            // (see `update`). The instance that installs exits as the user
+            // chose in the Update Available window; the other profiles leave
+            // with their transfers suspended, as at a logoff, and are not
+            // started again by Setup.
+            m if m == MSG_EXIT_FOR_UPDATE.get() && m != 0 => {
+                // The mutexes go first, so that Setup never sees them.
+                crate::release_instance_mutexes();
+                exit(w.hwnd, app::with(|a| a.update_cancel_transfers));
+                Some(0)
+            }
+            WM_TIMER if wp == TIMER_UPDATE_START => {
+                unsafe { KillTimer(w.hwnd, TIMER_UPDATE_START) };
+                // Leftovers of an earlier update; a Setup that is still
+                // running from such a file keeps it, which is fine.
+                crate::update::cleanup();
+                super::update::tick();
+                Some(0)
+            }
+            WM_TIMER if wp == TIMER_UPDATE_TICK => {
+                super::update::tick();
                 Some(0)
             }
             // Logoff or shutdown is never blocked with a question: transfers

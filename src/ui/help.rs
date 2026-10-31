@@ -234,6 +234,15 @@ mod tests {
                 s.close_running_label,
                 s.language_label,
                 s.cancelled,
+                s.menu_check_updates,
+                s.check_updates,
+                s.update_title,
+                s.release_notes_label,
+                s.install_update,
+                s.remind_later,
+                s.cancel_download,
+                s.update_balloon_title,
+                s.updated_balloon_title,
             ];
             for text in texts {
                 let text = visible(text);

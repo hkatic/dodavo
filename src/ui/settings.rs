@@ -31,6 +31,7 @@ const ID_ASK_AFTER: u16 = 19;
 const ID_MINIMIZED: u16 = 20;
 const ID_CLOSE_RUNNING: u16 = 21;
 const ID_CONNECTION_LOST: u16 = 22;
+const ID_CHECK_UPDATES: u16 = 23;
 
 struct SettingsDialog {
     my_name: HWND,
@@ -43,6 +44,7 @@ struct SettingsDialog {
     autostart: HWND,
     minimized: HWND,
     tray: HWND,
+    check_updates: HWND,
     close_running: HWND,
     connection_lost: HWND,
     language: HWND,
@@ -60,6 +62,7 @@ pub fn show(owner: HWND) {
         autostart: std::ptr::null_mut(),
         minimized: std::ptr::null_mut(),
         tray: std::ptr::null_mut(),
+        check_updates: std::ptr::null_mut(),
         close_running: std::ptr::null_mut(),
         connection_lost: std::ptr::null_mut(),
         language: std::ptr::null_mut(),
@@ -67,7 +70,7 @@ pub fn show(owner: HWND) {
     let hwnd = window::create(
         CreateOptions {
             title: tr!(settings_title),
-            client: (500, 650),
+            client: (500, 674),
             center_on: owner,
             ..Default::default()
         },
@@ -107,6 +110,7 @@ impl SettingsDialog {
         let autostart = window::is_checked(self.autostart);
         let minimized = window::is_checked(self.minimized);
         let tray = window::is_checked(self.tray);
+        let check_updates = window::is_checked(self.check_updates);
         let close_running = window::combo_selection(self.close_running)
             .and_then(|i| CloseAction::ALL.get(i).copied())
             .unwrap_or_default();
@@ -128,6 +132,7 @@ impl SettingsDialog {
             c.start_with_windows = autostart;
             c.start_minimized = minimized;
             c.minimize_to_tray = tray;
+            c.check_updates = check_updates;
             c.close_running_transfer = close_running;
             c.connection_lost = connection_lost;
             c.language = language;
@@ -198,23 +203,28 @@ impl Handler for SettingsDialog {
             cfg.minimize_to_tray,
             (24, 340, 462, 20),
         );
-        w.caption(tr!(close_running_label), (24, 372, 462, 18));
+        self.check_updates = w.checkbox(
+            tr!(check_updates),
+            ID_CHECK_UPDATES,
+            cfg.check_updates,
+            (24, 364, 462, 20),
+        );
+        w.caption(tr!(close_running_label), (24, 396, 462, 18));
         let actions = [tr!(close_ask), tr!(close_background), tr!(close_cancel)];
         let selected = CloseAction::ALL
             .iter()
             .position(|&a| a == cfg.close_running_transfer)
             .unwrap_or(0);
-        self.close_running =
-            w.combobox(&actions, selected, ID_CLOSE_RUNNING, (24, 392, 300, 24));
-        w.caption(tr!(connection_lost_label), (24, 428, 462, 18));
+        self.close_running = w.combobox(&actions, selected, ID_CLOSE_RUNNING, (24, 416, 300, 24));
+        w.caption(tr!(connection_lost_label), (24, 452, 462, 18));
         let actions = [tr!(lost_ask), tr!(lost_wait), tr!(lost_cancel)];
         let selected = ConnectionLostAction::ALL
             .iter()
             .position(|&a| a == cfg.connection_lost)
             .unwrap_or(0);
         self.connection_lost =
-            w.combobox(&actions, selected, ID_CONNECTION_LOST, (24, 448, 300, 24));
-        w.caption(tr!(language_label), (24, 484, 462, 18));
+            w.combobox(&actions, selected, ID_CONNECTION_LOST, (24, 472, 300, 24));
+        w.caption(tr!(language_label), (24, 508, 462, 18));
         let mut languages = vec![tr!(language_default)];
         languages.extend(Lang::ALL.iter().map(|l| l.native_name()));
         let selected = cfg
@@ -223,21 +233,21 @@ impl Handler for SettingsDialog {
             .and_then(Lang::from_code)
             .and_then(|l| Lang::ALL.iter().position(|&x| x == l))
             .map_or(0, |i| i + 1);
-        self.language = w.combobox(&languages, selected, ID_LANGUAGE, (24, 504, 300, 24));
+        self.language = w.combobox(&languages, selected, ID_LANGUAGE, (24, 528, 300, 24));
 
         let my_id = app::with(|a| a.my_id.clone());
-        w.label(tr!(my_id_label), (14, 544, 472, 18));
-        let id_edit = w.edit(&my_id, 0, (14, 564, 380, 24));
+        w.label(tr!(my_id_label), (14, 568, 472, 18));
+        let id_edit = w.edit(&my_id, 0, (14, 588, 380, 24));
         super::send(
             id_edit,
             windows_sys::Win32::UI::Controls::EM_SETREADONLY,
             1,
             0,
         );
-        w.button(tr!(copy), ID_COPY, (400, 563, 86, 26));
+        w.button(tr!(copy), ID_COPY, (400, 587, 86, 26));
 
-        w.button(tr!(ok), ID_OK, (300, 606, 90, 30));
-        w.button(tr!(cancel), IDCANCEL as u16, (396, 606, 90, 30));
+        w.button(tr!(ok), ID_OK, (300, 630, 90, 30));
+        w.button(tr!(cancel), IDCANCEL as u16, (396, 630, 90, 30));
         w.default_id.set(ID_OK);
         self.update_enabled();
         window::focus(self.my_name);

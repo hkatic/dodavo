@@ -80,6 +80,12 @@ pub struct Config {
     pub tray_hint_shown: bool,
     /// User interface language code (see `i18n::Lang::code`); `None` follows Windows.
     pub language: Option<String>,
+    /// Look for a newer version once a day (see `update`).
+    pub check_updates: bool,
+    /// When the last check succeeded (Unix seconds).
+    pub update_last_check: Option<u64>,
+    /// "Remind Me Later": no update window before this time (Unix seconds).
+    pub update_remind_after: Option<u64>,
 }
 
 impl Default for Config {
@@ -100,6 +106,9 @@ impl Default for Config {
             ask_after_receive: true,
             tray_hint_shown: false,
             language: None,
+            check_updates: true,
+            update_last_check: None,
+            update_remind_after: None,
         }
     }
 }
@@ -214,6 +223,9 @@ mod tests {
         cfg.language = Some("hr".into());
         cfg.close_running_transfer = CloseAction::Background;
         cfg.connection_lost = ConnectionLostAction::Wait;
+        cfg.check_updates = false;
+        cfg.update_last_check = Some(1_700_000_000);
+        cfg.update_remind_after = Some(1_700_086_400);
         cfg.save(&dir).unwrap();
         assert_eq!(Config::load(&dir).unwrap(), cfg);
         assert!(cfg.contact_by_id("ABC").is_some());
@@ -253,5 +265,8 @@ mod tests {
         assert_eq!(cfg.close_running_transfer, CloseAction::Ask);
         assert_eq!(cfg.connection_lost, ConnectionLostAction::Ask);
         assert_eq!(cfg.language, None);
+        assert!(cfg.check_updates);
+        assert_eq!(cfg.update_last_check, None);
+        assert_eq!(cfg.update_remind_after, None);
     }
 }

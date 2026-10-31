@@ -27,6 +27,7 @@ use crate::{
         self, APP_NAME, format_size, incoming, progress,
         tray::{self, BalloonAction},
     },
+    update,
 };
 
 /// Speed is averaged over the progress reports of the last few seconds.
@@ -39,13 +40,30 @@ pub struct App {
     pub data_dir: PathBuf,
     pub my_id: String,
     pub net: NetHandle,
+    /// The `--profile` this instance runs with.
+    pub profile: Option<String>,
     pub main: HWND,
+    /// Whether the network reports us online (`None` until it says).
+    pub online: Option<bool>,
     /// Running and recently finished transfers by transfer id.
     pub transfers: HashMap<u64, Transfer>,
     /// Open "incoming transfer" windows by transfer id.
     pub offers: HashMap<u64, HWND>,
     /// What selecting the last notification does.
     pub balloon_action: Option<BalloonAction>,
+    /// The open "Update Available" window, if any.
+    pub update_window: HWND,
+    /// The running update check or download, if any.
+    pub update_job: Option<update::Job>,
+    /// What the user chose for running transfers when installing an update:
+    /// cancel them (`true`) or suspend them when Setup asks us to exit.
+    pub update_cancel_transfers: bool,
+}
+
+/// What the event queue carries onto the UI thread.
+pub enum Queued {
+    Net(Event),
+    Update(update::Event),
 }
 
 /// A transfer the UI knows about: its progress window and the state that the
@@ -257,7 +275,7 @@ thread_local! {
     static AWAKE: Cell<bool> = const { Cell::new(false) };
 }
 
-static EVENTS: Mutex<VecDeque<Event>> = Mutex::new(VecDeque::new());
+static EVENTS: Mutex<VecDeque<Queued>> = Mutex::new(VecDeque::new());
 static MAIN_HWND: AtomicIsize = AtomicIsize::new(0);
 
 pub fn install(app: App) {
@@ -303,6 +321,15 @@ pub fn net_send(cmd: Command) {
 
 /// Called from network threads.
 pub fn event_sink(event: Event) {
+    enqueue(Queued::Net(event));
+}
+
+/// Called from the update thread.
+pub fn update_sink(event: update::Event) {
+    enqueue(Queued::Update(event));
+}
+
+fn enqueue(event: Queued) {
     EVENTS.lock().unwrap().push_back(event);
     let hwnd = MAIN_HWND.load(Ordering::SeqCst);
     if hwnd != 0 {
@@ -507,7 +534,7 @@ pub fn cancel_all_transfers() {
     }
 }
 
-/// Drains the queue of network events (on the UI thread).
+/// Drains the queue of network and update events (on the UI thread).
 pub fn process_events() {
     loop {
         let Some(event) = EVENTS.lock().unwrap().pop_front() else {
@@ -528,10 +555,24 @@ unsafe extern "system" fn retry_timer(_: HWND, _: u32, id: usize, _: u32) {
 }
 
 /// Handles one event; returns it back if it could not be delivered yet.
-fn handle_event(event: Event) -> Option<Event> {
+fn handle_event(event: Queued) -> Option<Queued> {
+    match event {
+        Queued::Net(event) => handle_net_event(event).map(Queued::Net),
+        Queued::Update(event) => ui::update::handle_event(event).map(Queued::Update),
+    }
+}
+
+fn handle_net_event(event: Event) -> Option<Event> {
     match event {
         Event::BindFailed(msg) => ui::main_window::set_status(&tr!(network_problem, error = msg)),
-        Event::Online(online) => ui::main_window::set_online(online),
+        Event::Online(online) => {
+            with(|a| a.online = Some(online));
+            ui::main_window::set_online(online);
+            if online {
+                // A check that was waiting for the connection.
+                ui::update::tick();
+            }
+        }
         Event::Offer { id, from, offer } => {
             let from = from.to_string();
             let (name, known) = peer_name(&from, &offer.sender_name);

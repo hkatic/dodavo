@@ -335,6 +335,7 @@ strings! {
         start_with_windows,
         start_minimized,
         keep_in_tray,
+        check_updates,
         ask_after_receive,
         close_running_label,
         close_ask,
@@ -361,6 +362,39 @@ strings! {
         tray_tip_one_speed,
         tray_tip_many,
         tray_tip_many_speed,
+        // Updates: Help menu command, notifications and the Update Available window.
+        menu_check_updates,
+        update_checking,
+        update_latest,
+        update_check_failed,
+        update_balloon_title,
+        update_balloon,
+        updated_balloon_title,
+        updated_balloon,
+        update_not_installed,
+        update_title,
+        update_headline,
+        release_notes_label,
+        install_update,
+        remind_later,
+        cancel_download,
+        update_downloading,
+        update_verifying,
+        update_launching,
+        update_launching_admin,
+        update_cancel_confirm,
+        update_failed,
+        update_err_network,
+        update_err_http,
+        update_err_too_large,
+        update_err_manifest,
+        update_err_signature,
+        update_err_size,
+        update_err_checksum,
+        update_err_io,
+        update_err_disk_space,
+        update_err_launch,
+        update_err_setup_exit,
         // Common.
         ok,
         cancel,
@@ -612,7 +646,7 @@ mod tests {
         }
         for lang in Lang::ALL {
             let s = lang.strings();
-            let groups: [(&str, Vec<&str>); 16] = [
+            let groups: [(&str, Vec<&str>); 17] = [
                 ("menu bar", vec![s.menu_file, s.menu_transfers, s.menu_help]),
                 (
                     "File menu",
@@ -629,7 +663,12 @@ mod tests {
                 ),
                 (
                     "Help menu",
-                    vec![s.menu_view_help, s.menu_how, s.menu_about],
+                    vec![
+                        s.menu_view_help,
+                        s.menu_how,
+                        s.menu_check_updates,
+                        s.menu_about,
+                    ],
                 ),
                 // `ctx_show_transfers` replaces `ctx_show_transfer` when there are
                 // several, so the two share their access key.
@@ -670,6 +709,7 @@ mod tests {
                         s.start_with_windows,
                         s.start_minimized,
                         s.keep_in_tray,
+                        s.check_updates,
                         s.close_running_label,
                         s.connection_lost_label,
                         s.language_label,
@@ -712,6 +752,15 @@ mod tests {
                         s.browse,
                         s.accept,
                         s.decline,
+                    ],
+                ),
+                (
+                    "update",
+                    vec![
+                        s.release_notes_label,
+                        s.install_update,
+                        s.remind_later,
+                        s.cancel_download,
                     ],
                 ),
             ];

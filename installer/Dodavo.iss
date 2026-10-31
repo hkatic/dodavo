@@ -24,6 +24,9 @@
 
 #define AppName "Dodavo"
 #define AppExeName "Dodavo.exe"
+; Held by every running instance (see src/main.rs); Setup and the uninstaller
+; use it to tell that Dodavo is running.
+#define AppMutexName "Local\DodavoRunning"
 ; build.ps1 passes a staged (and possibly signed) copy of the program.
 #ifndef AppExe
   #define AppExe SourcePath + "..\target\release\" + AppExeName
@@ -60,8 +63,11 @@ VersionInfoDescription={#AppName} Setup
 
 ; Per-user install without UAC by default (%LOCALAPPDATA%\Programs\Dodavo).
 ; The wizard offers "install for all users" too, which asks for elevation.
+; /CURRENTUSER and /ALLUSERS choose the mode on the command line; an
+; automatic update passes the mode of the installation it updates. Without
+; them, an existing installation decides (UsePreviousPrivileges).
 PrivilegesRequired=lowest
-PrivilegesRequiredOverridesAllowed=dialog
+PrivilegesRequiredOverridesAllowed=dialog commandline
 DefaultDirName={autopf}\{#AppName}
 DisableProgramGroupPage=yes
 ; The uninstall step below touches HKCU, also in an all-users install.
@@ -84,7 +90,7 @@ MinVersion=10.0
 
 ; Every running instance (of any profile) holds this mutex, so Setup and the
 ; uninstaller ask the user to close Dodavo first. See src/main.rs.
-AppMutex=Local\DodavoRunning
+AppMutex={#AppMutexName}
 
 ; Follows the Windows light/dark app mode, like the program itself.
 WizardStyle=modern dynamic
@@ -116,6 +122,14 @@ Name: "serbianlatin"; MessagesFile: "languages\SerbianLatin.isl"
 Name: "croatian"; MessagesFile: "languages\Croatian.isl"
 Name: "slovenian"; MessagesFile: "compiler:Languages\Slovenian.isl"
 
+[CustomMessages]
+; Shown (in the log, since the update runs silently) when Dodavo did not exit
+; in time for an automatic update.
+english.UpdateStillRunning=Dodavo is still running. Exit Dodavo and start the update again.
+croatian.UpdateStillRunning=Dodavo je još uvijek pokrenut. Izađite iz programa Dodavo i ponovno pokrenite ažuriranje.
+serbianlatin.UpdateStillRunning=Dodavo je i dalje pokrenut. Izađite iz programa Dodavo i ponovo pokrenite ažuriranje.
+slovenian.UpdateStillRunning=Dodavo še vedno teče. Končajte Dodavo in znova zaženite posodobitev.
+
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 
@@ -145,6 +159,127 @@ Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueName: 
 
 [Run]
 Filename: "{app}\{#AppExeName}"; Description: "{cm:LaunchProgram,{#AppName}}"; Flags: nowait postinstall skipifsilent
+; Automatic update (Setup was started by Dodavo itself, see [Code]): start the
+; new version again with the arguments Dodavo passed, as the logged-on user
+; even when Setup had to elevate for an all-users installation.
+Filename: "{app}\{#AppExeName}"; Parameters: "{param:DODAVOARGS|}"; Flags: nowait runasoriginaluser; Check: IsAutoUpdate
 
 ; Settings, recipients and the identity key in %APPDATA%\Dodavo are kept on
 ; uninstall on purpose: reinstalling keeps the same Contact ID.
+
+[Code]
+{ Automatic updates. Dodavo downloads this Setup, checks it and starts it with
+    /VERYSILENT /SUPPRESSMSGBOXES ... /CURRENTUSER|/ALLUSERS
+    /DODAVOUPDATE=<its process id> /DODAVOARGS="<args>"
+  and keeps running. Setup elevates itself first when the installation is for
+  all users (Windows asks the user), so everything below runs with the rights
+  the installation needs. InitializeSetup then asks every running instance
+  of Dodavo (all profiles hold the same mutex) to exit by posting the window
+  message Dodavo_ExitForUpdate to their main windows, and waits for them;
+  this runs before Setup's own AppMutex check, which a silent Setup would
+  fail. PrepareToInstall waits once more, right before the files are
+  replaced, and the second [Run] entry above starts Dodavo again afterwards.
+  The message name, the window class name and the parameters are a contract
+  with src/update and src/ui/main_window.rs: keep them in step. }
+
+const
+  SYNCHRONIZE = $00100000;
+  { 240 x 250 ms = 60 seconds. }
+  UpdateWaitTicks = 240;
+  DodavoMainClass = 'Dodavo_Main';
+  ExitForUpdateMessage = 'Dodavo_ExitForUpdate';
+
+function OpenProcess(dwDesiredAccess: DWORD; bInheritHandle: BOOL; dwProcessId: DWORD): THandle;
+  external 'OpenProcess@kernel32.dll stdcall';
+function WaitForSingleObject(hHandle: THandle; dwMilliseconds: DWORD): DWORD;
+  external 'WaitForSingleObject@kernel32.dll stdcall';
+function CloseHandle(hObject: THandle): BOOL;
+  external 'CloseHandle@kernel32.dll stdcall';
+function RegisterWindowMessageW(lpString: String): UINT;
+  external 'RegisterWindowMessageW@user32.dll stdcall';
+{ lpszWindow is declared as a number so that 0 (any title) can be passed. }
+function FindWindowExW(hWndParent, hWndChildAfter: HWND; lpszClass: String; lpszWindow: Cardinal): HWND;
+  external 'FindWindowExW@user32.dll stdcall';
+
+{ True when Setup was started by Dodavo's own update. }
+function IsAutoUpdate: Boolean;
+begin
+  Result := ExpandConstant('{param:DODAVOUPDATE|}') <> '';
+end;
+
+{ Asks every running instance of Dodavo to exit for the update. }
+procedure AskDodavoToExit;
+var
+  Msg: UINT;
+  Wnd: HWND;
+  Count: Integer;
+begin
+  Msg := RegisterWindowMessageW(ExitForUpdateMessage);
+  Count := 0;
+  Wnd := FindWindowExW(0, 0, DodavoMainClass, 0);
+  while Wnd <> 0 do
+  begin
+    PostMessage(Wnd, Msg, 0, 0);
+    Count := Count + 1;
+    Wnd := FindWindowExW(0, Wnd, DodavoMainClass, 0);
+  end;
+  Log(Format('Update: asked %d Dodavo window(s) to exit', [Count]));
+end;
+
+{ Waits for the Dodavo that started the update and for every other instance
+  to exit. Returns False if one is still running after a minute. }
+function WaitForDodavoToExit: Boolean;
+var
+  Pid: Integer;
+  Process: THandle;
+  Ticks: Integer;
+begin
+  Pid := StrToIntDef(ExpandConstant('{param:DODAVOUPDATE|0}'), 0);
+  if Pid > 0 then
+  begin
+    Process := OpenProcess(SYNCHRONIZE, False, Pid);
+    if Process <> 0 then
+    begin
+      Log(Format('Update: waiting for Dodavo (process %d) to exit', [Pid]));
+      WaitForSingleObject(Process, UpdateWaitTicks * 250);
+      CloseHandle(Process);
+    end;
+  end;
+  Ticks := 0;
+  while CheckForMutexes('{#AppMutexName}') and (Ticks < UpdateWaitTicks) do
+  begin
+    if Ticks = 0 then
+      Log('Update: waiting for the other instances of Dodavo to exit');
+    Sleep(250);
+    Ticks := Ticks + 1;
+  end;
+  Result := not CheckForMutexes('{#AppMutexName}');
+end;
+
+{ Runs (after any elevation) before Setup's own AppMutex check at startup,
+  which a silent Setup would fail: tells Dodavo to exit now and waits. }
+function InitializeSetup: Boolean;
+begin
+  Result := True;
+  if IsAutoUpdate then
+  begin
+    AskDodavoToExit;
+    if not WaitForDodavoToExit then
+    begin
+      Log('Update: Dodavo is still running; giving up');
+      Result := False;
+    end;
+  end;
+end;
+
+{ Runs before Setup checks for files in use: the last chance for an instance
+  that was started meanwhile to go. }
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+begin
+  Result := '';
+  if IsAutoUpdate and not WaitForDodavoToExit then
+  begin
+    Log('Update: Dodavo is still running; giving up');
+    Result := CustomMessage('UpdateStillRunning');
+  end;
+end;

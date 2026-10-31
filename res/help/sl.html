@@ -77,7 +77,17 @@
 <p>Dodavo je nato v meniju Start: pritisnite tipko <kbd>Windows</kbd>, vnesite <kbd>Dodavo</kbd> in pritisnite <kbd>Enter</kbd>.</p>
 <p>Če se Dodavo izvaja, ko ga nameščate, posodabljate ali odstranjujete, vas namestitveni program na to opozori in počaka. Zaprite Dodavo (meni <span class="ui">Datoteka</span>, <span class="ui">Izhod</span> ali <span class="ui">Izhod</span> v meniju ikone v območju za obvestila), nato izberite <span class="ui">V redu</span>.</p>
 <h3 id="update">Posodabljanje programa Dodavo</h3>
-<p>Če želite posodobiti Dodavo, zaženite namestitveni program nove različice. Ta zamenja program na istem mestu. Vaše nastavitve, seznam prejemnikov in ID stika se ohranijo.</p>
+<p>Dodavo se posodablja sam. Enkrat na dan, približno 15 sekund po zagonu, ko je povezan z omrežjem, na strani programa Dodavo na GitHubu preveri, ali je bila objavljena novejša različica. Če je, se prikaže obvestilo <span class="ui">Na voljo je posodobitev</span>, v ozadju pa se odpre okno <span class="ui">Na voljo je posodobitev</span>; z izbiro obvestila ali s tipkama <kbd>Alt</kbd>+<kbd>Tab</kbd> ga postavite v ospredje. V oknu piše, katera različica je na voljo in katero imate, nato pa sledijo:</p>
+<dl>
+<dt><span class="ui">Opombe ob izdaji</span></dt>
+<dd>Besedilno polje samo za branje z opisom novosti. Berite ga s puščičnimi tipkami; tipka <kbd>Tab</kbd> vodi naprej na gumbe.</dd>
+<dt><span class="ui">Namesti posodobitev</span> (<kbd>Alt</kbd>+<kbd>N</kbd>; to je privzeti gumb, zato ga izbere tudi <kbd>Enter</kbd>)</dt>
+<dd>Prenese novi namestitveni program in ga namesti, kot je opisano spodaj.</dd>
+<dt><span class="ui">Opomni me pozneje</span> (<kbd>Alt</kbd>+<kbd>P</kbd> ali <kbd>Esc</kbd>)</dt>
+<dd>Zapre okno. Dodavo vas znova opomni čez en dan; do takrat lahko posodobitev še vedno namestite iz menija <span class="ui">Pomoč</span>.</dd>
+</dl>
+<p>Ko izberete <span class="ui">Namesti posodobitev</span>, Dodavo najprej vpraša, kaj naj stori s prenosi, ki še potekajo, z istimi tremi možnostmi kot ob izhodu: <span class="ui">Ne končaj</span>, <span class="ui">Končaj in nadaljuj prenose pozneje</span> in <span class="ui">Prekliči prenose in končaj</span>. Nato prenese namestitveni program; vrstica v oknu prikazuje napredek, fokus pa se premakne na gumb <span class="ui">Prekliči prenos</span> (<kbd>Alt</kbd>+<kbd>K</kbd>), ki po potrditvi ustavi prenos. Prenesena datoteka je sprejeta le, če se njena velikost, kontrolna vsota in digitalni podpis ujemajo s tem, kar so objavili avtorji programa Dodavo; sicer sporočilo o napaki to pove in nič se ne namesti. Nato se zažene namestitveni program; če je Dodavo nameščen za vse uporabnike, Windows najprej zahteva dovoljenje skrbnika. Takoj ko je namestitveni program pripravljen, se Dodavo zapre, namestitveni program tiho namesti novo različico na isto mesto in z isto izbiro med »samo zame« in »za vse uporabnike«, Dodavo pa se sam znova zažene z obvestilom <span class="ui">Dodavo je bil posodobljen</span>. Vaše nastavitve, seznam prejemnikov in ID stika se ohranijo, prekinjeni prenosi pa se nadaljujejo kot po vsakem drugem vnovičnem zagonu. Če Dodavo uporabljate z več profili, se zaprejo tudi drugi profili in jih morate znova zagnati ročno.</p>
+<p>Če želite preveriti kadar koli, v meniju <span class="ui">Pomoč</span> izberite <span class="ui">Preveri, ali so na voljo posodobitve…</span>. Ko ni nič novega, sporočilo pove, da imate najnovejšo različico; ko preverjanje ne uspe, na primer brez internetne povezave, sporočilo pove, zakaj. Če želite izklopiti dnevno preverjanje, v nastavitvah počistite <span class="ui">Samodejno preverjaj, ali so na voljo posodobitve (enkrat na dan)</span>; preverjanja, ki jih zaženete iz menija <span class="ui">Pomoč</span>, še vedno delujejo. Posodobite lahko tudi ročno kadar koli: zaženite namestitveni program nove različice s <a href="https://github.com/hkatic/dodavo/releases">strani programa Dodavo na GitHubu</a>. Ta zamenja program na istem mestu, vaše nastavitve, seznam prejemnikov in ID stika pa se ohranijo.</p>
 <h3 id="uninstall">Odstranjevanje programa Dodavo</h3>
 <ol>
 <li>Zaprite Dodavo.</li>
@@ -119,7 +129,7 @@
 <li><span class="ui">Brez povezave – preverite internetno povezavo. Prenosi v lokalnem omrežju še vedno delujejo.</span></li>
 </ul>
 <p>Vrstica stanja ne more dobiti fokusa tipkovnice. Če jo želite slišati, uporabite ukaz bralnika zaslona za branje celotnega okna: <kbd>NVDA</kbd>+<kbd>B</kbd> v bralniku NVDA, <kbd>Insert</kbd>+<kbd>B</kbd> v bralniku JAWS ali <kbd>Pripovedovalec</kbd>+<kbd>W</kbd> v Pripovedovalcu.</p>
-<p>Menijska vrstica ima tri menije. Meni <span class="ui">Datoteka</span> (<kbd>Alt</kbd>+<kbd>D</kbd>) vsebuje ukaze <span class="ui">Pošlji datoteko…</span>, <span class="ui">Pošlji mapo…</span>, <span class="ui">Dodaj prejemnika…</span>, <span class="ui">Uredi prejemnika…</span>, <span class="ui">Odstrani prejemnika</span>, <span class="ui">Kopiraj moj ID stika</span>, <span class="ui">Nastavitve…</span> in <span class="ui">Izhod</span>. Meni <span class="ui">Prenosi</span> (<kbd>Alt</kbd>+<kbd>R</kbd>) našteje vse prenose, ki potekajo, z osebo, elementom in stanjem, na koncu pa vsebuje ukaz <span class="ui">Pokaži vse prenose</span> (<kbd>Ctrl</kbd>+<kbd>T</kbd>); ko ne poteka noben prenos, v njem piše <span class="ui">Noben prenos ne poteka</span>. Glejte <a href="#finding-transfers">Iskanje prenosa, ki poteka v ozadju</a>. Meni <span class="ui">Pomoč</span> (<kbd>Alt</kbd>+<kbd>P</kbd>) vsebuje ukaze <span class="ui">Ogled pomoči</span>, <span class="ui">Kako deluje</span> (kratek povzetek) in <span class="ui">O programu</span> (številka različice).</p>
+<p>Menijska vrstica ima tri menije. Meni <span class="ui">Datoteka</span> (<kbd>Alt</kbd>+<kbd>D</kbd>) vsebuje ukaze <span class="ui">Pošlji datoteko…</span>, <span class="ui">Pošlji mapo…</span>, <span class="ui">Dodaj prejemnika…</span>, <span class="ui">Uredi prejemnika…</span>, <span class="ui">Odstrani prejemnika</span>, <span class="ui">Kopiraj moj ID stika</span>, <span class="ui">Nastavitve…</span> in <span class="ui">Izhod</span>. Meni <span class="ui">Prenosi</span> (<kbd>Alt</kbd>+<kbd>R</kbd>) našteje vse prenose, ki potekajo, z osebo, elementom in stanjem, na koncu pa vsebuje ukaz <span class="ui">Pokaži vse prenose</span> (<kbd>Ctrl</kbd>+<kbd>T</kbd>); ko ne poteka noben prenos, v njem piše <span class="ui">Noben prenos ne poteka</span>. Glejte <a href="#finding-transfers">Iskanje prenosa, ki poteka v ozadju</a>. Meni <span class="ui">Pomoč</span> (<kbd>Alt</kbd>+<kbd>P</kbd>) vsebuje ukaze <span class="ui">Ogled pomoči</span>, <span class="ui">Kako deluje</span> (kratek povzetek), <span class="ui">Preveri, ali so na voljo posodobitve…</span> (glejte <a href="#update">Posodabljanje programa Dodavo</a>) in <span class="ui">O programu</span> (številka različice).</p>
 <p>Ko je na seznamu izbrana oseba, meni dejanj (<kbd>Enter</kbd>, dvoklik, <kbd>Shift</kbd>+<kbd>F10</kbd>, tipka za priročni meni ali desni klik) ponuja ukaze <span class="ui">Pošlji datoteko…</span>, <span class="ui">Pošlji mapo…</span>, <span class="ui">Pokaži prenos</span> (samo dokler s to osebo poteka prenos; <span class="ui">Pokaži prenose</span>, kadar jih je več), <span class="ui">Uredi…</span> in <span class="ui">Odstrani</span>.</p>
 </section>
 
@@ -267,7 +277,7 @@
 <li>Medtem ko prenosi potekajo, ikona v majhni znački prikazuje njihovo število, njen opis orodja (to, kar bralnik zaslona prebere, ko pridete do ikone) pa pove, kaj se dogaja, osvežen približno vsako sekundo: na primer <span class="ui">Dodavo – Pošiljanje – »poročilo.pdf« (45 %), 12,3 MB/s</span> ali, kadar jih je več, <span class="ui">Dodavo – 2 prenosa potekata, 45 %, 12,3 MB/s</span>.</li>
 </ul>
 <p>Če želite Dodavo popolnoma zapreti, izberite <span class="ui">Izhod</span> v meniju <span class="ui">Datoteka</span> ali v meniju ikone. Če prenosi še potekajo, Dodavo najprej vpraša in ponudi tri možnosti: <span class="ui">Ne končaj</span> (privzeta možnost, zato <kbd>Enter</kbd> ali <kbd>Esc</kbd> pusti Dodavo zagnan), <span class="ui">Končaj in nadaljuj prenose pozneje</span> (prenosi se prekinejo in nadaljujejo, ko bo Dodavo znova zagnan v obeh računalnikih) in <span class="ui">Prekliči prenose in končaj</span>. Ob odjavi ali zaustavitvi sistema Windows Dodavo ne vpraša; prenosi se nadaljujejo naslednjič. Po izhodu ne morete prejemati datotek, dokler znova ne zaženete programa Dodavo.</p>
-<p>Dodavo o končanih prenosih, dohodnih prenosih, začasnih ustavitvah na drugi strani, prekinjenih in znova vzpostavljenih povezavah ter drugih dogodkih obvešča z obvestili sistema Windows, tudi ko je okno napredka pomanjšano v ozadje. Bralniki zaslona jih običajno najavijo. Izbira obvestila o prenosu postavi njegovo okno v ospredje. Če katero zamudite ali je vklopljena možnost Ne moti, ga najdete v središču za obvestila sistema Windows (<kbd>Windows</kbd>+<kbd>N</kbd> v sistemu Windows 11).</p>
+<p>Dodavo o končanih prenosih, dohodnih prenosih, začasnih ustavitvah na drugi strani, prekinjenih in znova vzpostavljenih povezavah, posodobitvah, ki so na voljo, ter drugih dogodkih obvešča z obvestili sistema Windows, tudi ko je okno napredka pomanjšano v ozadje. Bralniki zaslona jih običajno najavijo. Izbira obvestila o prenosu postavi njegovo okno v ospredje. Če katero zamudite ali je vklopljena možnost Ne moti, ga najdete v središču za obvestila sistema Windows (<kbd>Windows</kbd>+<kbd>N</kbd> v sistemu Windows 11).</p>
 </section>
 
 <section aria-labelledby="settings">
@@ -294,6 +304,8 @@
 <dd>Dodavo se zažene, ne da bi prikazal glavno okno.</dd>
 <dt><span class="ui">Ob zaprtju okna nadaljuj delovanje v območju za obvestila</span></dt>
 <dd>Ko ni izbrano, z zaprtjem glavnega okna zaprete Dodavo.</dd>
+<dt><span class="ui">Samodejno preverjaj, ali so na voljo posodobitve (enkrat na dan)</span></dt>
+<dd>Dodavo enkrat na dan na strani programa Dodavo na GitHubu preveri, ali je na voljo novejša različica, in ponudi njeno namestitev. Glejte <a href="#update">Posodabljanje programa Dodavo</a>.</dd>
 <dt><span class="ui">Ob zapiranju okna prenosa, ki še poteka</span></dt>
 <dd>Seznam z možnostmi <span class="ui">Vprašaj vsakič</span>, <span class="ui">Nadaljuj v ozadju</span> in <span class="ui">Prekliči prenos</span>. Glejte <a href="#closing-progress">Zapiranje okna napredka med prenosom</a>.</dd>
 <dt><span class="ui">Če se povezava med prenosom prekine</span></dt>
@@ -362,6 +374,17 @@
 <tr><td><kbd>Alt</kbd>+<kbd>N</kbd></td><td>Nadaljevanje prenosa</td></tr>
 <tr><td><kbd>Alt</kbd>+<kbd>P</kbd></td><td>Pomanjšanje v ozadje</td></tr>
 <tr><td><kbd>Esc</kbd></td><td>Zapiranje okna (vpraša, ali želite nadaljevati v ozadju ali preklicati)</td></tr>
+</tbody>
+</table>
+<table>
+<caption>Okno Na voljo je posodobitev</caption>
+<thead>
+<tr><th scope="col">Tipke</th><th scope="col">Dejanje</th></tr>
+</thead>
+<tbody>
+<tr><td><kbd>Alt</kbd>+<kbd>N</kbd> ali <kbd>Enter</kbd></td><td>Namestitev posodobitve</td></tr>
+<tr><td><kbd>Alt</kbd>+<kbd>P</kbd> ali <kbd>Esc</kbd></td><td>Opomni me pozneje (zapiranje okna)</td></tr>
+<tr><td><kbd>Alt</kbd>+<kbd>K</kbd></td><td>Preklic prenosa</td></tr>
 </tbody>
 </table>
 <table>
@@ -451,7 +474,7 @@
 <p>ID stika ni skrivnost; deluje kot telefonska številka. Kdor ga ima, vam lahko ponudi datoteko, vendar se v vaš računalnik nič ne shrani, dokler ne izberete <span class="ui">Sprejmi</span>, ponudbe oseb, ki niso na vašem seznamu prejemnikov, pa so označene z opozorilom o neznanem pošiljatelju. Tudi ko je vklopljena možnost <span class="ui">Prenose začni samodejno, brez vprašanja</span>, se sami začnejo le prenosi oseb z vašega seznama prejemnikov. Glejte <a href="#auto-accept">Prejemanje brez vprašanja</a>.</p>
 
 <h3 id="faq-servers">Kaj Dodavo pošilja strežnikom v internetu?</h3>
-<p>Samo tisto, kar je potrebno, da drugi računalniki najdejo vašega. Dodavo pod vašim ID-jem stika objavi naslove, na katerih je vaš računalnik trenutno dosegljiv, in sicer v storitvi za iskanje naslovov omrežja iroh, ter vzdržuje povezavo s posredovalnim strežnikom, da je prenos mogoče vzpostaviti tudi takrat, ko neposredna povezava ni mogoča. Imena in vsebina vaših datotek potujejo le znotraj šifrirane povezave z drugim računalnikom. Dodavo nima uporabniških računov in ne pošilja statistike uporabe.</p>
+<p>Samo tisto, kar je potrebno, da drugi računalniki najdejo vašega. Dodavo pod vašim ID-jem stika objavi naslove, na katerih je vaš računalnik trenutno dosegljiv, in sicer v storitvi za iskanje naslovov omrežja iroh, ter vzdržuje povezavo s posredovalnim strežnikom, da je prenos mogoče vzpostaviti tudi takrat, ko neposredna povezava ni mogoča. Imena in vsebina vaših datotek potujejo le znotraj šifrirane povezave z drugim računalnikom. Enkrat na dan, ko je vklopljena nastavitev <span class="ui">Samodejno preverjaj, ali so na voljo posodobitve (enkrat na dan)</span>, Dodavo s strani programa Dodavo na GitHubu (github.com) prenese tudi majhno datoteko, ki opisuje najnovejšo različico, in od tam prenese namestitveni program, ko se odločite namestiti posodobitev; glejte <a href="#update">Posodabljanje programa Dodavo</a>. Dodavo nima uporabniških računov in ne pošilja statistike uporabe.</p>
 
 <h3 id="faq-intact">Kako vem, da je prejeta datoteka nepoškodovana?</h3>
 <p>Vsak prenos se konča s kontrolno vsoto celotnega elementa, ki jo stran, ki prejema, preveri. Medtem ko se datoteka prejema, ima pripono <code>.part</code>; svoje pravo ime dobi šele, ko je kontrolna vsota potrjena. Podatki, ki se ne ujemajo, se nikoli ne shranijo kot celotna datoteka: prenos sporoči <span class="ui">Prejeti podatki so poškodovani (kontrolna vsota se ne ujema)</span>, pošiljatelj pa element preprosto pošlje znova.</p>
@@ -499,6 +522,14 @@
 <dd>Podatki so se na poti spremenili, zato element ni bil shranjen. Prosite pošiljatelja, naj ga pošlje znova.</dd>
 <dt>»Odložišče trenutno uporablja drug program.«</dt>
 <dd>Počakajte trenutek in znova poskusite kopirati svoj ID stika.</dd>
+<dt>»Podatkov o posodobitvi niso podpisali avtorji programa Dodavo, zato so prezrti.«</dt>
+<dd>Datoteka, ki opisuje najnovejšo različico, je bila na poti do vas spremenjena ali pa je niso izdelali avtorji programa Dodavo. Nič se ne namesti. Poskusite znova pozneje; če se to ponavlja, ročno prenesite namestitveni program s strani programa Dodavo na GitHubu in primerjajte njegovo kontrolno vsoto z objavljeno.</dd>
+<dt>»Namestitveni program se je končal, preden je bila posodobitev nameščena«</dt>
+<dd>Namestitveni program se je zaprl takoj po zagonu, običajno zato, ker je bila zahteva za dovoljenje skrbnika zavrnjena (namestitev za vse uporabnike ga potrebuje). V meniju <span class="ui">Pomoč</span> izberite <span class="ui">Preveri, ali so na voljo posodobitve…</span> in poskusite znova.</dd>
+<dt>Dodavo se po posodobitvi ni znova zagnal</dt>
+<dd>Zaženite ga iz menija Start. Če se prikaže sporočilo »Posodobitev na Dodavo … ni bila nameščena«, namestitveni program ni končal; znova zaženite <span class="ui">Preveri, ali so na voljo posodobitve…</span> ali ročno namestite novo različico.</dd>
+<dt>Posodobitev je zaprla druge profile programa Dodavo</dt>
+<dd>Posodobitev zapre vsak zagnani primerek programa Dodavo in znova zažene le tistega, ki jo je namestil. Druge profile zaženite ročno; njihovi prenosi se nadaljujejo.</dd>
 <dt>Dodavo se ne zažene drugič</dt>
 <dd>Hkrati se lahko izvaja samo en primerek programa Dodavo. Če ga znova zaženete, se obstoječe okno prikaže v ospredju.</dd>
 </dl>

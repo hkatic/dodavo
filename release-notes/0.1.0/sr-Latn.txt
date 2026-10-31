@@ -1,0 +1,7 @@
+Prvo javno izdanje programa Dodavo.
+
+- Šalje datoteke i fascikle direktno sa jednog Windows računara na drugi, potpuno šifrovano, uz trajni ID kontakta umesto IP adresa.
+- Prenosi se nastavljaju posle prekida veze, spavanja i ponovnog pokretanja.
+- Puna podrška za tastaturu i čitače ekrana, svetli i tamni režim i pomoć na engleskom, hrvatskom, srpskom (latinica) i slovenačkom jeziku.
+- Jednom dnevno proverava da li ima novih verzija i na zahtev ih instalira.
+- Radi na sistemima od Windows 7 SP1 do Windows 11, 32-bitnim i 64-bitnim.

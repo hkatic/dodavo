@@ -10,9 +10,12 @@ mod i18n;
 mod identity;
 mod net;
 mod ui;
+mod update;
+
+use std::sync::atomic::{AtomicIsize, Ordering};
 
 use windows_sys::Win32::{
-    Foundation::{ERROR_ALREADY_EXISTS, GetLastError},
+    Foundation::{CloseHandle, ERROR_ALREADY_EXISTS, GetLastError, HANDLE},
     System::{
         Com::{COINIT_APARTMENTTHREADED, COINIT_DISABLE_OLE1DDE, CoInitializeEx},
         Threading::CreateMutexW,
@@ -36,17 +39,36 @@ struct Args {
     minimized: bool,
     /// Separate settings and identity, e.g. to run two instances for testing.
     profile: Option<String>,
+    /// Started by Setup right after an automatic update.
+    updated: bool,
+}
+
+/// The mutexes that mark a running instance (see `main`). They are closed
+/// right before an update's Setup takes over, so that Setup never sees them.
+static INSTANCE_MUTEX: AtomicIsize = AtomicIsize::new(0);
+static RUNNING_MUTEX: AtomicIsize = AtomicIsize::new(0);
+
+/// Releases the "running" mutexes before this instance exits for an update.
+pub fn release_instance_mutexes() {
+    for mutex in [&INSTANCE_MUTEX, &RUNNING_MUTEX] {
+        let handle = mutex.swap(0, Ordering::SeqCst) as HANDLE;
+        if !handle.is_null() {
+            unsafe { CloseHandle(handle) };
+        }
+    }
 }
 
 fn parse_args() -> Args {
     let mut args = Args {
         minimized: false,
         profile: None,
+        updated: false,
     };
     let mut it = std::env::args().skip(1);
     while let Some(a) = it.next() {
         match a.as_str() {
             "--minimized" => args.minimized = true,
+            "--updated" => args.updated = true,
             "--profile" => {
                 args.profile = it
                     .next()
@@ -104,7 +126,8 @@ fn main() {
     // The mutex handle is deliberately kept open for the life of the process.
     let instance_mutex = wide(&format!("Local\\Dodavo-{}", profile.unwrap_or("default")));
     let already_running = unsafe {
-        CreateMutexW(std::ptr::null(), 1, instance_mutex.as_ptr());
+        let handle = CreateMutexW(std::ptr::null(), 1, instance_mutex.as_ptr());
+        INSTANCE_MUTEX.store(handle as isize, Ordering::SeqCst);
         GetLastError() == ERROR_ALREADY_EXISTS
     };
     if already_running {
@@ -117,7 +140,8 @@ fn main() {
     // Held by every instance, whatever its profile, so the installer and
     // uninstaller can tell that Dodavo is running (AppMutex in installer\Dodavo.iss).
     let running_mutex = wide("Local\\DodavoRunning");
-    unsafe { CreateMutexW(std::ptr::null(), 0, running_mutex.as_ptr()) };
+    let handle = unsafe { CreateMutexW(std::ptr::null(), 0, running_mutex.as_ptr()) };
+    RUNNING_MUTEX.store(handle as isize, Ordering::SeqCst);
     unsafe {
         CoInitializeEx(
             std::ptr::null(),
@@ -174,13 +198,19 @@ fn main() {
         data_dir,
         my_id,
         net,
+        profile: profile.map(str::to_string),
         main: std::ptr::null_mut(),
+        online: None,
         transfers: Default::default(),
         offers: Default::default(),
         balloon_action: None,
+        update_window: std::ptr::null_mut(),
+        update_job: None,
+        update_cancel_transfers: false,
     });
 
     ui::main_window::create(profile, start_hidden);
+    ui::update::on_start(args.updated);
 
     let mut msg: MSG = unsafe { std::mem::zeroed() };
     while unsafe { GetMessageW(&mut msg, std::ptr::null_mut(), 0, 0) } > 0 {
