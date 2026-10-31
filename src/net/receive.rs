@@ -20,12 +20,13 @@ use iroh::{
 use tokio::{
     io::AsyncWriteExt,
     sync::{mpsc, oneshot, watch},
+    task::JoinHandle,
 };
 
 use super::{
     CLOSE_CANCELLED, CLOSE_FAILED, CLOSE_OK, CLOSE_SUSPENDED, Event, Outcome, Phase, Shared,
     Throttle,
-    protocol::{self, CHUNK, Kind, Msg, Offer},
+    protocol::{self, CHUNK, Kind, Msg, Offer, Token},
     send::AbortOnDrop,
     session::{
         self, Control, Lost, PeerClose, Role, Session, Side, Streams, TransferRecord, lost,
@@ -37,9 +38,27 @@ use crate::{archive, i18n::tr};
 
 /// How often a waiting receiver asks the sender whether the transfer still exists.
 const QUERY_INTERVAL: Duration = Duration::from_secs(30);
+/// How long one such question may take, dialing included.
+const QUERY_TIMEOUT: Duration = Duration::from_secs(20);
+/// The part file is flushed to disk, and the amount noted in the record,
+/// after this much new data.
+const SYNC_EVERY: u64 = 64 * 1024 * 1024;
+/// Tests set this to stop a folder transfer right before unpacking, to
+/// simulate a shutdown during the last step.
+#[cfg(test)]
+pub(super) static HOLD_FINALIZE: AtomicBool = AtomicBool::new(false);
 /// How long to wait for a replacement connection after losing one before
 /// telling the user (the router replaces connections in one go).
 const REPLACEMENT_GRACE: Duration = Duration::from_secs(1);
+
+/// The answer of a running query, or never, when none is running (the
+/// expression of a disabled `select!` branch is still evaluated).
+async fn query_answer(query: &mut Option<JoinHandle<Option<bool>>>) -> Option<bool> {
+    match query {
+        Some(handle) => handle.await.ok().flatten(),
+        None => std::future::pending().await,
+    }
+}
 
 /// A failure that was already reported to the sender over the stream. The
 /// connection must stay open until the sender has read the report, so it is
@@ -174,6 +193,8 @@ struct Receiver<'a> {
     /// The hash of those bytes; `None` until the part file was hashed again
     /// after a restart.
     hasher: Option<blake3::Hasher>,
+    /// The sender's hash of the whole item, once `Done` arrived.
+    done_hash: Option<[u8; 32]>,
     peer_paused: Arc<AtomicBool>,
 }
 
@@ -196,8 +217,9 @@ async fn accept(
         // Folders arrive as a zip in the temp folder; files go straight to the destination folder.
         let part_path = match offer.kind {
             Kind::File => archive::unique_path(&dest_dir, &format!("{name}.part"), false),
-            Kind::Folder => archive::temp_dir()?
-                .join(format!("recv-{}.zip", protocol::token_hex(&offer.token))),
+            Kind::Folder => {
+                archive::temp_dir()?.join(format!("recv-{}.zip", protocol::token_hex(&offer.token)))
+            }
         };
         tokio::fs::File::create(&part_path).await?;
         Ok(part_path)
@@ -219,8 +241,10 @@ async fn accept(
         side: Side::Receive {
             dest_dir: dest_dir.clone(),
             part_path: part_path.clone(),
+            synced: Some(0),
         },
         offer,
+        done_hash: None,
     };
     if let Err(e) = record.save(&shared.data_dir) {
         let _ = std::fs::remove_file(&part_path);
@@ -247,6 +271,7 @@ async fn accept(
         size,
         have: 0,
         hasher: Some(blake3::Hasher::new()),
+        done_hash: None,
         peer_paused: Arc::new(AtomicBool::new(false)),
     };
     if protocol::write_msg(&mut send, &Msg::Accept).await.is_err() {
@@ -271,10 +296,16 @@ async fn continue_record(
     let Side::Receive {
         dest_dir,
         part_path,
+        ..
     } = &record.side
     else {
         return Outcome::Failed(tr!(error_bad_resume).into());
     };
+    // Data beyond the last flush may never have reached the disk.
+    if let Err(e) = record.truncate_to_synced() {
+        record.discard(&shared.data_dir);
+        return Outcome::Failed(format!("{e:#}"));
+    }
     let (session, session_rx) = Session::new(id, record.token, peer, Role::Receive);
     let mut receiver = Receiver {
         shared,
@@ -291,12 +322,45 @@ async fn continue_record(
         size: record.offer.size,
         have: record.have().min(record.offer.size),
         hasher: None,
+        done_hash: record.done_hash,
         peer_paused: Arc::new(AtomicBool::new(false)),
     };
+    let token = record.token;
     *session.record.lock().unwrap() = Some(record);
     shared.add_session(session);
+    shared.restored(&token);
+    // Everything had arrived and the sender was told so: only the last step
+    // (renaming, or unpacking the folder) was interrupted.
+    if let Some(hash) = receiver.done_hash
+        && receiver.have == receiver.size
+    {
+        return receiver.complete_alone(hash).await;
+    }
     receiver.emit_waiting();
     receiver.drive(None).await
+}
+
+/// Asks the sender whether it still has the transfer. `Some(completed)` if it
+/// says it is gone, `None` if it is still there or could not be reached.
+async fn query_gone(endpoint: Endpoint, peer: EndpointId, token: Token) -> Option<bool> {
+    let ask = async {
+        let conn = endpoint.connect(peer, protocol::ALPN).await.ok()?;
+        let answer: anyhow::Result<Msg> = async {
+            let (mut send, mut recv) = conn.open_bi().await?;
+            protocol::write_msg(&mut send, &Msg::Query { token }).await?;
+            send.finish()?;
+            protocol::read_msg(&mut recv).await
+        }
+        .await;
+        conn.close(CLOSE_OK.into(), b"query");
+        match answer {
+            Ok(Msg::Gone { completed }) => Some(completed),
+            _ => None,
+        }
+    };
+    tokio::time::timeout(QUERY_TIMEOUT, ask)
+        .await
+        .unwrap_or(None)
 }
 
 /// Owns the sending half of the stream while receiving: tells the sender
@@ -310,7 +374,8 @@ async fn control_writer(
     session: Arc<Session>,
     peer_paused: Arc<AtomicBool>,
 ) {
-    if *paused_rx.borrow_and_update() && protocol::write_msg(&mut send, &Msg::Paused).await.is_err() {
+    if *paused_rx.borrow_and_update() && protocol::write_msg(&mut send, &Msg::Paused).await.is_err()
+    {
         return;
     }
     loop {
@@ -404,18 +469,39 @@ impl Receiver<'_> {
     /// it still has the transfer, and follows the user's pauses.
     async fn wait_for_connection(&mut self) -> Result<Streams, Outcome> {
         let mut paused_rx = self.ctl.paused.subscribe();
+        // The question runs as its own task, so that a `Continue` arriving
+        // meanwhile is answered at once.
+        let mut query: Option<JoinHandle<Option<bool>>> = None;
         loop {
+            let asking = query.is_some();
             tokio::select! {
                 s = self.session_rx.recv() => {
                     let Some(s) = s else {
                         return Err(Outcome::Failed(tr!(error_bad_resume).into()));
                     };
                     if let Some(s) = self.take_new(s).await {
+                        if let Some(q) = query.take() {
+                            q.abort();
+                        }
                         return Ok(s);
                     }
                 }
-                _ = tokio::time::sleep(QUERY_INTERVAL) => {
-                    if !self.ctl.is_paused() && self.query_gone().await {
+                _ = tokio::time::sleep(QUERY_INTERVAL), if !asking => {
+                    if !self.ctl.is_paused() {
+                        let (endpoint, peer, token) =
+                            (self.endpoint.clone(), self.peer, self.session.token);
+                        query = Some(tokio::spawn(query_gone(endpoint, peer, token)));
+                    }
+                }
+                answer = query_answer(&mut query), if asking => {
+                    query = None;
+                    if let Some(completed) = answer {
+                        if completed
+                            && let Some(hash) = self.done_hash
+                            && self.have == self.size
+                        {
+                            return Err(self.complete_alone(hash).await);
+                        }
                         self.session.end(&self.shared.data_dir, None, false);
                         return Err(Outcome::CancelledByPeer);
                     }
@@ -429,22 +515,30 @@ impl Receiver<'_> {
         }
     }
 
-    /// Asks the sender whether it still has the transfer. `true` if it says no.
-    async fn query_gone(&self) -> bool {
-        let dial = self.endpoint.connect(self.peer, protocol::ALPN);
-        let Ok(Ok(conn)) = tokio::time::timeout(Duration::from_secs(20), dial).await else {
-            return false;
-        };
-        let token = self.session.token;
-        let answer: anyhow::Result<Msg> = async {
-            let (mut send, mut recv) = conn.open_bi().await?;
-            protocol::write_msg(&mut send, &Msg::Query { token }).await?;
-            send.finish()?;
-            tokio::time::timeout(Duration::from_secs(15), protocol::read_msg(&mut recv)).await?
+    /// The sender's hash is known: check what is on disk and finish without
+    /// the sender (after a restart during the last step, or when the sender
+    /// already counts the transfer as complete).
+    async fn complete_alone(&mut self, expected: [u8; 32]) -> Outcome {
+        let data_dir = &self.shared.data_dir;
+        self.hasher = None;
+        if let Err(e) = self.rehash().await {
+            self.session.end(data_dir, None, false);
+            return Outcome::Failed(format!("{e:#}"));
         }
-        .await;
-        conn.close(CLOSE_OK.into(), b"query");
-        matches!(answer, Ok(Msg::Gone { .. }))
+        if *self.hasher.as_ref().unwrap().finalize().as_bytes() != expected {
+            self.session.end(data_dir, None, false);
+            return Outcome::Failed(tr!(error_damaged).into());
+        }
+        match self.finalize().await {
+            Ok(path) => {
+                self.session.end(data_dir, None, true);
+                Outcome::Completed(Some(path))
+            }
+            Err(e) => {
+                self.session.end(data_dir, None, false);
+                Outcome::Failed(format!("{e:#}"))
+            }
+        }
     }
 
     /// Receives on one connection.
@@ -485,6 +579,11 @@ impl Receiver<'_> {
                         self.session.end(data_dir, None, false);
                         Err(End::Final(Outcome::Failed(tr!(error_sender_failed).into())))
                     }
+                    PeerClose::Suspended => {
+                        self.shared.emit(Event::PeerSuspended { id: self.id });
+                        self.session.set_current(None);
+                        Err(End::Lost)
+                    }
                     PeerClose::Lost => {
                         self.session.set_current(None);
                         Err(End::Lost)
@@ -520,11 +619,18 @@ impl Receiver<'_> {
         let hasher = tokio::task::spawn_blocking(move || {
             let mut hasher = blake3::Hasher::new();
             let mut throttle = Throttle::new();
-            session::hash_range(&path, 0, have, &mut hasher, cancel.flag(), &mut |done, total| {
-                if throttle.ready() || done == total {
-                    shared.emit(Event::Progress { id, done, total });
-                }
-            })?;
+            session::hash_range(
+                &path,
+                0,
+                have,
+                &mut hasher,
+                cancel.flag(),
+                &mut |done, total| {
+                    if throttle.ready() || done == total {
+                        shared.emit(Event::Progress { id, done, total });
+                    }
+                },
+            )?;
             Ok::<_, std::io::Error>(hasher)
         })
         .await??;
@@ -549,9 +655,12 @@ impl Receiver<'_> {
             .open(&self.part_path)
             .await?;
         let received = self.read_frames(&mut recv, &mut out).await;
-        // Whatever happened, what was written has to be on disk before `have` is trusted.
+        // Whatever happened, what was written has to be on disk before `have`
+        // is trusted, also after a power cut.
         out.flush().await?;
+        out.sync_data().await?;
         drop(out);
+        self.session.save_synced(&self.shared.data_dir, self.have);
         let hash = received?;
 
         if hash != *self.hasher.as_ref().unwrap().finalize().as_bytes() {
@@ -561,6 +670,9 @@ impl Receiver<'_> {
             });
             return Err(Reported(tr!(error_damaged).into()).into());
         }
+        // From here on this side can finish on its own, even after a restart.
+        self.done_hash = Some(hash);
+        self.session.save_done_hash(&self.shared.data_dir, hash);
         let _ = result_tx.send(Msg::Result {
             ok: true,
             message: String::new(),
@@ -576,6 +688,7 @@ impl Receiver<'_> {
     ) -> anyhow::Result<[u8; 32]> {
         let mut buf = vec![0u8; CHUNK];
         let mut throttle = Throttle::new();
+        let mut unsynced = 0u64;
         loop {
             match protocol::read_msg(recv).await.map_err(lost)? {
                 Msg::Data { len } => {
@@ -588,6 +701,12 @@ impl Receiver<'_> {
                     out.write_all(&buf[..len]).await?;
                     self.hasher.as_mut().unwrap().update(&buf[..len]);
                     self.have += len as u64;
+                    unsynced += len as u64;
+                    if unsynced >= SYNC_EVERY {
+                        out.sync_data().await?;
+                        self.session.save_synced(&self.shared.data_dir, self.have);
+                        unsynced = 0;
+                    }
                     if throttle.ready() || self.have == self.size {
                         self.shared.emit(Event::Progress {
                             id: self.id,
@@ -623,6 +742,10 @@ impl Receiver<'_> {
             }
             Kind::Folder => {
                 self.emit(Phase::Unpacking);
+                #[cfg(test)]
+                while HOLD_FINALIZE.load(Ordering::SeqCst) {
+                    tokio::time::sleep(Duration::from_millis(50)).await;
+                }
                 let final_path = archive::unique_path(&self.dest_dir, &self.name, true);
                 let shared = self.shared.clone();
                 let id = self.id;

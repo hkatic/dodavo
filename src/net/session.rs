@@ -20,7 +20,7 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::{mpsc, watch};
 
 use super::{
-    CLOSE_CANCELLED, CLOSE_FAILED, CancelToken,
+    CLOSE_CANCELLED, CLOSE_FAILED, CLOSE_SUSPENDED, CancelToken,
     protocol::{Offer, Token, token_hex},
 };
 
@@ -45,8 +45,8 @@ pub enum Side {
     Send {
         /// What the user chose to send.
         source: PathBuf,
-        /// Size and modification time of `source` when the transfer started;
-        /// a changed source cannot be continued.
+        /// Size and modification time of `data_path` when the transfer
+        /// started; changed data cannot be continued.
         source_len: u64,
         source_mtime: Option<SystemTime>,
         /// What is streamed: the file itself, or the zip of the folder.
@@ -56,6 +56,11 @@ pub enum Side {
         dest_dir: PathBuf,
         /// The `.part` file, or the zip of a folder in the temporary folder.
         part_path: PathBuf,
+        /// How much of the part file is known to be on disk, so that a power
+        /// cut cannot leave data that looks received but never got written.
+        /// `None` in records of earlier versions: the file length is trusted.
+        #[serde(default)]
+        synced: Option<u64>,
     },
 }
 
@@ -72,6 +77,10 @@ pub struct TransferRecord {
     pub paused: bool,
     pub created: SystemTime,
     pub side: Side,
+    /// The sender's hash of the whole item once `Done` arrived: with it the
+    /// receiver can check and finish the item without the sender.
+    #[serde(default)]
+    pub done_hash: Option<[u8; 32]>,
 }
 
 pub fn records_dir(data_dir: &Path) -> PathBuf {
@@ -98,14 +107,38 @@ impl TransferRecord {
         crate::identity::parse_contact_id(&self.peer)
     }
 
-    /// The bytes this side already has (receiver: the length of the part file).
+    /// The bytes this side already has (receiver: what is on disk of the part
+    /// file, at most what is known to be flushed).
     pub fn have(&self) -> u64 {
         match &self.side {
-            Side::Receive { part_path, .. } => {
-                fs::metadata(part_path).map(|m| m.len()).unwrap_or(0)
+            Side::Receive {
+                part_path, synced, ..
+            } => {
+                let len = fs::metadata(part_path).map(|m| m.len()).unwrap_or(0);
+                synced.map_or(len, |s| s.min(len))
             }
             Side::Send { .. } => 0,
         }
+    }
+
+    /// Cuts the part file back to what is known to be on disk: after a power
+    /// cut the end of the file may never have been written.
+    pub fn truncate_to_synced(&self) -> io::Result<()> {
+        if let Side::Receive {
+            part_path,
+            synced: Some(synced),
+            ..
+        } = &self.side
+        {
+            let len = fs::metadata(part_path)?.len();
+            if len > *synced {
+                fs::OpenOptions::new()
+                    .write(true)
+                    .open(part_path)?
+                    .set_len(*synced)?;
+            }
+        }
+        Ok(())
     }
 
     /// Whether the files the transfer needs still exist.
@@ -118,15 +151,17 @@ impl TransferRecord {
         }
     }
 
-    /// Whether the source of a send still looks like it did at the start.
+    /// Whether the data of a send still looks like it did at the start: the
+    /// file itself, or the zip made of the folder (changes inside the folder
+    /// after packing do not matter).
     pub fn source_unchanged(&self) -> bool {
         match &self.side {
             Side::Send {
-                source,
+                data_path,
                 source_len,
                 source_mtime,
                 ..
-            } => match fs::metadata(source) {
+            } => match fs::metadata(data_path) {
                 Ok(m) => m.len() == *source_len && m.modified().ok() == *source_mtime,
                 Err(_) => false,
             },
@@ -138,7 +173,13 @@ impl TransferRecord {
         let path = record_path(data_dir, &self.token);
         fs::create_dir_all(path.parent().unwrap())?;
         let tmp = path.with_extension("json.tmp");
-        fs::write(&tmp, serde_json::to_vec_pretty(self)?)?;
+        {
+            let mut file = fs::File::create(&tmp)?;
+            io::Write::write_all(&mut file, &serde_json::to_vec_pretty(self)?)?;
+            // On disk before the rename: a power cut leaves the old record or
+            // the new one, never half of one.
+            file.sync_all()?;
+        }
         fs::rename(&tmp, &path)
     }
 
@@ -188,8 +229,8 @@ fn is_old(path: &Path) -> bool {
         .is_some_and(|age| age > MAX_AGE)
 }
 
-/// The unfinished transfers from earlier runs. Old records and tombstones
-/// are deleted on the way.
+/// The unfinished transfers from earlier runs. Old records (with their
+/// partial data) and old tombstones are deleted on the way.
 pub fn load_all(data_dir: &Path) -> Vec<TransferRecord> {
     let mut records = Vec::new();
     let Ok(entries) = fs::read_dir(records_dir(data_dir)) else {
@@ -197,20 +238,67 @@ pub fn load_all(data_dir: &Path) -> Vec<TransferRecord> {
     };
     for entry in entries.flatten() {
         let path = entry.path();
-        let ext = path.extension().and_then(|e| e.to_str());
+        let is_json = path.extension().and_then(|e| e.to_str()) == Some("json");
+        let record = is_json
+            .then(|| fs::read_to_string(&path).ok())
+            .flatten()
+            .and_then(|text| serde_json::from_str::<TransferRecord>(&text).ok());
         if is_old(&path) {
+            if let Some(record) = &record {
+                record.discard(data_dir);
+            }
             let _ = fs::remove_file(&path);
             continue;
         }
-        if ext == Some("json")
-            && let Ok(text) = fs::read_to_string(&path)
-            && let Ok(record) = serde_json::from_str::<TransferRecord>(&text)
-        {
-            records.push(record);
+        match record {
+            Some(record) => records.push(record),
+            // A damaged record is kept aside instead of being read again at
+            // every start.
+            None if is_json => {
+                let _ = fs::rename(&path, path.with_extension("json.bad"));
+            }
+            None => {}
         }
     }
     records.sort_by_key(|r| r.created);
     records
+}
+
+/// Deletes temporary archives (`send-*.zip`, `recv-*.zip`) that no record
+/// refers to and that are older than a day: leftovers of transfers that
+/// ended before they had a record, such as a crash while packing a folder or
+/// an offer that was never accepted.
+pub fn cleanup_temp(records: &[TransferRecord]) {
+    let Ok(dir) = crate::archive::temp_dir() else {
+        return;
+    };
+    let Ok(entries) = fs::read_dir(&dir) else {
+        return;
+    };
+    let in_use: Vec<&Path> = records
+        .iter()
+        .map(|r| match &r.side {
+            Side::Send { data_path, .. } => data_path.as_path(),
+            Side::Receive { part_path, .. } => part_path.as_path(),
+        })
+        .collect();
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let name = entry.file_name().to_string_lossy().into_owned();
+        let temp_archive =
+            (name.starts_with("send-") || name.starts_with("recv-")) && name.ends_with(".zip");
+        if !temp_archive || in_use.contains(&path.as_path()) {
+            continue;
+        }
+        let old = fs::metadata(&path)
+            .and_then(|m| m.modified())
+            .ok()
+            .and_then(|t| SystemTime::now().duration_since(t).ok())
+            .is_some_and(|age| age > Duration::from_secs(24 * 60 * 60));
+        if old {
+            let _ = fs::remove_file(&path);
+        }
+    }
 }
 
 /// Copies of a hash state at regular offsets of the data being sent.
@@ -341,6 +429,25 @@ impl Session {
         }
     }
 
+    /// Remembers how much of the part file is on disk.
+    pub fn save_synced(&self, data_dir: &Path, on_disk: u64) {
+        if let Some(record) = self.record.lock().unwrap().as_mut()
+            && let Side::Receive { synced, .. } = &mut record.side
+        {
+            *synced = Some(on_disk);
+            let _ = record.save(data_dir);
+        }
+    }
+
+    /// Remembers the sender's final hash: from now on this side can finish
+    /// the item on its own.
+    pub fn save_done_hash(&self, data_dir: &Path, hash: [u8; 32]) {
+        if let Some(record) = self.record.lock().unwrap().as_mut() {
+            record.done_hash = Some(hash);
+            let _ = record.save(data_dir);
+        }
+    }
+
     /// Ends the transfer on this side: closes the connection (with `code`, if
     /// given), leaves a tombstone so the other side learns about it later, and
     /// forgets the record together with the partial or temporary data.
@@ -401,7 +508,10 @@ pub(crate) enum PeerClose {
     Cancelled,
     /// The transfer failed on the other side.
     Failed,
-    /// Anything else: a network problem, a timeout, the other side exiting.
+    /// The other side went away for now (exiting, or replacing the
+    /// connection); the transfer continues later, like after a loss.
+    Suspended,
+    /// Anything else: a network problem or a timeout.
     Lost,
 }
 
@@ -416,6 +526,11 @@ pub(crate) fn peer_close(conn: &Connection) -> PeerClose {
             if close.error_code == CLOSE_FAILED.into() =>
         {
             PeerClose::Failed
+        }
+        Some(ConnectionError::ApplicationClosed(close))
+            if close.error_code == CLOSE_SUSPENDED.into() =>
+        {
+            PeerClose::Suspended
         }
         _ => PeerClose::Lost,
     }
@@ -450,6 +565,15 @@ mod tests {
             paused: false,
             created: SystemTime::now(),
             side,
+            done_hash: None,
+        }
+    }
+
+    fn receive_side(dir: &Path, part: &Path, synced: Option<u64>) -> Side {
+        Side::Receive {
+            dest_dir: dir.to_path_buf(),
+            part_path: part.to_path_buf(),
+            synced,
         }
     }
 
@@ -458,13 +582,7 @@ mod tests {
         let dir = scratch("records");
         let part = dir.join("a.bin.part");
         fs::write(&part, b"12345").unwrap();
-        let r = record(
-            1,
-            Side::Receive {
-                dest_dir: dir.clone(),
-                part_path: part.clone(),
-            },
-        );
+        let r = record(1, receive_side(&dir, &part, None));
         r.save(&dir).unwrap();
         assert_eq!(r.have(), 5);
         assert!(r.files_present());
@@ -492,6 +610,112 @@ mod tests {
         s.discard(&dir);
         assert!(!zip.exists(), "discard deletes the zip but not the source");
         assert!(dir.exists());
+        fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn records_of_earlier_versions_still_load() {
+        let dir = scratch("legacy");
+        let part = dir.join("old.bin.part");
+        fs::write(&part, b"12345").unwrap();
+        // A record as written before `synced` and `done_hash` existed.
+        let mut json = serde_json::to_value(record(7, receive_side(&dir, &part, None))).unwrap();
+        json.as_object_mut().unwrap().remove("done_hash");
+        json["side"]["receive"]
+            .as_object_mut()
+            .unwrap()
+            .remove("synced");
+        fs::create_dir_all(records_dir(&dir)).unwrap();
+        fs::write(record_path(&dir, &[7; 16]), json.to_string()).unwrap();
+        let loaded = load_all(&dir);
+        assert_eq!(loaded.len(), 1);
+        assert_eq!(loaded[0].done_hash, None);
+        assert_eq!(
+            loaded[0].have(),
+            5,
+            "without a sync mark the length is trusted"
+        );
+
+        // A damaged record is set aside, not read again and again.
+        fs::write(record_path(&dir, &[8; 16]), "{ not json").unwrap();
+        assert_eq!(load_all(&dir).len(), 1);
+        assert!(!record_path(&dir, &[8; 16]).exists());
+        assert!(
+            records_dir(&dir)
+                .join(format!("{}.json.bad", token_hex(&[8; 16])))
+                .exists()
+        );
+        fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn synced_mark_limits_and_truncates_the_part() {
+        let dir = scratch("synced");
+        let part = dir.join("f.part");
+        fs::write(&part, b"123456789").unwrap();
+        let r = record(9, receive_side(&dir, &part, Some(4)));
+        assert_eq!(r.have(), 4);
+        r.truncate_to_synced().unwrap();
+        assert_eq!(fs::read(&part).unwrap(), b"1234");
+        // A mark beyond the file never grows it.
+        let r = record(9, receive_side(&dir, &part, Some(100)));
+        assert_eq!(r.have(), 4);
+        r.truncate_to_synced().unwrap();
+        assert_eq!(fs::metadata(&part).unwrap().len(), 4);
+        fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn expired_records_take_their_data_along() {
+        let dir = scratch("expired");
+        let part = dir.join("old.part");
+        fs::write(&part, b"old").unwrap();
+        let r = record(6, receive_side(&dir, &part, None));
+        r.save(&dir).unwrap();
+        let long_ago = SystemTime::now() - MAX_AGE - Duration::from_secs(60);
+        fs::File::options()
+            .write(true)
+            .open(record_path(&dir, &r.token))
+            .unwrap()
+            .set_modified(long_ago)
+            .unwrap();
+        assert!(load_all(&dir).is_empty());
+        assert!(
+            !part.exists(),
+            "the partial data of an expired record is deleted"
+        );
+        fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn temp_cleanup_removes_only_old_orphans() {
+        let temp = crate::archive::temp_dir().unwrap();
+        let orphan = temp.join("send-00000000000000000000000000000001.zip");
+        let used = temp.join("recv-00000000000000000000000000000002.zip");
+        let fresh = temp.join("send-00000000000000000000000000000003.zip");
+        let other = temp.join("notes-00000000000000000000000000000004.zip");
+        for p in [&orphan, &used, &fresh, &other] {
+            fs::write(p, b"z").unwrap();
+        }
+        let two_days_ago = SystemTime::now() - Duration::from_secs(2 * 24 * 60 * 60);
+        for p in [&orphan, &used, &other] {
+            fs::File::options()
+                .write(true)
+                .open(p)
+                .unwrap()
+                .set_modified(two_days_ago)
+                .unwrap();
+        }
+        let dir = scratch("cleanup");
+        let r = record(2, receive_side(&dir, &used, None));
+        cleanup_temp(&[r]);
+        assert!(!orphan.exists(), "old and unreferenced: deleted");
+        assert!(used.exists(), "referenced by a record: kept");
+        assert!(fresh.exists(), "recent: kept");
+        assert!(other.exists(), "not a Dodavo archive: kept");
+        for p in [&used, &fresh, &other] {
+            fs::remove_file(p).ok();
+        }
         fs::remove_dir_all(&dir).ok();
     }
 
@@ -524,6 +748,27 @@ mod tests {
         assert!(r.source_unchanged());
         fs::write(&file, b"hello world").unwrap();
         assert!(!r.source_unchanged());
+
+        // A folder is sent as its zip: changes in the folder after packing
+        // do not stop the transfer, a changed zip does.
+        let folder = dir.join("folder");
+        fs::create_dir_all(&folder).unwrap();
+        let zip = dir.join("send-x.zip");
+        fs::write(&zip, b"zip").unwrap();
+        let meta = fs::metadata(&zip).unwrap();
+        let f = record(
+            6,
+            Side::Send {
+                source: folder.clone(),
+                source_len: meta.len(),
+                source_mtime: meta.modified().ok(),
+                data_path: zip.clone(),
+            },
+        );
+        fs::write(folder.join("new.txt"), b"later").unwrap();
+        assert!(f.source_unchanged());
+        fs::write(&zip, b"zip!").unwrap();
+        assert!(!f.source_unchanged());
         fs::remove_dir_all(&dir).ok();
     }
 
@@ -565,8 +810,15 @@ mod tests {
 
         // Cancellation stops the hashing.
         cancel.store(true, Ordering::Relaxed);
-        let err = hash_range(&file, 0, offset, &mut blake3::Hasher::new(), &cancel, &mut |_, _| {})
-            .unwrap_err();
+        let err = hash_range(
+            &file,
+            0,
+            offset,
+            &mut blake3::Hasher::new(),
+            &cancel,
+            &mut |_, _| {},
+        )
+        .unwrap_err();
         assert_eq!(err.kind(), io::ErrorKind::Interrupted);
         fs::remove_dir_all(&dir).ok();
     }

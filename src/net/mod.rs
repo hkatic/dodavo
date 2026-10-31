@@ -11,7 +11,7 @@ mod send;
 pub mod session;
 
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     path::PathBuf,
     sync::{
         Arc, Mutex,
@@ -25,8 +25,8 @@ use iroh_mdns_address_lookup::MdnsAddressLookup;
 use tokio::sync::{mpsc, oneshot, watch};
 
 pub use protocol::{Kind, Offer};
-pub use session::{Role, TransferRecord};
 use session::{Control, Session, Streams};
+pub use session::{Role, TransferRecord};
 
 pub enum Command {
     Send {
@@ -113,6 +113,11 @@ pub enum Event {
         id: u64,
         phase: Phase,
     },
+    /// The other side closed the connection on purpose (exiting, for now);
+    /// the `WaitingForConnection` that follows is not a network problem.
+    PeerSuspended {
+        id: u64,
+    },
     Progress {
         id: u64,
         done: u64,
@@ -171,11 +176,38 @@ pub(crate) struct Shared {
     pub(crate) pending: Mutex<HashMap<u64, oneshot::Sender<Option<PathBuf>>>>,
     controls: Mutex<HashMap<u64, Arc<Control>>>,
     sessions: Mutex<Vec<Arc<Session>>>,
+    /// Transfers from an earlier run whose tasks have not registered their
+    /// sessions yet: a question about them must wait, not get "gone".
+    restoring: Mutex<HashSet<protocol::Token>>,
+    /// Set once shutdown has begun: transfers stop dialing, so that the
+    /// other side sees one clean suspension and not a fresh connection that
+    /// dies a moment later without explanation.
+    pub(crate) shutting_down: AtomicBool,
 }
 
 impl Shared {
     pub(crate) fn emit(&self, event: Event) {
         (self.sink)(event)
+    }
+
+    /// The restored transfer's session is registered.
+    pub(crate) fn restored(&self, token: &protocol::Token) {
+        self.restoring.lock().unwrap().remove(token);
+    }
+
+    /// The session for `token`, waiting a little for one that is still being
+    /// restored at startup.
+    async fn session_soon(&self, token: &protocol::Token) -> Option<Arc<Session>> {
+        for _ in 0..100 {
+            if let Some(session) = self.session(token) {
+                return Some(session);
+            }
+            if !self.restoring.lock().unwrap().contains(token) {
+                return None;
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+        self.session(token)
     }
 
     pub(crate) fn register(&self, id: u64, paused: bool) -> Arc<Control> {
@@ -293,6 +325,8 @@ pub fn start(
         pending: Mutex::new(HashMap::new()),
         controls: Mutex::new(HashMap::new()),
         sessions: Mutex::new(Vec::new()),
+        restoring: Mutex::new(HashSet::new()),
+        shutting_down: AtomicBool::new(false),
     });
     std::thread::Builder::new()
         .name("network".into())
@@ -335,7 +369,8 @@ async fn accept(shared: Arc<Shared>, endpoint: Endpoint, conn: Connection) {
         }
         Msg::Continue { token } => {
             let session = shared
-                .session(&token)
+                .session_soon(&token)
+                .await
                 .filter(|s| s.role == Role::Receive && s.peer == peer);
             match session {
                 Some(session) => {
@@ -352,7 +387,8 @@ async fn accept(shared: Arc<Shared>, endpoint: Endpoint, conn: Connection) {
         }
         Msg::Query { token } => {
             let alive = shared
-                .session(&token)
+                .session_soon(&token)
+                .await
                 .is_some_and(|s| s.role == Role::Send && s.peer == peer);
             if alive {
                 Msg::Alive
@@ -372,7 +408,16 @@ async fn accept(shared: Arc<Shared>, endpoint: Endpoint, conn: Connection) {
 
 /// Picks up the transfers that were interrupted in an earlier run.
 fn restore(shared: &Arc<Shared>, endpoint: &Endpoint) {
-    for record in session::load_all(&shared.data_dir) {
+    let records = session::load_all(&shared.data_dir);
+    session::cleanup_temp(&records);
+    // Known before any task runs, so that an early `Continue` or `Query`
+    // from the other side waits instead of being answered with "gone".
+    shared
+        .restoring
+        .lock()
+        .unwrap()
+        .extend(records.iter().map(|r| r.token));
+    for record in records {
         let id = next_transfer_id();
         let have = record.have();
         shared.emit(Event::Restored {
@@ -381,6 +426,7 @@ fn restore(shared: &Arc<Shared>, endpoint: &Endpoint) {
             have,
         });
         if !record.files_present() {
+            shared.restored(&record.token);
             session::write_tombstone(&shared.data_dir, &record.token, false);
             record.discard(&shared.data_dir);
             shared.emit(Event::Finished {
@@ -431,6 +477,9 @@ async fn run(secret: SecretKey, shared: Arc<Shared>, mut rx: mpsc::UnboundedRece
         });
     }
 
+    // The transfers of the last run, before anyone can ask about them.
+    restore(&shared, &endpoint);
+
     // Incoming connections.
     {
         let endpoint = endpoint.clone();
@@ -449,8 +498,6 @@ async fn run(secret: SecretKey, shared: Arc<Shared>, mut rx: mpsc::UnboundedRece
             }
         });
     }
-
-    restore(&shared, &endpoint);
 
     while let Some(cmd) = rx.recv().await {
         match cmd {
@@ -500,6 +547,8 @@ async fn run(secret: SecretKey, shared: Arc<Shared>, mut rx: mpsc::UnboundedRece
                 }
             }
             Command::Shutdown { done } => {
+                // No more dialing from now on (see `shutting_down`).
+                shared.shutting_down.store(true, Ordering::SeqCst);
                 // Transfers that were just cancelled need a moment to tell
                 // their peer and to clean up; the rest is suspended.
                 let deadline = Instant::now() + Duration::from_secs(1);
@@ -554,7 +603,10 @@ mod tests {
 
     fn wait_finished(rx: &mpsc::Receiver<Event>, id: u64) -> Outcome {
         loop {
-            match rx.recv_timeout(Duration::from_secs(120)).expect("timed out") {
+            match rx
+                .recv_timeout(Duration::from_secs(120))
+                .expect("timed out")
+            {
                 Event::Finished { id: i, outcome } if i == id => return outcome,
                 _ => {}
             }
@@ -564,7 +616,9 @@ mod tests {
     /// Waits until `pred` accepts an event (events before it are dropped).
     fn wait_for(rx: &mpsc::Receiver<Event>, mut pred: impl FnMut(&Event) -> bool) -> Event {
         loop {
-            let e = rx.recv_timeout(Duration::from_secs(120)).expect("timed out");
+            let e = rx
+                .recv_timeout(Duration::from_secs(120))
+                .expect("timed out");
             if pred(&e) {
                 return e;
             }
@@ -650,10 +704,34 @@ mod tests {
             my_name: "A".into(),
             peer_name: "B".into(),
         });
-        wait_for(&rx_a, |e| matches!(e, Event::Phase { phase: Phase::PausedByPeer, .. }));
-        wait_for(&rx_a, |e| matches!(e, Event::Phase { phase: Phase::Transferring, .. }));
+        wait_for(&rx_a, |e| {
+            matches!(
+                e,
+                Event::Phase {
+                    phase: Phase::PausedByPeer,
+                    ..
+                }
+            )
+        });
+        wait_for(&rx_a, |e| {
+            matches!(
+                e,
+                Event::Phase {
+                    phase: Phase::Transferring,
+                    ..
+                }
+            )
+        });
         a.send(Command::Pause { id });
-        wait_for(&rx_a, |e| matches!(e, Event::Phase { phase: Phase::Paused, .. }));
+        wait_for(&rx_a, |e| {
+            matches!(
+                e,
+                Event::Phase {
+                    phase: Phase::Paused,
+                    ..
+                }
+            )
+        });
         std::thread::sleep(Duration::from_millis(300));
         a.send(Command::Resume { id });
         assert!(matches!(wait_finished(&rx_a, id), Outcome::Completed(_)));
@@ -733,7 +811,10 @@ mod tests {
             std::thread::spawn(move || {
                 let mut phases = Vec::new();
                 loop {
-                    match rx_b.recv_timeout(Duration::from_secs(120)).expect("timed out") {
+                    match rx_b
+                        .recv_timeout(Duration::from_secs(120))
+                        .expect("timed out")
+                    {
                         Event::Offer { id, .. } => b.send(Command::Respond {
                             id,
                             accept: Some(recv_dir.clone()),
@@ -757,11 +838,17 @@ mod tests {
             my_name: "A".into(),
             peer_name: "B".into(),
         });
-        wait_for(&rx_a, |e| matches!(e, Event::Progress { done, .. } if *done > 4_000_000));
+        wait_for(
+            &rx_a,
+            |e| matches!(e, Event::Progress { done, .. } if *done > 4_000_000),
+        );
         a.send(Command::DropConnection { id });
         let mut phases = Vec::new();
         let outcome = loop {
-            match rx_a.recv_timeout(Duration::from_secs(120)).expect("timed out") {
+            match rx_a
+                .recv_timeout(Duration::from_secs(120))
+                .expect("timed out")
+            {
                 Event::Phase { phase, .. } => phases.push(phase),
                 Event::Finished { id: i, outcome } if i == id => break outcome,
                 _ => {}
@@ -774,7 +861,11 @@ mod tests {
         let (outcome_b, phases_b) = b_thread.join().unwrap();
         assert!(matches!(outcome_b, Outcome::Completed(_)), "{outcome_b:?}");
         assert!(
-            phases_b.iter().filter(|p| **p == Phase::Transferring).count() >= 2,
+            phases_b
+                .iter()
+                .filter(|p| **p == Phase::Transferring)
+                .count()
+                >= 2,
             "{phases_b:?}"
         );
         assert_eq!(std::fs::read(recv_dir.join("big.bin")).unwrap(), data);
@@ -817,7 +908,10 @@ mod tests {
             id: id_in,
             accept: Some(recv_dir.clone()),
         });
-        wait_for(&rx_b, |e| matches!(e, Event::Progress { done, .. } if *done > 4_000_000));
+        wait_for(
+            &rx_b,
+            |e| matches!(e, Event::Progress { done, .. } if *done > 4_000_000),
+        );
         b.shutdown(Duration::from_secs(5));
         drop(b);
         let records = session::load_all(&dir_b);
@@ -836,24 +930,126 @@ mod tests {
         });
         let (tx_b2, rx_b2) = mpsc::channel();
         let b2 = start(key_b, dir_b.clone(), sink(tx_b2));
-        let Event::Restored { id: id_b2, have, .. } =
-            wait_for(&rx_b2, |e| matches!(e, Event::Restored { .. }))
+        let Event::Restored {
+            id: id_b2, have, ..
+        } = wait_for(&rx_b2, |e| matches!(e, Event::Restored { .. }))
         else {
             unreachable!()
         };
         assert_eq!(have, written);
         // The part file is hashed again, then the rest arrives.
-        wait_for(&rx_b2, |e| matches!(e, Event::Phase { phase: Phase::Verifying, .. }));
-        let Event::Progress { done: first, .. } = wait_for(&rx_b2, |e| {
-            matches!(e, Event::Progress { id, total, .. } if *id == id_b2 && *total == data.len() as u64)
-        }) else {
+        wait_for(&rx_b2, |e| {
+            matches!(
+                e,
+                Event::Phase {
+                    phase: Phase::Verifying,
+                    ..
+                }
+            )
+        });
+        let Event::Progress { done: first, .. } = wait_for(
+            &rx_b2,
+            |e| matches!(e, Event::Progress { id, total, .. } if *id == id_b2 && *total == data.len() as u64),
+        ) else {
             unreachable!()
         };
-        assert!(first >= written, "continues from {written}, not from {first}");
-        assert!(matches!(wait_finished(&rx_b2, id_b2), Outcome::Completed(_)));
+        assert!(
+            first >= written,
+            "continues from {written}, not from {first}"
+        );
+        assert!(matches!(
+            wait_finished(&rx_b2, id_b2),
+            Outcome::Completed(_)
+        ));
         assert!(matches!(wait_finished(&rx_a, id), Outcome::Completed(_)));
         assert_eq!(std::fs::read(recv_dir.join("big.bin")).unwrap(), data);
         assert_eq!(leftovers(&recv_dir).len(), 1);
+        assert!(session::load_all(&dir_b).is_empty());
+        drop(b2);
+        std::fs::remove_dir_all(&base).ok();
+    }
+
+    /// The receiver is stopped after all data has arrived, while it is still
+    /// unpacking the folder, and started again: it finishes on its own from
+    /// the hash the sender gave it, without the sender, which is already done.
+    #[test]
+    fn finish_alone_after_restart_during_unpacking() {
+        let base = scratch("finish-alone");
+        let (tx_a, rx_a) = mpsc::channel();
+        let (tx_b, rx_b) = mpsc::channel();
+        let key_b = SecretKey::generate();
+        let id_b = key_b.public();
+        let dir_b = base.join("b");
+        let a = start(SecretKey::generate(), base.join("a"), sink(tx_a));
+        let b = start(key_b.clone(), dir_b.clone(), sink(tx_b));
+        let recv_dir = base.join("received");
+
+        let folder = base.join("Photos");
+        std::fs::create_dir_all(folder.join("sub")).unwrap();
+        let data = pattern(3_000_000);
+        std::fs::write(folder.join("a.bin"), &data).unwrap();
+        std::fs::write(folder.join("sub").join("b.txt"), b"beta").unwrap();
+        receive::HOLD_FINALIZE.store(true, Ordering::SeqCst);
+        let id = next_transfer_id();
+        a.send(Command::Send {
+            id,
+            to: id_b,
+            path: folder,
+            kind: Kind::Folder,
+            my_name: "A".into(),
+            peer_name: "B".into(),
+        });
+        let Event::Offer { id: id_in, .. } = wait_for(&rx_b, |e| matches!(e, Event::Offer { .. }))
+        else {
+            unreachable!()
+        };
+        b.send(Command::Respond {
+            id: id_in,
+            accept: Some(recv_dir.clone()),
+        });
+        // The sender is done as soon as the receiver has confirmed the data…
+        assert!(matches!(wait_finished(&rx_a, id), Outcome::Completed(_)));
+        // …while the receiver is held right before unpacking: stop it there.
+        wait_for(&rx_b, |e| {
+            matches!(
+                e,
+                Event::Phase {
+                    phase: Phase::Unpacking,
+                    ..
+                }
+            )
+        });
+        b.shutdown(Duration::from_secs(5));
+        drop(b);
+        receive::HOLD_FINALIZE.store(false, Ordering::SeqCst);
+        let records = session::load_all(&dir_b);
+        assert_eq!(records.len(), 1, "the record survives");
+        assert!(
+            records[0].done_hash.is_some(),
+            "the sender's hash was saved"
+        );
+        assert!(!recv_dir.join("Photos").exists());
+
+        let (tx_b2, rx_b2) = mpsc::channel();
+        let b2 = start(key_b, dir_b.clone(), sink(tx_b2));
+        let Event::Restored { id: id_b2, .. } =
+            wait_for(&rx_b2, |e| matches!(e, Event::Restored { .. }))
+        else {
+            unreachable!()
+        };
+        let outcome = wait_finished(&rx_b2, id_b2);
+        assert!(
+            matches!(outcome, Outcome::Completed(Some(_))),
+            "{outcome:?}"
+        );
+        assert_eq!(
+            std::fs::read(recv_dir.join("Photos").join("sub").join("b.txt")).unwrap(),
+            b"beta"
+        );
+        assert_eq!(
+            std::fs::read(recv_dir.join("Photos").join("a.bin")).unwrap(),
+            data
+        );
         assert!(session::load_all(&dir_b).is_empty());
         drop(b2);
         std::fs::remove_dir_all(&base).ok();

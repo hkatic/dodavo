@@ -66,6 +66,13 @@ struct Progress {
     active: bool,
     /// The window was hidden and the transfer continues without it.
     background: bool,
+    /// Data has flowed while this window was open. Only then is a lost
+    /// connection something to ask about; a transfer picked up after a
+    /// restart simply waits for the other side.
+    had_data: bool,
+    /// The other side closed the connection on purpose (it is exiting for
+    /// now): the waiting that follows is not a network problem either.
+    peer_suspended: bool,
     samples: VecDeque<(Instant, u64)>,
     rate_shown: Option<Instant>,
     /// For a completed receive: where the item was saved.
@@ -128,6 +135,8 @@ pub fn open(
         phase: None,
         active: true,
         background: false,
+        had_data: false,
+        peer_suspended: false,
         samples: VecDeque::new(),
         rate_shown: None,
         result_path: None,
@@ -178,6 +187,12 @@ pub fn show(hwnd: HWND) {
 /// Shows the new phase. Returns `None` if the window is busy.
 pub fn set_phase(hwnd: HWND, phase: Phase) -> Option<PhaseNotice> {
     window::with_handler::<Progress, _>(hwnd, |p, w| p.set_phase(w, phase))
+}
+
+/// The other side is going away on purpose: the coming wait is not a lost
+/// connection to ask about. `false` if the window is busy.
+pub fn peer_suspended(hwnd: HWND) -> bool {
+    window::with_handler::<Progress, _>(hwnd, |p, _| p.peer_suspended = true).is_some()
 }
 
 pub fn set_progress(hwnd: HWND, done: u64, total: u64) -> bool {
@@ -250,6 +265,9 @@ impl Progress {
 
     fn set_phase(&mut self, w: &Window, phase: Phase) -> PhaseNotice {
         let previous = self.phase.replace(phase);
+        if phase == Phase::Transferring {
+            self.had_data = true;
+        }
         let text = match phase {
             Phase::Preparing => tr!(phase_preparing).to_string(),
             Phase::Connecting => tr!(phase_connecting, name = self.peer),
@@ -294,18 +312,24 @@ impl Progress {
         );
         window::enable(self.pause, can_pause(phase));
 
-        if phase == Phase::WaitingForConnection {
+        // A connection lost while data was flowing asks (or acts) after a
+        // moment. A transfer restored at startup just waits, which the
+        // "unfinished transfer" notification already said, and so does one
+        // whose other side exited on purpose: that is not a network problem.
+        let lost = phase == Phase::WaitingForConnection
+            && self.had_data
+            && !std::mem::take(&mut self.peer_suspended);
+        if lost {
             unsafe { SetTimer(w.hwnd, TIMER_LOST, LOST_PROMPT_DELAY_MS, None) };
         }
-        let will_ask = phase == Phase::WaitingForConnection
-            && !self.background
-            && app::cfg().connection_lost == ConnectionLostAction::Ask;
+        let will_ask =
+            lost && !self.background && app::cfg().connection_lost == ConnectionLostAction::Ask;
         let balloon = match phase {
             Phase::PausedByPeer => Some((
                 tr!(paused_balloon_title).to_string(),
                 tr!(paused_by_peer_balloon, item = self.item, name = self.peer),
             )),
-            Phase::WaitingForConnection if !will_ask => Some((
+            Phase::WaitingForConnection if lost && !will_ask => Some((
                 tr!(connection_lost_balloon_title).to_string(),
                 tr!(connection_lost_balloon, item = self.item),
             )),
@@ -541,7 +565,7 @@ impl Progress {
     /// chosen now or in the settings. The network side waits anyway, so
     /// waiting needs nothing more.
     fn connection_lost(&mut self, w: &Window) {
-        if !self.active || self.phase != Some(Phase::WaitingForConnection) {
+        if !self.active || !self.had_data || self.phase != Some(Phase::WaitingForConnection) {
             return;
         }
         let action = match app::cfg().connection_lost {

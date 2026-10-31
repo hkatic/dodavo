@@ -2,7 +2,12 @@
 //! whenever the connection was lost, until the transfer is complete or
 //! cancelled.
 
-use std::{io::SeekFrom, path::PathBuf, sync::Arc, time::Duration};
+use std::{
+    io::SeekFrom,
+    path::PathBuf,
+    sync::{Arc, atomic::Ordering},
+    time::Duration,
+};
 
 use anyhow::{Context, bail};
 use iroh::{Endpoint, EndpointId, endpoint::Connection};
@@ -151,7 +156,9 @@ async fn start(
         Ok(p) => p,
         Err(e) => return Outcome::Failed(format!("{e:#}")),
     };
-    let (source_len, source_mtime) = match std::fs::metadata(&path) {
+    // What a later run compares to notice a changed source: the file, or the
+    // zip the folder was packed into.
+    let (source_len, source_mtime) = match std::fs::metadata(&data_path) {
         Ok(m) => (m.len(), m.modified().ok()),
         Err(_) => (0, None),
     };
@@ -207,7 +214,7 @@ async fn start(
             return match peer_close(&conn) {
                 PeerClose::Cancelled => Outcome::CancelledByPeer,
                 PeerClose::Failed => Outcome::Failed(tr!(error_recipient_failed).into()),
-                PeerClose::Lost => {
+                PeerClose::Suspended | PeerClose::Lost => {
                     session.close_current(CLOSE_FAILED, b"failed");
                     Outcome::Failed(format!("{e:#}"))
                 }
@@ -229,6 +236,7 @@ async fn start(
             source_mtime,
             data_path: data_path.clone(),
         },
+        done_hash: None,
     };
     if let Err(e) = record.save(&shared.data_dir) {
         session.close_current(CLOSE_FAILED, b"failed");
@@ -269,6 +277,7 @@ async fn continue_record(
     };
     let (session, _unused) = Session::new(id, record.token, to, Role::Send);
     shared.add_session(session.clone());
+    shared.restored(&record.token);
     let mut sender = Sender {
         shared,
         endpoint,
@@ -399,6 +408,11 @@ impl Sender<'_> {
     async fn reconnect(&mut self) -> Result<(Streams, u64), Outcome> {
         let mut delay = RETRY_MIN;
         loop {
+            if self.shared.shutting_down.load(Ordering::SeqCst) {
+                // Exiting: the transfer continues at the next start, and the
+                // receiver was told so by the suspended connection.
+                std::future::pending::<()>().await;
+            }
             if *self.paused_rx.borrow() {
                 // Paused: nothing to do until the user resumes.
                 let _ = self.paused_rx.changed().await;
@@ -475,7 +489,11 @@ impl Sender<'_> {
 
     /// Streams from byte `have` on one connection.
     async fn stream(&mut self, s: Streams, have: u64) -> Result<Outcome, End> {
-        let Streams { conn, mut send, recv } = s;
+        let Streams {
+            conn,
+            mut send,
+            recv,
+        } = s;
         self.session.set_current(Some(conn.clone()));
         let _watch = AbortOnDrop(spawn_path_watch(self.shared.clone(), self.id, conn.clone()));
         // Everything the receiver says arrives through this channel, so the
@@ -509,6 +527,11 @@ impl Sender<'_> {
                         tr!(error_recipient_failed).into(),
                     )))
                 }
+                PeerClose::Suspended => {
+                    self.shared.emit(Event::PeerSuspended { id: self.id });
+                    self.session.set_current(None);
+                    Err(End::Lost)
+                }
                 PeerClose::Lost => {
                     self.session.set_current(None);
                     Err(End::Lost)
@@ -535,11 +558,18 @@ impl Sender<'_> {
         let id = self.id;
         tokio::task::spawn_blocking(move || {
             let mut throttle = Throttle::new();
-            session::hash_range(&path, from, have, &mut hasher, cancel.flag(), &mut |done, total| {
-                if throttle.ready() || done == total {
-                    shared.emit(Event::Progress { id, done, total });
-                }
-            })?;
+            session::hash_range(
+                &path,
+                from,
+                have,
+                &mut hasher,
+                cancel.flag(),
+                &mut |done, total| {
+                    if throttle.ready() || done == total {
+                        shared.emit(Event::Progress { id, done, total });
+                    }
+                },
+            )?;
             Ok::<_, std::io::Error>(hasher)
         })
         .await?

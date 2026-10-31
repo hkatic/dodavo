@@ -14,6 +14,7 @@ use std::{
 
 use windows_sys::Win32::{
     Foundation::HWND,
+    System::Power::{ES_CONTINUOUS, ES_SYSTEM_REQUIRED, SetThreadExecutionState},
     UI::WindowsAndMessaging::{IsWindowVisible, KillTimer, PostMessageW, SetTimer, WM_APP},
 };
 
@@ -165,6 +166,32 @@ impl Transfer {
     fn is_with(&self, peer_id: &str) -> bool {
         self.active && !self.peer_id.is_empty() && self.peer_id.eq_ignore_ascii_case(peer_id)
     }
+
+    /// Whether data is being worked on right now (not paused, not waiting):
+    /// then the computer must not go to sleep by itself.
+    fn moving_data(&self) -> bool {
+        self.active
+            && matches!(
+                self.phase,
+                Some(Phase::Preparing | Phase::Transferring | Phase::Verifying | Phase::Unpacking)
+            )
+    }
+}
+
+/// Keeps the computer from sleeping automatically while `busy` (like a
+/// download does); the display may still turn off. The flag belongs to the
+/// calling thread, so this runs on the UI thread only.
+fn keep_awake(busy: bool) {
+    if AWAKE.get() == busy {
+        return;
+    }
+    AWAKE.set(busy);
+    let state = if busy {
+        ES_CONTINUOUS | ES_SYSTEM_REQUIRED
+    } else {
+        ES_CONTINUOUS
+    };
+    unsafe { SetThreadExecutionState(state) };
 }
 
 /// The text of the recipient list's Transfer column for one peer's transfers.
@@ -226,6 +253,8 @@ thread_local! {
     static APP: RefCell<Option<App>> = const { RefCell::new(None) };
     /// When the notification area icon last showed the transfers.
     static TRAY_SHOWN: Cell<Option<Instant>> = const { Cell::new(None) };
+    /// Whether the computer is currently kept from sleeping.
+    static AWAKE: Cell<bool> = const { Cell::new(false) };
 }
 
 static EVENTS: Mutex<VecDeque<Event>> = Mutex::new(VecDeque::new());
@@ -458,11 +487,13 @@ fn refresh_tray(force: bool) {
         return;
     }
     TRAY_SHOWN.set(Some(Instant::now()));
-    let (count, tip) = with(|a| {
+    let (count, tip, busy) = with(|a| {
         let active: Vec<&Transfer> = a.transfers.values().filter(|t| t.active).collect();
-        (active.len(), tray_tip(&active))
+        let busy = active.iter().any(|t| t.moving_data());
+        (active.len(), tray_tip(&active), busy)
     });
     tray::set_status(main_window(), count, &tip);
+    keep_awake(busy);
 }
 
 pub fn active_transfer_count() -> usize {
@@ -574,6 +605,13 @@ fn handle_event(event: Event) -> Option<Event> {
                 if let Some((title, text)) = notice.balloon {
                     tray::balloon(main_window(), &title, &text, Some(BalloonAction::Window(h)));
                 }
+            }
+        }
+        Event::PeerSuspended { id } => {
+            if let Some(h) = transfer_window(id)
+                && !progress::peer_suspended(h)
+            {
+                return Some(Event::PeerSuspended { id });
             }
         }
         Event::Progress { id, done, total } => {
@@ -737,6 +775,27 @@ mod tests {
         assert!(tip.contains("72%") || tip.contains("72 %"), "{tip}");
         assert!(tip.contains("3.0 KB") || tip.contains("3,0 KB"), "{tip}");
         assert!(!tip.contains('{'), "{tip}");
+    }
+
+    #[test]
+    fn only_flowing_data_keeps_the_computer_awake() {
+        for (phase, busy) in [
+            (None, false),
+            (Some(Phase::Connecting), false),
+            (Some(Phase::WaitingForAccept), false),
+            (Some(Phase::Preparing), true),
+            (Some(Phase::Transferring), true),
+            (Some(Phase::Verifying), true),
+            (Some(Phase::Unpacking), true),
+            (Some(Phase::Paused), false),
+            (Some(Phase::PausedByPeer), false),
+            (Some(Phase::WaitingForConnection), false),
+        ] {
+            let mut t = transfer(phase, 1, 2);
+            assert_eq!(t.moving_data(), busy, "{phase:?}");
+            t.active = false;
+            assert!(!t.moving_data(), "{phase:?} once ended");
+        }
     }
 
     #[test]
