@@ -20,6 +20,10 @@ Windows 7 with Service Pack 1, Windows 8.1, Windows 10 and Windows 11, 32-bit an
 
 Windows 10 and 11 are what Dodavo is developed and tested on. Windows 7 and 8.1 are no longer supported by Microsoft and get a separate build (see [Building](#building)); it starts and runs there as far as can be checked without those systems, but it is provided as is. On Windows 7 without the SHA-2 code signing updates from 2019 (KB4474419 and KB4490628), Windows cannot verify SHA-256 signatures and shows the setup program as coming from an unknown publisher.
 
+Dodavo carries its own list of trusted certificate authorities (the Mozilla root set bundled by iroh) for its encrypted connections to the relay and address lookup servers, so it does not depend on the Windows certificate store and connects even on a Windows 7 whose root certificates were never updated.
+
+An unsigned build (see [Code signing](#installer)) is flagged when it is started: Windows 8.1 and later show SmartScreen's "Windows protected your PC" (choose **More info**, then **Run anyway**), and Windows 7 asks whether to run software whose publisher could not be verified. Verify the download first: `certutil -hashfile Dodavo-<version>-setup.exe SHA256` must match the published `.sha256` file.
+
 ## How connections work
 
 Every installation has a permanent **Contact ID** (a public key). You share that instead of an IP address: click **Copy My Contact ID** and send it to the other person, and they add you with **Add Recipient**.
@@ -66,6 +70,8 @@ powershell -ExecutionPolicy Bypass -File installer\build.ps1
 
 This builds the program four times (x64 and x86, each for Windows 10 and later with stable Rust and for Windows 7 SP1 to 8.1 with the pinned nightly, see above), checks their imports, and writes `target\installer\Dodavo-<version>-setup.exe`, plus a `.sha256` file to publish next to it. Add `-Test` to run `cargo test` first, and `-SkipWin7` to build only the Windows 10 programs and an installer that requires Windows 10. The installer needs the 32-bit edition of Inno Setup, whose setup program also runs on 32-bit Windows.
 
+The four programs are also left in `target\installer\staging\<x64|x86|x64-win7|x86-win7>\Dodavo.exe`, so a single build can be copied to a test machine without running Setup.
+
 - Setup carries all four builds (about 20 MB) and installs the one for the running Windows: by version (`MinVersion`/`OnlyBelowVersion: 10.0`) and by install mode (64-bit on x64 and on Windows 11 on ARM, 32-bit otherwise).
 - By default Dodavo is installed for the current user (`%LOCALAPPDATA%\Programs\Dodavo`) without administrator rights. Setup also offers to install for all users.
 - Setup runs in English, Croatian, Serbian (Latin) or Slovenian, following the Windows display language. Croatian and Serbian come from `installer\languages`, which are adapted copies of the user-contributed Inno Setup translations.
@@ -82,7 +88,7 @@ This builds the program four times (x64 and x86, each for Windows 10 and later w
 | `DODAVO_SIGN_PFX_PASSWORD` | `-PfxPassword` | password of the `.pfx` file |
 | `DODAVO_SIGN_TIMESTAMP_URL` | `-TimestampUrl` | timestamp server (default `http://timestamp.digicert.com`) |
 
-If none is set, the installer is built unsigned.
+If none is set, the installer is built unsigned, which is fine for testing; [System requirements](#system-requirements) describes the warnings Windows then shows and how to verify the file.
 
 ## Development
 
