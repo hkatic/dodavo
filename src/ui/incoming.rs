@@ -219,7 +219,7 @@ impl Incoming {
             super::main_window::refresh_list();
         }
         self.answered = true;
-        app::accept_offer(self.id, &sender, &self.offer, dir, true);
+        app::accept_offer(self.id, &self.from, &sender, &self.offer, dir, true);
         w.close();
     }
 }

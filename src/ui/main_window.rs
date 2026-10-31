@@ -7,14 +7,14 @@ use windows_sys::Win32::{
     Graphics::Gdi::{MapWindowPoints, ScreenToClient, UpdateWindow},
     UI::{
         Controls::*,
-        Input::KeyboardAndMouse::{IsWindowEnabled, VK_DELETE, VK_F1, VK_F2},
+        Input::KeyboardAndMouse::{GetFocus, IsWindowEnabled, VK_DELETE, VK_F1, VK_F2},
         Shell::{DragAcceptFiles, DragFinish, DragQueryFileW, DragQueryPoint, HDROP},
         WindowsAndMessaging::*,
     },
 };
 
 use super::{
-    APP_NAME, ask, confirm, info, send, set_text, shell, short_id, tray, wide,
+    APP_NAME, ask, confirm, info, progress, send, set_text, shell, short_id, tray, wide,
     window::{self, CreateOptions, Handler, Window},
 };
 use crate::{
@@ -36,7 +36,15 @@ const ID_HELP: u16 = 109;
 const ID_ABOUT: u16 = 110;
 const ID_TRAY_OPEN: u16 = 111;
 const ID_VIEW_HELP: u16 = 112;
+const ID_SHOW_TRANSFERS: u16 = 113;
+/// Shows the running transfers with the selected recipient.
+const ID_SHOW_CONTACT_TRANSFERS: u16 = 114;
 const ID_LIST: u16 = 200;
+/// The running transfers listed in the Transfers menu, in menu order.
+const ID_TRANSFER_FIRST: u16 = 300;
+const ID_TRANSFER_LAST: u16 = 349;
+/// The list's Transfer column.
+const COL_TRANSFER: usize = 2;
 
 const NIN_BALLOONUSERCLICK: u32 = WM_USER + 5;
 /// Command links of the exit question.
@@ -74,12 +82,30 @@ struct MainWindow {
     copy: HWND,
     /// Widths of the four buttons above, in 96-DPI units.
     widths: [i32; 4],
+    /// The Transfers menu of the menu bar; filled when it opens.
+    transfers_menu: HMENU,
+    /// The transfer ids behind `ID_TRANSFER_FIRST + index`.
+    menu_transfers: Vec<u64>,
 }
 
 /// Appends a command to a menu.
 fn menu_item(menu: HMENU, id: u16, text: &str) {
     let text = wide(text);
     unsafe { AppendMenuW(menu, MF_STRING, id as usize, text.as_ptr()) };
+}
+
+/// Appends a text that cannot be chosen (an explanation).
+fn menu_note(menu: HMENU, text: &str) {
+    let text = wide(text);
+    unsafe { AppendMenuW(menu, MF_STRING | MF_GRAYED, 0, text.as_ptr()) };
+}
+
+fn clear_menu(menu: HMENU) {
+    unsafe {
+        while GetMenuItemCount(menu) > 0 {
+            DeleteMenu(menu, 0, MF_BYPOSITION);
+        }
+    }
 }
 
 fn menu_separator(menu: HMENU) {
@@ -109,7 +135,9 @@ fn track_popup(menu: HMENU, owner: HWND, pt: POINT) -> Option<u16> {
     (cmd != 0).then_some(cmd as u16)
 }
 
-fn build_menu() -> HMENU {
+/// Builds the menu bar; also returns its Transfers menu, which is filled
+/// each time it opens.
+fn build_menu() -> (HMENU, HMENU) {
     let bar = unsafe { CreateMenu() };
     let file = unsafe { CreatePopupMenu() };
     menu_item(file, ID_SEND_FILE, tr!(menu_send_file));
@@ -125,12 +153,15 @@ fn build_menu() -> HMENU {
     menu_item(file, ID_EXIT, tr!(menu_exit));
     menu_popup(bar, file, tr!(menu_file));
 
+    let transfers = unsafe { CreatePopupMenu() };
+    menu_popup(bar, transfers, tr!(menu_transfers));
+
     let help = unsafe { CreatePopupMenu() };
     menu_item(help, ID_VIEW_HELP, tr!(menu_view_help));
     menu_item(help, ID_HELP, tr!(menu_how));
     menu_item(help, ID_ABOUT, tr!(menu_about));
     menu_popup(bar, help, tr!(menu_help));
-    bar
+    (bar, transfers)
 }
 
 fn build_accelerators() -> HACCEL {
@@ -161,6 +192,11 @@ fn build_accelerators() -> HACCEL {
             key: VK_DELETE,
             cmd: ID_REMOVE,
         },
+        ACCEL {
+            fVirt: virt,
+            key: b'T' as u16,
+            cmd: ID_SHOW_TRANSFERS,
+        },
     ];
     unsafe { CreateAcceleratorTableW(table.as_ptr(), table.len() as i32) }
 }
@@ -169,6 +205,7 @@ pub fn create(profile: Option<&str>, start_hidden: bool) -> HWND {
     MSG_TASKBAR_CREATED.set(unsafe { RegisterWindowMessageW(wide("TaskbarCreated").as_ptr()) });
     MSG_SHOW.set(show_message_id());
     ACCEL.set(build_accelerators());
+    let (menu, transfers_menu) = build_menu();
     let handler = MainWindow {
         list: std::ptr::null_mut(),
         label: std::ptr::null_mut(),
@@ -178,6 +215,8 @@ pub fn create(profile: Option<&str>, start_hidden: bool) -> HWND {
         add: std::ptr::null_mut(),
         copy: std::ptr::null_mut(),
         widths: [110, 110, 120, 144],
+        transfers_menu,
+        menu_transfers: Vec::new(),
     };
     let title = window_title(profile);
     let hwnd = window::create(
@@ -186,7 +225,7 @@ pub fn create(profile: Option<&str>, start_hidden: bool) -> HWND {
             main_class: true,
             style: WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN,
             ex_style: WS_EX_CONTROLPARENT | WS_EX_ACCEPTFILES,
-            menu: build_menu(),
+            menu,
             client: (600, 400),
             ..Default::default()
         },
@@ -249,7 +288,10 @@ fn create_list(w: &Window) -> HWND {
         0,
         (LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER) as isize,
     );
-    for (i, title) in [tr!(col_name), tr!(col_contact_id)].iter().enumerate() {
+    for (i, title) in [tr!(col_name), tr!(col_contact_id), tr!(col_transfer)]
+        .iter()
+        .enumerate()
+    {
         let mut text = wide(title);
         let mut col: LVCOLUMNW = unsafe { std::mem::zeroed() };
         col.mask = LVCF_TEXT | LVCF_WIDTH;
@@ -328,6 +370,16 @@ fn select_index(index: usize) {
     send(LIST.get(), LVM_ENSUREVISIBLE, index, 0);
 }
 
+fn set_cell(list: HWND, index: usize, column: usize, text: &str) {
+    let mut text = wide(text);
+    let mut item: LVITEMW = unsafe { std::mem::zeroed() };
+    item.mask = LVIF_TEXT;
+    item.iItem = index as i32;
+    item.iSubItem = column as i32;
+    item.pszText = text.as_mut_ptr();
+    send(list, LVM_SETITEMTEXTW, index, &item as *const _ as isize);
+}
+
 /// Rebuilds the recipient list from the configuration.
 pub fn refresh_list() {
     let list = LIST.get();
@@ -341,15 +393,31 @@ pub fn refresh_list() {
         item.iItem = i as i32;
         item.pszText = name.as_mut_ptr();
         send(list, LVM_INSERTITEMW, 0, &item as *const _ as isize);
-        let mut id = wide(&short_id(&c.id));
-        item.iSubItem = 1;
-        item.pszText = id.as_mut_ptr();
-        send(list, LVM_SETITEMTEXTW, i, &item as *const _ as isize);
+        set_cell(list, i, 1, &short_id(&c.id));
+        set_cell(list, i, COL_TRANSFER, &app::transfer_status(&c.id));
     }
     if let Some(sel) = selected.filter(|&s| s < contacts.len()) {
         select_index(sel);
     } else if !contacts.is_empty() {
         select_index(0);
+    }
+}
+
+/// Shows the state of a peer's transfers in the list. Only that cell changes,
+/// so the selection, the focus and the other cells stay as they are.
+pub fn update_transfer_status(peer_id: &str) {
+    let list = LIST.get();
+    if list.is_null() {
+        return;
+    }
+    let index = app::with(|a| {
+        a.cfg
+            .contacts
+            .iter()
+            .position(|c| c.id.eq_ignore_ascii_case(peer_id))
+    });
+    if let Some(i) = index {
+        set_cell(list, i, COL_TRANSFER, &app::transfer_status(peer_id));
     }
 }
 
@@ -453,6 +521,66 @@ impl MainWindow {
         }
     }
 
+    /// Brings the windows of all running transfers back.
+    fn show_transfers(&self, w: &Window) {
+        let transfers = app::active_transfer_list();
+        if transfers.is_empty() {
+            info(w.hwnd, tr!(menu_no_transfers));
+        }
+        for (_, hwnd, _) in transfers {
+            progress::show(hwnd);
+        }
+    }
+
+    /// Brings the windows of the running transfers with the selected recipient back.
+    fn show_contact_transfers(&self, w: &Window) {
+        let Some(contact) = self.selected_contact(w) else {
+            return;
+        };
+        for hwnd in app::transfer_windows_of(&contact.id) {
+            progress::show(hwnd);
+        }
+    }
+
+    /// Brings one transfer chosen from the Transfers menu back.
+    fn show_transfer(&self, id: u16) {
+        let Some(&transfer) = self.menu_transfers.get((id - ID_TRANSFER_FIRST) as usize) else {
+            return;
+        };
+        if let Some(hwnd) = app::transfer_window(transfer) {
+            progress::show(hwnd);
+        }
+    }
+
+    /// Fills a menu with the running transfers and the "Show All" command.
+    fn fill_transfers_menu(&mut self, menu: HMENU) {
+        clear_menu(menu);
+        self.menu_transfers.clear();
+        let transfers = app::active_transfer_list();
+        if transfers.is_empty() {
+            menu_note(menu, tr!(menu_no_transfers));
+        }
+        let room = (ID_TRANSFER_LAST - ID_TRANSFER_FIRST + 1) as usize;
+        for (i, (id, _, text)) in transfers.into_iter().take(room).enumerate() {
+            self.menu_transfers.push(id);
+            // Names and file names are not access keys.
+            let text = text.replace('&', "&&");
+            menu_item(menu, ID_TRANSFER_FIRST + i as u16, &text);
+        }
+        menu_separator(menu);
+        menu_item(menu, ID_SHOW_TRANSFERS, tr!(menu_show_transfers));
+    }
+
+    /// Enter in the list: `IsDialogMessageW` turns it into `IDOK` because the
+    /// window has no default button. It opens the recipient's actions menu.
+    fn enter_pressed(&mut self, w: &Window) -> bool {
+        if unsafe { GetFocus() } != self.list || self.selected().is_none() {
+            return false;
+        }
+        self.context_menu(w, None);
+        true
+    }
+
     fn command(&mut self, w: &Window, id: u16) -> bool {
         match id {
             ID_SEND_FILE => self.send_item(w, Kind::File),
@@ -461,6 +589,10 @@ impl MainWindow {
             ID_EDIT => self.edit_recipient(w),
             ID_REMOVE => self.remove_recipient(w),
             ID_COPY_ID => self.copy_my_id(w),
+            ID_SHOW_TRANSFERS => self.show_transfers(w),
+            ID_SHOW_CONTACT_TRANSFERS => self.show_contact_transfers(w),
+            ID_TRANSFER_FIRST..=ID_TRANSFER_LAST => self.show_transfer(id),
+            id if id == IDOK as u16 => return self.enter_pressed(w),
             ID_SETTINGS => {
                 super::settings::show(w.hwnd);
             }
@@ -481,8 +613,12 @@ impl MainWindow {
         true
     }
 
+    /// The actions for the selected recipient (or "Add Recipient" when there
+    /// is none), at `screen` or below the selected row.
     fn context_menu(&mut self, w: &Window, screen: Option<POINT>) {
-        let has_selection = self.selected().is_some();
+        let contact = self
+            .selected()
+            .and_then(|i| app::cfg().contacts.get(i).cloned());
         let pt = screen.unwrap_or_else(|| {
             let mut rc: RECT = unsafe { std::mem::zeroed() };
             if let Some(i) = self.selected() {
@@ -497,13 +633,17 @@ impl MainWindow {
             p
         });
         let menu = unsafe { CreatePopupMenu() };
-        if has_selection {
+        if let Some(contact) = contact {
             menu_item(menu, ID_SEND_FILE, tr!(send_file));
             menu_item(menu, ID_SEND_FOLDER, tr!(send_folder));
+            match app::transfer_windows_of(&contact.id).len() {
+                0 => {}
+                1 => menu_item(menu, ID_SHOW_CONTACT_TRANSFERS, tr!(ctx_show_transfer)),
+                _ => menu_item(menu, ID_SHOW_CONTACT_TRANSFERS, tr!(ctx_show_transfers)),
+            }
             menu_separator(menu);
             menu_item(menu, ID_EDIT, tr!(ctx_edit));
             menu_item(menu, ID_REMOVE, tr!(ctx_remove));
-            unsafe { SetMenuDefaultItem(menu, ID_SEND_FILE as u32, 0) };
         } else {
             menu_item(menu, ID_ADD, tr!(add_recipient));
         }
@@ -515,6 +655,10 @@ impl MainWindow {
     fn tray_menu(&mut self, w: &Window) {
         let menu = unsafe { CreatePopupMenu() };
         menu_item(menu, ID_TRAY_OPEN, tr!(tray_open));
+        // Destroyed together with its parent by `track_popup`.
+        let transfers = unsafe { CreatePopupMenu() };
+        self.fill_transfers_menu(transfers);
+        menu_popup(menu, transfers, tr!(menu_transfers));
         menu_item(menu, ID_COPY_ID, tr!(menu_copy_id));
         menu_separator(menu);
         menu_item(menu, ID_EXIT, tr!(menu_exit));
@@ -641,18 +785,15 @@ impl Handler for MainWindow {
         );
         w.place(self.status, (margin, cy - 26, cx - 2 * margin, 18));
         let list_width = w.px(cx - 2 * margin) - unsafe { GetSystemMetrics(SM_CXVSCROLL) } - 4;
-        send(
-            self.list,
-            LVM_SETCOLUMNWIDTH,
-            0,
-            (list_width * 2 / 5) as isize,
-        );
-        send(
-            self.list,
-            LVM_SETCOLUMNWIDTH,
-            1,
-            (list_width - list_width * 2 / 5) as isize,
-        );
+        // Name and Contact ID (shortened) take 30% each; the transfer state the rest.
+        let name_width = list_width * 3 / 10;
+        for (column, width) in [
+            (0, name_width),
+            (1, name_width),
+            (COL_TRANSFER, list_width - 2 * name_width),
+        ] {
+            send(self.list, LVM_SETCOLUMNWIDTH, column, width as isize);
+        }
     }
 
     fn on_command(&mut self, w: &Window, id: u16, _code: u16) -> bool {
@@ -664,9 +805,10 @@ impl Handler for MainWindow {
             return None;
         }
         match hdr.code {
+            // Like Enter: the recipient's actions menu, below the row.
             NM_DBLCLK => {
                 if self.selected().is_some() {
-                    self.send_item(w, Kind::File);
+                    self.context_menu(w, None);
                 }
                 Some(0)
             }
@@ -718,12 +860,16 @@ impl Handler for MainWindow {
                     NIN_BALLOONUSERCLICK => match app::with(|a| a.balloon_action.take()) {
                         Some(tray::BalloonAction::Reveal(path)) => shell::reveal_in_explorer(&path),
                         Some(tray::BalloonAction::Window(h)) if unsafe { IsWindow(h) } != 0 => {
-                            window::bring_to_front(h)
+                            progress::show(h)
                         }
                         _ => window::bring_to_front(w.hwnd),
                     },
                     _ => {}
                 }
+                Some(0)
+            }
+            WM_INITMENUPOPUP if wp as HMENU == self.transfers_menu => {
+                self.fill_transfers_menu(self.transfers_menu);
                 Some(0)
             }
             WM_DROPFILES => {

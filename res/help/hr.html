@@ -104,7 +104,7 @@
 <p>Glavni prozor sadrži, redoslijedom tipke Tab:</p>
 <dl>
 <dt>Popis primatelja</dt>
-<dd>Osobe kojima možete slati datoteke. Popis ima dva stupca: <span class="ui">Ime</span> i <span class="ui">ID kontakta</span>. ID kontakta skraćen je na prvih osam i zadnjih šest znakova. Po popisu se krećete tipkama sa strelicama. Kada je popis prazan, to piše na njemu, zajedno s uputom kako nekoga dodati.</dd>
+<dd>Osobe kojima možete slati datoteke. Popis ima tri stupca: <span class="ui">Ime</span>, <span class="ui">ID kontakta</span> i <span class="ui">Prijenos</span>. ID kontakta skraćen je na prvih osam i zadnjih šest znakova. Dok s nekom osobom traje prijenos, u stupcu <span class="ui">Prijenos</span> piše što se događa, na primjer <span class="ui">Slanje – „izvještaj.pdf” (45 %)</span> ili <span class="ui">Čeka se veza – „izvještaj.pdf” (45 %)</span>; osvježava se otprilike svake sekunde, a kada je prijenosa više, piše koliko ih je u tijeku. Inače je prazan. Po popisu se krećete tipkama sa strelicama. Tipka <kbd>Enter</kbd> ili dvostruki klik otvara izbornik radnji za odabranu osobu (pogledajte u nastavku). Kada je popis prazan, to piše na njemu, zajedno s uputom kako nekoga dodati.</dd>
 <dt>Gumbi <span class="ui">Pošalji datoteku…</span> i <span class="ui">Pošalji mapu…</span></dt>
 <dd>Šalju nešto odabranoj osobi.</dd>
 <dt>Gumb <span class="ui">Dodaj primatelja…</span></dt>
@@ -119,8 +119,8 @@
 <li><span class="ui">Izvan mreže – provjerite internetsku vezu. Prijenosi unutar lokalne mreže i dalje rade.</span></li>
 </ul>
 <p>Redak stanja ne može dobiti fokus tipkovnice. Da biste ga čuli, upotrijebite naredbu čitača zaslona za čitanje cijelog prozora: <kbd>NVDA</kbd>+<kbd>B</kbd> u čitaču NVDA, <kbd>Insert</kbd>+<kbd>B</kbd> u čitaču JAWS ili <kbd>Pripovjedač</kbd>+<kbd>W</kbd> u Pripovjedaču.</p>
-<p>Traka izbornika ima dva izbornika. Izbornik <span class="ui">Datoteka</span> (<kbd>Alt</kbd>+<kbd>D</kbd>) sadrži naredbe <span class="ui">Pošalji datoteku…</span>, <span class="ui">Pošalji mapu…</span>, <span class="ui">Dodaj primatelja…</span>, <span class="ui">Uredi primatelja…</span>, <span class="ui">Ukloni primatelja</span>, <span class="ui">Kopiraj moj ID kontakta</span>, <span class="ui">Postavke…</span> i <span class="ui">Izlaz</span>. Izbornik <span class="ui">Pomoć</span> (<kbd>Alt</kbd>+<kbd>P</kbd>) sadrži naredbe <span class="ui">Prikaz pomoći</span>, <span class="ui">Kako funkcionira</span> (kratak sažetak) i <span class="ui">O programu</span> (broj verzije).</p>
-<p>Kada je na popisu odabrana osoba, kontekstni izbornik (<kbd>Shift</kbd>+<kbd>F10</kbd>, tipka kontekstnog izbornika ili desni klik) nudi naredbe <span class="ui">Pošalji datoteku…</span>, <span class="ui">Pošalji mapu…</span>, <span class="ui">Uredi…</span> i <span class="ui">Ukloni</span>.</p>
+<p>Traka izbornika ima tri izbornika. Izbornik <span class="ui">Datoteka</span> (<kbd>Alt</kbd>+<kbd>D</kbd>) sadrži naredbe <span class="ui">Pošalji datoteku…</span>, <span class="ui">Pošalji mapu…</span>, <span class="ui">Dodaj primatelja…</span>, <span class="ui">Uredi primatelja…</span>, <span class="ui">Ukloni primatelja</span>, <span class="ui">Kopiraj moj ID kontakta</span>, <span class="ui">Postavke…</span> i <span class="ui">Izlaz</span>. Izbornik <span class="ui">Prijenosi</span> (<kbd>Alt</kbd>+<kbd>R</kbd>) navodi sve prijenose u tijeku, s osobom, stavkom i stanjem, a na kraju sadrži naredbu <span class="ui">Prikaži sve prijenose</span> (<kbd>Ctrl</kbd>+<kbd>T</kbd>); kada ništa nije u tijeku, u njemu piše <span class="ui">Nema prijenosa u tijeku</span>. Pogledajte <a href="#finding-transfers">Pronalaženje prijenosa koji se odvija u pozadini</a>. Izbornik <span class="ui">Pomoć</span> (<kbd>Alt</kbd>+<kbd>P</kbd>) sadrži naredbe <span class="ui">Prikaz pomoći</span>, <span class="ui">Kako funkcionira</span> (kratak sažetak) i <span class="ui">O programu</span> (broj verzije).</p>
+<p>Kada je na popisu odabrana osoba, izbornik radnji (<kbd>Enter</kbd>, dvostruki klik, <kbd>Shift</kbd>+<kbd>F10</kbd>, tipka kontekstnog izbornika ili desni klik) nudi naredbe <span class="ui">Pošalji datoteku…</span>, <span class="ui">Pošalji mapu…</span>, <span class="ui">Prikaži prijenos</span> (samo dok s tom osobom traje prijenos; <span class="ui">Prikaži prijenose</span> kada ih je više), <span class="ui">Uredi…</span> i <span class="ui">Ukloni</span>.</p>
 </section>
 
 <section aria-labelledby="recipients">
@@ -162,7 +162,7 @@
 <li>Odaberite datoteku i pritisnite <kbd>Enter</kbd>.</li>
 </ol>
 <p>Otvara se prozor napretka i prijenos počinje. Pogledajte <a href="#progress">Praćenje prijenosa</a>.</p>
-<p>Mišem možete datoteku poslati i dvostrukim klikom na osobu.</p>
+<p>Možete i pritisnuti <kbd>Enter</kbd> na osobi ili je dvaput kliknuti pa u izborniku koji se otvori odabrati <span class="ui">Pošalji datoteku…</span>.</p>
 
 <h3 id="send-folder">Slanje mape</h3>
 <ol>
@@ -219,9 +219,9 @@
 <li><span class="ui">Preneseno:</span> (ili <span class="ui">Obrađeno:</span> dok se mapa pakira ili raspakirava) s dovršenom količinom, ukupnom veličinom i postotkom.</li>
 <li><span class="ui">Brzina:</span> i <span class="ui">Preostalo vrijeme:</span>, koji se ažuriraju jednom u sekundi.</li>
 <li>Vrstu veze: <span class="ui">Veza: izravna (s računala na računalo)</span> ili <span class="ui">Veza: preko relejnog poslužitelja (sveobuhvatno šifrirana)</span>.</li>
-<li>Tri gumba: <span class="ui">Pauziraj</span> (<kbd>Alt</kbd>+<kbd>P</kbd>), koji dok je prijenos pauziran postaje <span class="ui">Nastavi</span> (<kbd>Alt</kbd>+<kbd>N</kbd>); <span class="ui">Minimiziraj u pozadinu</span> (<kbd>Alt</kbd>+<kbd>Z</kbd>), koji skriva prozor i pušta prijenos da se nastavi; i <span class="ui">Odustani</span>, koji prije otkazivanja prijenosa traži potvrdu.</li>
+<li>Tri gumba: <span class="ui">Pauziraj</span> (<kbd>Alt</kbd>+<kbd>P</kbd>), koji dok je prijenos pauziran postaje <span class="ui">Nastavi</span> (<kbd>Alt</kbd>+<kbd>N</kbd>); <span class="ui">Minimiziraj u pozadinu</span> (<kbd>Alt</kbd>+<kbd>Z</kbd>), koji skriva prozor i pušta prijenos da se nastavi (pogledajte <a href="#finding-transfers">Pronalaženje prijenosa koji se odvija u pozadini</a>); i <span class="ui">Odustani</span>, koji prije otkazivanja prijenosa traži potvrdu.</li>
 </ul>
-<p>Kada se prozor otvori, fokus je na gumbu <span class="ui">Pauziraj</span>; tipkom <kbd>Tab</kbd> prelazite između gumba, a tipkom <kbd>Enter</kbd> aktivirate onaj koji ima fokus. Ostali retci ne mogu dobiti fokus. Da biste čuli napredak, upotrijebite naredbu čitača zaslona za čitanje cijelog prozora: <kbd>NVDA</kbd>+<kbd>B</kbd> u čitaču NVDA, <kbd>Insert</kbd>+<kbd>B</kbd> u čitaču JAWS ili <kbd>Pripovjedač</kbd>+<kbd>W</kbd> u Pripovjedaču.</p>
+<p>Kada se prozor otvori, fokus je na gumbu <span class="ui">Minimiziraj u pozadinu</span>; gumb <span class="ui">Pauziraj</span> postaje dostupan čim podaci počnu teći. tipkom <kbd>Tab</kbd> prelazite između gumba, a tipkom <kbd>Enter</kbd> aktivirate onaj koji ima fokus. Ostali retci ne mogu dobiti fokus. Da biste čuli napredak, upotrijebite naredbu čitača zaslona za čitanje cijelog prozora: <kbd>NVDA</kbd>+<kbd>B</kbd> u čitaču NVDA, <kbd>Insert</kbd>+<kbd>B</kbd> u čitaču JAWS ili <kbd>Pripovjedač</kbd>+<kbd>W</kbd> u Pripovjedaču.</p>
 <p>Kada prijenos završi, redak koraka kaže kako je završio, na primjer <span class="ui">Gotovo! Datoteka je isporučena primatelju (Ana).</span> ili <span class="ui">Prijenos je otkazan.</span> Ako nešto nije uspjelo, redak ispod navodi razlog. Gumb <span class="ui">Odustani</span> postaje <span class="ui">Zatvori</span>. Kada ste stavku primili, prozor napretka zatvara se sam čim se stavka spremi (pogledajte <a href="#after-receiving">Kada je prijenos dovršen</a>).</p>
 
 <h3 id="pausing">Pauziranje i nastavljanje</h3>
@@ -235,16 +235,26 @@
 <li><span class="ui">Pričekaj vezu</span> ostavlja prijenos da čeka. Nastavlja se sam.</li>
 <li><span class="ui">Otkaži prijenos</span> ga završava. Djelomično primljeni podaci se brišu.</li>
 </ul>
-<p>Odaberite <span class="ui">Ne pitaj me ponovno</span> da bi se uvijek dogodilo isto. Izbor kasnije možete promijeniti u postavkama, pod <span class="ui">Ako se veza prekine tijekom prijenosa</span>. Uz mogućnost <span class="ui">Pričekaj vezu i nastavi</span> Dodavo umjesto pitanja prikazuje obavijest, a uz mogućnost <span class="ui">Otkaži prijenos</span> odmah otkazuje.</p>
+<p>Odaberite <span class="ui">Ne pitaj me ponovno</span> da bi se uvijek dogodilo isto. Izbor kasnije možete promijeniti u postavkama, pod <span class="ui">Ako se veza prekine tijekom prijenosa</span>. Uz mogućnost <span class="ui">Pričekaj vezu i nastavi</span> Dodavo umjesto pitanja prikazuje obavijest, a uz mogućnost <span class="ui">Otkaži prijenos</span> otkazuje prijenos bez pitanja.</p>
 <p>Pri pokretanju Dodavo preuzima prijenose koji su prošli put prekinuti: za svaki od njih pojavljuje se obavijest <span class="ui">Nedovršeni prijenos</span>, a njegov se prozor napretka otvara bez preuzimanja fokusa. Prije nego što podaci nastave teći, redak koraka kaže <span class="ui">Provjera već prenesenih podataka…</span> dok Dodavo provjerava ono što već ima.</p>
 
 <h3 id="closing-progress">Zatvaranje prozora napretka tijekom prijenosa</h3>
 <p>Ako zatvorite prozor napretka (tipkom <kbd>Esc</kbd>, tipkama <kbd>Alt</kbd>+<kbd>F4</kbd> ili gumbom za zatvaranje prozora) dok je prijenos još u tijeku, Dodavo pita što učiniti:</p>
 <ul>
-<li><span class="ui">Nastavi u pozadini</span> skriva prozor (isto kao gumb <span class="ui">Minimiziraj u pozadinu</span>). Prijenos se nastavlja, a obavijest vas izvješćuje kada završi.</li>
+<li><span class="ui">Nastavi u pozadini</span> skriva prozor (isto kao gumb <span class="ui">Minimiziraj u pozadinu</span>). Prijenos se nastavlja, a obavijest vas izvješćuje kada završi. Kako vratiti prozor, pogledajte u odjeljku <a href="#finding-transfers">Pronalaženje prijenosa koji se odvija u pozadini</a>.</li>
 <li><span class="ui">Otkaži prijenos</span> zaustavlja ga nakon vaše potvrde.</li>
 </ul>
 <p>Odaberite <span class="ui">Ne pitaj me ponovno</span> da bi se uvijek dogodilo isto. Izbor kasnije možete promijeniti u postavkama, pod <span class="ui">Pri zatvaranju prozora prijenosa koji je u tijeku</span>.</p>
+
+<h3 id="finding-transfers">Pronalaženje prijenosa koji se odvija u pozadini</h3>
+<p>Prijenos čiji je prozor skriven nastavlja se kao i prije. Njegov prozor možete vratiti u bilo kojem trenutku:</p>
+<ul>
+<li>U glavnom prozoru otvorite izbornik <span class="ui">Prijenosi</span> (<kbd>Alt</kbd>+<kbd>R</kbd>). U njemu su navedeni svi prijenosi u tijeku, na primjer <span class="ui">Ana: Slanje – „izvještaj.pdf” (45 %)</span>; odaberite jedan da biste prikazali njegov prozor. Naredba <span class="ui">Prikaži sve prijenose</span> (<kbd>Ctrl</kbd>+<kbd>T</kbd>) prikazuje sve. Kada ništa nije u tijeku, u izborniku piše <span class="ui">Nema prijenosa u tijeku</span>, a isto vam javlja i <kbd>Ctrl</kbd>+<kbd>T</kbd>.</li>
+<li>Na popisu primatelja stupac <span class="ui">Prijenos</span> prikazuje stanje pokraj osobe. Otvorite izbornik radnji za osobu (<kbd>Enter</kbd>) i odaberite <span class="ui">Prikaži prijenos</span> (ili <span class="ui">Prikaži prijenose</span> kada ih je više).</li>
+<li>Izbornik ikone u području obavijesti ima isti podizbornik <span class="ui">Prijenosi</span>, pa do prijenosa možete doći i dok je glavni prozor zatvoren.</li>
+<li>Prozor vraća i odabir obavijesti sustava Windows o tom prijenosu.</li>
+</ul>
+<p>Kada je prozor ponovno vidljiv, ponaša se kao da nikada nije bio skriven: na kraju prijenosa postavlja uobičajena pitanja umjesto da samo prikaže obavijest.</p>
 </section>
 
 <section aria-labelledby="background">
@@ -253,7 +263,7 @@
 <ul>
 <li>Da biste ponovno prikazali glavni prozor, ponovno pokrenite Dodavo (na primjer, s izbornika Start) ili odaberite njegovu ikonu u području obavijesti.</li>
 <li>Da biste do ikone došli tipkovnicom, pritisnite <kbd>Windows</kbd>+<kbd>B</kbd>, a zatim se tipkama sa strelicama pomaknite do ikone <span class="ui">Dodavo</span>. Ako je nema, možda je među skrivenim ikonama: najprije odaberite gumb <span class="ui">Prikaži skrivene ikone</span>. Pritisnite <kbd>Enter</kbd> da biste otvorili prozor ili <kbd>Shift</kbd>+<kbd>F10</kbd> odnosno tipku kontekstnog izbornika da biste otvorili izbornik ikone.</li>
-<li>Izbornik ikone sadrži naredbe <span class="ui">Otvori</span>, <span class="ui">Kopiraj moj ID kontakta</span> i <span class="ui">Izlaz</span>.</li>
+<li>Izbornik ikone sadrži naredbu <span class="ui">Otvori</span>, podizbornik <span class="ui">Prijenosi</span> (prijenosi u tijeku, pogledajte <a href="#finding-transfers">Pronalaženje prijenosa koji se odvija u pozadini</a>) te naredbe <span class="ui">Kopiraj moj ID kontakta</span> i <span class="ui">Izlaz</span>.</li>
 </ul>
 <p>Da biste potpuno zatvorili Dodavo, odaberite <span class="ui">Izlaz</span> na izborniku <span class="ui">Datoteka</span> ili na izborniku ikone. Ako su prijenosi još u tijeku, Dodavo nudi dvije mogućnosti: <span class="ui">Izađi i nastavi prijenose kasnije</span> (prijenosi se prekidaju i nastavljaju kada Dodavo ponovno bude pokrenut na oba računala) ili <span class="ui">Otkaži prijenose i izađi</span>. Nakon izlaza ne možete primati datoteke dok ponovno ne pokrenete Dodavo.</p>
 <p>Dodavo o dovršenim prijenosima, dolaznim prijenosima, pauziranju na drugoj strani, prekinutim i ponovno uspostavljenim vezama te drugim događajima izvješćuje obavijestima sustava Windows, i dok je prozor napretka minimiziran u pozadinu. Čitači zaslona obično ih najavljuju. Odabir obavijesti o prijenosu dovodi njegov prozor u prednji plan. Ako neku propustite ili je uključena mogućnost Ne ometaj, pronaći ćete je u centru za obavijesti sustava Windows (<kbd>Windows</kbd>+<kbd>N</kbd> u sustavu Windows 11).</p>
@@ -307,8 +317,11 @@
 <tr><td><kbd>Ctrl</kbd>+<kbd>N</kbd></td><td>Dodavanje primatelja</td></tr>
 <tr><td><kbd>F2</kbd></td><td>Uređivanje odabranog primatelja</td></tr>
 <tr><td><kbd>Delete</kbd></td><td>Uklanjanje odabranog primatelja</td></tr>
-<tr><td><kbd>Shift</kbd>+<kbd>F10</kbd> ili tipka kontekstnog izbornika</td><td>Otvaranje kontekstnog izbornika odabranog primatelja</td></tr>
+<tr><td><kbd>Ctrl</kbd>+<kbd>T</kbd></td><td>Prikaz prozora svih prijenosa u tijeku</td></tr>
+<tr><td><kbd>Enter</kbd> ili dvostruki klik</td><td>Otvaranje izbornika radnji odabranog primatelja</td></tr>
+<tr><td><kbd>Shift</kbd>+<kbd>F10</kbd> ili tipka kontekstnog izbornika</td><td>Otvaranje istog izbornika kao kontekstnog izbornika</td></tr>
 <tr><td><kbd>Alt</kbd>+<kbd>D</kbd></td><td>Otvaranje izbornika Datoteka</td></tr>
+<tr><td><kbd>Alt</kbd>+<kbd>R</kbd></td><td>Otvaranje izbornika Prijenosi</td></tr>
 <tr><td><kbd>Alt</kbd>+<kbd>P</kbd></td><td>Otvaranje izbornika Pomoć</td></tr>
 <tr><td><kbd>Tab</kbd> i <kbd>Shift</kbd>+<kbd>Tab</kbd></td><td>Kretanje između popisa i gumba</td></tr>
 </tbody>
@@ -405,7 +418,7 @@
 <p>Ne. Dodavo ne ograničava veličinu datoteke ni mape; jedino je ograničenje slobodan prostor na pogonu koji prima. Za mapu računalo koje prima treba mjesta i za arhivu i za raspakiranu mapu, dakle otprilike dvostruku veličinu mape dok traje raspakiravanje. Prozor Dolazni prijenos kaže ima li dovoljno prostora prije nego što prihvatite.</p>
 
 <h3 id="faq-several">Mogu li poslati više stavki odjednom ili više osoba?</h3>
-<p>Da. Možete pokrenuti koliko god prijenosa želite, istoj osobi ili različitim osobama, a svaki ima vlastiti prozor napretka. Da biste poslali više datoteka ili mapa u jednom potezu, povucite ih iz Eksplorera za datoteke na osobu na popisu primatelja; nakon što potvrdite, svaka se stavka šalje kao zaseban prijenos. Pogledajte <a href="#drag-and-drop">Povlačenje stavki na osobu</a>.</p>
+<p>Da. Možete pokrenuti koliko god prijenosa želite, istoj osobi ili različitim osobama, a svaki ima vlastiti prozor napretka. Da biste poslali više datoteka ili mapa u jednom potezu, povucite ih iz Eksplorera za datoteke na osobu na popisu primatelja; nakon što potvrdite, svaka se stavka šalje kao zaseban prijenos. Pogledajte <a href="#drag-and-drop">Povlačenje stavki na osobu</a>. Stupac <span class="ui">Prijenos</span> na popisu primatelja i izbornik <span class="ui">Prijenosi</span> prate ih sve.</p>
 
 <h3 id="faq-where">Gdje se spremaju primljene datoteke?</h3>
 <p>U mapu prikazanu pod <span class="ui">Spremi u:</span> u prozoru Dolazni prijenos, koju možete promijeniti za svaki prijenos. Dodavo predlaže vašu mapu Preuzimanja, mapu koju ste upotrijebili prošli put ili stalnu mapu koju ste postavili u postavkama pod <span class="ui">Uvijek spremaj primljene datoteke u ovu mapu</span>. Ako stavka istog naziva ondje već postoji, nova dobiva broj dodan nazivu; ništa se nikada ne prepisuje. Pogledajte <a href="#incoming-window">Prozor Dolazni prijenos</a> i <a href="#settings-receiving">Primanje datoteka</a>.</p>

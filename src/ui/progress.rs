@@ -168,8 +168,11 @@ pub fn open(
     hwnd
 }
 
-pub fn is_active(hwnd: HWND) -> bool {
-    window::with_handler::<Progress, _>(hwnd, |p, _| p.active).unwrap_or(true)
+/// Brings a transfer's window back, also from the background: the user asked
+/// for it, so it takes part in the finishing questions again.
+pub fn show(hwnd: HWND) {
+    window::with_handler::<Progress, _>(hwnd, |p, _| p.background = false);
+    window::bring_to_front(hwnd);
 }
 
 /// Shows the new phase. Returns `None` if the window is busy.
@@ -691,7 +694,9 @@ impl Handler for Progress {
         );
         self.cancel = w.button(tr!(cancel), ID_CANCEL, (cancel_x, 200, cancel_w, 28));
         w.default_id.set(ID_CANCEL);
-        window::focus(self.pause);
+        // Pause is enabled only once data flows, so the focus starts on the
+        // first button that can be used.
+        window::focus(self.background_button);
     }
 
     fn on_command(&mut self, w: &Window, id: u16, _code: u16) -> bool {

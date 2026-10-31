@@ -104,7 +104,7 @@
 <p>Glavno okno vsebuje, v vrstnem redu tipke Tab:</p>
 <dl>
 <dt>Seznam prejemnikov</dt>
-<dd>Osebe, ki jim lahko pošiljate datoteke. Seznam ima dva stolpca: <span class="ui">Ime</span> in <span class="ui">ID stika</span>. ID stika je skrajšan na prvih osem in zadnjih šest znakov. Po seznamu se premikate s puščičnimi tipkami. Ko je seznam prazen, to piše na njem, skupaj z navodilom, kako nekoga dodati.</dd>
+<dd>Osebe, ki jim lahko pošiljate datoteke. Seznam ima tri stolpce: <span class="ui">Ime</span>, <span class="ui">ID stika</span> in <span class="ui">Prenos</span>. ID stika je skrajšan na prvih osem in zadnjih šest znakov. Dokler z neko osebo poteka prenos, v stolpcu <span class="ui">Prenos</span> piše, kaj se dogaja, na primer <span class="ui">Pošiljanje – »poročilo.pdf« (45 %)</span> ali <span class="ui">Čakanje na povezavo – »poročilo.pdf« (45 %)</span>; osveži se približno vsako sekundo, pri več prenosih pa piše, koliko jih poteka. Sicer je prazen. Po seznamu se premikate s puščičnimi tipkami. Tipka <kbd>Enter</kbd> ali dvoklik odpre meni dejanj za izbrano osebo (glejte spodaj). Ko je seznam prazen, to piše na njem, skupaj z navodilom, kako nekoga dodati.</dd>
 <dt>Gumba <span class="ui">Pošlji datoteko…</span> in <span class="ui">Pošlji mapo…</span></dt>
 <dd>Pošljeta nekaj izbrani osebi.</dd>
 <dt>Gumb <span class="ui">Dodaj prejemnika…</span></dt>
@@ -119,8 +119,8 @@
 <li><span class="ui">Brez povezave – preverite internetno povezavo. Prenosi v lokalnem omrežju še vedno delujejo.</span></li>
 </ul>
 <p>Vrstica stanja ne more dobiti fokusa tipkovnice. Če jo želite slišati, uporabite ukaz bralnika zaslona za branje celotnega okna: <kbd>NVDA</kbd>+<kbd>B</kbd> v bralniku NVDA, <kbd>Insert</kbd>+<kbd>B</kbd> v bralniku JAWS ali <kbd>Pripovedovalec</kbd>+<kbd>W</kbd> v Pripovedovalcu.</p>
-<p>Menijska vrstica ima dva menija. Meni <span class="ui">Datoteka</span> (<kbd>Alt</kbd>+<kbd>D</kbd>) vsebuje ukaze <span class="ui">Pošlji datoteko…</span>, <span class="ui">Pošlji mapo…</span>, <span class="ui">Dodaj prejemnika…</span>, <span class="ui">Uredi prejemnika…</span>, <span class="ui">Odstrani prejemnika</span>, <span class="ui">Kopiraj moj ID stika</span>, <span class="ui">Nastavitve…</span> in <span class="ui">Izhod</span>. Meni <span class="ui">Pomoč</span> (<kbd>Alt</kbd>+<kbd>P</kbd>) vsebuje ukaze <span class="ui">Ogled pomoči</span>, <span class="ui">Kako deluje</span> (kratek povzetek) in <span class="ui">O programu</span> (številka različice).</p>
-<p>Ko je na seznamu izbrana oseba, priročni meni (<kbd>Shift</kbd>+<kbd>F10</kbd>, tipka za priročni meni ali desni klik) ponuja ukaze <span class="ui">Pošlji datoteko…</span>, <span class="ui">Pošlji mapo…</span>, <span class="ui">Uredi…</span> in <span class="ui">Odstrani</span>.</p>
+<p>Menijska vrstica ima tri menije. Meni <span class="ui">Datoteka</span> (<kbd>Alt</kbd>+<kbd>D</kbd>) vsebuje ukaze <span class="ui">Pošlji datoteko…</span>, <span class="ui">Pošlji mapo…</span>, <span class="ui">Dodaj prejemnika…</span>, <span class="ui">Uredi prejemnika…</span>, <span class="ui">Odstrani prejemnika</span>, <span class="ui">Kopiraj moj ID stika</span>, <span class="ui">Nastavitve…</span> in <span class="ui">Izhod</span>. Meni <span class="ui">Prenosi</span> (<kbd>Alt</kbd>+<kbd>R</kbd>) našteje vse prenose, ki potekajo, z osebo, elementom in stanjem, na koncu pa vsebuje ukaz <span class="ui">Pokaži vse prenose</span> (<kbd>Ctrl</kbd>+<kbd>T</kbd>); ko ne poteka noben prenos, v njem piše <span class="ui">Noben prenos ne poteka</span>. Glejte <a href="#finding-transfers">Iskanje prenosa, ki poteka v ozadju</a>. Meni <span class="ui">Pomoč</span> (<kbd>Alt</kbd>+<kbd>P</kbd>) vsebuje ukaze <span class="ui">Ogled pomoči</span>, <span class="ui">Kako deluje</span> (kratek povzetek) in <span class="ui">O programu</span> (številka različice).</p>
+<p>Ko je na seznamu izbrana oseba, meni dejanj (<kbd>Enter</kbd>, dvoklik, <kbd>Shift</kbd>+<kbd>F10</kbd>, tipka za priročni meni ali desni klik) ponuja ukaze <span class="ui">Pošlji datoteko…</span>, <span class="ui">Pošlji mapo…</span>, <span class="ui">Pokaži prenos</span> (samo dokler s to osebo poteka prenos; <span class="ui">Pokaži prenose</span>, kadar jih je več), <span class="ui">Uredi…</span> in <span class="ui">Odstrani</span>.</p>
 </section>
 
 <section aria-labelledby="recipients">
@@ -162,7 +162,7 @@
 <li>Izberite datoteko in pritisnite <kbd>Enter</kbd>.</li>
 </ol>
 <p>Odpre se okno napredka in prenos se začne. Glejte <a href="#progress">Spremljanje prenosa</a>.</p>
-<p>Z miško lahko datoteko pošljete tudi tako, da dvokliknete osebo.</p>
+<p>Lahko tudi pritisnete <kbd>Enter</kbd> na osebi ali jo dvokliknete in v meniju, ki se odpre, izberete <span class="ui">Pošlji datoteko…</span>.</p>
 
 <h3 id="send-folder">Pošiljanje mape</h3>
 <ol>
@@ -219,9 +219,9 @@
 <li><span class="ui">Preneseno:</span> (ali <span class="ui">Obdelano:</span>, medtem ko se mapa pakira ali razpakira) z opravljeno količino, skupno velikostjo in odstotkom.</li>
 <li><span class="ui">Hitrost:</span> in <span class="ui">Preostali čas:</span>, ki se posodobita enkrat na sekundo.</li>
 <li>Vrsto povezave: <span class="ui">Povezava: neposredna (od računalnika do računalnika)</span> ali <span class="ui">Povezava: prek posredovalnega strežnika (celovito šifrirana)</span>.</li>
-<li>Tri gumbe: <span class="ui">Začasno ustavi</span> (<kbd>Alt</kbd>+<kbd>Z</kbd>), ki se, medtem ko je prenos začasno ustavljen, spremeni v <span class="ui">Nadaljuj</span> (<kbd>Alt</kbd>+<kbd>N</kbd>); <span class="ui">Pomanjšaj v ozadje</span> (<kbd>Alt</kbd>+<kbd>P</kbd>), ki skrije okno in pusti, da se prenos nadaljuje; in <span class="ui">Prekliči</span>, ki pred preklicem prenosa zahteva potrditev.</li>
+<li>Tri gumbe: <span class="ui">Začasno ustavi</span> (<kbd>Alt</kbd>+<kbd>Z</kbd>), ki se, medtem ko je prenos začasno ustavljen, spremeni v <span class="ui">Nadaljuj</span> (<kbd>Alt</kbd>+<kbd>N</kbd>); <span class="ui">Pomanjšaj v ozadje</span> (<kbd>Alt</kbd>+<kbd>P</kbd>), ki skrije okno in pusti, da se prenos nadaljuje (glejte <a href="#finding-transfers">Iskanje prenosa, ki poteka v ozadju</a>); in <span class="ui">Prekliči</span>, ki pred preklicem prenosa zahteva potrditev.</li>
 </ul>
-<p>Ko se okno odpre, je fokus na gumbu <span class="ui">Začasno ustavi</span>; s tipko <kbd>Tab</kbd> se premikate med gumbi, s tipko <kbd>Enter</kbd> pa aktivirate tistega, ki ima fokus. Druge vrstice ne morejo dobiti fokusa. Če želite slišati napredek, uporabite ukaz bralnika zaslona za branje celotnega okna: <kbd>NVDA</kbd>+<kbd>B</kbd> v bralniku NVDA, <kbd>Insert</kbd>+<kbd>B</kbd> v bralniku JAWS ali <kbd>Pripovedovalec</kbd>+<kbd>W</kbd> v Pripovedovalcu.</p>
+<p>Ko se okno odpre, je fokus na gumbu <span class="ui">Pomanjšaj v ozadje</span>; gumb <span class="ui">Začasno ustavi</span> je na voljo, takoj ko podatki stečejo. s tipko <kbd>Tab</kbd> se premikate med gumbi, s tipko <kbd>Enter</kbd> pa aktivirate tistega, ki ima fokus. Druge vrstice ne morejo dobiti fokusa. Če želite slišati napredek, uporabite ukaz bralnika zaslona za branje celotnega okna: <kbd>NVDA</kbd>+<kbd>B</kbd> v bralniku NVDA, <kbd>Insert</kbd>+<kbd>B</kbd> v bralniku JAWS ali <kbd>Pripovedovalec</kbd>+<kbd>W</kbd> v Pripovedovalcu.</p>
 <p>Ko se prenos konča, vrstica koraka pove, kako se je končal, na primer <span class="ui">Končano! Datoteka je bila dostavljena prejemniku (Ana).</span> ali <span class="ui">Prenos je bil preklican.</span> Če kaj ni uspelo, vrstica pod njo navede razlog. Gumb <span class="ui">Prekliči</span> se spremeni v <span class="ui">Zapri</span>. Ko ste element prejeli, se okno napredka samo zapre, takoj ko je element shranjen (glejte <a href="#after-receiving">Ko je prenos končan</a>).</p>
 
 <h3 id="pausing">Začasna ustavitev in nadaljevanje</h3>
@@ -235,16 +235,26 @@
 <li><span class="ui">Počakaj na povezavo</span> pusti prenos čakati. Nadaljuje se sam.</li>
 <li><span class="ui">Prekliči prenos</span> ga konča. Delno prejeti podatki se izbrišejo.</li>
 </ul>
-<p>Izberite <span class="ui">Ne sprašuj me več</span>, če želite, da se vedno zgodi enako. Izbiro lahko pozneje spremenite v nastavitvah, pod <span class="ui">Če se povezava med prenosom prekine</span>. Z možnostjo <span class="ui">Počakaj na povezavo in nadaljuj</span> Dodavo namesto vprašanja prikaže obvestilo, z možnostjo <span class="ui">Prekliči prenos</span> pa takoj prekliče.</p>
+<p>Izberite <span class="ui">Ne sprašuj me več</span>, če želite, da se vedno zgodi enako. Izbiro lahko pozneje spremenite v nastavitvah, pod <span class="ui">Če se povezava med prenosom prekine</span>. Z možnostjo <span class="ui">Počakaj na povezavo in nadaljuj</span> Dodavo namesto vprašanja prikaže obvestilo, z možnostjo <span class="ui">Prekliči prenos</span> pa prenos prekliče brez vprašanja.</p>
 <p>Ob zagonu Dodavo prevzame prenose, ki so bili zadnjič prekinjeni: za vsakega od njih se prikaže obvestilo <span class="ui">Nedokončan prenos</span>, njegovo okno napredka pa se odpre, ne da bi prevzelo fokus. Preden podatki spet stečejo, vrstica koraka pove <span class="ui">Preverjanje že prenesenih podatkov…</span>, medtem ko Dodavo preverja, kar že ima.</p>
 
 <h3 id="closing-progress">Zapiranje okna napredka med prenosom</h3>
 <p>Če okno napredka zaprete (s tipko <kbd>Esc</kbd>, s tipkama <kbd>Alt</kbd>+<kbd>F4</kbd> ali z gumbom za zapiranje okna), medtem ko prenos še poteka, vas Dodavo vpraša, kaj naj naredi:</p>
 <ul>
-<li><span class="ui">Nadaljuj v ozadju</span> skrije okno (enako kot gumb <span class="ui">Pomanjšaj v ozadje</span>). Prenos se nadaljuje, ko bo končan, pa vas o tem obvesti obvestilo.</li>
+<li><span class="ui">Nadaljuj v ozadju</span> skrije okno (enako kot gumb <span class="ui">Pomanjšaj v ozadje</span>). Prenos se nadaljuje, ko bo končan, pa vas o tem obvesti obvestilo. Kako okno znova prikazati, glejte v razdelku <a href="#finding-transfers">Iskanje prenosa, ki poteka v ozadju</a>.</li>
 <li><span class="ui">Prekliči prenos</span> ga po vaši potrditvi ustavi.</li>
 </ul>
 <p>Izberite <span class="ui">Ne sprašuj me več</span>, če želite, da se vedno zgodi enako. Izbiro lahko pozneje spremenite v nastavitvah, pod <span class="ui">Ob zapiranju okna prenosa, ki še poteka</span>.</p>
+
+<h3 id="finding-transfers">Iskanje prenosa, ki poteka v ozadju</h3>
+<p>Prenos, katerega okno je skrito, se nadaljuje kot prej. Njegovo okno lahko kadar koli znova prikažete:</p>
+<ul>
+<li>V glavnem oknu odprite meni <span class="ui">Prenosi</span> (<kbd>Alt</kbd>+<kbd>R</kbd>). V njem so našteti vsi prenosi, ki potekajo, na primer <span class="ui">Ana: Pošiljanje – »poročilo.pdf« (45 %)</span>; izberite enega, da prikažete njegovo okno. Ukaz <span class="ui">Pokaži vse prenose</span> (<kbd>Ctrl</kbd>+<kbd>T</kbd>) prikaže vse. Ko ne poteka noben prenos, v meniju piše <span class="ui">Noben prenos ne poteka</span>, isto pa vam sporoči tudi <kbd>Ctrl</kbd>+<kbd>T</kbd>.</li>
+<li>Na seznamu prejemnikov stolpec <span class="ui">Prenos</span> prikazuje stanje ob osebi. Odprite meni dejanj za osebo (<kbd>Enter</kbd>) in izberite <span class="ui">Pokaži prenos</span> (ali <span class="ui">Pokaži prenose</span>, kadar jih je več).</li>
+<li>Meni ikone v območju za obvestila ima enak podmeni <span class="ui">Prenosi</span>, zato lahko do prenosa pridete, tudi ko je glavno okno zaprto.</li>
+<li>Okno znova prikaže tudi izbira obvestila sistema Windows o tem prenosu.</li>
+</ul>
+<p>Ko je okno znova vidno, se vede, kot da nikoli ne bi bilo skrito: ob koncu prenosa postavi običajna vprašanja, namesto da bi samo prikazalo obvestilo.</p>
 </section>
 
 <section aria-labelledby="background">
@@ -253,7 +263,7 @@
 <ul>
 <li>Če želite glavno okno znova prikazati, znova zaženite Dodavo (na primer iz menija Start) ali izberite njegovo ikono v območju za obvestila.</li>
 <li>Če želite do ikone priti s tipkovnico, pritisnite <kbd>Windows</kbd>+<kbd>B</kbd> in se s puščičnimi tipkami premaknite do ikone <span class="ui">Dodavo</span>. Če je ni, je morda med skritimi ikonami: najprej izberite gumb <span class="ui">Pokaži skrite ikone</span>. Pritisnite <kbd>Enter</kbd>, da odprete okno, ali <kbd>Shift</kbd>+<kbd>F10</kbd> oziroma tipko za priročni meni, da odprete meni ikone.</li>
-<li>Meni ikone vsebuje ukaze <span class="ui">Odpri</span>, <span class="ui">Kopiraj moj ID stika</span> in <span class="ui">Izhod</span>.</li>
+<li>Meni ikone vsebuje ukaz <span class="ui">Odpri</span>, podmeni <span class="ui">Prenosi</span> (prenosi, ki potekajo, glejte <a href="#finding-transfers">Iskanje prenosa, ki poteka v ozadju</a>) ter ukaza <span class="ui">Kopiraj moj ID stika</span> in <span class="ui">Izhod</span>.</li>
 </ul>
 <p>Če želite Dodavo popolnoma zapreti, izberite <span class="ui">Izhod</span> v meniju <span class="ui">Datoteka</span> ali v meniju ikone. Če prenosi še potekajo, Dodavo ponudi dve možnosti: <span class="ui">Končaj in nadaljuj prenose pozneje</span> (prenosi se prekinejo in nadaljujejo, ko bo Dodavo znova zagnan v obeh računalnikih) ali <span class="ui">Prekliči prenose in končaj</span>. Po izhodu ne morete prejemati datotek, dokler znova ne zaženete programa Dodavo.</p>
 <p>Dodavo o končanih prenosih, dohodnih prenosih, začasnih ustavitvah na drugi strani, prekinjenih in znova vzpostavljenih povezavah ter drugih dogodkih obvešča z obvestili sistema Windows, tudi ko je okno napredka pomanjšano v ozadje. Bralniki zaslona jih običajno najavijo. Izbira obvestila o prenosu postavi njegovo okno v ospredje. Če katero zamudite ali je vklopljena možnost Ne moti, ga najdete v središču za obvestila sistema Windows (<kbd>Windows</kbd>+<kbd>N</kbd> v sistemu Windows 11).</p>
@@ -307,8 +317,11 @@
 <tr><td><kbd>Ctrl</kbd>+<kbd>N</kbd></td><td>Dodajanje prejemnika</td></tr>
 <tr><td><kbd>F2</kbd></td><td>Urejanje izbranega prejemnika</td></tr>
 <tr><td><kbd>Delete</kbd></td><td>Odstranjevanje izbranega prejemnika</td></tr>
-<tr><td><kbd>Shift</kbd>+<kbd>F10</kbd> ali tipka za priročni meni</td><td>Odpiranje priročnega menija izbranega prejemnika</td></tr>
+<tr><td><kbd>Ctrl</kbd>+<kbd>T</kbd></td><td>Prikaz oken vseh prenosov, ki potekajo</td></tr>
+<tr><td><kbd>Enter</kbd> ali dvoklik</td><td>Odpiranje menija dejanj izbranega prejemnika</td></tr>
+<tr><td><kbd>Shift</kbd>+<kbd>F10</kbd> ali tipka za priročni meni</td><td>Odpiranje istega menija kot priročnega menija</td></tr>
 <tr><td><kbd>Alt</kbd>+<kbd>D</kbd></td><td>Odpiranje menija Datoteka</td></tr>
+<tr><td><kbd>Alt</kbd>+<kbd>R</kbd></td><td>Odpiranje menija Prenosi</td></tr>
 <tr><td><kbd>Alt</kbd>+<kbd>P</kbd></td><td>Odpiranje menija Pomoč</td></tr>
 <tr><td><kbd>Tab</kbd> in <kbd>Shift</kbd>+<kbd>Tab</kbd></td><td>Premikanje med seznamom in gumbi</td></tr>
 </tbody>
@@ -405,7 +418,7 @@
 <p>Ne. Dodavo ne omejuje velikosti datoteke ali mape; edina omejitev je prosti prostor na pogonu, ki prejema. Za mapo potrebuje računalnik, ki prejema, prostor tako za arhiv kot za razpakirano mapo, torej med razpakiranjem približno dvakratno velikost mape. Okno Dohodni prenos pove, ali je prostora dovolj, še preden sprejmete.</p>
 
 <h3 id="faq-several">Ali lahko pošljem več elementov hkrati ali več osebam?</h3>
-<p>Da. Začnete lahko poljubno število prenosov, isti osebi ali različnim osebam, vsak pa ima svoje okno napredka. Če želite poslati več datotek ali map naenkrat, jih iz Raziskovalca povlecite na osebo na seznamu prejemnikov; ko potrdite, se vsak element pošlje kot ločen prenos. Glejte <a href="#drag-and-drop">Vlečenje elementov na osebo</a>.</p>
+<p>Da. Začnete lahko poljubno število prenosov, isti osebi ali različnim osebam, vsak pa ima svoje okno napredka. Če želite poslati več datotek ali map naenkrat, jih iz Raziskovalca povlecite na osebo na seznamu prejemnikov; ko potrdite, se vsak element pošlje kot ločen prenos. Glejte <a href="#drag-and-drop">Vlečenje elementov na osebo</a>. Stolpec <span class="ui">Prenos</span> na seznamu prejemnikov in meni <span class="ui">Prenosi</span> spremljata vse.</p>
 
 <h3 id="faq-where">Kam se shranijo prejete datoteke?</h3>
 <p>V mapo, prikazano pod <span class="ui">Shrani v:</span> v oknu Dohodni prenos, ki jo lahko spremenite za vsak prenos. Dodavo predlaga vašo mapo Prenosi, mapo, ki ste jo uporabili zadnjič, ali stalno mapo, ki ste jo nastavili v nastavitvah pod <span class="ui">Vedno shrani prejete datoteke v to mapo</span>. Če element z istim imenom tam že obstaja, dobi novi imenu dodano številko; nikoli se nič ne prepiše. Glejte <a href="#incoming-window">Okno Dohodni prenos</a> in <a href="#settings-receiving">Prejemanje datotek</a>.</p>

@@ -150,6 +150,11 @@ mod tests {
             let html = page(lang);
             let texts = [
                 s.menu_file,
+                s.menu_transfers,
+                s.menu_show_transfers,
+                s.menu_no_transfers,
+                s.ctx_show_transfer,
+                s.col_transfer,
                 s.menu_help,
                 s.menu_view_help,
                 s.menu_how,

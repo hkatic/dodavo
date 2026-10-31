@@ -159,6 +159,7 @@ strings! {
     texts {
         // Main window: menus.
         menu_file,
+        menu_transfers,
         menu_help,
         menu_send_file,
         menu_send_folder,
@@ -173,7 +174,12 @@ strings! {
         menu_about,
         ctx_edit,
         ctx_remove,
+        ctx_show_transfer,
+        ctx_show_transfers,
         tray_open,
+        menu_show_transfers,
+        menu_no_transfers,
+        transfer_menu_entry,
         // Main window: controls and messages.
         recipients_label,
         send_file,
@@ -182,6 +188,20 @@ strings! {
         copy_my_id,
         col_name,
         col_contact_id,
+        col_transfer,
+        // Main window: the transfer column and the Transfers menu.
+        transfer_status,
+        transfer_status_percent,
+        tx_preparing,
+        tx_connecting,
+        tx_waiting_accept,
+        tx_sending,
+        tx_receiving,
+        tx_paused,
+        tx_paused_by_peer,
+        tx_waiting_connection,
+        tx_verifying,
+        tx_unpacking,
         status_connecting,
         status_online,
         status_offline,
@@ -384,6 +404,7 @@ strings! {
     plurals {
         drop_confirm,
         exit_instruction,
+        transfers_in_progress,
         folder_description,
         bytes,
         seconds,
@@ -585,8 +606,8 @@ mod tests {
         }
         for lang in Lang::ALL {
             let s = lang.strings();
-            let groups: [(&str, Vec<&str>); 15] = [
-                ("menu bar", vec![s.menu_file, s.menu_help]),
+            let groups: [(&str, Vec<&str>); 16] = [
+                ("menu bar", vec![s.menu_file, s.menu_transfers, s.menu_help]),
                 (
                     "File menu",
                     vec![
@@ -604,11 +625,23 @@ mod tests {
                     "Help menu",
                     vec![s.menu_view_help, s.menu_how, s.menu_about],
                 ),
+                // `ctx_show_transfers` replaces `ctx_show_transfer` when there are
+                // several, so the two share their access key.
                 (
                     "context menu",
-                    vec![s.send_file, s.send_folder, s.ctx_edit, s.ctx_remove],
+                    vec![
+                        s.send_file,
+                        s.send_folder,
+                        s.ctx_show_transfer,
+                        s.ctx_edit,
+                        s.ctx_remove,
+                    ],
                 ),
-                ("tray menu", vec![s.tray_open, s.menu_copy_id, s.menu_exit]),
+                ("Transfers menu", vec![s.menu_show_transfers]),
+                (
+                    "tray menu",
+                    vec![s.tray_open, s.menu_transfers, s.menu_copy_id, s.menu_exit],
+                ),
                 (
                     "main window",
                     vec![

@@ -104,7 +104,7 @@
 <p>The main window contains, in Tab order:</p>
 <dl>
 <dt>Recipients list</dt>
-<dd>The people you can send files to. It has two columns: <span class="ui">Name</span> and <span class="ui">Contact ID</span>. The Contact ID is shortened to its first eight and last six characters. Move through the list with the arrow keys. When the list is empty, it says so and tells you how to add someone.</dd>
+<dd>The people you can send files to. It has three columns: <span class="ui">Name</span>, <span class="ui">Contact ID</span> and <span class="ui">Transfer</span>. The Contact ID is shortened to its first eight and last six characters. While a transfer with a person is running, the <span class="ui">Transfer</span> column says what is happening, for example <span class="ui">Sending – “report.pdf” (45%)</span> or <span class="ui">Waiting for the connection – “report.pdf” (45%)</span>, refreshed about once a second; with several transfers, it says how many are in progress. Otherwise it is empty. Move through the list with the arrow keys. <kbd>Enter</kbd> or a double-click opens the menu of actions for the selected person (see below). When the list is empty, it says so and tells you how to add someone.</dd>
 <dt><span class="ui">Send File…</span> and <span class="ui">Send Folder…</span> buttons</dt>
 <dd>Send something to the selected person.</dd>
 <dt><span class="ui">Add Recipient…</span> button</dt>
@@ -119,8 +119,8 @@
 <li><span class="ui">Offline – check your internet connection. Transfers within your local network still work.</span></li>
 </ul>
 <p>The status line cannot receive keyboard focus. To hear it, use your screen reader's command for reading the whole window: <kbd>NVDA</kbd>+<kbd>B</kbd> in NVDA, <kbd>Insert</kbd>+<kbd>B</kbd> in JAWS, or <kbd>Narrator</kbd>+<kbd>W</kbd> in Narrator.</p>
-<p>The menu bar has two menus. The <span class="ui">File</span> menu (<kbd>Alt</kbd>+<kbd>F</kbd>) contains <span class="ui">Send File…</span>, <span class="ui">Send Folder…</span>, <span class="ui">Add Recipient…</span>, <span class="ui">Edit Recipient…</span>, <span class="ui">Remove Recipient</span>, <span class="ui">Copy My Contact ID</span>, <span class="ui">Settings…</span> and <span class="ui">Exit</span>. The <span class="ui">Help</span> menu (<kbd>Alt</kbd>+<kbd>H</kbd>) contains <span class="ui">View Help</span>, <span class="ui">How It Works</span> (a short summary) and <span class="ui">About</span> (the version number).</p>
-<p>When a person is selected in the list, the context menu (<kbd>Shift</kbd>+<kbd>F10</kbd> or the Menu key, or a right-click) offers <span class="ui">Send File…</span>, <span class="ui">Send Folder…</span>, <span class="ui">Edit…</span> and <span class="ui">Remove</span>.</p>
+<p>The menu bar has three menus. The <span class="ui">File</span> menu (<kbd>Alt</kbd>+<kbd>F</kbd>) contains <span class="ui">Send File…</span>, <span class="ui">Send Folder…</span>, <span class="ui">Add Recipient…</span>, <span class="ui">Edit Recipient…</span>, <span class="ui">Remove Recipient</span>, <span class="ui">Copy My Contact ID</span>, <span class="ui">Settings…</span> and <span class="ui">Exit</span>. The <span class="ui">Transfers</span> menu (<kbd>Alt</kbd>+<kbd>T</kbd>) lists every transfer in progress, with the person, the item and the state, and ends with <span class="ui">Show All Transfers</span> (<kbd>Ctrl</kbd>+<kbd>T</kbd>); when nothing is running, it says <span class="ui">No transfers in progress</span>. See <a href="#finding-transfers">Finding a transfer that runs in the background</a>. The <span class="ui">Help</span> menu (<kbd>Alt</kbd>+<kbd>H</kbd>) contains <span class="ui">View Help</span>, <span class="ui">How It Works</span> (a short summary) and <span class="ui">About</span> (the version number).</p>
+<p>When a person is selected in the list, the menu of actions (<kbd>Enter</kbd>, a double-click, <kbd>Shift</kbd>+<kbd>F10</kbd> or the Menu key, or a right-click) offers <span class="ui">Send File…</span>, <span class="ui">Send Folder…</span>, <span class="ui">Show Transfer</span> (only while a transfer with that person is running; <span class="ui">Show Transfers</span> when there are several), <span class="ui">Edit…</span> and <span class="ui">Remove</span>.</p>
 </section>
 
 <section aria-labelledby="recipients">
@@ -162,7 +162,7 @@
 <li>Choose the file and press <kbd>Enter</kbd>.</li>
 </ol>
 <p>A progress window opens and the transfer starts. See <a href="#progress">Following a transfer</a>.</p>
-<p>With the mouse, you can also double-click the person to send a file.</p>
+<p>You can also press <kbd>Enter</kbd> on the person, or double-click them, and choose <span class="ui">Send File…</span> from the menu that opens.</p>
 
 <h3 id="send-folder">Sending a folder</h3>
 <ol>
@@ -219,9 +219,9 @@
 <li><span class="ui">Transferred:</span> (or <span class="ui">Processed:</span> while a folder is packed or unpacked) with the amount done, the total and the percentage.</li>
 <li><span class="ui">Speed:</span> and <span class="ui">Time remaining:</span>, updated once a second.</li>
 <li>The type of connection: <span class="ui">Connection: direct (computer to computer)</span> or <span class="ui">Connection: through a relay server (end-to-end encrypted)</span>.</li>
-<li>Three buttons: <span class="ui">Pause</span> (<kbd>Alt</kbd>+<kbd>P</kbd>), which becomes <span class="ui">Resume</span> (<kbd>Alt</kbd>+<kbd>R</kbd>) while the transfer is paused; <span class="ui">Minimize to background</span> (<kbd>Alt</kbd>+<kbd>B</kbd>), which hides the window and lets the transfer continue; and <span class="ui">Cancel</span>, which asks for confirmation before it cancels the transfer.</li>
+<li>Three buttons: <span class="ui">Pause</span> (<kbd>Alt</kbd>+<kbd>P</kbd>), which becomes <span class="ui">Resume</span> (<kbd>Alt</kbd>+<kbd>R</kbd>) while the transfer is paused; <span class="ui">Minimize to background</span> (<kbd>Alt</kbd>+<kbd>B</kbd>), which hides the window and lets the transfer continue (see <a href="#finding-transfers">Finding a transfer that runs in the background</a>); and <span class="ui">Cancel</span>, which asks for confirmation before it cancels the transfer.</li>
 </ul>
-<p>When the window opens, the focus is on <span class="ui">Pause</span>; <kbd>Tab</kbd> moves between the buttons, and <kbd>Enter</kbd> activates the focused one. The other lines cannot receive the focus. To hear the progress, use your screen reader's command for reading the whole window: <kbd>NVDA</kbd>+<kbd>B</kbd> in NVDA, <kbd>Insert</kbd>+<kbd>B</kbd> in JAWS, or <kbd>Narrator</kbd>+<kbd>W</kbd> in Narrator.</p>
+<p>When the window opens, the focus is on <span class="ui">Minimize to background</span>; <span class="ui">Pause</span> becomes available once the data is flowing. <kbd>Tab</kbd> moves between the buttons, and <kbd>Enter</kbd> activates the focused one. The other lines cannot receive the focus. To hear the progress, use your screen reader's command for reading the whole window: <kbd>NVDA</kbd>+<kbd>B</kbd> in NVDA, <kbd>Insert</kbd>+<kbd>B</kbd> in JAWS, or <kbd>Narrator</kbd>+<kbd>W</kbd> in Narrator.</p>
 <p>When the transfer ends, the step line says how it ended, for example <span class="ui">Done! Ana has received the file.</span> or <span class="ui">The transfer was cancelled.</span> If something went wrong, the line below gives the reason. The <span class="ui">Cancel</span> button becomes <span class="ui">Close</span>. When you have received an item, the progress window closes by itself once the item is saved (see <a href="#after-receiving">When the transfer is complete</a>).</p>
 
 <h3 id="pausing">Pausing and resuming</h3>
@@ -235,16 +235,26 @@
 <li><span class="ui">Wait for the connection</span> leaves the transfer waiting. It continues by itself.</li>
 <li><span class="ui">Cancel the transfer</span> ends it. Partly received data is deleted.</li>
 </ul>
-<p>Select <span class="ui">Don't ask me again</span> to always do the same. You can change the choice later in Settings, under <span class="ui">If the connection is lost during a transfer</span>. With <span class="ui">Wait for the connection and continue</span>, Dodavo shows a notification instead of the question; with <span class="ui">Cancel the transfer</span>, it cancels right away.</p>
+<p>Select <span class="ui">Don't ask me again</span> to always do the same. You can change the choice later in Settings, under <span class="ui">If the connection is lost during a transfer</span>. With <span class="ui">Wait for the connection and continue</span>, Dodavo shows a notification instead of the question; with <span class="ui">Cancel the transfer</span>, it cancels the transfer without asking.</p>
 <p>When Dodavo starts, it picks up the transfers that were interrupted last time: a notification, <span class="ui">Unfinished transfer</span>, appears for each of them, and its progress window opens without taking the focus. Before the data continues to flow, the step line says <span class="ui">Checking the data already transferred…</span> while Dodavo verifies what it already has.</p>
 
 <h3 id="closing-progress">Closing a progress window during a transfer</h3>
 <p>If you close a progress window (with <kbd>Esc</kbd>, <kbd>Alt</kbd>+<kbd>F4</kbd> or the window's Close button) while the transfer is still running, Dodavo asks what to do:</p>
 <ul>
-<li><span class="ui">Continue in the background</span> hides the window (the same as the <span class="ui">Minimize to background</span> button). The transfer goes on, and a notification tells you when it is finished.</li>
+<li><span class="ui">Continue in the background</span> hides the window (the same as the <span class="ui">Minimize to background</span> button). The transfer goes on, and a notification tells you when it is finished. <a href="#finding-transfers">Finding a transfer that runs in the background</a> explains how to bring the window back.</li>
 <li><span class="ui">Cancel the transfer</span> stops it after you confirm.</li>
 </ul>
 <p>Select <span class="ui">Don't ask me again</span> to always do the same. You can change the choice later in Settings, under <span class="ui">When closing the window of a running transfer</span>.</p>
+
+<h3 id="finding-transfers">Finding a transfer that runs in the background</h3>
+<p>A transfer whose window is hidden goes on as before. You can bring its window back at any time:</p>
+<ul>
+<li>Open the <span class="ui">Transfers</span> menu (<kbd>Alt</kbd>+<kbd>T</kbd>) in the main window. It lists every transfer in progress, for example <span class="ui">Ana: Sending – “report.pdf” (45%)</span>; choose one to show its window. <span class="ui">Show All Transfers</span> (<kbd>Ctrl</kbd>+<kbd>T</kbd>) shows them all. When nothing is running, the menu says <span class="ui">No transfers in progress</span>, and <kbd>Ctrl</kbd>+<kbd>T</kbd> tells you the same.</li>
+<li>In the recipient list, the <span class="ui">Transfer</span> column shows the state next to the person. Open the person's menu of actions (<kbd>Enter</kbd>) and choose <span class="ui">Show Transfer</span> (or <span class="ui">Show Transfers</span> when there are several).</li>
+<li>The menu of the notification area icon has the same <span class="ui">Transfers</span> submenu, so you can get to a transfer even while the main window is closed.</li>
+<li>Selecting a Windows notification about the transfer also brings its window back.</li>
+</ul>
+<p>Once the window is visible again, it behaves as if it had never been hidden: when the transfer ends, it asks the usual questions instead of only showing a notification.</p>
 </section>
 
 <section aria-labelledby="background">
@@ -253,7 +263,7 @@
 <ul>
 <li>To show the main window again, start Dodavo again (for example, from the Start menu), or select its notification area icon.</li>
 <li>To reach the icon with the keyboard, press <kbd>Windows</kbd>+<kbd>B</kbd>, then use the arrow keys to move to <span class="ui">Dodavo</span>. If it is not there, it may be among the hidden icons: select the <span class="ui">Show hidden icons</span> button first. Press <kbd>Enter</kbd> to open the window, or <kbd>Shift</kbd>+<kbd>F10</kbd> or the Menu key for the icon's menu.</li>
-<li>The icon's menu contains <span class="ui">Open</span>, <span class="ui">Copy My Contact ID</span> and <span class="ui">Exit</span>.</li>
+<li>The icon's menu contains <span class="ui">Open</span>, <span class="ui">Transfers</span> (a submenu with the transfers in progress, see <a href="#finding-transfers">Finding a transfer that runs in the background</a>), <span class="ui">Copy My Contact ID</span> and <span class="ui">Exit</span>.</li>
 </ul>
 <p>To quit Dodavo completely, choose <span class="ui">Exit</span> from the <span class="ui">File</span> menu or from the icon's menu. If transfers are still running, Dodavo offers two choices: <span class="ui">Exit and continue the transfers later</span> (they are interrupted and continue the next time Dodavo and the other computer are both running) or <span class="ui">Cancel the transfers and exit</span>. After exiting, you can no longer receive files until you start Dodavo again.</p>
 <p>Dodavo reports finished transfers, incoming transfers, pauses by the other side, lost and restored connections and other events with Windows notifications, also while a progress window is minimized to the background. Screen readers usually announce them. Selecting a notification about a transfer brings its window to the front. If you miss one, or if Do not disturb is on, you can find it in the Windows notification center (<kbd>Windows</kbd>+<kbd>N</kbd> in Windows 11).</p>
@@ -307,8 +317,11 @@
 <tr><td><kbd>Ctrl</kbd>+<kbd>N</kbd></td><td>Add a recipient</td></tr>
 <tr><td><kbd>F2</kbd></td><td>Edit the selected recipient</td></tr>
 <tr><td><kbd>Delete</kbd></td><td>Remove the selected recipient</td></tr>
-<tr><td><kbd>Shift</kbd>+<kbd>F10</kbd> or the Menu key</td><td>Open the context menu of the selected recipient</td></tr>
+<tr><td><kbd>Ctrl</kbd>+<kbd>T</kbd></td><td>Show the windows of all transfers in progress</td></tr>
+<tr><td><kbd>Enter</kbd> or a double-click</td><td>Open the menu of actions for the selected recipient</td></tr>
+<tr><td><kbd>Shift</kbd>+<kbd>F10</kbd> or the Menu key</td><td>Open the same menu as a context menu</td></tr>
 <tr><td><kbd>Alt</kbd>+<kbd>F</kbd></td><td>Open the File menu</td></tr>
+<tr><td><kbd>Alt</kbd>+<kbd>T</kbd></td><td>Open the Transfers menu</td></tr>
 <tr><td><kbd>Alt</kbd>+<kbd>H</kbd></td><td>Open the Help menu</td></tr>
 <tr><td><kbd>Tab</kbd> and <kbd>Shift</kbd>+<kbd>Tab</kbd></td><td>Move between the list and the buttons</td></tr>
 </tbody>
@@ -405,7 +418,7 @@
 <p>No. Dodavo has no limit on the size of a file or folder; the only limit is the free space on the receiving drive. For a folder, the receiving computer needs room for the archive and for the unpacked folder, so roughly twice the folder's size while unpacking. The Incoming Transfer window says whether there is enough space before you accept.</p>
 
 <h3 id="faq-several">Can I send several items at once, or to several people?</h3>
-<p>Yes. You can start as many transfers as you like, to the same person or to different people, and each has its own progress window. To send several files or folders in one go, drag them from File Explorer onto the person in your recipient list; after you confirm, each item is sent as a separate transfer. See <a href="#drag-and-drop">Dragging items onto a person</a>.</p>
+<p>Yes. You can start as many transfers as you like, to the same person or to different people, and each has its own progress window. To send several files or folders in one go, drag them from File Explorer onto the person in your recipient list; after you confirm, each item is sent as a separate transfer. See <a href="#drag-and-drop">Dragging items onto a person</a>. The <span class="ui">Transfer</span> column of the recipient list and the <span class="ui">Transfers</span> menu keep track of all of them.</p>
 
 <h3 id="faq-where">Where are received files saved?</h3>
 <p>In the folder shown under <span class="ui">Save to:</span> in the Incoming Transfer window, which you can change for each transfer. Dodavo suggests your Downloads folder, the folder you used last time, or the fixed folder you set in Settings under <span class="ui">Always save received files to this folder</span>. If an item with the same name already exists there, the new one gets a number added to its name; nothing is ever overwritten. See <a href="#incoming-window">The Incoming Transfer window</a> and <a href="#settings-receiving">Receiving files</a>.</p>
