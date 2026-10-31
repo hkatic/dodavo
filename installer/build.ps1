@@ -87,6 +87,26 @@ try {
         }
     }
 
+    # SHA-256 of a file, lower-case hex. Get-FileHash is missing on some
+    # Windows PowerShell 5.1 installations, so certutil is the fallback.
+    function Get-Sha256 {
+        param([string]$Path)
+        if (Get-Command Get-FileHash -ErrorAction SilentlyContinue) {
+            return (Get-FileHash $Path -Algorithm SHA256).Hash.ToLowerInvariant()
+        }
+        $lines = & certutil -hashfile $Path SHA256
+        if ($LASTEXITCODE -ne 0) {
+            throw "certutil failed with exit code $LASTEXITCODE."
+        }
+        # The hash is the line between the header and the trailer; older
+        # versions print it with spaces between the bytes.
+        $hash = ($lines | Where-Object { $_ -match '^[0-9A-Fa-f ]+$' } | Select-Object -First 1) -replace ' ', ''
+        if ($hash.Length -ne 64) {
+            throw "Could not read the SHA-256 of $Path from certutil."
+        }
+        return $hash.ToLowerInvariant()
+    }
+
     function Find-Tool {
         param([string]$Name, [string[]]$Candidates, [string]$Hint)
         $cmd = Get-Command $Name -ErrorAction SilentlyContinue
@@ -204,7 +224,7 @@ try {
     Invoke-Native $iscc ($isccArgs + @((Join-Path $root 'installer\Dodavo.iss')))
 
     $setup = Join-Path $root "target\installer\Dodavo-$version-setup.exe"
-    $hash = (Get-FileHash $setup -Algorithm SHA256).Hash.ToLowerInvariant()
+    $hash = Get-Sha256 $setup
     # Same format as sha256sum, so "sha256sum -c" works too.
     Set-Content -Path "$setup.sha256" -Value "$hash  $(Split-Path -Leaf $setup)" -Encoding ASCII -NoNewline
 
