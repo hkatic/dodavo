@@ -30,6 +30,7 @@
 <li><a href="#settings">Settings</a></li>
 <li><a href="#shortcuts">Keyboard shortcuts</a></li>
 <li><a href="#connections">Connections and security</a></li>
+<li><a href="#faq">Frequently asked questions</a></li>
 <li><a href="#troubleshooting">Troubleshooting</a></li>
 </ol>
 </nav>
@@ -235,7 +236,7 @@
 <li><span class="ui">Cancel the transfer</span> ends it. Partly received data is deleted.</li>
 </ul>
 <p>Select <span class="ui">Don't ask me again</span> to always do the same. You can change the choice later in Settings, under <span class="ui">If the connection is lost during a transfer</span>. With <span class="ui">Wait for the connection and continue</span>, Dodavo shows a notification instead of the question; with <span class="ui">Cancel the transfer</span>, it cancels right away.</p>
-<p>When Dodavo starts, it picks up the transfers that were interrupted last time: a notification, <span class="ui">Unfinished transfer</span>, appears for each of them, and its progress window opens without taking the focus. Before the data continues to flow, the step line says <span class="ui">Checking the data already transferred…</span> while Dodavo verifies what it already has. Both computers need the current version of Dodavo for this; with an older version on the other side, a transfer cannot even start.</p>
+<p>When Dodavo starts, it picks up the transfers that were interrupted last time: a notification, <span class="ui">Unfinished transfer</span>, appears for each of them, and its progress window opens without taking the focus. Before the data continues to flow, the step line says <span class="ui">Checking the data already transferred…</span> while Dodavo verifies what it already has.</p>
 
 <h3 id="closing-progress">Closing a progress window during a transfer</h3>
 <p>If you close a progress window (with <kbd>Esc</kbd>, <kbd>Alt</kbd>+<kbd>F4</kbd> or the window's Close button) while the transfer is still running, Dodavo asks what to do:</p>
@@ -381,13 +382,67 @@
 <p>Dodavo stores its settings, your recipient list and your secret key in the folder <code>%APPDATA%\Dodavo</code>. The secret key is what makes your Contact ID yours. Don't share the contents of this folder. If you move to another computer and want to keep your Contact ID, copy this folder to the same place on the new computer while Dodavo is not running there. If the folder is deleted, Dodavo creates a new Contact ID, and everyone has to add you again.</p>
 </section>
 
+<section aria-labelledby="faq">
+<h2 id="faq">Frequently asked questions</h2>
+
+<h3 id="faq-advantage">What is the advantage of Dodavo over social networks, messaging apps and cloud services?</h3>
+<p>With Dodavo, the file goes from your computer straight to the other person's. Nothing is uploaded to a server, so nothing is stored, scanned or kept by a third party, and there is no account to create, no storage quota and no link that expires. Files arrive exactly as they are: photos and videos are not shrunk or recompressed, and there is no size limit. Every transfer is end-to-end encrypted, and computers on the same network exchange files even without an internet connection.</p>
+<p>The trade-off is that Dodavo must be running on both computers when a transfer starts. If one side goes away afterwards, the transfer waits and continues later; see <a href="#faq-offline">What happens if the Internet connection drops or Dodavo exits on either side?</a></p>
+
+<h3 id="faq-how">How does a transfer work?</h3>
+<p>You select a person in your recipient list and choose a file or a folder. Dodavo looks up the other computer by its Contact ID and connects to it, directly if possible or through a relay server otherwise. The other person sees the name and size of the item and chooses <span class="ui">Accept</span> and a folder to save it in, or <span class="ui">Decline</span>. The data then streams, encrypted, from your computer to theirs, and both sides show a progress window. At the end, the received data is checked against a checksum; only then does the file get its real name. See <a href="#how-it-works">How Dodavo works</a> and <a href="#progress">Following a transfer</a>.</p>
+
+<h3 id="faq-folders">How are folders sent and received?</h3>
+<p>A folder is sent as one item. Dodavo first packs it, with all its subfolders, into a temporary ZIP archive in your Windows temporary folder (<code>%TEMP%\Dodavo</code>); the progress window says <span class="ui">Packing the folder…</span>. The archive is sent, and the other computer saves it in its own temporary folder and then unpacks it into the chosen folder (<span class="ui">Unpacking the folder…</span>). The person receives an ordinary folder with the same name; if a folder with that name already exists, a number is added. The temporary archives are deleted afterwards. The receiving computer therefore needs free space for both the archive and the unpacked folder. A received archive that contains unsafe paths, such as paths pointing outside the destination folder, is refused. See <a href="#send-folder">Sending a folder</a>.</p>
+
+<h3 id="faq-offline">What happens if the Internet connection drops or Dodavo exits on either side?</h3>
+<p>The transfer is not lost. Whatever has already arrived is kept, and the transfer continues from that point as soon as both computers can reach each other again, whether that takes seconds or days, and even after Dodavo or Windows has been restarted on either side. The progress window says <span class="ui">The connection was lost. The transfer continues as soon as you are both online again, even after a restart.</span> When the connection stays lost for a few seconds, Dodavo asks whether to <span class="ui">Wait for the connection</span> or <span class="ui">Cancel the transfer</span>; you can make that choice permanent in Settings. When you exit Dodavo during a transfer, it offers <span class="ui">Exit and continue the transfers later</span>. After a restart, Dodavo first checks the data it already has before continuing. See <a href="#connection-lost">When the connection is lost</a>.</p>
+
+<h3 id="faq-online">Does the other person have to be online?</h3>
+<p>To start a transfer, yes: Dodavo must be running on both computers, otherwise you see <span class="ui">Could not connect to …</span>. Once a transfer has been accepted, either side may go offline, go to sleep or exit Dodavo; the transfer continues when both are back, as described in the previous answer.</p>
+
+<h3 id="faq-size">Is there a size limit?</h3>
+<p>No. Dodavo has no limit on the size of a file or folder; the only limit is the free space on the receiving drive. For a folder, the receiving computer needs room for the archive and for the unpacked folder, so roughly twice the folder's size while unpacking. The Incoming Transfer window says whether there is enough space before you accept.</p>
+
+<h3 id="faq-several">Can I send several items at once, or to several people?</h3>
+<p>Yes. You can start as many transfers as you like, to the same person or to different people, and each has its own progress window. To send several files or folders in one go, drag them from File Explorer onto the person in your recipient list; after you confirm, each item is sent as a separate transfer. See <a href="#drag-and-drop">Dragging items onto a person</a>.</p>
+
+<h3 id="faq-where">Where are received files saved?</h3>
+<p>In the folder shown under <span class="ui">Save to:</span> in the Incoming Transfer window, which you can change for each transfer. Dodavo suggests your Downloads folder, the folder you used last time, or the fixed folder you set in Settings under <span class="ui">Always save received files to this folder</span>. If an item with the same name already exists there, the new one gets a number added to its name; nothing is ever overwritten. See <a href="#incoming-window">The Incoming Transfer window</a> and <a href="#settings-receiving">Receiving files</a>.</p>
+
+<h3 id="faq-lan">Does Dodavo work without an internet connection?</h3>
+<p>Yes, between computers on the same local network, for example at home or in an office. They find each other on the network directly. The status line then says <span class="ui">Offline – check your internet connection. Transfers within your local network still work.</span>, and transfers to computers elsewhere wait until you are online again.</p>
+
+<h3 id="faq-read">Can anyone read my files on the way?</h3>
+<p>No. Every transfer is end-to-end encrypted between the two computers. When the data has to go through a relay server, the relay only passes on encrypted data that it cannot read. The Contact ID is the recipient's public key, so the connection can only be established with the computer that holds the matching secret key. See <a href="#connections">Connections and security</a>.</p>
+
+<h3 id="faq-id-secret">Is my Contact ID secret? Can anyone send me files?</h3>
+<p>The Contact ID is not secret; it works like a phone number. Anyone who has it can offer you a file, but nothing is saved on your computer until you choose <span class="ui">Accept</span>, and offers from people who are not in your recipient list are marked with an unknown sender warning. Even with <span class="ui">Start transfers automatically, without asking</span> turned on, only transfers from people in your recipient list start by themselves. See <a href="#auto-accept">Receiving without being asked</a>.</p>
+
+<h3 id="faq-servers">What does Dodavo send to servers on the Internet?</h3>
+<p>Only what is needed for other computers to find yours. Dodavo publishes the addresses at which your computer can currently be reached under your Contact ID, to the lookup service of the iroh network, and keeps a connection to a relay server so that a transfer can be set up even when a direct connection is not possible. The names and contents of your files travel only inside the encrypted connection to the other computer. Dodavo has no accounts and sends no usage statistics.</p>
+
+<h3 id="faq-intact">How do I know that a received file is intact?</h3>
+<p>Every transfer ends with a checksum over the whole item, which the receiving side verifies. While a file is being received, it has the extension <code>.part</code>; it gets its real name only after the checksum has been confirmed. Data that does not match is never saved as a complete file: the transfer reports <span class="ui">The received data is damaged (checksum mismatch)</span>, and the sender simply sends the item again.</p>
+
+<h3 id="faq-unknown">Why does the Incoming Transfer window warn about an unknown sender?</h3>
+<p>Because the sender's Contact ID is not in your recipient list. The name shown in the window is the name the sender chose for themselves, so it cannot prove who they are. Accept the transfer only if you know who is sending it, for example because the person told you. The check box <span class="ui">Add “…” to my recipients</span> adds the sender to your list when you accept, so the next transfer from them is no longer marked. See <a href="#incoming-window">The Incoming Transfer window</a>.</p>
+
+<h3 id="faq-relay">Why does the progress window say the connection goes through a relay server, and is that slower?</h3>
+<p>Dodavo always tries to connect the two computers directly. When that is not possible, for example behind a strict company firewall or on some mobile networks, the data goes through a relay server instead. The transfer stays end-to-end encrypted, but it is usually slower, because the relay's bandwidth is shared. You don't have to do anything: Dodavo keeps looking for a direct path during the transfer and switches to it when one appears. If relayed transfers are common for you, try another network or connect the computer by cable.</p>
+
+<h3 id="faq-firewall">Do I need to open ports or change my router or firewall?</h3>
+<p>No. Dodavo connects through home routers and firewalls by itself, without port forwarding. If Windows Defender Firewall asks whether to allow Dodavo the first time it starts, allow it; otherwise direct connections may be impossible and transfers go through a relay server.</p>
+
+<h3 id="faq-wrong">Something went wrong. What should I check?</h3>
+<p>First make sure that Dodavo is running on both computers and that the status line in both main windows says <span class="ui">Online – ready to send and receive files.</span>, and that you have the right Contact ID for the other person. If a transfer has ended with an error, the line below the step line in its progress window gives the reason; the <a href="#troubleshooting">Troubleshooting</a> topic explains the messages. A transfer can always be cancelled and started again.</p>
+</section>
+
 <section aria-labelledby="troubleshooting">
 <h2 id="troubleshooting">Troubleshooting</h2>
 <dl>
 <dt>“Could not connect to …”</dt>
 <dd>Dodavo is not running on the other computer, or one of you is offline. Ask the other person to start Dodavo and check the status line at the bottom of both main windows, then try again. Also check that you have the right Contact ID for them.</dd>
-<dt>“Dodavo on the other computer is out of date. Both computers need the current version”</dt>
-<dd>The other person uses an older version of Dodavo, which cannot pause or continue transfers. Ask them to install the current version.</dd>
 <dt>“The file was changed after the transfer started”</dt>
 <dd>The file you are sending was modified while the transfer was waiting for the connection, so it cannot be continued. Send it again.</dd>
 <dt>The transfer says the connection was lost, but we are both online</dt>

@@ -101,30 +101,10 @@ fn cancelled(shared: &Arc<Shared>, id: u64) -> Outcome {
     Outcome::Cancelled
 }
 
-/// The messages of an error and its causes, so that a TLS alert buried in an
-/// iroh error can be recognised.
-fn error_chain(e: &(dyn std::error::Error + 'static)) -> String {
-    let mut text = e.to_string();
-    let mut source = e.source();
-    while let Some(s) = source {
-        text.push_str(": ");
-        text.push_str(&s.to_string());
-        source = s.source();
-    }
-    text
-}
-
 async fn dial(endpoint: &Endpoint, to: EndpointId) -> Result<Connection, String> {
     match tokio::time::timeout(CONNECT_TIMEOUT, endpoint.connect(to, protocol::ALPN)).await {
         Ok(Ok(conn)) => Ok(conn),
-        Ok(Err(e)) => {
-            let text = error_chain(&e);
-            if text.to_ascii_lowercase().contains("application protocol") {
-                Err(tr!(error_peer_outdated).into())
-            } else {
-                Err(text)
-            }
-        }
+        Ok(Err(e)) => Err(e.to_string()),
         Err(_) => Err(tr!(error_timeout).into()),
     }
 }

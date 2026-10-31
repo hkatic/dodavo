@@ -364,7 +364,6 @@ strings! {
         untitled,
         error_cannot_read,
         error_timeout,
-        error_peer_outdated,
         error_unexpected_answer,
         error_file_shorter,
         error_peer_reported,

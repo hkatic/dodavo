@@ -231,7 +231,6 @@ pub const HR: Strings = Strings {
     untitled: "Bez naslova",
     error_cannot_read: "Nije moguće pročitati: {path}",
     error_timeout: "Isteklo je vrijeme za povezivanje",
-    error_peer_outdated: "Dodavo na drugom računalu je zastario. Na oba računala potrebna je trenutačna verzija",
     error_unexpected_answer: "Neočekivan odgovor primatelja: {answer}",
     error_file_shorter: "Datoteka se skratila tijekom slanja",
     error_peer_reported: "Primatelj je prijavio pogrešku: {message}",

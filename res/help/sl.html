@@ -30,6 +30,7 @@
 <li><a href="#settings">Nastavitve</a></li>
 <li><a href="#shortcuts">Bližnjice na tipkovnici</a></li>
 <li><a href="#connections">Povezave in varnost</a></li>
+<li><a href="#faq">Pogosta vprašanja</a></li>
 <li><a href="#troubleshooting">Odpravljanje težav</a></li>
 </ol>
 </nav>
@@ -235,7 +236,7 @@
 <li><span class="ui">Prekliči prenos</span> ga konča. Delno prejeti podatki se izbrišejo.</li>
 </ul>
 <p>Izberite <span class="ui">Ne sprašuj me več</span>, če želite, da se vedno zgodi enako. Izbiro lahko pozneje spremenite v nastavitvah, pod <span class="ui">Če se povezava med prenosom prekine</span>. Z možnostjo <span class="ui">Počakaj na povezavo in nadaljuj</span> Dodavo namesto vprašanja prikaže obvestilo, z možnostjo <span class="ui">Prekliči prenos</span> pa takoj prekliče.</p>
-<p>Ob zagonu Dodavo prevzame prenose, ki so bili zadnjič prekinjeni: za vsakega od njih se prikaže obvestilo <span class="ui">Nedokončan prenos</span>, njegovo okno napredka pa se odpre, ne da bi prevzelo fokus. Preden podatki spet stečejo, vrstica koraka pove <span class="ui">Preverjanje že prenesenih podatkov…</span>, medtem ko Dodavo preverja, kar že ima. Za to oba računalnika potrebujeta trenutno različico programa Dodavo; s starejšo različico na drugi strani se prenos sploh ne more začeti.</p>
+<p>Ob zagonu Dodavo prevzame prenose, ki so bili zadnjič prekinjeni: za vsakega od njih se prikaže obvestilo <span class="ui">Nedokončan prenos</span>, njegovo okno napredka pa se odpre, ne da bi prevzelo fokus. Preden podatki spet stečejo, vrstica koraka pove <span class="ui">Preverjanje že prenesenih podatkov…</span>, medtem ko Dodavo preverja, kar že ima.</p>
 
 <h3 id="closing-progress">Zapiranje okna napredka med prenosom</h3>
 <p>Če okno napredka zaprete (s tipko <kbd>Esc</kbd>, s tipkama <kbd>Alt</kbd>+<kbd>F4</kbd> ali z gumbom za zapiranje okna), medtem ko prenos še poteka, vas Dodavo vpraša, kaj naj naredi:</p>
@@ -381,13 +382,67 @@
 <p>Dodavo shranjuje nastavitve, vaš seznam prejemnikov in vaš skrivni ključ v mapo <code>%APPDATA%\Dodavo</code>. Skrivni ključ je tisto, zaradi česar je vaš ID stika vaš. Vsebine te mape ne delite z nikomer. Če se selite na drug računalnik in želite obdržati svoj ID stika, kopirajte to mapo na isto mesto v novem računalniku, ko se Dodavo v njem ne izvaja. Če mapo izbrišete, Dodavo ustvari nov ID stika in vsi vas morajo znova dodati.</p>
 </section>
 
+<section aria-labelledby="faq">
+<h2 id="faq">Pogosta vprašanja</h2>
+
+<h3 id="faq-advantage">Kakšna je prednost programa Dodavo pred družabnimi omrežji, aplikacijami za sporočanje in storitvami v oblaku?</h3>
+<p>S programom Dodavo gre datoteka z vašega računalnika naravnost v računalnik druge osebe. Nič se ne nalaga v strežnik, zato tretja oseba ničesar ne shranjuje, ne pregleduje in ne hrani, prav tako ni računa, ki bi ga morali ustvariti, ne omejitve prostora za shranjevanje in ne povezave, ki poteče. Datoteke prispejo natanko take, kakršne so: fotografije in videoposnetki se ne pomanjšajo in ne stisnejo znova, velikost pa ni omejena. Vsak prenos je celovito šifriran, računalniki v istem omrežju pa si datoteke izmenjujejo tudi brez internetne povezave.</p>
+<p>V zameno mora Dodavo ob začetku prenosa teči v obeh računalnikih. Če ena stran pozneje izgine, prenos počaka in se nadaljuje pozneje; glejte <a href="#faq-offline">Kaj se zgodi, če se internetna povezava prekine ali če se Dodavo zapre na kateri koli strani?</a></p>
+
+<h3 id="faq-how">Kako poteka prenos?</h3>
+<p>Na seznamu prejemnikov izberete osebo in nato datoteko ali mapo. Dodavo poišče drugi računalnik po njegovem ID-ju stika in se poveže z njim, neposredno, če je mogoče, sicer pa prek posredovalnega strežnika. Druga oseba vidi ime in velikost elementa ter izbere <span class="ui">Sprejmi</span> in mapo, v katero ga bo shranila, ali <span class="ui">Odkloni</span>. Podatki nato šifrirani tečejo z vašega računalnika v njenega, obe strani pa prikazujeta okno napredka. Na koncu se prejeti podatki preverijo s kontrolno vsoto; šele nato dobi datoteka svoje pravo ime. Glejte <a href="#how-it-works">Kako deluje Dodavo</a> in <a href="#progress">Spremljanje prenosa</a>.</p>
+
+<h3 id="faq-folders">Kako se pošiljajo in prejemajo mape?</h3>
+<p>Mapa se pošlje kot en element. Dodavo jo najprej z vsemi podmapami zapakira v začasen arhiv ZIP v začasni mapi sistema Windows (<code>%TEMP%\Dodavo</code>); okno napredka pove <span class="ui">Pakiranje mape…</span>. Arhiv se pošlje, drugi računalnik pa ga shrani v svojo začasno mapo in nato razpakira v izbrano mapo (<span class="ui">Razpakiranje mape…</span>). Oseba prejme navadno mapo z istim imenom; če mapa s tem imenom že obstaja, se doda številka. Začasni arhivi se pozneje izbrišejo. Računalnik, ki prejema, zato potrebuje prostor tako za arhiv kot za razpakirano mapo. Prejeti arhiv, ki vsebuje nevarne poti, na primer poti, ki kažejo zunaj ciljne mape, se zavrne. Glejte <a href="#send-folder">Pošiljanje mape</a>.</p>
+
+<h3 id="faq-offline">Kaj se zgodi, če se internetna povezava prekine ali če se Dodavo zapre na kateri koli strani?</h3>
+<p>Prenos ni izgubljen. Vse, kar je že prispelo, ostane shranjeno, prenos pa se od tam nadaljuje, takoj ko se računalnika spet lahko dosežeta, pa naj to traja sekunde ali dneve, in to tudi potem, ko sta bila Dodavo ali Windows na kateri koli strani znova zagnana. Okno napredka pove <span class="ui">Povezava je bila prekinjena. Prenos se nadaljuje, takoj ko sta oba spet povezana, tudi po vnovičnem zagonu.</span> Ko povezava ostane prekinjena nekaj sekund, Dodavo vpraša, ali želite <span class="ui">Počakaj na povezavo</span> ali <span class="ui">Prekliči prenos</span>; to izbiro lahko v nastavitvah naredite trajno. Ko med prenosom končate Dodavo, ponudi <span class="ui">Končaj in nadaljuj prenose pozneje</span>. Po vnovičnem zagonu Dodavo najprej preveri podatke, ki jih že ima, in šele nato nadaljuje. Glejte <a href="#connection-lost">Ko se povezava prekine</a>.</p>
+
+<h3 id="faq-online">Ali mora biti druga oseba povezana?</h3>
+<p>Za začetek prenosa da: Dodavo mora teči v obeh računalnikih, sicer vidite <span class="ui">Povezave z računalnikom (…) ni bilo mogoče vzpostaviti.</span> Ko je prenos enkrat sprejet, lahko katera koli stran izgubi povezavo, preide v spanje ali konča Dodavo; prenos se nadaljuje, ko sta obe spet tu, kot je opisano v prejšnjem odgovoru.</p>
+
+<h3 id="faq-size">Ali obstaja omejitev velikosti?</h3>
+<p>Ne. Dodavo ne omejuje velikosti datoteke ali mape; edina omejitev je prosti prostor na pogonu, ki prejema. Za mapo potrebuje računalnik, ki prejema, prostor tako za arhiv kot za razpakirano mapo, torej med razpakiranjem približno dvakratno velikost mape. Okno Dohodni prenos pove, ali je prostora dovolj, še preden sprejmete.</p>
+
+<h3 id="faq-several">Ali lahko pošljem več elementov hkrati ali več osebam?</h3>
+<p>Da. Začnete lahko poljubno število prenosov, isti osebi ali različnim osebam, vsak pa ima svoje okno napredka. Če želite poslati več datotek ali map naenkrat, jih iz Raziskovalca povlecite na osebo na seznamu prejemnikov; ko potrdite, se vsak element pošlje kot ločen prenos. Glejte <a href="#drag-and-drop">Vlečenje elementov na osebo</a>.</p>
+
+<h3 id="faq-where">Kam se shranijo prejete datoteke?</h3>
+<p>V mapo, prikazano pod <span class="ui">Shrani v:</span> v oknu Dohodni prenos, ki jo lahko spremenite za vsak prenos. Dodavo predlaga vašo mapo Prenosi, mapo, ki ste jo uporabili zadnjič, ali stalno mapo, ki ste jo nastavili v nastavitvah pod <span class="ui">Vedno shrani prejete datoteke v to mapo</span>. Če element z istim imenom tam že obstaja, dobi novi imenu dodano številko; nikoli se nič ne prepiše. Glejte <a href="#incoming-window">Okno Dohodni prenos</a> in <a href="#settings-receiving">Prejemanje datotek</a>.</p>
+
+<h3 id="faq-lan">Ali Dodavo deluje brez internetne povezave?</h3>
+<p>Da, med računalniki v istem lokalnem omrežju, na primer doma ali v pisarni. Ti se v omrežju najdejo neposredno. Vrstica stanja tedaj pove <span class="ui">Brez povezave – preverite internetno povezavo. Prenosi v lokalnem omrežju še vedno delujejo.</span>, prenosi v računalnike drugje pa počakajo, dokler niste spet povezani.</p>
+
+<h3 id="faq-read">Ali lahko kdo med potjo prebere moje datoteke?</h3>
+<p>Ne. Vsak prenos je med obema računalnikoma celovito šifriran. Kadar morajo podatki prek posredovalnega strežnika, ta le posreduje šifrirane podatke, ki jih ne more prebrati. ID stika je prejemnikov javni ključ, zato je povezavo mogoče vzpostaviti samo z računalnikom, ki ima ustrezni tajni ključ. Glejte <a href="#connections">Povezave in varnost</a>.</p>
+
+<h3 id="faq-id-secret">Ali je moj ID stika skrivnost? Ali mi lahko kdor koli pošilja datoteke?</h3>
+<p>ID stika ni skrivnost; deluje kot telefonska številka. Kdor ga ima, vam lahko ponudi datoteko, vendar se v vaš računalnik nič ne shrani, dokler ne izberete <span class="ui">Sprejmi</span>, ponudbe oseb, ki niso na vašem seznamu prejemnikov, pa so označene z opozorilom o neznanem pošiljatelju. Tudi ko je vklopljena možnost <span class="ui">Prenose začni samodejno, brez vprašanja</span>, se sami začnejo le prenosi oseb z vašega seznama prejemnikov. Glejte <a href="#auto-accept">Prejemanje brez vprašanja</a>.</p>
+
+<h3 id="faq-servers">Kaj Dodavo pošilja strežnikom v internetu?</h3>
+<p>Samo tisto, kar je potrebno, da drugi računalniki najdejo vašega. Dodavo pod vašim ID-jem stika objavi naslove, na katerih je vaš računalnik trenutno dosegljiv, in sicer storitvi za iskanje omrežja iroh, ter vzdržuje povezavo s posredovalnim strežnikom, da je prenos mogoče vzpostaviti tudi takrat, ko neposredna povezava ni mogoča. Imena in vsebina vaših datotek potujejo le znotraj šifrirane povezave z drugim računalnikom. Dodavo nima uporabniških računov in ne pošilja statistike uporabe.</p>
+
+<h3 id="faq-intact">Kako vem, da je prejeta datoteka nepoškodovana?</h3>
+<p>Vsak prenos se konča s kontrolno vsoto celotnega elementa, ki jo stran, ki prejema, preveri. Medtem ko se datoteka prejema, ima pripono <code>.part</code>; svoje pravo ime dobi šele, ko je kontrolna vsota potrjena. Podatki, ki se ne ujemajo, se nikoli ne shranijo kot celotna datoteka: prenos sporoči <span class="ui">Prejeti podatki so poškodovani (kontrolna vsota se ne ujema)</span>, pošiljatelj pa element preprosto pošlje znova.</p>
+
+<h3 id="faq-unknown">Zakaj okno Dohodni prenos opozarja na neznanega pošiljatelja?</h3>
+<p>Ker ID stika pošiljatelja ni na vašem seznamu prejemnikov. Ime, prikazano v oknu, je ime, ki si ga je pošiljatelj izbral sam, zato ne more dokazati, kdo je. Prenos sprejmite le, če veste, kdo ga pošilja, na primer zato, ker vam je ta oseba to povedala. Potrditveno polje <span class="ui">Dodaj »…« med moje prejemnike</span> ob sprejemu doda pošiljatelja na vaš seznam, tako da naslednji prenos od njega ni več označen. Glejte <a href="#incoming-window">Okno Dohodni prenos</a>.</p>
+
+<h3 id="faq-relay">Zakaj okno napredka pove, da povezava poteka prek posredovalnega strežnika, in ali je to počasneje?</h3>
+<p>Dodavo vedno poskuša računalnika povezati neposredno. Kadar to ni mogoče, na primer za strogim požarnim zidom podjetja ali v nekaterih mobilnih omrežjih, gredo podatki namesto tega prek posredovalnega strežnika. Prenos ostane celovito šifriran, vendar je običajno počasnejši, ker si pasovno širino strežnika deli več uporabnikov. Ničesar vam ni treba storiti: Dodavo med prenosom še naprej išče neposredno pot in preklopi nanjo, takoj ko se pojavi. Če so prenosi prek posredovalnega strežnika pri vas pogosti, poskusite z drugim omrežjem ali računalnik povežite s kablom.</p>
+
+<h3 id="faq-firewall">Ali moram odpreti vrata ali spremeniti nastavitve usmerjevalnika ali požarnega zidu?</h3>
+<p>Ne. Dodavo se skozi domače usmerjevalnike in požarne zidove poveže sam, brez posredovanja vrat. Če vas požarni zid sistema Windows ob prvem zagonu vpraša, ali dovolite Dodavo, dovolite; sicer neposredne povezave morda ne bodo mogoče in bodo prenosi potekali prek posredovalnega strežnika.</p>
+
+<h3 id="faq-wrong">Nekaj je šlo narobe. Kaj naj preverim?</h3>
+<p>Najprej preverite, ali Dodavo teče v obeh računalnikih, ali vrstica stanja v obeh glavnih oknih pove <span class="ui">Povezano – pripravljeno za pošiljanje in prejemanje datotek.</span> in ali imate pravi ID stika druge osebe. Če se je prenos končal z napako, vrstica pod vrstico koraka v njegovem oknu napredka navaja razlog, tema <a href="#troubleshooting">Odpravljanje težav</a> pa pojasnjuje sporočila. Prenos je vedno mogoče preklicati in začeti znova.</p>
+</section>
+
 <section aria-labelledby="troubleshooting">
 <h2 id="troubleshooting">Odpravljanje težav</h2>
 <dl>
 <dt>»Povezave z računalnikom (…) ni bilo mogoče vzpostaviti.«</dt>
 <dd>Dodavo se v drugem računalniku ne izvaja ali pa eden od vaju ni povezan. Prosite drugo osebo, naj zažene Dodavo, preverite vrstico stanja na dnu obeh glavnih oken in poskusite znova. Preverite tudi, ali imate pravilen ID stika te osebe.</dd>
-<dt>»Dodavo v drugem računalniku je zastarel. Oba računalnika potrebujeta trenutno različico«</dt>
-<dd>Druga oseba uporablja starejšo različico programa Dodavo, ki prenosov ne more začasno ustaviti ali nadaljevati. Prosite jo, naj namesti trenutno različico.</dd>
 <dt>»Datoteka je bila spremenjena po začetku prenosa«</dt>
 <dd>Datoteka, ki jo pošiljate, je bila spremenjena, medtem ko je prenos čakal na povezavo, zato se ne more nadaljevati. Pošljite jo znova.</dd>
 <dt>Prenos pravi, da je povezava prekinjena, a sva oba povezana</dt>

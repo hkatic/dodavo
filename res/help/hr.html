@@ -30,6 +30,7 @@
 <li><a href="#settings">Postavke</a></li>
 <li><a href="#shortcuts">Tipkovni prečaci</a></li>
 <li><a href="#connections">Veze i sigurnost</a></li>
+<li><a href="#faq">Česta pitanja</a></li>
 <li><a href="#troubleshooting">Rješavanje problema</a></li>
 </ol>
 </nav>
@@ -235,7 +236,7 @@
 <li><span class="ui">Otkaži prijenos</span> ga završava. Djelomično primljeni podaci se brišu.</li>
 </ul>
 <p>Odaberite <span class="ui">Ne pitaj me ponovno</span> da bi se uvijek dogodilo isto. Izbor kasnije možete promijeniti u postavkama, pod <span class="ui">Ako se veza prekine tijekom prijenosa</span>. Uz mogućnost <span class="ui">Pričekaj vezu i nastavi</span> Dodavo umjesto pitanja prikazuje obavijest, a uz mogućnost <span class="ui">Otkaži prijenos</span> odmah otkazuje.</p>
-<p>Pri pokretanju Dodavo preuzima prijenose koji su prošli put prekinuti: za svaki od njih pojavljuje se obavijest <span class="ui">Nedovršeni prijenos</span>, a njegov se prozor napretka otvara bez preuzimanja fokusa. Prije nego što podaci nastave teći, redak koraka kaže <span class="ui">Provjera već prenesenih podataka…</span> dok Dodavo provjerava ono što već ima. Za to je na oba računala potrebna trenutačna verzija programa Dodavo; sa starijom verzijom na drugoj strani prijenos ne može ni započeti.</p>
+<p>Pri pokretanju Dodavo preuzima prijenose koji su prošli put prekinuti: za svaki od njih pojavljuje se obavijest <span class="ui">Nedovršeni prijenos</span>, a njegov se prozor napretka otvara bez preuzimanja fokusa. Prije nego što podaci nastave teći, redak koraka kaže <span class="ui">Provjera već prenesenih podataka…</span> dok Dodavo provjerava ono što već ima.</p>
 
 <h3 id="closing-progress">Zatvaranje prozora napretka tijekom prijenosa</h3>
 <p>Ako zatvorite prozor napretka (tipkom <kbd>Esc</kbd>, tipkama <kbd>Alt</kbd>+<kbd>F4</kbd> ili gumbom za zatvaranje prozora) dok je prijenos još u tijeku, Dodavo pita što učiniti:</p>
@@ -381,13 +382,67 @@
 <p>Dodavo sprema postavke, vaš popis primatelja i vaš tajni ključ u mapu <code>%APPDATA%\Dodavo</code>. Tajni ključ čini vaš ID kontakta vašim. Sadržaj te mape ne dijelite ni s kim. Ako prelazite na drugo računalo i želite zadržati svoj ID kontakta, kopirajte tu mapu na isto mjesto na novom računalu dok Dodavo na njemu nije pokrenut. Ako se mapa izbriše, Dodavo stvara novi ID kontakta i svi vas moraju ponovno dodati.</p>
 </section>
 
+<section aria-labelledby="faq">
+<h2 id="faq">Česta pitanja</h2>
+
+<h3 id="faq-advantage">Koja je prednost programa Dodavo pred društvenim mrežama, aplikacijama za razmjenu poruka i uslugama u oblaku?</h3>
+<p>S programom Dodavo datoteka putuje s vašeg računala izravno na računalo druge osobe. Ništa se ne prenosi na poslužitelj, pa treća strana ništa ne pohranjuje, ne pregledava i ne zadržava, a nema ni računa koji biste morali otvoriti, ni ograničenja prostora za pohranu, ni veze koja istječe. Datoteke stižu točno onakve kakve jesu: fotografije i videozapisi ne smanjuju se niti ponovno komprimiraju, a veličina nije ograničena. Svaki je prijenos sveobuhvatno šifriran, a računala u istoj mreži razmjenjuju datoteke i bez internetske veze.</p>
+<p>Zauzvrat Dodavo mora biti pokrenut na oba računala kad prijenos započinje. Ako jedna strana poslije nestane, prijenos čeka i nastavlja se kasnije; pogledajte <a href="#faq-offline">Što se događa ako se internetska veza prekine ili ako se Dodavo zatvori na bilo kojoj strani?</a></p>
+
+<h3 id="faq-how">Kako funkcionira prijenos?</h3>
+<p>Odaberete osobu na popisu primatelja i odaberete datoteku ili mapu. Dodavo pronalazi drugo računalo prema njegovu ID-u kontakta i povezuje se s njim, izravno ako je moguće, a inače preko relejnog poslužitelja. Druga osoba vidi naziv i veličinu stavke te odabire <span class="ui">Prihvati</span> i mapu u koju će je spremiti, ili <span class="ui">Odbij</span>. Podaci zatim šifrirani teku s vašeg računala na njezino, a obje strane prikazuju prozor napretka. Na kraju se primljeni podaci provjeravaju kontrolnim zbrojem; tek tada datoteka dobiva svoj pravi naziv. Pogledajte <a href="#how-it-works">Kako Dodavo funkcionira</a> i <a href="#progress">Praćenje prijenosa</a>.</p>
+
+<h3 id="faq-folders">Kako se šalju i primaju mape?</h3>
+<p>Mapa se šalje kao jedna stavka. Dodavo je najprije, sa svim podmapama, pakira u privremenu ZIP arhivu u privremenoj mapi sustava Windows (<code>%TEMP%\Dodavo</code>); prozor napretka kaže <span class="ui">Pakiranje mape…</span>. Arhiva se šalje, a drugo je računalo sprema u svoju privremenu mapu i zatim raspakirava u odabranu mapu (<span class="ui">Raspakiravanje mape…</span>). Osoba prima običnu mapu istog naziva; ako mapa tog naziva već postoji, dodaje se broj. Privremene se arhive poslije brišu. Računalo koje prima stoga treba slobodan prostor i za arhivu i za raspakiranu mapu. Primljena arhiva koja sadrži nesigurne putanje, na primjer putanje koje vode izvan odredišne mape, odbija se. Pogledajte <a href="#send-folder">Slanje mape</a>.</p>
+
+<h3 id="faq-offline">Što se događa ako se internetska veza prekine ili ako se Dodavo zatvori na bilo kojoj strani?</h3>
+<p>Prijenos nije izgubljen. Sve što je već stiglo ostaje sačuvano, a prijenos se nastavlja od tog mjesta čim se računala ponovno mogu međusobno dosegnuti, bilo da to traje sekunde ili dane, čak i nakon što su Dodavo ili Windows ponovno pokrenuti na bilo kojoj strani. Prozor napretka kaže <span class="ui">Veza je prekinuta. Prijenos se nastavlja čim oboje ponovno budete na mreži, čak i nakon ponovnog pokretanja.</span> Kad veza ostane prekinuta nekoliko sekundi, Dodavo pita želite li <span class="ui">Pričekaj vezu</span> ili <span class="ui">Otkaži prijenos</span>; taj izbor možete učiniti trajnim u postavkama. Kad izađete iz programa Dodavo tijekom prijenosa, on nudi <span class="ui">Izađi i nastavi prijenose kasnije</span>. Nakon ponovnog pokretanja Dodavo najprije provjerava podatke koje već ima pa tek onda nastavlja. Pogledajte <a href="#connection-lost">Kada se veza prekine</a>.</p>
+
+<h3 id="faq-online">Mora li druga osoba biti na mreži?</h3>
+<p>Za pokretanje prijenosa da: Dodavo mora biti pokrenut na oba računala, inače vidite <span class="ui">Povezivanje s računalom (…) nije uspjelo.</span> Kad je prijenos jednom prihvaćen, bilo koja strana može otići izvan mreže, prijeći u stanje mirovanja ili izaći iz programa Dodavo; prijenos se nastavlja kad su obje opet tu, kako je opisano u prethodnom odgovoru.</p>
+
+<h3 id="faq-size">Postoji li ograničenje veličine?</h3>
+<p>Ne. Dodavo ne ograničava veličinu datoteke ni mape; jedino je ograničenje slobodan prostor na pogonu koji prima. Za mapu računalo koje prima treba mjesta i za arhivu i za raspakiranu mapu, dakle otprilike dvostruku veličinu mape dok traje raspakiravanje. Prozor Dolazni prijenos kaže ima li dovoljno prostora prije nego što prihvatite.</p>
+
+<h3 id="faq-several">Mogu li poslati više stavki odjednom ili više osoba?</h3>
+<p>Da. Možete pokrenuti koliko god prijenosa želite, istoj osobi ili različitim osobama, a svaki ima vlastiti prozor napretka. Da biste poslali više datoteka ili mapa u jednom potezu, povucite ih iz Eksplorera za datoteke na osobu na popisu primatelja; nakon što potvrdite, svaka se stavka šalje kao zaseban prijenos. Pogledajte <a href="#drag-and-drop">Povlačenje stavki na osobu</a>.</p>
+
+<h3 id="faq-where">Gdje se spremaju primljene datoteke?</h3>
+<p>U mapu prikazanu pod <span class="ui">Spremi u:</span> u prozoru Dolazni prijenos, koju možete promijeniti za svaki prijenos. Dodavo predlaže vašu mapu Preuzimanja, mapu koju ste upotrijebili prošli put ili stalnu mapu koju ste postavili u postavkama pod <span class="ui">Uvijek spremaj primljene datoteke u ovu mapu</span>. Ako stavka istog naziva ondje već postoji, nova dobiva broj dodan nazivu; ništa se nikada ne prepisuje. Pogledajte <a href="#incoming-window">Prozor Dolazni prijenos</a> i <a href="#settings-receiving">Primanje datoteka</a>.</p>
+
+<h3 id="faq-lan">Radi li Dodavo bez internetske veze?</h3>
+<p>Da, između računala u istoj lokalnoj mreži, na primjer kod kuće ili u uredu. Ona se u mreži pronalaze izravno. Redak stanja tada kaže <span class="ui">Izvan mreže – provjerite internetsku vezu. Prijenosi unutar lokalne mreže i dalje rade.</span>, a prijenosi na računala drugdje čekaju dok ponovno ne budete na mreži.</p>
+
+<h3 id="faq-read">Može li netko usput pročitati moje datoteke?</h3>
+<p>Ne. Svaki je prijenos sveobuhvatno šifriran između dvaju računala. Kad podaci moraju proći preko relejnog poslužitelja, poslužitelj samo prosljeđuje šifrirane podatke koje ne može pročitati. ID kontakta javni je ključ primatelja, pa se veza može uspostaviti samo s računalom koje ima odgovarajući tajni ključ. Pogledajte <a href="#connections">Veze i sigurnost</a>.</p>
+
+<h3 id="faq-id-secret">Je li moj ID kontakta tajan? Može li mi bilo tko slati datoteke?</h3>
+<p>ID kontakta nije tajan; funkcionira kao telefonski broj. Svatko tko ga ima može vam ponuditi datoteku, ali na vašem se računalu ništa ne sprema dok ne odaberete <span class="ui">Prihvati</span>, a ponude osoba koje nisu na vašem popisu primatelja označene su upozorenjem o nepoznatom pošiljatelju. Čak i kad je uključeno <span class="ui">Prijenose pokreći automatski, bez pitanja</span>, sami se pokreću samo prijenosi osoba s vašeg popisa primatelja. Pogledajte <a href="#auto-accept">Primanje bez pitanja</a>.</p>
+
+<h3 id="faq-servers">Što Dodavo šalje poslužiteljima na internetu?</h3>
+<p>Samo ono što je potrebno da bi druga računala pronašla vaše. Dodavo pod vašim ID-om kontakta objavljuje adrese na kojima je vaše računalo trenutačno dostupno, i to usluzi za pronalaženje mreže iroh, te održava vezu s relejnim poslužiteljem kako bi se prijenos mogao uspostaviti i kad izravna veza nije moguća. Nazivi i sadržaj vaših datoteka putuju samo unutar šifrirane veze s drugim računalom. Dodavo nema korisničkih računa i ne šalje statistiku upotrebe.</p>
+
+<h3 id="faq-intact">Kako znam da je primljena datoteka neoštećena?</h3>
+<p>Svaki prijenos završava kontrolnim zbrojem cijele stavke, koji strana koja prima provjerava. Dok se datoteka prima, ima nastavak <code>.part</code>; svoj pravi naziv dobiva tek nakon što je kontrolni zbroj potvrđen. Podaci koji ne odgovaraju nikada se ne spremaju kao cjelovita datoteka: prijenos javlja <span class="ui">Primljeni podaci su oštećeni (kontrolni zbroj ne odgovara)</span>, a pošiljatelj jednostavno ponovno pošalje stavku.</p>
+
+<h3 id="faq-unknown">Zašto prozor Dolazni prijenos upozorava na nepoznatog pošiljatelja?</h3>
+<p>Zato što ID kontakta pošiljatelja nije na vašem popisu primatelja. Ime prikazano u prozoru ime je koje je pošiljatelj sam odabrao, pa ne može dokazati tko je on. Prihvatite prijenos samo ako znate tko ga šalje, na primjer zato što vam je ta osoba to rekla. Potvrdni okvir <span class="ui">Dodaj „…” u moje primatelje</span> dodaje pošiljatelja na vaš popis kad prihvatite, pa sljedeći prijenos od njega više nije označen. Pogledajte <a href="#incoming-window">Prozor Dolazni prijenos</a>.</p>
+
+<h3 id="faq-relay">Zašto prozor napretka kaže da veza ide preko relejnog poslužitelja i je li to sporije?</h3>
+<p>Dodavo uvijek pokušava izravno povezati dva računala. Kad to nije moguće, na primjer iza strogog vatrozida tvrtke ili u nekim mobilnim mrežama, podaci umjesto toga idu preko relejnog poslužitelja. Prijenos ostaje sveobuhvatno šifriran, ali je obično sporiji jer se propusnost poslužitelja dijeli. Ne morate ništa poduzimati: Dodavo tijekom prijenosa i dalje traži izravan put i prelazi na njega čim se pojavi. Ako su vam prijenosi preko relejnog poslužitelja česti, pokušajte s drugom mrežom ili računalo povežite kabelom.</p>
+
+<h3 id="faq-firewall">Moram li otvoriti priključke ili mijenjati postavke usmjerivača ili vatrozida?</h3>
+<p>Ne. Dodavo se sam povezuje kroz kućne usmjerivače i vatrozide, bez prosljeđivanja priključaka. Ako vas vatrozid sustava Windows pri prvom pokretanju pita želite li dopustiti Dodavo, dopustite; inače izravne veze možda neće biti moguće, pa prijenosi idu preko relejnog poslužitelja.</p>
+
+<h3 id="faq-wrong">Nešto je pošlo po zlu. Što trebam provjeriti?</h3>
+<p>Najprije provjerite je li Dodavo pokrenut na oba računala, piše li u retku stanja u oba glavna prozora <span class="ui">Na mreži – spremno za slanje i primanje datoteka.</span> i imate li ispravan ID kontakta druge osobe. Ako je prijenos završio pogreškom, redak ispod retka koraka u njegovu prozoru napretka navodi razlog, a tema <a href="#troubleshooting">Rješavanje problema</a> objašnjava poruke. Prijenos se uvijek može otkazati i pokrenuti iznova.</p>
+</section>
+
 <section aria-labelledby="troubleshooting">
 <h2 id="troubleshooting">Rješavanje problema</h2>
 <dl>
 <dt>„Povezivanje s računalom (…) nije uspjelo.”</dt>
 <dd>Dodavo nije pokrenut na drugom računalu ili jedno od vas nije na mreži. Zamolite drugu osobu da pokrene Dodavo, provjerite redak stanja na dnu obaju glavnih prozora, a zatim pokušajte ponovno. Provjerite i imate li točan ID kontakta te osobe.</dd>
-<dt>„Dodavo na drugom računalu je zastario. Na oba računala potrebna je trenutačna verzija”</dt>
-<dd>Druga osoba koristi stariju verziju programa Dodavo, koja ne može pauzirati ni nastavljati prijenose. Zamolite je da instalira trenutačnu verziju.</dd>
 <dt>„Datoteka je promijenjena nakon početka prijenosa”</dt>
 <dd>Datoteka koju šaljete izmijenjena je dok je prijenos čekao vezu, pa se ne može nastaviti. Pošaljite je ponovno.</dd>
 <dt>Prijenos kaže da je veza prekinuta, a oboje smo na mreži</dt>

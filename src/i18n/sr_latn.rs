@@ -231,7 +231,6 @@ pub const SR_LATN: Strings = Strings {
     untitled: "Bez naslova",
     error_cannot_read: "Nije moguće pročitati: {path}",
     error_timeout: "Isteklo je vreme za povezivanje",
-    error_peer_outdated: "Dodavo na drugom računaru je zastareo. Na oba računara je potrebna aktuelna verzija",
     error_unexpected_answer: "Neočekivan odgovor primaoca: {answer}",
     error_file_shorter: "Datoteka je postala kraća tokom slanja",
     error_peer_reported: "Primalac je prijavio grešku: {message}",
