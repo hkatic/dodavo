@@ -206,6 +206,7 @@ mod tests {
                 s.lost_ask,
                 s.lost_wait,
                 s.lost_cancel,
+                s.exit_stay,
                 s.exit_keep,
                 s.exit_cancel_transfers,
                 s.continue_background,

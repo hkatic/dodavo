@@ -218,8 +218,14 @@ pub const SR_LATN: Strings = Strings {
     invalid_save_folder: "Izaberite važeću fasciklu za čuvanje primljenih datoteka.",
 
     exit_text: "Ako sada izađete, nezavršeni prenosi se zaustavljaju i nastavljaju kada Dodavo ponovo bude pokrenut na oba računara.",
+    exit_stay: "&Ne izlazi",
     exit_keep: "&Izađi i nastavi prenose kasnije",
     exit_cancel_transfers: "&Otkaži prenose i izađi",
+
+    tray_tip_one: "{app} – {status}",
+    tray_tip_one_speed: "{app} – {status}, {speed}",
+    tray_tip_many: "{app} – {transfers}, {percent} %",
+    tray_tip_many_speed: "{app} – {transfers}, {percent} %, {speed}",
 
     ok: "U redu",
     cancel: "Otkaži",

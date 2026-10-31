@@ -50,6 +50,7 @@ const NIN_BALLOONUSERCLICK: u32 = WM_USER + 5;
 /// Command links of the exit question.
 const CHOICE_EXIT_KEEP: i32 = 100;
 const CHOICE_EXIT_CANCEL: i32 = 101;
+const CHOICE_EXIT_STAY: i32 = 102;
 
 thread_local! {
     static MAIN: Cell<HWND> = const { Cell::new(std::ptr::null_mut()) };
@@ -268,6 +269,9 @@ pub fn create(profile: Option<&str>, start_hidden: bool) -> HWND {
         unsafe {
             ShowWindow(hwnd, SW_SHOW);
             UpdateWindow(hwnd);
+            // Started by the user (desktop, Explorer, Start menu): take the
+            // foreground even when the launcher did not hand it over.
+            SetForegroundWindow(hwnd);
         }
     }
     hwnd
@@ -719,8 +723,9 @@ impl MainWindow {
     }
 }
 
-/// Exits the application. Running transfers are suspended and continue at
-/// the next start, unless the user chooses to cancel them.
+/// Exits the application. While transfers run, the user is asked first; the
+/// default is to stay. Suspended transfers continue at the next start,
+/// unless the user chooses to cancel them.
 fn quit(w: &Window) {
     let active = app::active_transfer_count();
     if active > 0 {
@@ -729,6 +734,7 @@ fn quit(w: &Window) {
             &trn!(exit_instruction, active),
             tr!(exit_text),
             &[
+                (CHOICE_EXIT_STAY, tr!(exit_stay)),
                 (CHOICE_EXIT_KEEP, tr!(exit_keep)),
                 (CHOICE_EXIT_CANCEL, tr!(exit_cancel_transfers)),
             ],
@@ -738,6 +744,7 @@ fn quit(w: &Window) {
         match choice {
             CHOICE_EXIT_KEEP => {}
             CHOICE_EXIT_CANCEL => app::cancel_all_transfers(),
+            // "Don't exit", Escape or the dialog's close button.
             _ => return,
         }
     }
@@ -908,6 +915,18 @@ impl Handler for MainWindow {
             }
             m if m == MSG_SHOW.get() => {
                 window::bring_to_front(w.hwnd);
+                Some(0)
+            }
+            // Logoff or shutdown is never blocked with a question: transfers
+            // continue at the next start anyway.
+            WM_QUERYENDSESSION => Some(1),
+            WM_ENDSESSION => {
+                if wp != 0 {
+                    // Tell the peers the transfers are suspended, not lost,
+                    // while the process is still allowed to run.
+                    tray::remove(w.hwnd);
+                    app::with(|a| a.net.shutdown(std::time::Duration::from_secs(2)));
+                }
                 Some(0)
             }
             m if m == MSG_TASKBAR_CREATED.get() && m != 0 => {

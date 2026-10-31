@@ -23,7 +23,8 @@ use windows_sys::Win32::{
             InitCommonControlsEx,
         },
         WindowsAndMessaging::{
-            DispatchMessageW, FindWindowW, GetMessageW, MSG, PostMessageW, TranslateMessage,
+            AllowSetForegroundWindow, DispatchMessageW, FindWindowW, GetMessageW,
+            GetWindowThreadProcessId, MSG, PostMessageW, TranslateMessage,
         },
     },
 };
@@ -62,6 +63,34 @@ fn parse_args() -> Args {
     args
 }
 
+/// Brings the window of the instance that is already running to the front.
+fn show_running_instance(title: &str) {
+    let class = wide(ui::window::MAIN_CLASS);
+    let title = wide(title);
+    // The other instance may still be starting: its window is created after
+    // the settings, the identity and the network, so look for it for a while.
+    let mut existing = std::ptr::null_mut();
+    for _ in 0..50 {
+        existing = unsafe { FindWindowW(class.as_ptr(), title.as_ptr()) };
+        if !existing.is_null() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+    if existing.is_null() {
+        return;
+    }
+    unsafe {
+        // Only the process the user just started may take the foreground;
+        // hand that right to the running instance before asking it to show
+        // its window, otherwise Windows merely flashes its taskbar button.
+        let mut pid = 0;
+        GetWindowThreadProcessId(existing, &mut pid);
+        AllowSetForegroundWindow(pid);
+        PostMessageW(existing, ui::main_window::show_message_id(), 0, 0);
+    }
+}
+
 fn main() {
     std::panic::set_hook(Box::new(|info| {
         ui::error(std::ptr::null_mut(), &tr!(panic_message, info = info));
@@ -79,11 +108,9 @@ fn main() {
         GetLastError() == ERROR_ALREADY_EXISTS
     };
     if already_running {
-        let class = wide(ui::window::MAIN_CLASS);
-        let title = wide(&title);
-        let existing = unsafe { FindWindowW(class.as_ptr(), title.as_ptr()) };
-        if !existing.is_null() {
-            unsafe { PostMessageW(existing, ui::main_window::show_message_id(), 0, 0) };
+        // A start in the background (autostart) leaves the running instance alone.
+        if !args.minimized {
+            show_running_instance(&title);
         }
         return;
     }

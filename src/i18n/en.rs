@@ -215,8 +215,14 @@ pub const EN: Strings = Strings {
     invalid_save_folder: "Please choose a valid folder for saving received files.",
 
     exit_text: "If you exit now, unfinished transfers stop and continue the next time Dodavo and the other computer are both running.",
+    exit_stay: "&Don't exit",
     exit_keep: "E&xit and continue the transfers later",
     exit_cancel_transfers: "&Cancel the transfers and exit",
+
+    tray_tip_one: "{app} – {status}",
+    tray_tip_one_speed: "{app} – {status}, {speed}",
+    tray_tip_many: "{app} – {transfers}, {percent}%",
+    tray_tip_many_speed: "{app} – {transfers}, {percent}%, {speed}",
 
     ok: "OK",
     cancel: "Cancel",

@@ -218,8 +218,14 @@ pub const HR: Strings = Strings {
     invalid_save_folder: "Odaberite valjanu mapu za spremanje primljenih datoteka.",
 
     exit_text: "Ako sada izađete, nedovršeni prijenosi se zaustavljaju i nastavljaju kada Dodavo ponovno bude pokrenut na oba računala.",
+    exit_stay: "&Ne izlazi",
     exit_keep: "&Izađi i nastavi prijenose kasnije",
     exit_cancel_transfers: "&Otkaži prijenose i izađi",
+
+    tray_tip_one: "{app} – {status}",
+    tray_tip_one_speed: "{app} – {status}, {speed}",
+    tray_tip_many: "{app} – {transfers}, {percent} %",
+    tray_tip_many_speed: "{app} – {transfers}, {percent} %, {speed}",
 
     ok: "U redu",
     cancel: "Odustani",

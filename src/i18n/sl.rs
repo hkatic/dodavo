@@ -218,8 +218,14 @@ pub const SL: Strings = Strings {
     invalid_save_folder: "Izberite veljavno mapo za shranjevanje prejetih datotek.",
 
     exit_text: "Če zdaj končate, se nedokončani prenosi ustavijo in nadaljujejo, ko bo Dodavo znova zagnan v obeh računalnikih.",
+    exit_stay: "&Ne končaj",
     exit_keep: "&Končaj in nadaljuj prenose pozneje",
     exit_cancel_transfers: "&Prekliči prenose in končaj",
+
+    tray_tip_one: "{app} – {status}",
+    tray_tip_one_speed: "{app} – {status}, {speed}",
+    tray_tip_many: "{app} – {transfers}, {percent} %",
+    tray_tip_many_speed: "{app} – {transfers}, {percent} %, {speed}",
 
     ok: "V redu",
     cancel: "Prekliči",

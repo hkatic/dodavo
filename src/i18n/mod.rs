@@ -353,8 +353,14 @@ strings! {
         invalid_save_folder,
         // Exiting while transfers run.
         exit_text,
+        exit_stay,
         exit_keep,
         exit_cancel_transfers,
+        // Notification area icon tooltip.
+        tray_tip_one,
+        tray_tip_one_speed,
+        tray_tip_many,
+        tray_tip_many_speed,
         // Common.
         ok,
         cancel,
@@ -682,7 +688,10 @@ mod tests {
                     "connection lost",
                     vec![s.wait_for_connection, s.cancel_transfer, s.dont_ask_again],
                 ),
-                ("exit", vec![s.exit_keep, s.exit_cancel_transfers]),
+                (
+                    "exit",
+                    vec![s.exit_stay, s.exit_keep, s.exit_cancel_transfers],
+                ),
                 (
                     "received file",
                     vec![s.open_file, s.open_containing_folder, s.dont_ask_again],
