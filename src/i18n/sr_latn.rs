@@ -86,6 +86,7 @@ pub const SR_LATN: Strings = Strings {
         da biste pročitali licencu i licence komponenti koje Dodavo sadrži.",
     tray_hint: "Dodavo nastavlja da radi ovde da biste mogli da primate datoteke. Za izlaz kliknite desnim tasterom miša na ikonu.",
     help_failed: "Pomoć nije moguće otvoriti:\n{error}",
+    website_failed: "Veb lokaciju nije moguće otvoriti:\n{error}",
 
     license_title: "Licenca",
     license_intro: "{app} je slobodan softver: možete da ga delite i menjate pod uslovima licence GNU General \

@@ -121,19 +121,21 @@ pub fn copy_to_clipboard(owner: HWND, text: &str) -> bool {
 /// Opens a file with its default program, or a folder in Explorer.
 /// Returns `false` if Windows could not open it.
 pub fn open_path(path: &Path) -> bool {
-    shell_open(&path.display().to_string())
+    shell_open(std::ptr::null_mut(), &path.display().to_string())
 }
 
-/// Opens a web address in the default browser.
-pub fn open_url(url: &str) -> bool {
-    shell_open(url)
+/// Opens a web address in the default browser. Anything Windows shows on
+/// the way, such as the choice of an app, belongs to `owner`. Returns `false`
+/// (with the reason in the thread's last error) if Windows could not open it.
+pub fn open_url(owner: HWND, url: &str) -> bool {
+    shell_open(owner, url)
 }
 
-fn shell_open(target: &str) -> bool {
+fn shell_open(owner: HWND, target: &str) -> bool {
     let target = wide(target);
     let result = unsafe {
         ShellExecuteW(
-            std::ptr::null_mut(),
+            owner,
             wide("open").as_ptr(),
             target.as_ptr(),
             std::ptr::null(),

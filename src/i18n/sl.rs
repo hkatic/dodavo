@@ -86,6 +86,7 @@ pub const SL: Strings = Strings {
         jamstva. Izberite »Licenca«, če želite prebrati licenco in licence komponent, ki jih vsebuje Dodavo.",
     tray_hint: "Dodavo se še naprej izvaja tukaj, da lahko prejemate datoteke. Za izhod z desno tipko miške kliknite ikono.",
     help_failed: "Pomoči ni bilo mogoče odpreti:\n{error}",
+    website_failed: "Spletnega mesta ni bilo mogoče odpreti:\n{error}",
 
     license_title: "Licenca",
     license_intro: "{app} je prosta programska oprema: lahko jo delite z drugimi in spreminjate pod pogoji licence \

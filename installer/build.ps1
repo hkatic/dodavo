@@ -28,7 +28,8 @@ variables), every Dodavo.exe, the setup and the uninstaller are signed with
 signtool from the Windows SDK. Without one, everything is built unsigned.
 
 First, installer\licenses.ps1 brings res\third-party-licenses.txt up to date
-(it needs cargo-about), so the programs never ship outdated license notices.
+(it needs cargo-about, and rust-src for both toolchains, which it installs),
+so the programs never ship outdated license notices.
 
 .PARAMETER Test
 Runs "cargo test" first. The end-to-end test needs internet access.
@@ -148,9 +149,20 @@ try {
         (Join-Path $env:LOCALAPPDATA 'Programs\Inno Setup 6\ISCC.exe')
     ) 'Install Inno Setup 6.6 or later (32-bit edition), e.g. "winget install JRSoftware.InnoSetup".'
 
-    # The licenses of the dependencies, which every build shows in
-    # Help > License: brought up to date before anything is built.
-    & (Join-Path $PSScriptRoot 'licenses.ps1')
+    # The licenses of the dependencies and of the Rust standard library of
+    # both toolchains, which every build shows in Help > License: brought up
+    # to date before anything is built. Without the nightly (-SkipWin7 when
+    # it cannot be installed), the committed file is used.
+    $licenses = Join-Path $PSScriptRoot 'licenses.ps1'
+    if ($SkipWin7) {
+        try {
+            & $licenses -Win7Toolchain $Win7Toolchain
+        } catch {
+            Write-Warning "The license notices could not be brought up to date ($_); using the committed res\third-party-licenses.txt."
+        }
+    } else {
+        & $licenses -Win7Toolchain $Win7Toolchain
+    }
 
     # Toolchains. "rustup target add" is a no-op when the target is installed.
     Invoke-Native 'rustup' @('target', 'add', 'i686-pc-windows-msvc')
@@ -165,6 +177,21 @@ try {
     $staging = Join-Path $root 'target\installer\staging'
     $checkImports = Join-Path $PSScriptRoot 'check-imports.ps1'
     $isccArgs = @("/DAppVersion=$version", "/DAppVersionNumeric=$versionNumeric")
+
+    # The license texts Setup installs next to the program, with Windows line
+    # ends and a byte order mark: Notepad before Windows 10 1809 shows a file
+    # with Unix line ends as one long line, and may guess another encoding
+    # than UTF-8 for one without the mark.
+    New-Item -ItemType Directory -Force $staging | Out-Null
+    foreach ($file in @(
+        @{ Source = 'LICENSE'; Name = 'LICENSE.txt'; Define = 'LicenseFile' }
+        @{ Source = 'res\third-party-licenses.txt'; Name = 'THIRD-PARTY-LICENSES.txt'; Define = 'ThirdPartyLicensesFile' }
+    )) {
+        $text = [IO.File]::ReadAllText((Join-Path $root $file.Source)) -replace "`r?`n", "`r`n"
+        $staged = Join-Path $staging $file.Name
+        [IO.File]::WriteAllText($staged, $text, (New-Object Text.UTF8Encoding $true))
+        $isccArgs += "/D$($file.Define)=$staged"
+    }
     $stagedExes = @()
     foreach ($b in $builds) {
         Write-Host ''

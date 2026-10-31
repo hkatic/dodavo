@@ -1,10 +1,14 @@
-// UTF-8, for the author's name and the copyright sign below.
+// UTF-8, for the author's name and the copyright sign.
 #pragma code_page(65001)
 
-1 ICON "app.ico"
-1 24 "app.manifest"
+// VER_MAJOR, VER_MINOR, VER_PATCH, VER_STR, APP_AUTHOR, APP_COPYRIGHT and
+// APP_WEBSITE, from Cargo.toml (written by build.rs to OUT_DIR).
+#include "app-info.h"
 
-// VER_MAJOR, VER_MINOR, VER_PATCH and VER_STR come from Cargo.toml (build.rs).
+1 ICON "app.ico"
+// res/app.manifest with the version filled in (build.rs, in OUT_DIR).
+1 24 "Dodavo.exe.manifest"
+
 1 VERSIONINFO
 FILEVERSION VER_MAJOR,VER_MINOR,VER_PATCH,0
 PRODUCTVERSION VER_MAJOR,VER_MINOR,VER_PATCH,0
@@ -15,13 +19,15 @@ BEGIN
   BEGIN
     BLOCK "040904B0"
     BEGIN
-      VALUE "CompanyName", "Hrvoje Katić"
+      VALUE "CompanyName", APP_AUTHOR
       VALUE "FileDescription", "Dodavo"
       VALUE "ProductName", "Dodavo"
       VALUE "FileVersion", VER_STR
       VALUE "ProductVersion", VER_STR
       VALUE "OriginalFilename", "Dodavo.exe"
-      VALUE "LegalCopyright", "Copyright © 2026 Hrvoje Katić"
+      VALUE "LegalCopyright", APP_COPYRIGHT
+      // Not shown by Windows; Setup takes its web addresses from here.
+      VALUE "Website", APP_WEBSITE
     END
   END
   BLOCK "VarFileInfo"

@@ -83,6 +83,7 @@ pub const EN: Strings = Strings {
         and the licenses of the components Dodavo contains.",
     tray_hint: "Dodavo keeps running here so you can receive files. Right-click the icon to exit.",
     help_failed: "The help could not be opened:\n{error}",
+    website_failed: "The website could not be opened:\n{error}",
 
     license_title: "License",
     license_intro: "{app} is free software: you can share and change it under the terms of the GNU General Public \

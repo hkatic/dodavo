@@ -224,6 +224,7 @@ strings! {
         about_instruction,
         about_text,
         about_license,
+        website_failed,
         tray_hint,
         help_failed,
         // License window.

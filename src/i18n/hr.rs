@@ -86,6 +86,7 @@ pub const HR: Strings = Strings {
         da biste pročitali licencu i licence komponenti koje Dodavo sadrži.",
     tray_hint: "Dodavo nastavlja raditi ovdje kako biste mogli primati datoteke. Za izlaz desnom tipkom miša kliknite ikonu.",
     help_failed: "Pomoć se ne može otvoriti:\n{error}",
+    website_failed: "Web-mjesto se ne može otvoriti:\n{error}",
 
     license_title: "Licenca",
     license_intro: "{app} je slobodni softver: možete ga dijeliti i mijenjati prema uvjetima licence GNU General \

@@ -13,9 +13,10 @@ use std::{
 use windows_sys::Win32::{
     Foundation::{HWND, LPARAM, LRESULT, RECT, SIZE, WPARAM},
     Graphics::Gdi::{
-        CreateFontIndirectW, DeleteObject, FW_BOLD, FillRect, GetDC, GetDeviceCaps,
-        GetMonitorInfoW, GetTextExtentPoint32W, HDC, HFONT, LOGPIXELSX, MONITOR_DEFAULTTONEAREST,
-        MONITORINFO, MonitorFromWindow, ReleaseDC, SelectObject,
+        CreateFontIndirectW, DT_CALCRECT, DT_EXPANDTABS, DT_NOPREFIX, DT_WORDBREAK, DeleteObject,
+        DrawTextW, FW_BOLD, FillRect, GetDC, GetDeviceCaps, GetMonitorInfoW, GetTextExtentPoint32W,
+        HDC, HFONT, LOGPIXELSX, MONITOR_DEFAULTTONEAREST, MONITORINFO, MonitorFromWindow,
+        ReleaseDC, SelectObject,
     },
     System::LibraryLoader::{GetModuleHandleW, GetProcAddress},
     UI::{
@@ -84,9 +85,14 @@ pub trait Handler: Any {
     fn on_destroy(&mut self, _w: &Window) {}
 }
 
+/// Handles a window message without the window's handler; see
+/// [`CreateOptions::urgent`].
+pub type UrgentFn = fn(&Window, u32, WPARAM, LPARAM) -> Option<LRESULT>;
+
 struct State {
     win: Window,
     handler: RefCell<Box<dyn Handler>>,
+    urgent: Option<UrgentFn>,
     depth: Cell<u32>,
     dead: Cell<bool>,
 }
@@ -207,6 +213,13 @@ pub struct CreateOptions<'a> {
     pub client: (i32, i32),
     /// Window to center on (`null` = center on screen, `None`-like behaviour).
     pub center_on: HWND,
+    /// Sees every message before the handler, and also while the handler is
+    /// busy: a modal window, message box or task dialog it opened runs its
+    /// own message loop, and the messages the window gets meanwhile would
+    /// otherwise go to `DefWindowProcW`. For messages that must not be lost
+    /// and need nothing of the handler. Returns `Some` if it handled the
+    /// message.
+    pub urgent: Option<UrgentFn>,
 }
 
 impl Default for CreateOptions<'_> {
@@ -220,6 +233,7 @@ impl Default for CreateOptions<'_> {
             menu: std::ptr::null_mut(),
             client: (400, 200),
             center_on: std::ptr::null_mut(),
+            urgent: None,
         }
     }
 }
@@ -242,6 +256,7 @@ pub fn create(opts: CreateOptions, handler: Box<dyn Handler>) -> HWND {
             annotated: RefCell::new(Vec::new()),
         },
         handler: RefCell::new(handler),
+        urgent: opts.urgent,
         depth: Cell::new(0),
         dead: Cell::new(false),
     });
@@ -284,7 +299,9 @@ pub fn create(opts: CreateOptions, handler: Box<dyn Handler>) -> HWND {
     hwnd
 }
 
-/// Runs a nested message loop until `hwnd` is destroyed, disabling `owner` meanwhile.
+/// Runs a nested message loop until `hwnd` is destroyed, disabling `owner`
+/// meanwhile. When the program ends meanwhile (WM_QUIT), the window is
+/// closed and WM_QUIT passed on to the loop below.
 pub fn run_modal(owner: HWND, hwnd: HWND) {
     with_state(hwnd, |s| s.win.modal_owner.set(owner));
     unsafe {
@@ -297,6 +314,7 @@ pub fn run_modal(owner: HWND, hwnd: HWND) {
         while IsWindow(hwnd) != 0 {
             if GetMessageW(&mut msg, std::ptr::null_mut(), 0, 0) <= 0 {
                 PostQuitMessage(msg.wParam as i32);
+                DestroyWindow(hwnd);
                 break;
             }
             if !super::main_window::translate(&msg) {
@@ -507,10 +525,11 @@ impl Window {
     /// its whole text when Tab or its access key moves the focus to it (the
     /// caret would then be at the end, and reading would start there); Tab,
     /// Shift+Tab, Enter and Escape act on the window as everywhere else.
+    /// Lines may end in `\n`; a new text needs [`super::crlf`] as well.
     pub fn read_only_text(&self, text: &str, id: u16, rect: (i32, i32, i32, i32)) -> HWND {
         let h = self.add_ex(
             "EDIT",
-            text,
+            &super::crlf(text),
             WS_TABSTOP | WS_VSCROLL | (ES_MULTILINE | ES_READONLY | ES_AUTOVSCROLL) as u32,
             WS_EX_CLIENTEDGE,
             id,
@@ -573,7 +592,7 @@ impl Window {
     /// drawn in this window's font.
     pub fn text_width(&self, text: &str) -> i32 {
         let mut shown = String::new();
-        let mut chars = text.split('\t').next().unwrap_or("").chars();
+        let mut chars = super::without_shortcut(text).chars();
         while let Some(c) = chars.next() {
             // "&x" shows as "x", "&&" as "&".
             match c {
@@ -591,6 +610,35 @@ impl Window {
             ReleaseDC(self.hwnd, dc);
         }
         self.dip(size.cx)
+    }
+
+    /// Height in 96-DPI units of a [`label`](Self::label) `width` units wide
+    /// showing `text`, wrapped at words as the label wraps it. The font
+    /// follows the Windows text size setting, which DPI scaling alone does
+    /// not, so a label of several lines needs this to show all of them.
+    pub fn text_height(&self, text: &str, width: i32) -> i32 {
+        let buf: Vec<u16> = text.encode_utf16().collect();
+        let mut rc = RECT {
+            left: 0,
+            top: 0,
+            right: self.px(width),
+            bottom: 0,
+        };
+        unsafe {
+            let dc = GetDC(self.hwnd);
+            let old = SelectObject(dc, self.font.get());
+            DrawTextW(
+                dc,
+                buf.as_ptr(),
+                buf.len() as i32,
+                &mut rc,
+                DT_CALCRECT | DT_WORDBREAK | DT_EXPANDTABS | DT_NOPREFIX,
+            );
+            SelectObject(dc, old);
+            ReleaseDC(self.hwnd, dc);
+        }
+        // Rounded up, so that converting back to pixels loses no line.
+        (rc.bottom.max(0) as u32 * 96).div_ceil(self.dpi.get()) as i32
     }
 
     /// Width for a push button labelled `text`: the text plus padding, at least `min`.
@@ -870,6 +918,11 @@ unsafe fn dispatch(s: &State, hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> L
         if msg == crate::app::WM_APP_NET {
             crate::app::process_events();
             return 0;
+        }
+        if let Some(urgent) = s.urgent
+            && let Some(r) = urgent(w, msg, wp, lp)
+        {
+            return r;
         }
         if let Ok(mut h) = handler!()
             && let Some(r) = h.on_message(w, msg, wp, lp)

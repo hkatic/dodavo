@@ -9,6 +9,13 @@ repository = "https://github.com/hkatic/dodavo"
 # A program, not a library for crates.io.
 publish = false
 
+# Version, authors and repository above, and the years here, are the only
+# copies: build.rs passes them to the program and its version resource, from
+# which Setup takes them (installer\Dodavo.iss). README.md repeats the
+# copyright line; a test checks it.
+[package.metadata.dodavo]
+copyright-years = "2026"
+
 [[bin]]
 name = "Dodavo"
 path = "src/main.rs"

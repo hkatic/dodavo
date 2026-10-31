@@ -13,7 +13,8 @@
 ;
 ; Compiling this file directly with ISCC works too, once
 ; target\release\Dodavo.exe exists; that gives an installer for 64-bit
-; Windows 10 and later only, and the version is read from the program.
+; Windows 10 and later only, the version is read from the program, and the
+; license texts keep the Unix line ends of the repository.
 ;
 ; Needs Inno Setup 6.6 or later (for "WizardStyle=modern dynamic"), and the
 ; 32-bit edition of Inno Setup, whose Setup program also runs on 32-bit Windows.
@@ -24,13 +25,29 @@
 
 #define AppName "Dodavo"
 #define AppExeName "Dodavo.exe"
-#define AppURL "https://github.com/hkatic/dodavo"
 ; Held by every running instance (see src/main.rs); Setup and the uninstaller
 ; use it to tell that Dodavo is running.
 #define AppMutexName "Local\DodavoRunning"
 ; build.ps1 passes a staged (and possibly signed) copy of the program.
 #ifndef AppExe
   #define AppExe SourcePath + "..\target\release\" + AppExeName
+#endif
+; build.ps1 passes copies with Windows line ends, which Notepad on Windows 7
+; to Windows 10 1803 needs; the files in the repository have Unix ones.
+#ifndef LicenseFile
+  #define LicenseFile SourcePath + "..\LICENSE"
+#endif
+#ifndef ThirdPartyLicensesFile
+  #define ThirdPartyLicensesFile SourcePath + "..\res\third-party-licenses.txt"
+#endif
+
+; The author, the copyright and the website come from Cargo.toml, through the
+; version resource of the program (build.rs, res/app.rc).
+#define AppPublisher GetStringFileInfo(AppExe, "CompanyName")
+#define AppCopyright GetStringFileInfo(AppExe, "LegalCopyright")
+#define AppURL GetStringFileInfo(AppExe, "Website")
+#if AppPublisher == "" || AppCopyright == "" || AppURL == ""
+  #error The version resource of the program lacks CompanyName, LegalCopyright or Website
 #endif
 
 #ifdef AppExeX64Win7
@@ -56,12 +73,12 @@ AppId={{34D1793E-8FBB-46FC-BC27-09F31F071943}
 AppName={#AppName}
 AppVersion={#AppVersion}
 AppVerName={#AppName} {#AppVersion}
-AppPublisher=Hrvoje Katić
+AppPublisher={#AppPublisher}
 AppPublisherURL={#AppURL}
 AppSupportURL={#AppURL}/issues
 AppUpdatesURL={#AppURL}/releases
 ; Also the copyright of Setup's own version resource.
-AppCopyright=Copyright © 2026 Hrvoje Katić
+AppCopyright={#AppCopyright}
 VersionInfoVersion={#AppVersionNumeric}
 VersionInfoProductVersion={#AppVersionNumeric}
 VersionInfoProductTextVersion={#AppVersion}
@@ -162,8 +179,8 @@ Source: "{#AppExeX86Win7}"; DestDir: "{app}"; DestName: "{#AppExeName}"; Check: 
 ; of the components built into it (installer\licenses.ps1). The program shows
 ; both in Help > License as well. 'solidbreak' keeps them out of the block of
 ; the last build above, which Setup would otherwise have to unpack for them.
-Source: "..\LICENSE"; DestDir: "{app}"; DestName: "LICENSE.txt"; Flags: ignoreversion solidbreak
-Source: "..\res\third-party-licenses.txt"; DestDir: "{app}"; DestName: "THIRD-PARTY-LICENSES.txt"; Flags: ignoreversion
+Source: "{#LicenseFile}"; DestDir: "{app}"; DestName: "LICENSE.txt"; Flags: ignoreversion solidbreak
+Source: "{#ThirdPartyLicensesFile}"; DestDir: "{app}"; DestName: "THIRD-PARTY-LICENSES.txt"; Flags: ignoreversion
 
 [Icons]
 Name: "{autoprograms}\{#AppName}"; Filename: "{app}\{#AppExeName}"

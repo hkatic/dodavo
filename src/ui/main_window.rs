@@ -16,6 +16,7 @@ use windows_sys::Win32::{
 use super::{
     APP_NAME, ask, confirm, info, progress, send, set_text, shell, short_id, tray, wide,
     window::{self, CreateOptions, Handler, Window},
+    without_shortcut,
 };
 use crate::{
     app,
@@ -106,11 +107,6 @@ struct MainWindow {
 fn menu_item(menu: HMENU, id: u16, text: &str) {
     let text = wide(text);
     unsafe { AppendMenuW(menu, MF_STRING, id as usize, text.as_ptr()) };
-}
-
-/// A menu text without the shortcut shown after the tab.
-fn without_shortcut(text: &str) -> &str {
-    text.split('\t').next().unwrap_or(text)
 }
 
 /// Appends a text that cannot be chosen (an explanation).
@@ -256,6 +252,7 @@ pub fn create(profile: Option<&str>, start_hidden: bool) -> HWND {
             ex_style: WS_EX_CONTROLPARENT | WS_EX_ACCEPTFILES,
             menu,
             client: (600, 400),
+            urgent: Some(urgent_message),
             ..Default::default()
         },
         Box::new(handler),
@@ -603,8 +600,9 @@ impl MainWindow {
         }
     }
 
-    /// Fills a menu with the running transfers and the "Show All" command.
-    fn fill_transfers_menu(&mut self, menu: HMENU) {
+    /// Fills a menu with the running transfers and the "Show All" command,
+    /// with its shortcut if `shortcuts` (they work in the menu bar only).
+    fn fill_transfers_menu(&mut self, menu: HMENU, shortcuts: bool) {
         clear_menu(menu);
         self.menu_transfers.clear();
         let transfers = app::active_transfer_list();
@@ -619,7 +617,13 @@ impl MainWindow {
             menu_item(menu, ID_TRANSFER_FIRST + i as u16, &text);
         }
         menu_separator(menu);
-        menu_item(menu, ID_SHOW_TRANSFERS, tr!(menu_show_transfers));
+        let show_all = tr!(menu_show_transfers);
+        let show_all = if shortcuts {
+            show_all
+        } else {
+            without_shortcut(show_all)
+        };
+        menu_item(menu, ID_SHOW_TRANSFERS, show_all);
     }
 
     /// Enter in the list: `IsDialogMessageW` turns it into `IDOK` because the
@@ -698,17 +702,19 @@ impl MainWindow {
         }
     }
 
+    /// The menu of the notification-area icon. The accelerators only work in
+    /// the main window, not from here, so no item shows a shortcut.
     fn tray_menu(&mut self, w: &Window) {
+        let item = |menu, id, text| menu_item(menu, id, without_shortcut(text));
         let menu = unsafe { CreatePopupMenu() };
-        menu_item(menu, ID_TRAY_OPEN, tr!(tray_open));
+        item(menu, ID_TRAY_OPEN, tr!(tray_open));
         // Destroyed together with its parent by `track_popup`.
         let transfers = unsafe { CreatePopupMenu() };
-        self.fill_transfers_menu(transfers);
+        self.fill_transfers_menu(transfers, false);
         menu_popup(menu, transfers, tr!(menu_transfers));
-        // The accelerators only work in the main window, not from here.
-        menu_item(menu, ID_COPY_ID, without_shortcut(tr!(menu_copy_id)));
+        item(menu, ID_COPY_ID, tr!(menu_copy_id));
         menu_separator(menu);
-        menu_item(menu, ID_EXIT, tr!(menu_exit));
+        item(menu, ID_EXIT, tr!(menu_exit));
         unsafe { SetMenuDefaultItem(menu, ID_TRAY_OPEN as u32, 0) };
         let mut pt = POINT { x: 0, y: 0 };
         unsafe { GetCursorPos(&mut pt) };
@@ -802,6 +808,11 @@ fn exit(main: HWND, cancel_transfers: bool) {
     // While the window still exists, so the icon is reliably removed.
     tray::remove(main);
     unsafe { DestroyWindow(main) };
+    // `on_destroy` posts WM_QUIT only once the handler is free. If a dialog
+    // is open (the exit came through `urgent_message`), its message loop
+    // runs inside the handler; WM_QUIT now ends it and every loop below it,
+    // as each passes WM_QUIT on.
+    unsafe { PostQuitMessage(0) };
 }
 
 /// Exits the application. While transfers run, the user is asked first.
@@ -936,7 +947,7 @@ impl Handler for MainWindow {
                 Some(0)
             }
             WM_INITMENUPOPUP if wp as HMENU == self.transfers_menu => {
-                self.fill_transfers_menu(self.transfers_menu);
+                self.fill_transfers_menu(self.transfers_menu, true);
                 Some(0)
             }
             WM_DROPFILES => {
@@ -977,17 +988,6 @@ impl Handler for MainWindow {
                 window::bring_to_front(w.hwnd);
                 Some(0)
             }
-            // The Setup of an update is ready and asks every instance to leave
-            // (see `update`). The instance that installs exits as the user
-            // chose in the Update Available window; the other profiles leave
-            // with their transfers suspended, as at a logoff, and are not
-            // started again by Setup.
-            m if m == MSG_EXIT_FOR_UPDATE.get() && m != 0 => {
-                // The mutexes go first, so that Setup never sees them.
-                crate::release_instance_mutexes();
-                exit(w.hwnd, app::with(|a| a.update_cancel_transfers));
-                Some(0)
-            }
             WM_TIMER if wp == TIMER_UPDATE_START => {
                 unsafe { KillTimer(w.hwnd, TIMER_UPDATE_START) };
                 // Leftovers of an earlier update; a Setup that is still
@@ -1000,23 +1000,44 @@ impl Handler for MainWindow {
                 super::update::tick();
                 Some(0)
             }
-            // Logoff or shutdown is never blocked with a question: transfers
-            // continue at the next start anyway.
-            WM_QUERYENDSESSION => Some(1),
-            WM_ENDSESSION => {
-                if wp != 0 {
-                    // Tell the peers the transfers are suspended, not lost,
-                    // while the process is still allowed to run.
-                    tray::remove(w.hwnd);
-                    app::with(|a| a.net.shutdown(std::time::Duration::from_secs(2)));
-                }
-                Some(0)
-            }
-            m if m == MSG_TASKBAR_CREATED.get() && m != 0 => {
-                tray::add(w.hwnd);
-                Some(0)
-            }
             _ => None,
         }
+    }
+}
+
+/// The main window's messages that must be handled even while one of its
+/// dialogs is open (`CreateOptions::urgent`): Setup and Windows send each of
+/// them once, and they need nothing of the handler.
+fn urgent_message(w: &Window, msg: u32, wp: WPARAM, _lp: LPARAM) -> Option<LRESULT> {
+    match msg {
+        // The Setup of an update is ready and asks every instance to leave
+        // (see `update`). The instance that installs exits as the user chose
+        // in the Update Available window; the other profiles leave with their
+        // transfers suspended, as at a logoff, and are not started again by
+        // Setup. `exit` also ends a dialog that is open.
+        m if m == MSG_EXIT_FOR_UPDATE.get() && m != 0 => {
+            // The mutexes go first, so that Setup never sees them.
+            crate::release_instance_mutexes();
+            exit(w.hwnd, app::with(|a| a.update_cancel_transfers));
+            Some(0)
+        }
+        // Logoff or shutdown is never blocked with a question: transfers
+        // continue at the next start anyway.
+        WM_QUERYENDSESSION => Some(1),
+        WM_ENDSESSION => {
+            if wp != 0 {
+                // Tell the peers the transfers are suspended, not lost, while
+                // the process is still allowed to run.
+                tray::remove(w.hwnd);
+                app::with(|a| a.net.shutdown(std::time::Duration::from_secs(2)));
+            }
+            Some(0)
+        }
+        // Explorer was restarted: the icon has to be added again.
+        m if m == MSG_TASKBAR_CREATED.get() && m != 0 => {
+            tray::add(w.hwnd);
+            Some(0)
+        }
+        _ => None,
     }
 }

@@ -139,7 +139,7 @@ pub enum Trigger {
 #[derive(Debug, Clone)]
 pub struct UpdateInfo {
     pub version: String,
-    /// Release notes in the user's language, with `\r\n` line ends.
+    /// Release notes in the user's language, as in the manifest.
     pub notes: String,
     pub url: String,
     pub size: u64,
@@ -319,13 +319,9 @@ pub fn newer(manifest: &Manifest, current: &Version, lang: &str) -> Option<Updat
     let sha256: [u8; 32] = manifest::from_hex(&manifest.installer.sha256)?
         .try_into()
         .ok()?;
-    let notes = manifest
-        .notes_for(lang)
-        .replace("\r\n", "\n")
-        .replace('\n', "\r\n");
     Some(UpdateInfo {
         version: manifest.version.clone(),
-        notes,
+        notes: manifest.notes_for(lang).to_string(),
         url: manifest.installer.url.clone(),
         size: manifest.installer.size,
         sha256,
@@ -651,7 +647,7 @@ mod tests {
         let current = Version::parse("1.0.0").unwrap();
         let info = newer(&m, &current, "hr").expect("newer");
         assert_eq!(info.version, "1.1.0");
-        assert_eq!(info.notes, "Što je novo\r\n\r\n- Automatska ažuriranja");
+        assert_eq!(info.notes, "Što je novo\n\n- Automatska ažuriranja");
         assert_eq!(info.file_name, "Dodavo-1.1.0-setup.exe");
         assert_eq!(info.size, m.installer.size);
         assert_eq!(manifest::to_hex(&info.sha256), m.installer.sha256);

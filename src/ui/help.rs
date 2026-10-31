@@ -80,8 +80,10 @@ mod tests {
     /// A menu or button text as it reads on screen, without the access key
     /// marker, the shortcut and a trailing ellipsis.
     fn visible(text: &str) -> String {
-        let text = text.split('\t').next().unwrap();
-        text.replace('&', "").trim_end_matches('…').to_string()
+        crate::ui::without_shortcut(text)
+            .replace('&', "")
+            .trim_end_matches('…')
+            .to_string()
     }
 
     #[test]
@@ -258,6 +260,8 @@ mod tests {
             for lang in Lang::ALL {
                 assert!(html.contains(lang.native_name()), "{lang:?}: language list");
             }
+            // The author, as in Cargo.toml.
+            assert!(html.contains(crate::ui::APP_AUTHOR), "{lang:?}: author");
         }
     }
 }

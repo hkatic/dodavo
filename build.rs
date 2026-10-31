@@ -1,30 +1,85 @@
+//! Embeds res/app.rc (the icon, the application manifest and the version
+//! resource) with the version, the author, the website and the years of the
+//! copyright from Cargo.toml, so the program, Setup (installer\Dodavo.iss
+//! reads them from the program) and Settings → Apps show the same ones.
+
+use std::{env, fs, path::Path};
+
 fn main() {
-    println!("cargo:rerun-if-changed=res/app.rc");
-    println!("cargo:rerun-if-changed=res/app.manifest");
-    println!("cargo:rerun-if-changed=res/app.ico");
-    // The version resource comes from Cargo.toml, so the program, the
-    // installer (installer\Dodavo.iss) and Settings → Apps show the same one.
-    let env = |name| std::env::var(name).unwrap();
+    for file in [
+        "Cargo.toml",
+        "res/app.rc",
+        "res/app.manifest",
+        "res/app.ico",
+    ] {
+        println!("cargo:rerun-if-changed={file}");
+    }
+    let var = |name| env::var(name).unwrap();
+    let out_dir = var("OUT_DIR");
+    let out_dir = Path::new(&out_dir);
     let (major, minor, patch) = (
-        env("CARGO_PKG_VERSION_MAJOR"),
-        env("CARGO_PKG_VERSION_MINOR"),
-        env("CARGO_PKG_VERSION_PATCH"),
+        var("CARGO_PKG_VERSION_MAJOR"),
+        var("CARGO_PKG_VERSION_MINOR"),
+        var("CARGO_PKG_VERSION_PATCH"),
     );
-    // The application manifest cannot take macros, so its version is written
-    // by hand; make sure it was changed together with Cargo.toml.
-    let manifest = std::fs::read_to_string("res/app.manifest").unwrap();
-    let expected = format!("version=\"{major}.{minor}.{patch}.0\"");
+    // Several authors are separated by colons.
+    let author = var("CARGO_PKG_AUTHORS").replace(':', ", ");
+    let website = var("CARGO_PKG_REPOSITORY");
+    let years = copyright_years(&fs::read_to_string("Cargo.toml").unwrap());
+    // ui::COPYRIGHT_YEARS.
+    println!("cargo:rustc-env=DODAVO_COPYRIGHT_YEARS={years}");
+
+    // The application manifest cannot take macros: res/app.manifest is a
+    // template whose @VERSION@ is filled in here. rc.exe finds the result in
+    // OUT_DIR, which embed-resource passes as an include directory.
+    let manifest = fs::read_to_string("res/app.manifest").unwrap();
     assert!(
-        manifest.contains(&expected),
-        "res/app.manifest: the assemblyIdentity version must be {expected}, as in Cargo.toml"
+        manifest.contains("@VERSION@"),
+        "res/app.manifest: the assemblyIdentity version must be @VERSION@"
     );
-    let macros = [
-        format!("VER_MAJOR={major}"),
-        format!("VER_MINOR={minor}"),
-        format!("VER_PATCH={patch}"),
-        format!("VER_STR=\"{}\"", env("CARGO_PKG_VERSION")),
+    let manifest = manifest.replace("@VERSION@", &format!("{major}.{minor}.{patch}.0"));
+    fs::write(out_dir.join("Dodavo.exe.manifest"), manifest).unwrap();
+
+    // The values res/app.rc includes, in UTF-8 like app.rc itself.
+    let header = [
+        format!("#define VER_MAJOR {major}"),
+        format!("#define VER_MINOR {minor}"),
+        format!("#define VER_PATCH {patch}"),
+        format!("#define VER_STR {}", rc_string(&var("CARGO_PKG_VERSION"))),
+        format!("#define APP_AUTHOR {}", rc_string(&author)),
+        format!(
+            "#define APP_COPYRIGHT {}",
+            rc_string(&format!("Copyright © {years} {author}"))
+        ),
+        format!("#define APP_WEBSITE {}", rc_string(&website)),
     ];
-    embed_resource::compile("res/app.rc", embed_resource::ParamsMacros(&macros))
+    fs::write(out_dir.join("app-info.h"), header.join("\n") + "\n").unwrap();
+
+    embed_resource::compile("res/app.rc", embed_resource::NONE)
         .manifest_required()
         .unwrap();
+}
+
+/// A string literal for rc.exe.
+fn rc_string(s: &str) -> String {
+    format!("\"{}\"", s.replace('\\', "\\\\").replace('"', "\"\""))
+}
+
+/// `copyright-years` from the `[package.metadata.dodavo]` table of Cargo.toml.
+fn copyright_years(cargo_toml: &str) -> String {
+    let mut table = "";
+    for line in cargo_toml.lines().map(str::trim) {
+        if line.starts_with('[') {
+            table = line;
+        } else if table == "[package.metadata.dodavo]"
+            && let Some((key, value)) = line.split_once('=')
+            && key.trim() == "copyright-years"
+        {
+            let value = value.trim();
+            if let Some(years) = value.strip_prefix('"').and_then(|v| v.strip_suffix('"')) {
+                return years.to_string();
+            }
+        }
+    }
+    panic!("Cargo.toml: [package.metadata.dodavo] needs copyright-years = \"…\"");
 }
