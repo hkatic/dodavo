@@ -121,12 +121,21 @@ pub fn copy_to_clipboard(owner: HWND, text: &str) -> bool {
 /// Opens a file with its default program, or a folder in Explorer.
 /// Returns `false` if Windows could not open it.
 pub fn open_path(path: &Path) -> bool {
-    let file = wide(&path.display().to_string());
+    shell_open(&path.display().to_string())
+}
+
+/// Opens a web address in the default browser.
+pub fn open_url(url: &str) -> bool {
+    shell_open(url)
+}
+
+fn shell_open(target: &str) -> bool {
+    let target = wide(target);
     let result = unsafe {
         ShellExecuteW(
             std::ptr::null_mut(),
             wide("open").as_ptr(),
-            file.as_ptr(),
+            target.as_ptr(),
             std::ptr::null(),
             std::ptr::null(),
             SW_SHOWNORMAL,

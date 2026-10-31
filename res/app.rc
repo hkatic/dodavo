@@ -1,3 +1,6 @@
+// UTF-8, for the author's name and the copyright sign below.
+#pragma code_page(65001)
+
 1 ICON "app.ico"
 1 24 "app.manifest"
 
@@ -12,11 +15,13 @@ BEGIN
   BEGIN
     BLOCK "040904B0"
     BEGIN
+      VALUE "CompanyName", "Hrvoje Katić"
       VALUE "FileDescription", "Dodavo"
       VALUE "ProductName", "Dodavo"
       VALUE "FileVersion", VER_STR
       VALUE "ProductVersion", VER_STR
       VALUE "OriginalFilename", "Dodavo.exe"
+      VALUE "LegalCopyright", "Copyright © 2026 Hrvoje Katić"
     END
   END
   BLOCK "VarFileInfo"

@@ -14,13 +14,17 @@ pub const HR: Strings = Strings {
     menu_add: "Dod&aj primatelja…\tCtrl+N",
     menu_edit: "&Uredi primatelja…\tF2",
     menu_remove: "U&kloni primatelja\tDel",
-    menu_copy_id: "Kopiraj moj &ID kontakta",
+    menu_copy_id: "Kopiraj moj &ID kontakta\tCtrl+Shift+C",
     menu_settings: "&Postavke…",
     menu_exit: "I&zlaz",
     menu_view_help: "&Prikaz pomoći\tF1",
     menu_how: "&Kako funkcionira",
     menu_about: "&O programu",
+    menu_license: "&Licenca",
     menu_check_updates: "Provjeri ima li &ažuriranja…",
+    ctx_send_file: "Pošalji &datoteku…",
+    ctx_send_folder: "Pošalji &mapu…",
+    ctx_add: "Dod&aj primatelja…",
     ctx_edit: "&Uredi…",
     ctx_remove: "U&kloni",
     ctx_show_transfer: "Prikaži &prijenos",
@@ -30,11 +34,11 @@ pub const HR: Strings = Strings {
     menu_no_transfers: "Nema prijenosa u tijeku",
     transfer_menu_entry: "{name}: {status}",
 
-    recipients_label: "P&rimatelji:",
-    send_file: "Pošalji &datoteku…",
-    send_folder: "Pošalji &mapu…",
-    add_recipient: "Dod&aj primatelja…",
-    copy_my_id: "Kopiraj moj &ID kontakta",
+    recipients_label: "Pri&matelji:",
+    send_file: "Pošalji datoteku…",
+    send_folder: "Pošalji mapu…",
+    add_recipient: "Dodaj primatelja…",
+    copy_my_id: "Kopiraj moj ID kontakta",
     col_name: "Ime",
     col_contact_id: "ID kontakta",
     col_transfer: "Prijenos",
@@ -73,11 +77,25 @@ pub const HR: Strings = Strings {
         računalu (nastavlja raditi u području obavijesti kada se prozor zatvori).\n\n\
         Datoteke idu izravno s računala na računalo, sveobuhvatno šifrirane. Kada izravna veza \
         nije moguća, šifrirani se podaci prosljeđuju preko javnog relejnog poslužitelja.",
-    about_text: "{app}\nVerzija {version}\n\nŠaljite datoteke i mape izravno s računala na računalo – \
+    about_instruction: "{app}, verzija {version}",
+    about_text: "Šaljite datoteke i mape izravno s računala na računalo – \
         bez računa, bez prijenosa u oblak, bez poveznica.\n\nVeze su sveobuhvatno šifrirane i \
         uspostavljaju se pomoću tehnologije iroh (iroh.computer).",
+    about_license: "Dodavo je slobodni softver: možete ga dijeliti i mijenjati prema uvjetima licence GNU General \
+        Public License, verzije 3 ili bilo koje novije verzije. Isporučuje se bez ikakvog jamstva. Odaberite „Licenca” \
+        da biste pročitali licencu i licence komponenti koje Dodavo sadrži.",
     tray_hint: "Dodavo nastavlja raditi ovdje kako biste mogli primati datoteke. Za izlaz desnom tipkom miša kliknite ikonu.",
     help_failed: "Pomoć se ne može otvoriti:\n{error}",
+
+    license_title: "Licenca",
+    license_intro: "{app} je slobodni softver: možete ga dijeliti i mijenjati prema uvjetima licence GNU General \
+        Public License, verzije 3 ili bilo koje novije verzije. Isporučuje se bez ikakvog jamstva. {app} sadrži i \
+        komponente otvorenog koda drugih autora, koje su dostupne pod njihovim vlastitim licencama. Tekstovi licenci \
+        su na engleskom jeziku. Izvorni kod: {website}",
+    license_show_label: "&Prikaži:",
+    license_dodavo: "Dodavo (GNU General Public License, verzija 3)",
+    license_components: "Komponente drugih autora",
+    license_text_label: "&Tekst licence:",
 
     title_send_file: "Slanje datoteke – primatelj: {name}",
     title_send_folder: "Slanje mape – primatelj: {name}",

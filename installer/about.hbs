@@ -1,0 +1,23 @@
+LICENSES OF THE COMPONENTS BY OTHER AUTHORS
+
+Dodavo contains the following open-source components (Rust crates). Each
+license below is followed by the components that use it, with their version
+and the place where their source code is available.
+
+Overview:
+{{#each overview}}
+- {{{name}}}: {{count}}
+{{/each}}
+{{#each licenses}}
+
+================================================================================
+{{{name}}}
+
+Used by:
+{{#each used_by}}
+- {{{crate.name}}} {{{crate.version}}}: {{#if crate.repository}}{{{crate.repository}}}{{else}}https://crates.io/crates/{{{crate.name}}}{{/if}}
+{{/each}}
+--------------------------------------------------------------------------------
+
+{{{text}}}
+{{/each}}

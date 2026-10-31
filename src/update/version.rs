@@ -161,7 +161,7 @@ mod tests {
         ] {
             assert!(Version::parse(bad).is_none(), "{bad:?} should not parse");
         }
-        assert!(Version::current() >= v("0.1.0"));
+        assert!(Version::current() >= v("1.0.0"));
     }
 
     #[test]

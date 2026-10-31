@@ -11,13 +11,17 @@ pub const EN: Strings = Strings {
     menu_add: "&Add Recipient…\tCtrl+N",
     menu_edit: "&Edit Recipient…\tF2",
     menu_remove: "&Remove Recipient\tDel",
-    menu_copy_id: "&Copy My Contact ID",
+    menu_copy_id: "&Copy My Contact ID\tCtrl+Shift+C",
     menu_settings: "&Settings…",
     menu_exit: "E&xit",
     menu_view_help: "&View Help\tF1",
     menu_how: "&How It Works",
     menu_about: "&About",
+    menu_license: "&License",
     menu_check_updates: "Check for &Updates…",
+    ctx_send_file: "Send &File…",
+    ctx_send_folder: "Send F&older…",
+    ctx_add: "&Add Recipient…",
     ctx_edit: "&Edit…",
     ctx_remove: "&Remove",
     ctx_show_transfer: "Show &Transfer",
@@ -28,10 +32,10 @@ pub const EN: Strings = Strings {
     transfer_menu_entry: "{name}: {status}",
 
     recipients_label: "&Recipients:",
-    send_file: "Send &File…",
-    send_folder: "Send F&older…",
-    add_recipient: "&Add Recipient…",
-    copy_my_id: "&Copy My Contact ID",
+    send_file: "Send File…",
+    send_folder: "Send Folder…",
+    add_recipient: "Add Recipient…",
+    copy_my_id: "Copy My Contact ID",
     col_name: "Name",
     col_contact_id: "Contact ID",
     col_transfer: "Transfer",
@@ -70,11 +74,25 @@ pub const EN: Strings = Strings {
         computer (it keeps running in the notification area when its window is closed).\n\n\
         Files go directly from computer to computer, end-to-end encrypted. When a direct connection is \
         not possible, the encrypted data is forwarded through a public relay server.",
-    about_text: "{app}\nVersion {version}\n\nSend files and folders directly from computer to computer – \
+    about_instruction: "{app}, version {version}",
+    about_text: "Send files and folders directly from computer to computer – \
         no accounts, no cloud uploads, no links.\n\nConnections are end-to-end encrypted and \
         established with iroh (iroh.computer).",
+    about_license: "Dodavo is free software: you can share and change it under the GNU General Public License, \
+        version 3 or any later version. It comes with absolutely no warranty. Select “License” to read the license \
+        and the licenses of the components Dodavo contains.",
     tray_hint: "Dodavo keeps running here so you can receive files. Right-click the icon to exit.",
     help_failed: "The help could not be opened:\n{error}",
+
+    license_title: "License",
+    license_intro: "{app} is free software: you can share and change it under the terms of the GNU General Public \
+        License, version 3 or any later version. It comes with absolutely no warranty. {app} also contains \
+        open-source components by other authors, which are available under their own licenses. The license texts \
+        are in English. Source code: {website}",
+    license_show_label: "&Show:",
+    license_dodavo: "Dodavo (GNU General Public License, version 3)",
+    license_components: "Components by other authors",
+    license_text_label: "License &text:",
 
     title_send_file: "Sending file to {name}",
     title_send_folder: "Sending folder to {name}",

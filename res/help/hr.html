@@ -32,6 +32,7 @@
 <li><a href="#connections">Veze i sigurnost</a></li>
 <li><a href="#faq">Česta pitanja</a></li>
 <li><a href="#troubleshooting">Rješavanje problema</a></li>
+<li><a href="#license">Licenca</a></li>
 </ol>
 </nav>
 
@@ -103,7 +104,7 @@
 <ol>
 <li>Pokrenite Dodavo. Otvara se glavni prozor s vašim popisom primatelja, koji je u početku prazan.</li>
 <li>Provjerite svoje ime: otvorite izbornik <span class="ui">Datoteka</span> (<kbd>Alt</kbd>+<kbd>D</kbd>) i odaberite <span class="ui">Postavke…</span>. U prvom polju, <span class="ui">Vaše ime (prikazuje se osobama kojima šaljete datoteke)</span>, upisano je vaše korisničko ime u sustavu Windows. Po želji ga promijenite, a zatim pritisnite <kbd>Enter</kbd> da biste spremili promjenu.</li>
-<li>Podijelite svoj ID kontakta: na izborniku <span class="ui">Datoteka</span> odaberite <span class="ui">Kopiraj moj ID kontakta</span> ili aktivirajte gumb <span class="ui">Kopiraj moj ID kontakta</span>. Dodavo kopira ID u međuspremnik i prikazuje ga u poruci. Zalijepite ga u poruku e-pošte ili chata osobama koje vam trebaju moći slati datoteke.</li>
+<li>Podijelite svoj ID kontakta: na izborniku <span class="ui">Datoteka</span> odaberite <span class="ui">Kopiraj moj ID kontakta</span>, aktivirajte gumb <span class="ui">Kopiraj moj ID kontakta</span> ili pritisnite <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>C</kbd>. Dodavo kopira ID u međuspremnik i prikazuje ga u poruci. Zalijepite ga u poruku e-pošte ili chata osobama koje vam trebaju moći slati datoteke.</li>
 <li>Dodajte osobe kojima želite slati datoteke, kako je opisano u odjeljku <a href="#add-recipient">Dodavanje primatelja</a>.</li>
 </ol>
 <p class="note"><strong>Napomena:</strong> Vaš ID kontakta nije tajna. Svatko tko ga ima može vam ponuditi datoteke, ali na vašem se računalu ništa ne sprema bez vašeg pristanka, osim ako uključite mogućnost <span class="ui">Prijenose pokreći automatski, bez pitanja</span>, a i tada samo za osobe s vašeg popisa primatelja.</p>
@@ -113,15 +114,16 @@
 <h2 id="main-window">Glavni prozor</h2>
 <p>Glavni prozor sadrži, redoslijedom tipke Tab:</p>
 <dl>
-<dt>Popis primatelja</dt>
+<dt>Popis primatelja (<kbd>Alt</kbd>+<kbd>M</kbd>)</dt>
 <dd>Osobe kojima možete slati datoteke. Popis ima tri stupca: <span class="ui">Ime</span>, <span class="ui">ID kontakta</span> i <span class="ui">Prijenos</span>. ID kontakta skraćen je na prvih osam i zadnjih šest znakova. Dok s nekom osobom traje prijenos, u stupcu <span class="ui">Prijenos</span> piše što se događa, na primjer <span class="ui">Slanje – „izvještaj.pdf” (45 %)</span> ili <span class="ui">Čeka se veza – „izvještaj.pdf” (45 %)</span>; osvježava se otprilike svake sekunde, a kada je prijenosa više, piše koliko ih je u tijeku. Inače je prazan. Po popisu se krećete tipkama sa strelicama. Tipka <kbd>Enter</kbd> ili dvostruki klik otvara izbornik radnji za odabranu osobu (pogledajte u nastavku). Kada je popis prazan, to piše na njemu, zajedno s uputom kako nekoga dodati.</dd>
-<dt>Gumbi <span class="ui">Pošalji datoteku…</span> i <span class="ui">Pošalji mapu…</span></dt>
+<dt>Gumbi <span class="ui">Pošalji datoteku…</span> i <span class="ui">Pošalji mapu…</span> (<kbd>Ctrl</kbd>+<kbd>O</kbd> i <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>O</kbd>)</dt>
 <dd>Šalju nešto odabranoj osobi.</dd>
-<dt>Gumb <span class="ui">Dodaj primatelja…</span></dt>
+<dt>Gumb <span class="ui">Dodaj primatelja…</span> (<kbd>Ctrl</kbd>+<kbd>N</kbd>)</dt>
 <dd>Dodaje novu osobu na popis.</dd>
-<dt>Gumb <span class="ui">Kopiraj moj ID kontakta</span></dt>
+<dt>Gumb <span class="ui">Kopiraj moj ID kontakta</span> (<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>C</kbd>)</dt>
 <dd>Kopira vaš ID kontakta u međuspremnik.</dd>
 </dl>
+<p>Gumbi nemaju podcrtana slova jer u glavnom prozoru <kbd>Alt</kbd> + slovo otvara izbornik. Umjesto toga upotrijebite tipkovne prečace navedene u zagradama: rade bez obzira na to gdje se u glavnom prozoru nalazi fokus, a izbornik <span class="ui">Datoteka</span> prikazuje ih uz svoje naredbe.</p>
 <p>Na dnu prozora redak stanja pokazuje je li Dodavo povezan:</p>
 <ul>
 <li><span class="ui">Povezivanje s mrežom…</span> dok se Dodavo pokreće.</li>
@@ -129,7 +131,7 @@
 <li><span class="ui">Izvan mreže – provjerite internetsku vezu. Prijenosi unutar lokalne mreže i dalje rade.</span></li>
 </ul>
 <p>Redak stanja ne može dobiti fokus tipkovnice. Da biste ga čuli, upotrijebite naredbu čitača zaslona za čitanje cijelog prozora: <kbd>NVDA</kbd>+<kbd>B</kbd> u čitaču NVDA, <kbd>Insert</kbd>+<kbd>B</kbd> u čitaču JAWS ili <kbd>Pripovjedač</kbd>+<kbd>W</kbd> u Pripovjedaču.</p>
-<p>Traka izbornika ima tri izbornika. Izbornik <span class="ui">Datoteka</span> (<kbd>Alt</kbd>+<kbd>D</kbd>) sadrži naredbe <span class="ui">Pošalji datoteku…</span>, <span class="ui">Pošalji mapu…</span>, <span class="ui">Dodaj primatelja…</span>, <span class="ui">Uredi primatelja…</span>, <span class="ui">Ukloni primatelja</span>, <span class="ui">Kopiraj moj ID kontakta</span>, <span class="ui">Postavke…</span> i <span class="ui">Izlaz</span>. Izbornik <span class="ui">Prijenosi</span> (<kbd>Alt</kbd>+<kbd>R</kbd>) navodi sve prijenose u tijeku, s osobom, stavkom i stanjem, a na kraju sadrži naredbu <span class="ui">Prikaži sve prijenose</span> (<kbd>Ctrl</kbd>+<kbd>T</kbd>); kada ništa nije u tijeku, u njemu piše <span class="ui">Nema prijenosa u tijeku</span>. Pogledajte <a href="#finding-transfers">Pronalaženje prijenosa koji se odvija u pozadini</a>. Izbornik <span class="ui">Pomoć</span> (<kbd>Alt</kbd>+<kbd>P</kbd>) sadrži naredbe <span class="ui">Prikaz pomoći</span>, <span class="ui">Kako funkcionira</span> (kratak sažetak), <span class="ui">Provjeri ima li ažuriranja…</span> (pogledajte <a href="#update">Ažuriranje programa Dodavo</a>) i <span class="ui">O programu</span> (broj verzije).</p>
+<p>Traka izbornika ima tri izbornika. Izbornik <span class="ui">Datoteka</span> (<kbd>Alt</kbd>+<kbd>D</kbd>) sadrži naredbe <span class="ui">Pošalji datoteku…</span>, <span class="ui">Pošalji mapu…</span>, <span class="ui">Dodaj primatelja…</span>, <span class="ui">Uredi primatelja…</span>, <span class="ui">Ukloni primatelja</span>, <span class="ui">Kopiraj moj ID kontakta</span>, <span class="ui">Postavke…</span> i <span class="ui">Izlaz</span>. Izbornik <span class="ui">Prijenosi</span> (<kbd>Alt</kbd>+<kbd>R</kbd>) navodi sve prijenose u tijeku, s osobom, stavkom i stanjem, a na kraju sadrži naredbu <span class="ui">Prikaži sve prijenose</span> (<kbd>Ctrl</kbd>+<kbd>T</kbd>); kada ništa nije u tijeku, u njemu piše <span class="ui">Nema prijenosa u tijeku</span>. Pogledajte <a href="#finding-transfers">Pronalaženje prijenosa koji se odvija u pozadini</a>. Izbornik <span class="ui">Pomoć</span> (<kbd>Alt</kbd>+<kbd>P</kbd>) sadrži naredbe <span class="ui">Prikaz pomoći</span>, <span class="ui">Kako funkcionira</span> (kratak sažetak), <span class="ui">Provjeri ima li ažuriranja…</span> (pogledajte <a href="#update">Ažuriranje programa Dodavo</a>), <span class="ui">Licenca</span> i <span class="ui">O programu</span> (verzija, autor, web-mjesto i licenca; pogledajte <a href="#license">Licenca</a>).</p>
 <p>Kada je na popisu odabrana osoba, izbornik radnji (<kbd>Enter</kbd>, dvostruki klik, <kbd>Shift</kbd>+<kbd>F10</kbd>, tipka kontekstnog izbornika ili desni klik) nudi naredbe <span class="ui">Pošalji datoteku…</span>, <span class="ui">Pošalji mapu…</span>, <span class="ui">Prikaži prijenos</span> (samo dok s tom osobom traje prijenos; <span class="ui">Prikaži prijenose</span> kada ih je više), <span class="ui">Uredi…</span> i <span class="ui">Ukloni</span>.</p>
 </section>
 
@@ -328,6 +330,7 @@
 <tr><td><kbd>Ctrl</kbd>+<kbd>O</kbd></td><td>Slanje datoteke odabranoj osobi</td></tr>
 <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>O</kbd></td><td>Slanje mape odabranoj osobi</td></tr>
 <tr><td><kbd>Ctrl</kbd>+<kbd>N</kbd></td><td>Dodavanje primatelja</td></tr>
+<tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>C</kbd></td><td>Kopiranje vašeg ID-a kontakta u međuspremnik</td></tr>
 <tr><td><kbd>F2</kbd></td><td>Uređivanje odabranog primatelja</td></tr>
 <tr><td><kbd>Delete</kbd></td><td>Uklanjanje odabranog primatelja</td></tr>
 <tr><td><kbd>Ctrl</kbd>+<kbd>T</kbd></td><td>Prikaz prozora svih prijenosa u tijeku</td></tr>
@@ -336,6 +339,7 @@
 <tr><td><kbd>Alt</kbd>+<kbd>D</kbd></td><td>Otvaranje izbornika Datoteka</td></tr>
 <tr><td><kbd>Alt</kbd>+<kbd>R</kbd></td><td>Otvaranje izbornika Prijenosi</td></tr>
 <tr><td><kbd>Alt</kbd>+<kbd>P</kbd></td><td>Otvaranje izbornika Pomoć</td></tr>
+<tr><td><kbd>Alt</kbd>+<kbd>M</kbd></td><td>Prelazak na popis primatelja</td></tr>
 <tr><td><kbd>Tab</kbd> i <kbd>Shift</kbd>+<kbd>Tab</kbd></td><td>Kretanje između popisa i gumba</td></tr>
 </tbody>
 </table>
@@ -535,6 +539,25 @@
 <dt>Dodavo se ne pokreće drugi put</dt>
 <dd>Istodobno može raditi samo jedan primjerak programa Dodavo. Ponovnim pokretanjem postojeći prozor dolazi u prvi plan.</dd>
 </dl>
+</section>
+
+<section aria-labelledby="license">
+<h2 id="license">Licenca</h2>
+<p>Dodavo je slobodni softver, a izradio ga je Hrvoje Katić. Možete ga koristiti u bilo koju svrhu, dijeliti ga s drugima i mijenjati prema uvjetima licence GNU General Public License (GPL), verzije 3 ili bilo koje novije verzije. Ako Dodavo prosljeđujete drugima, izmijenjen ili ne, morate pod istom licencom proslijediti i njegov izvorni kod. Dodavo se isporučuje bez ikakvog jamstva. Ovo je samo sažetak; mjerodavan je tekst licence.</p>
+<p>Izvorni kod nalazi se na <a href="https://github.com/hkatic/dodavo">stranici programa Dodavo na GitHubu</a>. Dodavo sadrži i komponente otvorenog koda drugih autora (Rust pakete kao što je iroh), svaku pod njezinom vlastitom licencom, na primjer pod licencom MIT ili Apache License 2.0.</p>
+<h3 id="license-window">Čitanje licence</h3>
+<p>Na izborniku <span class="ui">Pomoć</span> odaberite <span class="ui">Licenca</span> (<kbd>Alt</kbd>+<kbd>P</kbd>, zatim <kbd>L</kbd>). Otvara se prozor <span class="ui">Licenca</span>; čitači zaslona najprije pročitaju njegov uvod. Prozor sadrži, redoslijedom tipke Tab:</p>
+<dl>
+<dt><span class="ui">Prikaži</span> (<kbd>Alt</kbd>+<kbd>P</kbd>)</dt>
+<dd>Padajući popis kojim birate što prikazuje tekst ispod njega: <span class="ui">Dodavo (GNU General Public License, verzija 3)</span> ili <span class="ui">Komponente drugih autora</span>, odnosno licence komponenti, a nakon svake licence komponente koje je koriste, njihove verzije i mjesto na kojem se nalazi njihov izvorni kod. Birajte tipkama sa strelicama; tekst se odmah mijenja.</dd>
+<dt><span class="ui">Tekst licence</span> (<kbd>Alt</kbd>+<kbd>T</kbd>)</dt>
+<dd>Tekstno polje samo za čitanje. Fokus je najprije ovdje, na početku licence GNU General Public License. Čitajte ga tipkama sa strelicama; <kbd>Ctrl</kbd>+<kbd>Home</kbd> i <kbd>Ctrl</kbd>+<kbd>End</kbd> vode na početak i na kraj. Tekstovi su na engleskom jeziku; pravno su obvezujući samo izvorni tekstovi.</dd>
+<dt><span class="ui">Zatvori</span></dt>
+<dd>Zatvara prozor. Zatvaraju ga i tipke <kbd>Enter</kbd> i <kbd>Esc</kbd>.</dd>
+</dl>
+<p>Instalacijski program oba teksta instalira i u mapu u koju je instaliran Dodavo, kao <code>LICENSE.txt</code> i <code>THIRD-PARTY-LICENSES.txt</code>.</p>
+<h3 id="about">O programu Dodavo</h3>
+<p>Naredba <span class="ui">O programu</span> na izborniku <span class="ui">Pomoć</span> (<kbd>Alt</kbd>+<kbd>P</kbd>, zatim <kbd>O</kbd>) prikazuje verziju programa Dodavo, njegova autora, adresu web-mjesta i kratku napomenu o licenci. Čitači zaslona pročitaju cijeli tekst kada se prozor otvori. Fokus je na gumbu <span class="ui">Zatvori</span>; tipkom <kbd>Tab</kbd> prelazite između poveznice na web-mjesto (tipka <kbd>Enter</kbd> otvara je u web-pregledniku), gumba <span class="ui">Licenca</span>, koji otvara prozor Licenca, i gumba <span class="ui">Zatvori</span>. Tipka <kbd>Esc</kbd> zatvara prozor.</p>
 </section>
 
 </main>

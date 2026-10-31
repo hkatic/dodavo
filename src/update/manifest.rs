@@ -150,10 +150,10 @@ pub fn from_hex(s: &str) -> Option<Vec<u8>> {
 pub fn example() -> Manifest {
     Manifest {
         format: FORMAT,
-        version: "0.2.0".into(),
+        version: "1.1.0".into(),
         published: Some("2026-11-20".into()),
         installer: Installer {
-            url: "https://github.com/hkatic/dodavo/releases/download/v0.2.0/Dodavo-0.2.0-setup.exe"
+            url: "https://github.com/hkatic/dodavo/releases/download/v1.1.0/Dodavo-1.1.0-setup.exe"
                 .into(),
             size: 21_345_678,
             sha256: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855".into(),
@@ -189,8 +189,8 @@ mod tests {
             "Što je novo\n\n- Automatska ažuriranja"
         );
         assert_eq!(parsed.notes_for("sl"), "What's new\n\n- Automatic updates");
-        assert_eq!(parsed.installer_file_name(), "Dodavo-0.2.0-setup.exe");
-        assert_eq!(parsed.parsed_version().unwrap().to_string(), "0.2.0");
+        assert_eq!(parsed.installer_file_name(), "Dodavo-1.1.0-setup.exe");
+        assert_eq!(parsed.parsed_version().unwrap().to_string(), "1.1.0");
         // `published` is optional.
         let json = br#"{"format":1,"version":"1.0.0","installer":{"url":"https://x/y","size":5,"sha256":"ab"},"signature":"cd","notes":{"en":"n"}}"#;
         let json = String::from_utf8_lossy(json)
@@ -228,7 +228,7 @@ mod tests {
         assert!(parse(&vec![b' '; MAX_MANIFEST_BYTES + 1]).is_err());
         assert!(parse(b"not json").is_err());
         let mut m = example();
-        m.version = "0.2.0/../x".into();
+        m.version = "1.1.0/../x".into();
         assert!(m.validate().is_err());
     }
 

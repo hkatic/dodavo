@@ -1,8 +1,10 @@
 //! Classic Win32 user interface.
 
+pub mod about;
 pub mod accessibility;
 pub mod help;
 pub mod incoming;
+pub mod license;
 pub mod main_window;
 pub mod progress;
 pub mod recipient;
@@ -32,6 +34,11 @@ use windows_sys::Win32::{
 use crate::i18n::{self, Strings, fill, tr, trn};
 
 pub const APP_NAME: &str = "Dodavo";
+/// The author and the website (the repository on GitHub), from Cargo.toml.
+pub const APP_AUTHOR: &str = env!("CARGO_PKG_AUTHORS");
+pub const APP_WEBSITE: &str = env!("CARGO_PKG_REPOSITORY");
+/// The years of the copyright notice (also in res/app.rc and installer\Dodavo.iss).
+pub const COPYRIGHT_YEARS: &str = "2026";
 
 pub fn wide(s: &str) -> Vec<u16> {
     s.encode_utf16().chain(std::iter::once(0)).collect()

@@ -1,8 +1,13 @@
 [package]
 name = "dodavo"
-version = "0.1.0"
+version = "1.0.0"
 edition = "2024"
 description = "Dodavo – send files and folders directly between computers"
+authors = ["Hrvoje Katić"]
+license = "GPL-3.0-or-later"
+repository = "https://github.com/hkatic/dodavo"
+# A program, not a library for crates.io.
+publish = false
 
 [[bin]]
 name = "Dodavo"

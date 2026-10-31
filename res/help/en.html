@@ -32,6 +32,7 @@
 <li><a href="#connections">Connections and security</a></li>
 <li><a href="#faq">Frequently asked questions</a></li>
 <li><a href="#troubleshooting">Troubleshooting</a></li>
+<li><a href="#license">License</a></li>
 </ol>
 </nav>
 
@@ -103,7 +104,7 @@
 <ol>
 <li>Start Dodavo. Its main window opens with your recipient list, which is empty at first.</li>
 <li>Check your name: open the <span class="ui">File</span> menu (<kbd>Alt</kbd>+<kbd>F</kbd>) and choose <span class="ui">Settings…</span>. The first field, <span class="ui">Your name (shown to the people you send files to)</span>, is filled in with your Windows user name. Change it if you like, then press <kbd>Enter</kbd> to save.</li>
-<li>Share your Contact ID: choose <span class="ui">Copy My Contact ID</span> from the <span class="ui">File</span> menu, or activate the <span class="ui">Copy My Contact ID</span> button. Dodavo copies the ID to the clipboard and shows it in a message. Paste it into an e-mail or chat message to the people who should be able to send you files.</li>
+<li>Share your Contact ID: choose <span class="ui">Copy My Contact ID</span> from the <span class="ui">File</span> menu, activate the <span class="ui">Copy My Contact ID</span> button, or press <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>C</kbd>. Dodavo copies the ID to the clipboard and shows it in a message. Paste it into an e-mail or chat message to the people who should be able to send you files.</li>
 <li>Add the people you want to send files to, as described in <a href="#add-recipient">Adding a recipient</a>.</li>
 </ol>
 <p class="note"><strong>Note:</strong> Your Contact ID is not secret. Anyone who has it can offer you files, but nothing is ever saved on your computer without your consent unless you turn on <span class="ui">Start transfers automatically, without asking</span>, and even then only for people in your recipient list.</p>
@@ -113,15 +114,16 @@
 <h2 id="main-window">The main window</h2>
 <p>The main window contains, in Tab order:</p>
 <dl>
-<dt>Recipients list</dt>
+<dt>Recipients list (<kbd>Alt</kbd>+<kbd>R</kbd>)</dt>
 <dd>The people you can send files to. It has three columns: <span class="ui">Name</span>, <span class="ui">Contact ID</span> and <span class="ui">Transfer</span>. The Contact ID is shortened to its first eight and last six characters. While a transfer with a person is running, the <span class="ui">Transfer</span> column says what is happening, for example <span class="ui">Sending – “report.pdf” (45%)</span> or <span class="ui">Waiting for the connection – “report.pdf” (45%)</span>, refreshed about once a second; with several transfers, it says how many are in progress. Otherwise it is empty. Move through the list with the arrow keys. <kbd>Enter</kbd> or a double-click opens the menu of actions for the selected person (see below). When the list is empty, it says so and tells you how to add someone.</dd>
-<dt><span class="ui">Send File…</span> and <span class="ui">Send Folder…</span> buttons</dt>
+<dt><span class="ui">Send File…</span> and <span class="ui">Send Folder…</span> buttons (<kbd>Ctrl</kbd>+<kbd>O</kbd> and <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>O</kbd>)</dt>
 <dd>Send something to the selected person.</dd>
-<dt><span class="ui">Add Recipient…</span> button</dt>
+<dt><span class="ui">Add Recipient…</span> button (<kbd>Ctrl</kbd>+<kbd>N</kbd>)</dt>
 <dd>Adds a new person to the list.</dd>
-<dt><span class="ui">Copy My Contact ID</span> button</dt>
+<dt><span class="ui">Copy My Contact ID</span> button (<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>C</kbd>)</dt>
 <dd>Copies your own Contact ID to the clipboard.</dd>
 </dl>
+<p>The buttons have no underlined letters, because in the main window <kbd>Alt</kbd> + a letter opens a menu. Use the shortcut keys in parentheses instead: they work wherever the focus is in the main window, and the <span class="ui">File</span> menu shows them next to its commands.</p>
 <p>At the bottom of the window, a status line tells you whether Dodavo is connected:</p>
 <ul>
 <li><span class="ui">Connecting to the network…</span> while Dodavo starts.</li>
@@ -129,7 +131,7 @@
 <li><span class="ui">Offline – check your internet connection. Transfers within your local network still work.</span></li>
 </ul>
 <p>The status line cannot receive keyboard focus. To hear it, use your screen reader's command for reading the whole window: <kbd>NVDA</kbd>+<kbd>B</kbd> in NVDA, <kbd>Insert</kbd>+<kbd>B</kbd> in JAWS, or <kbd>Narrator</kbd>+<kbd>W</kbd> in Narrator.</p>
-<p>The menu bar has three menus. The <span class="ui">File</span> menu (<kbd>Alt</kbd>+<kbd>F</kbd>) contains <span class="ui">Send File…</span>, <span class="ui">Send Folder…</span>, <span class="ui">Add Recipient…</span>, <span class="ui">Edit Recipient…</span>, <span class="ui">Remove Recipient</span>, <span class="ui">Copy My Contact ID</span>, <span class="ui">Settings…</span> and <span class="ui">Exit</span>. The <span class="ui">Transfers</span> menu (<kbd>Alt</kbd>+<kbd>T</kbd>) lists every transfer in progress, with the person, the item and the state, and ends with <span class="ui">Show All Transfers</span> (<kbd>Ctrl</kbd>+<kbd>T</kbd>); when nothing is running, it says <span class="ui">No transfers in progress</span>. See <a href="#finding-transfers">Finding a transfer that runs in the background</a>. The <span class="ui">Help</span> menu (<kbd>Alt</kbd>+<kbd>H</kbd>) contains <span class="ui">View Help</span>, <span class="ui">How It Works</span> (a short summary), <span class="ui">Check for Updates…</span> (see <a href="#update">Updating Dodavo</a>) and <span class="ui">About</span> (the version number).</p>
+<p>The menu bar has three menus. The <span class="ui">File</span> menu (<kbd>Alt</kbd>+<kbd>F</kbd>) contains <span class="ui">Send File…</span>, <span class="ui">Send Folder…</span>, <span class="ui">Add Recipient…</span>, <span class="ui">Edit Recipient…</span>, <span class="ui">Remove Recipient</span>, <span class="ui">Copy My Contact ID</span>, <span class="ui">Settings…</span> and <span class="ui">Exit</span>. The <span class="ui">Transfers</span> menu (<kbd>Alt</kbd>+<kbd>T</kbd>) lists every transfer in progress, with the person, the item and the state, and ends with <span class="ui">Show All Transfers</span> (<kbd>Ctrl</kbd>+<kbd>T</kbd>); when nothing is running, it says <span class="ui">No transfers in progress</span>. See <a href="#finding-transfers">Finding a transfer that runs in the background</a>. The <span class="ui">Help</span> menu (<kbd>Alt</kbd>+<kbd>H</kbd>) contains <span class="ui">View Help</span>, <span class="ui">How It Works</span> (a short summary), <span class="ui">Check for Updates…</span> (see <a href="#update">Updating Dodavo</a>), <span class="ui">License</span> and <span class="ui">About</span> (the version, the author, the website and the license; see <a href="#license">License</a>).</p>
 <p>When a person is selected in the list, the menu of actions (<kbd>Enter</kbd>, a double-click, <kbd>Shift</kbd>+<kbd>F10</kbd> or the Menu key, or a right-click) offers <span class="ui">Send File…</span>, <span class="ui">Send Folder…</span>, <span class="ui">Show Transfer</span> (only while a transfer with that person is running; <span class="ui">Show Transfers</span> when there are several), <span class="ui">Edit…</span> and <span class="ui">Remove</span>.</p>
 </section>
 
@@ -328,6 +330,7 @@
 <tr><td><kbd>Ctrl</kbd>+<kbd>O</kbd></td><td>Send a file to the selected person</td></tr>
 <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>O</kbd></td><td>Send a folder to the selected person</td></tr>
 <tr><td><kbd>Ctrl</kbd>+<kbd>N</kbd></td><td>Add a recipient</td></tr>
+<tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>C</kbd></td><td>Copy your Contact ID to the clipboard</td></tr>
 <tr><td><kbd>F2</kbd></td><td>Edit the selected recipient</td></tr>
 <tr><td><kbd>Delete</kbd></td><td>Remove the selected recipient</td></tr>
 <tr><td><kbd>Ctrl</kbd>+<kbd>T</kbd></td><td>Show the windows of all transfers in progress</td></tr>
@@ -336,6 +339,7 @@
 <tr><td><kbd>Alt</kbd>+<kbd>F</kbd></td><td>Open the File menu</td></tr>
 <tr><td><kbd>Alt</kbd>+<kbd>T</kbd></td><td>Open the Transfers menu</td></tr>
 <tr><td><kbd>Alt</kbd>+<kbd>H</kbd></td><td>Open the Help menu</td></tr>
+<tr><td><kbd>Alt</kbd>+<kbd>R</kbd></td><td>Move to the recipient list</td></tr>
 <tr><td><kbd>Tab</kbd> and <kbd>Shift</kbd>+<kbd>Tab</kbd></td><td>Move between the list and the buttons</td></tr>
 </tbody>
 </table>
@@ -535,6 +539,25 @@
 <dt>Dodavo does not start a second time</dt>
 <dd>Only one copy of Dodavo runs at a time. Starting it again brings the existing window to the front.</dd>
 </dl>
+</section>
+
+<section aria-labelledby="license">
+<h2 id="license">License</h2>
+<p>Dodavo is free software by Hrvoje Katić. You can use it for any purpose, share it with others and change it under the terms of the GNU General Public License (GPL), version 3 or any later version. If you pass Dodavo on to others, changed or not, you must pass on its source code under the same license too. Dodavo comes with absolutely no warranty. This is only a summary; the license text is what counts.</p>
+<p>The source code is on the <a href="https://github.com/hkatic/dodavo">Dodavo page on GitHub</a>. Dodavo also contains open-source components by other authors (Rust crates such as iroh), each under its own license, for example the MIT License or the Apache License 2.0.</p>
+<h3 id="license-window">Reading the license</h3>
+<p>Choose <span class="ui">License</span> from the <span class="ui">Help</span> menu (<kbd>Alt</kbd>+<kbd>H</kbd>, then <kbd>L</kbd>). The <span class="ui">License</span> window opens; screen readers read its introduction first. It contains, in Tab order:</p>
+<dl>
+<dt><span class="ui">Show</span> (<kbd>Alt</kbd>+<kbd>S</kbd>)</dt>
+<dd>A drop-down list that chooses what the text below it shows: <span class="ui">Dodavo (GNU General Public License, version 3)</span>, or <span class="ui">Components by other authors</span>: the licenses of the components, each followed by the components that use it, their versions and where their source code is. Choose with the arrow keys; the text changes right away.</dd>
+<dt><span class="ui">License text</span> (<kbd>Alt</kbd>+<kbd>T</kbd>)</dt>
+<dd>A read-only text field. The focus starts here, at the beginning of the GNU General Public License. Read it with the arrow keys; <kbd>Ctrl</kbd>+<kbd>Home</kbd> and <kbd>Ctrl</kbd>+<kbd>End</kbd> go to the beginning and the end. The texts are in English; only the original texts are legally binding.</dd>
+<dt><span class="ui">Close</span></dt>
+<dd>Closes the window. <kbd>Enter</kbd> and <kbd>Esc</kbd> close it too.</dd>
+</dl>
+<p>Setup also installs both texts in the folder Dodavo is installed in, as <code>LICENSE.txt</code> and <code>THIRD-PARTY-LICENSES.txt</code>.</p>
+<h3 id="about">About Dodavo</h3>
+<p><span class="ui">About</span> in the <span class="ui">Help</span> menu (<kbd>Alt</kbd>+<kbd>H</kbd>, then <kbd>A</kbd>) shows the version of Dodavo, its author, the address of its website and a short license notice. Screen readers read the whole text when the window opens. The focus is on <span class="ui">Close</span>; <kbd>Tab</kbd> moves between the link to the website (<kbd>Enter</kbd> opens it in your web browser), the <span class="ui">License</span> button, which opens the License window, and <span class="ui">Close</span>. <kbd>Esc</kbd> closes the window.</p>
 </section>
 
 </main>

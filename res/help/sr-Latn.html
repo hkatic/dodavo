@@ -32,6 +32,7 @@
 <li><a href="#connections">Veze i bezbednost</a></li>
 <li><a href="#faq">Česta pitanja</a></li>
 <li><a href="#troubleshooting">Rešavanje problema</a></li>
+<li><a href="#license">Licenca</a></li>
 </ol>
 </nav>
 
@@ -103,7 +104,7 @@
 <ol>
 <li>Pokrenite Dodavo. Otvara se glavni prozor sa vašom listom primalaca, koja je na početku prazna.</li>
 <li>Proverite svoje ime: otvorite meni <span class="ui">Datoteka</span> (<kbd>Alt</kbd>+<kbd>D</kbd>) i izaberite <span class="ui">Postavke…</span>. U prvom polju, <span class="ui">Vaše ime (prikazuje se osobama kojima šaljete datoteke)</span>, upisano je vaše korisničko ime u sistemu Windows. Po želji ga promenite, a zatim pritisnite <kbd>Enter</kbd> da biste sačuvali promenu.</li>
-<li>Podelite svoj ID kontakta: u meniju <span class="ui">Datoteka</span> izaberite <span class="ui">Kopiraj moj ID kontakta</span> ili aktivirajte dugme <span class="ui">Kopiraj moj ID kontakta</span>. Dodavo kopira ID u ostavu i prikazuje ga u poruci. Nalepite ga u e-poruku ili poruku ćaskanja osobama koje treba da mogu da vam šalju datoteke.</li>
+<li>Podelite svoj ID kontakta: u meniju <span class="ui">Datoteka</span> izaberite <span class="ui">Kopiraj moj ID kontakta</span>, aktivirajte dugme <span class="ui">Kopiraj moj ID kontakta</span> ili pritisnite <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>C</kbd>. Dodavo kopira ID u ostavu i prikazuje ga u poruci. Nalepite ga u e-poruku ili poruku ćaskanja osobama koje treba da mogu da vam šalju datoteke.</li>
 <li>Dodajte osobe kojima želite da šaljete datoteke, kao što je opisano u odeljku <a href="#add-recipient">Dodavanje primaoca</a>.</li>
 </ol>
 <p class="note"><strong>Napomena:</strong> Vaš ID kontakta nije tajna. Svako ko ga ima može da vam ponudi datoteke, ali se na vašem računaru ništa ne čuva bez vašeg pristanka, osim ako uključite opciju <span class="ui">Prenose pokreći automatski, bez pitanja</span>, a i tada samo za osobe sa vaše liste primalaca.</p>
@@ -113,15 +114,16 @@
 <h2 id="main-window">Glavni prozor</h2>
 <p>Glavni prozor sadrži, redosledom tastera Tab:</p>
 <dl>
-<dt>Lista primalaca</dt>
+<dt>Lista primalaca (<kbd>Alt</kbd>+<kbd>M</kbd>)</dt>
 <dd>Osobe kojima možete da šaljete datoteke. Lista ima tri kolone: <span class="ui">Ime</span>, <span class="ui">ID kontakta</span> i <span class="ui">Prenos</span>. ID kontakta je skraćen na prvih osam i poslednjih šest znakova. Dok sa nekom osobom traje prenos, u koloni <span class="ui">Prenos</span> piše šta se dešava, na primer <span class="ui">Slanje – „izveštaj.pdf“ (45 %)</span> ili <span class="ui">Čeka se veza – „izveštaj.pdf“ (45 %)</span>; osvežava se otprilike svake sekunde, a kada ima više prenosa, piše koliko ih je u toku. Inače je prazna. Po listi se krećete tasterima sa strelicama. Taster <kbd>Enter</kbd> ili dvostruki klik otvara meni radnji za izabranu osobu (pogledajte u nastavku). Kada je lista prazna, to piše na njoj, zajedno sa uputstvom kako da nekoga dodate.</dd>
-<dt>Dugmad <span class="ui">Pošalji datoteku…</span> i <span class="ui">Pošalji fasciklu…</span></dt>
+<dt>Dugmad <span class="ui">Pošalji datoteku…</span> i <span class="ui">Pošalji fasciklu…</span> (<kbd>Ctrl</kbd>+<kbd>O</kbd> i <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>O</kbd>)</dt>
 <dd>Šalju nešto izabranoj osobi.</dd>
-<dt>Dugme <span class="ui">Dodaj primaoca…</span></dt>
+<dt>Dugme <span class="ui">Dodaj primaoca…</span> (<kbd>Ctrl</kbd>+<kbd>N</kbd>)</dt>
 <dd>Dodaje novu osobu na listu.</dd>
-<dt>Dugme <span class="ui">Kopiraj moj ID kontakta</span></dt>
+<dt>Dugme <span class="ui">Kopiraj moj ID kontakta</span> (<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>C</kbd>)</dt>
 <dd>Kopira vaš ID kontakta u ostavu.</dd>
 </dl>
+<p>Dugmad nemaju podvučena slova jer u glavnom prozoru <kbd>Alt</kbd> + slovo otvara meni. Umesto toga upotrebite tasterske prečice navedene u zagradama: rade bez obzira na to gde se u glavnom prozoru nalazi fokus, a meni <span class="ui">Datoteka</span> ih prikazuje pored svojih opcija.</p>
 <p>Na dnu prozora red statusa pokazuje da li je Dodavo povezan:</p>
 <ul>
 <li><span class="ui">Povezivanje sa mrežom…</span> dok se Dodavo pokreće.</li>
@@ -129,7 +131,7 @@
 <li><span class="ui">Van mreže – proverite internet vezu. Prenosi unutar lokalne mreže i dalje rade.</span></li>
 </ul>
 <p>Red statusa ne može da dobije fokus tastature. Da biste ga čuli, upotrebite komandu čitača ekrana za čitanje celog prozora: <kbd>NVDA</kbd>+<kbd>B</kbd> u čitaču NVDA, <kbd>Insert</kbd>+<kbd>B</kbd> u čitaču JAWS ili <kbd>Narator</kbd>+<kbd>W</kbd> u Naratoru.</p>
-<p>Traka menija ima tri menija. Meni <span class="ui">Datoteka</span> (<kbd>Alt</kbd>+<kbd>D</kbd>) sadrži opcije <span class="ui">Pošalji datoteku…</span>, <span class="ui">Pošalji fasciklu…</span>, <span class="ui">Dodaj primaoca…</span>, <span class="ui">Uredi primaoca…</span>, <span class="ui">Ukloni primaoca</span>, <span class="ui">Kopiraj moj ID kontakta</span>, <span class="ui">Postavke…</span> i <span class="ui">Izlaz</span>. Meni <span class="ui">Prenosi</span> (<kbd>Alt</kbd>+<kbd>R</kbd>) navodi sve prenose u toku, sa osobom, stavkom i stanjem, a na kraju sadrži opciju <span class="ui">Prikaži sve prenose</span> (<kbd>Ctrl</kbd>+<kbd>T</kbd>); kada ništa nije u toku, u njemu piše <span class="ui">Nema prenosa u toku</span>. Pogledajte <a href="#finding-transfers">Pronalaženje prenosa koji se odvija u pozadini</a>. Meni <span class="ui">Pomoć</span> (<kbd>Alt</kbd>+<kbd>P</kbd>) sadrži opcije <span class="ui">Prikaži pomoć</span>, <span class="ui">Kako funkcioniše</span> (kratak pregled), <span class="ui">Proveri da li ima ažuriranja…</span> (pogledajte <a href="#update">Ažuriranje programa Dodavo</a>) i <span class="ui">O programu</span> (broj verzije).</p>
+<p>Traka menija ima tri menija. Meni <span class="ui">Datoteka</span> (<kbd>Alt</kbd>+<kbd>D</kbd>) sadrži opcije <span class="ui">Pošalji datoteku…</span>, <span class="ui">Pošalji fasciklu…</span>, <span class="ui">Dodaj primaoca…</span>, <span class="ui">Uredi primaoca…</span>, <span class="ui">Ukloni primaoca</span>, <span class="ui">Kopiraj moj ID kontakta</span>, <span class="ui">Postavke…</span> i <span class="ui">Izlaz</span>. Meni <span class="ui">Prenosi</span> (<kbd>Alt</kbd>+<kbd>R</kbd>) navodi sve prenose u toku, sa osobom, stavkom i stanjem, a na kraju sadrži opciju <span class="ui">Prikaži sve prenose</span> (<kbd>Ctrl</kbd>+<kbd>T</kbd>); kada ništa nije u toku, u njemu piše <span class="ui">Nema prenosa u toku</span>. Pogledajte <a href="#finding-transfers">Pronalaženje prenosa koji se odvija u pozadini</a>. Meni <span class="ui">Pomoć</span> (<kbd>Alt</kbd>+<kbd>P</kbd>) sadrži opcije <span class="ui">Prikaži pomoć</span>, <span class="ui">Kako funkcioniše</span> (kratak pregled), <span class="ui">Proveri da li ima ažuriranja…</span> (pogledajte <a href="#update">Ažuriranje programa Dodavo</a>), <span class="ui">Licenca</span> i <span class="ui">O programu</span> (verzija, autor, veb lokacija i licenca; pogledajte <a href="#license">Licenca</a>).</p>
 <p>Kada je na listi izabrana osoba, meni radnji (<kbd>Enter</kbd>, dvostruki klik, <kbd>Shift</kbd>+<kbd>F10</kbd>, taster kontekstualnog menija ili desni klik) nudi opcije <span class="ui">Pošalji datoteku…</span>, <span class="ui">Pošalji fasciklu…</span>, <span class="ui">Prikaži prenos</span> (samo dok sa tom osobom traje prenos; <span class="ui">Prikaži prenose</span> kada ih ima više), <span class="ui">Uredi…</span> i <span class="ui">Ukloni</span>.</p>
 </section>
 
@@ -328,6 +330,7 @@
 <tr><td><kbd>Ctrl</kbd>+<kbd>O</kbd></td><td>Slanje datoteke izabranoj osobi</td></tr>
 <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>O</kbd></td><td>Slanje fascikle izabranoj osobi</td></tr>
 <tr><td><kbd>Ctrl</kbd>+<kbd>N</kbd></td><td>Dodavanje primaoca</td></tr>
+<tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>C</kbd></td><td>Kopiranje vašeg ID-a kontakta u ostavu</td></tr>
 <tr><td><kbd>F2</kbd></td><td>Uređivanje izabranog primaoca</td></tr>
 <tr><td><kbd>Delete</kbd></td><td>Uklanjanje izabranog primaoca</td></tr>
 <tr><td><kbd>Ctrl</kbd>+<kbd>T</kbd></td><td>Prikaz prozora svih prenosa u toku</td></tr>
@@ -336,6 +339,7 @@
 <tr><td><kbd>Alt</kbd>+<kbd>D</kbd></td><td>Otvaranje menija Datoteka</td></tr>
 <tr><td><kbd>Alt</kbd>+<kbd>R</kbd></td><td>Otvaranje menija Prenosi</td></tr>
 <tr><td><kbd>Alt</kbd>+<kbd>P</kbd></td><td>Otvaranje menija Pomoć</td></tr>
+<tr><td><kbd>Alt</kbd>+<kbd>M</kbd></td><td>Prelazak na listu primalaca</td></tr>
 <tr><td><kbd>Tab</kbd> i <kbd>Shift</kbd>+<kbd>Tab</kbd></td><td>Kretanje između liste i dugmadi</td></tr>
 </tbody>
 </table>
@@ -535,6 +539,25 @@
 <dt>Dodavo se ne pokreće drugi put</dt>
 <dd>Istovremeno može da radi samo jedna instanca programa Dodavo. Ponovnim pokretanjem postojeći prozor dolazi u prvi plan.</dd>
 </dl>
+</section>
+
+<section aria-labelledby="license">
+<h2 id="license">Licenca</h2>
+<p>Dodavo je slobodan softver, a napravio ga je Hrvoje Katić. Možete da ga koristite u bilo koje svrhe, da ga delite sa drugima i da ga menjate pod uslovima licence GNU General Public License (GPL), verzije 3 ili bilo koje novije verzije. Ako Dodavo prosleđujete drugima, izmenjen ili ne, morate pod istom licencom da prosledite i njegov izvorni kod. Dodavo dolazi bez ikakve garancije. Ovo je samo kratak pregled; merodavan je tekst licence.</p>
+<p>Izvorni kod se nalazi na <a href="https://github.com/hkatic/dodavo">stranici programa Dodavo na GitHub-u</a>. Dodavo sadrži i komponente otvorenog koda drugih autora (Rust pakete kao što je iroh), svaku pod njenom sopstvenom licencom, na primer pod licencom MIT ili Apache License 2.0.</p>
+<h3 id="license-window">Čitanje licence</h3>
+<p>U meniju <span class="ui">Pomoć</span> izaberite <span class="ui">Licenca</span> (<kbd>Alt</kbd>+<kbd>P</kbd>, zatim <kbd>L</kbd>). Otvara se prozor <span class="ui">Licenca</span>; čitači ekrana prvo pročitaju njegov uvod. Prozor sadrži, redosledom tastera Tab:</p>
+<dl>
+<dt><span class="ui">Prikaži</span> (<kbd>Alt</kbd>+<kbd>P</kbd>)</dt>
+<dd>Padajuća lista kojom birate šta prikazuje tekst ispod nje: <span class="ui">Dodavo (GNU General Public License, verzija 3)</span> ili <span class="ui">Komponente drugih autora</span>, odnosno licence komponenti, a posle svake licence komponente koje je koriste, njihove verzije i mesto na kom se nalazi njihov izvorni kod. Birajte tasterima sa strelicama; tekst se odmah menja.</dd>
+<dt><span class="ui">Tekst licence</span> (<kbd>Alt</kbd>+<kbd>T</kbd>)</dt>
+<dd>Tekstualno polje samo za čitanje. Fokus je najpre ovde, na početku licence GNU General Public License. Čitajte ga tasterima sa strelicama; <kbd>Ctrl</kbd>+<kbd>Home</kbd> i <kbd>Ctrl</kbd>+<kbd>End</kbd> vode na početak i na kraj. Tekstovi su na engleskom jeziku; pravno su obavezujući samo originalni tekstovi.</dd>
+<dt><span class="ui">Zatvori</span></dt>
+<dd>Zatvara prozor. Zatvaraju ga i tasteri <kbd>Enter</kbd> i <kbd>Esc</kbd>.</dd>
+</dl>
+<p>Instalacioni program instalira oba teksta i u fasciklu u kojoj je instaliran Dodavo, kao <code>LICENSE.txt</code> i <code>THIRD-PARTY-LICENSES.txt</code>.</p>
+<h3 id="about">O programu Dodavo</h3>
+<p>Opcija <span class="ui">O programu</span> u meniju <span class="ui">Pomoć</span> (<kbd>Alt</kbd>+<kbd>P</kbd>, zatim <kbd>O</kbd>) prikazuje verziju programa Dodavo, njegovog autora, adresu veb lokacije i kratku napomenu o licenci. Čitači ekrana pročitaju ceo tekst kada se prozor otvori. Fokus je na dugmetu <span class="ui">Zatvori</span>; tasterom <kbd>Tab</kbd> prelazite između veze ka veb lokaciji (taster <kbd>Enter</kbd> je otvara u veb pregledaču), dugmeta <span class="ui">Licenca</span>, koje otvara prozor Licenca, i dugmeta <span class="ui">Zatvori</span>. Taster <kbd>Esc</kbd> zatvara prozor.</p>
 </section>
 
 </main>

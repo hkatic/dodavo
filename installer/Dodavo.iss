@@ -24,6 +24,7 @@
 
 #define AppName "Dodavo"
 #define AppExeName "Dodavo.exe"
+#define AppURL "https://github.com/hkatic/dodavo"
 ; Held by every running instance (see src/main.rs); Setup and the uninstaller
 ; use it to tell that Dodavo is running.
 #define AppMutexName "Local\DodavoRunning"
@@ -56,6 +57,11 @@ AppName={#AppName}
 AppVersion={#AppVersion}
 AppVerName={#AppName} {#AppVersion}
 AppPublisher=Hrvoje Katić
+AppPublisherURL={#AppURL}
+AppSupportURL={#AppURL}/issues
+AppUpdatesURL={#AppURL}/releases
+; Also the copyright of Setup's own version resource.
+AppCopyright=Copyright © 2026 Hrvoje Katić
 VersionInfoVersion={#AppVersionNumeric}
 VersionInfoProductVersion={#AppVersionNumeric}
 VersionInfoProductTextVersion={#AppVersion}
@@ -94,6 +100,12 @@ AppMutex={#AppMutexName}
 
 ; Follows the Windows light/dark app mode, like the program itself.
 WizardStyle=modern dynamic
+; No Welcome page (Inno Setup's default) and no license page, on purpose:
+; the GNU GPL does not need to be accepted to install or run the program
+; (section 9), Dodavo shows it in Help > License and About, and Setup
+; installs it next to the program (see [Files]). Every page is one more
+; stop for keyboard and screen reader users, and automatic updates run
+; silently, without pages, anyway.
 SetupIconFile=..\res\app.ico
 UninstallDisplayIcon={app}\{#AppExeName}
 UninstallDisplayName={#AppName}
@@ -146,6 +158,12 @@ Source: "{#AppExeX86}"; DestDir: "{app}"; DestName: "{#AppExeName}"; Check: not 
 Source: "{#AppExeX64Win7}"; DestDir: "{app}"; DestName: "{#AppExeName}"; Check: Is64BitInstallMode; OnlyBelowVersion: 10.0; Flags: ignoreversion solidbreak
 Source: "{#AppExeX86Win7}"; DestDir: "{app}"; DestName: "{#AppExeName}"; Check: not Is64BitInstallMode; OnlyBelowVersion: 10.0; Flags: ignoreversion solidbreak
 #endif
+; The GNU GPL, which asks for a copy to go with the program, and the licenses
+; of the components built into it (installer\licenses.ps1). The program shows
+; both in Help > License as well. 'solidbreak' keeps them out of the block of
+; the last build above, which Setup would otherwise have to unpack for them.
+Source: "..\LICENSE"; DestDir: "{app}"; DestName: "LICENSE.txt"; Flags: ignoreversion solidbreak
+Source: "..\res\third-party-licenses.txt"; DestDir: "{app}"; DestName: "THIRD-PARTY-LICENSES.txt"; Flags: ignoreversion
 
 [Icons]
 Name: "{autoprograms}\{#AppName}"; Filename: "{app}\{#AppExeName}"

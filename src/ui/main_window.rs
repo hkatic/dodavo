@@ -40,6 +40,7 @@ const ID_SHOW_TRANSFERS: u16 = 113;
 /// Shows the running transfers with the selected recipient.
 const ID_SHOW_CONTACT_TRANSFERS: u16 = 114;
 const ID_CHECK_UPDATES: u16 = 115;
+const ID_LICENSE: u16 = 116;
 const ID_LIST: u16 = 200;
 /// The first automatic update check, shortly after the start.
 const TIMER_UPDATE_START: usize = 1;
@@ -105,6 +106,11 @@ struct MainWindow {
 fn menu_item(menu: HMENU, id: u16, text: &str) {
     let text = wide(text);
     unsafe { AppendMenuW(menu, MF_STRING, id as usize, text.as_ptr()) };
+}
+
+/// A menu text without the shortcut shown after the tab.
+fn without_shortcut(text: &str) -> &str {
+    text.split('\t').next().unwrap_or(text)
 }
 
 /// Appends a text that cannot be chosen (an explanation).
@@ -175,6 +181,7 @@ fn build_menu() -> (HMENU, HMENU) {
     menu_separator(help);
     menu_item(help, ID_CHECK_UPDATES, tr!(menu_check_updates));
     menu_separator(help);
+    menu_item(help, ID_LICENSE, tr!(menu_license));
     menu_item(help, ID_ABOUT, tr!(menu_about));
     menu_popup(bar, help, tr!(menu_help));
     (bar, transfers)
@@ -197,6 +204,11 @@ fn build_accelerators() -> HACCEL {
             fVirt: virt,
             key: b'N' as u16,
             cmd: ID_ADD,
+        },
+        ACCEL {
+            fVirt: virt | FSHIFT,
+            key: b'C' as u16,
+            cmd: ID_COPY_ID,
         },
         ACCEL {
             fVirt: FVIRTKEY,
@@ -640,14 +652,8 @@ impl MainWindow {
             ID_VIEW_HELP => super::help::show(w.hwnd),
             ID_HELP => info(w.hwnd, tr!(help_text)),
             ID_CHECK_UPDATES => super::update::check_now(w.hwnd),
-            ID_ABOUT => info(
-                w.hwnd,
-                &tr!(
-                    about_text,
-                    app = APP_NAME,
-                    version = env!("CARGO_PKG_VERSION")
-                ),
-            ),
+            ID_LICENSE => super::license::show(w.hwnd),
+            ID_ABOUT => super::about::show(w.hwnd),
             _ => return false,
         }
         true
@@ -674,8 +680,8 @@ impl MainWindow {
         });
         let menu = unsafe { CreatePopupMenu() };
         if let Some(contact) = contact {
-            menu_item(menu, ID_SEND_FILE, tr!(send_file));
-            menu_item(menu, ID_SEND_FOLDER, tr!(send_folder));
+            menu_item(menu, ID_SEND_FILE, tr!(ctx_send_file));
+            menu_item(menu, ID_SEND_FOLDER, tr!(ctx_send_folder));
             match app::transfer_windows_of(&contact.id).len() {
                 0 => {}
                 1 => menu_item(menu, ID_SHOW_CONTACT_TRANSFERS, tr!(ctx_show_transfer)),
@@ -685,7 +691,7 @@ impl MainWindow {
             menu_item(menu, ID_EDIT, tr!(ctx_edit));
             menu_item(menu, ID_REMOVE, tr!(ctx_remove));
         } else {
-            menu_item(menu, ID_ADD, tr!(add_recipient));
+            menu_item(menu, ID_ADD, tr!(ctx_add));
         }
         if let Some(cmd) = track_popup(menu, w.hwnd, pt) {
             self.command(w, cmd);
@@ -699,7 +705,8 @@ impl MainWindow {
         let transfers = unsafe { CreatePopupMenu() };
         self.fill_transfers_menu(transfers);
         menu_popup(menu, transfers, tr!(menu_transfers));
-        menu_item(menu, ID_COPY_ID, tr!(menu_copy_id));
+        // The accelerators only work in the main window, not from here.
+        menu_item(menu, ID_COPY_ID, without_shortcut(tr!(menu_copy_id)));
         menu_separator(menu);
         menu_item(menu, ID_EXIT, tr!(menu_exit));
         unsafe { SetMenuDefaultItem(menu, ID_TRAY_OPEN as u32, 0) };
@@ -806,7 +813,9 @@ fn quit(w: &Window) {
 
 impl Handler for MainWindow {
     fn on_create(&mut self, w: &Window) {
-        // Button widths follow their (translated) text.
+        // Button widths follow their (translated) text. The buttons have no
+        // access keys, so Alt+letter opens the menus; their shortcuts are
+        // the accelerators.
         self.widths = [
             w.button_width(tr!(send_file), 110),
             w.button_width(tr!(send_folder), 110),

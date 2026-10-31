@@ -32,6 +32,7 @@
 <li><a href="#connections">Povezave in varnost</a></li>
 <li><a href="#faq">Pogosta vprašanja</a></li>
 <li><a href="#troubleshooting">Odpravljanje težav</a></li>
+<li><a href="#license">Licenca</a></li>
 </ol>
 </nav>
 
@@ -103,7 +104,7 @@
 <ol>
 <li>Zaženite Dodavo. Odpre se glavno okno z vašim seznamom prejemnikov, ki je na začetku prazen.</li>
 <li>Preverite svoje ime: odprite meni <span class="ui">Datoteka</span> (<kbd>Alt</kbd>+<kbd>D</kbd>) in izberite <span class="ui">Nastavitve…</span>. V prvem polju, <span class="ui">Vaše ime (prikazano osebam, ki jim pošiljate datoteke)</span>, je vpisano vaše uporabniško ime v sistemu Windows. Po želji ga spremenite in pritisnite <kbd>Enter</kbd>, da shranite spremembo.</li>
-<li>Delite svoj ID stika: v meniju <span class="ui">Datoteka</span> izberite <span class="ui">Kopiraj moj ID stika</span> ali aktivirajte gumb <span class="ui">Kopiraj moj ID stika</span>. Dodavo kopira ID v odložišče in ga prikaže v sporočilu. Prilepite ga v e-poštno sporočilo ali sporočilo v klepetu osebam, ki naj vam lahko pošiljajo datoteke.</li>
+<li>Delite svoj ID stika: v meniju <span class="ui">Datoteka</span> izberite <span class="ui">Kopiraj moj ID stika</span>, aktivirajte gumb <span class="ui">Kopiraj moj ID stika</span> ali pritisnite <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>C</kbd>. Dodavo kopira ID v odložišče in ga prikaže v sporočilu. Prilepite ga v e-poštno sporočilo ali sporočilo v klepetu osebam, ki naj vam lahko pošiljajo datoteke.</li>
 <li>Dodajte osebe, ki jim želite pošiljati datoteke, kot je opisano v razdelku <a href="#add-recipient">Dodajanje prejemnika</a>.</li>
 </ol>
 <p class="note"><strong>Opomba:</strong> Vaš ID stika ni skrivnost. Vsakdo, ki ga ima, vam lahko ponudi datoteke, vendar se v vašem računalniku brez vaše privolitve nič ne shrani, razen če vklopite možnost <span class="ui">Prenose začni samodejno, brez vprašanja</span>, pa še takrat samo za osebe z vašega seznama prejemnikov.</p>
@@ -113,15 +114,16 @@
 <h2 id="main-window">Glavno okno</h2>
 <p>Glavno okno vsebuje, v vrstnem redu tipke Tab:</p>
 <dl>
-<dt>Seznam prejemnikov</dt>
+<dt>Seznam prejemnikov (<kbd>Alt</kbd>+<kbd>M</kbd>)</dt>
 <dd>Osebe, ki jim lahko pošiljate datoteke. Seznam ima tri stolpce: <span class="ui">Ime</span>, <span class="ui">ID stika</span> in <span class="ui">Prenos</span>. ID stika je skrajšan na prvih osem in zadnjih šest znakov. Dokler z neko osebo poteka prenos, v stolpcu <span class="ui">Prenos</span> piše, kaj se dogaja, na primer <span class="ui">Pošiljanje – »poročilo.pdf« (45 %)</span> ali <span class="ui">Čakanje na povezavo – »poročilo.pdf« (45 %)</span>; osveži se približno vsako sekundo, pri več prenosih pa piše, koliko jih poteka. Sicer je prazen. Po seznamu se premikate s puščičnimi tipkami. Tipka <kbd>Enter</kbd> ali dvoklik odpre meni dejanj za izbrano osebo (glejte spodaj). Ko je seznam prazen, to piše na njem, skupaj z navodilom, kako nekoga dodati.</dd>
-<dt>Gumba <span class="ui">Pošlji datoteko…</span> in <span class="ui">Pošlji mapo…</span></dt>
+<dt>Gumba <span class="ui">Pošlji datoteko…</span> in <span class="ui">Pošlji mapo…</span> (<kbd>Ctrl</kbd>+<kbd>O</kbd> in <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>O</kbd>)</dt>
 <dd>Pošljeta nekaj izbrani osebi.</dd>
-<dt>Gumb <span class="ui">Dodaj prejemnika…</span></dt>
+<dt>Gumb <span class="ui">Dodaj prejemnika…</span> (<kbd>Ctrl</kbd>+<kbd>N</kbd>)</dt>
 <dd>Doda novo osebo na seznam.</dd>
-<dt>Gumb <span class="ui">Kopiraj moj ID stika</span></dt>
+<dt>Gumb <span class="ui">Kopiraj moj ID stika</span> (<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>C</kbd>)</dt>
 <dd>Kopira vaš ID stika v odložišče.</dd>
 </dl>
+<p>Gumbi nimajo podčrtanih črk, ker v glavnem oknu <kbd>Alt</kbd> + črka odpre meni. Namesto tega uporabite bližnjice na tipkovnici v oklepajih: delujejo ne glede na to, kje v glavnem oknu je fokus, meni <span class="ui">Datoteka</span> pa jih prikazuje ob svojih ukazih.</p>
 <p>Na dnu okna vrstica stanja pove, ali je Dodavo povezan:</p>
 <ul>
 <li><span class="ui">Povezovanje z omrežjem…</span> med zagonom programa Dodavo.</li>
@@ -129,7 +131,7 @@
 <li><span class="ui">Brez povezave – preverite internetno povezavo. Prenosi v lokalnem omrežju še vedno delujejo.</span></li>
 </ul>
 <p>Vrstica stanja ne more dobiti fokusa tipkovnice. Če jo želite slišati, uporabite ukaz bralnika zaslona za branje celotnega okna: <kbd>NVDA</kbd>+<kbd>B</kbd> v bralniku NVDA, <kbd>Insert</kbd>+<kbd>B</kbd> v bralniku JAWS ali <kbd>Pripovedovalec</kbd>+<kbd>W</kbd> v Pripovedovalcu.</p>
-<p>Menijska vrstica ima tri menije. Meni <span class="ui">Datoteka</span> (<kbd>Alt</kbd>+<kbd>D</kbd>) vsebuje ukaze <span class="ui">Pošlji datoteko…</span>, <span class="ui">Pošlji mapo…</span>, <span class="ui">Dodaj prejemnika…</span>, <span class="ui">Uredi prejemnika…</span>, <span class="ui">Odstrani prejemnika</span>, <span class="ui">Kopiraj moj ID stika</span>, <span class="ui">Nastavitve…</span> in <span class="ui">Izhod</span>. Meni <span class="ui">Prenosi</span> (<kbd>Alt</kbd>+<kbd>R</kbd>) našteje vse prenose, ki potekajo, z osebo, elementom in stanjem, na koncu pa vsebuje ukaz <span class="ui">Pokaži vse prenose</span> (<kbd>Ctrl</kbd>+<kbd>T</kbd>); ko ne poteka noben prenos, v njem piše <span class="ui">Noben prenos ne poteka</span>. Glejte <a href="#finding-transfers">Iskanje prenosa, ki poteka v ozadju</a>. Meni <span class="ui">Pomoč</span> (<kbd>Alt</kbd>+<kbd>P</kbd>) vsebuje ukaze <span class="ui">Ogled pomoči</span>, <span class="ui">Kako deluje</span> (kratek povzetek), <span class="ui">Preveri, ali so na voljo posodobitve…</span> (glejte <a href="#update">Posodabljanje programa Dodavo</a>) in <span class="ui">O programu</span> (številka različice).</p>
+<p>Menijska vrstica ima tri menije. Meni <span class="ui">Datoteka</span> (<kbd>Alt</kbd>+<kbd>D</kbd>) vsebuje ukaze <span class="ui">Pošlji datoteko…</span>, <span class="ui">Pošlji mapo…</span>, <span class="ui">Dodaj prejemnika…</span>, <span class="ui">Uredi prejemnika…</span>, <span class="ui">Odstrani prejemnika</span>, <span class="ui">Kopiraj moj ID stika</span>, <span class="ui">Nastavitve…</span> in <span class="ui">Izhod</span>. Meni <span class="ui">Prenosi</span> (<kbd>Alt</kbd>+<kbd>R</kbd>) našteje vse prenose, ki potekajo, z osebo, elementom in stanjem, na koncu pa vsebuje ukaz <span class="ui">Pokaži vse prenose</span> (<kbd>Ctrl</kbd>+<kbd>T</kbd>); ko ne poteka noben prenos, v njem piše <span class="ui">Noben prenos ne poteka</span>. Glejte <a href="#finding-transfers">Iskanje prenosa, ki poteka v ozadju</a>. Meni <span class="ui">Pomoč</span> (<kbd>Alt</kbd>+<kbd>P</kbd>) vsebuje ukaze <span class="ui">Ogled pomoči</span>, <span class="ui">Kako deluje</span> (kratek povzetek), <span class="ui">Preveri, ali so na voljo posodobitve…</span> (glejte <a href="#update">Posodabljanje programa Dodavo</a>), <span class="ui">Licenca</span> in <span class="ui">O programu</span> (različica, avtor, spletno mesto in licenca; glejte <a href="#license">Licenca</a>).</p>
 <p>Ko je na seznamu izbrana oseba, meni dejanj (<kbd>Enter</kbd>, dvoklik, <kbd>Shift</kbd>+<kbd>F10</kbd>, tipka za priročni meni ali desni klik) ponuja ukaze <span class="ui">Pošlji datoteko…</span>, <span class="ui">Pošlji mapo…</span>, <span class="ui">Pokaži prenos</span> (samo dokler s to osebo poteka prenos; <span class="ui">Pokaži prenose</span>, kadar jih je več), <span class="ui">Uredi…</span> in <span class="ui">Odstrani</span>.</p>
 </section>
 
@@ -328,6 +330,7 @@
 <tr><td><kbd>Ctrl</kbd>+<kbd>O</kbd></td><td>Pošiljanje datoteke izbrani osebi</td></tr>
 <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>O</kbd></td><td>Pošiljanje mape izbrani osebi</td></tr>
 <tr><td><kbd>Ctrl</kbd>+<kbd>N</kbd></td><td>Dodajanje prejemnika</td></tr>
+<tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>C</kbd></td><td>Kopiranje vašega ID-ja stika v odložišče</td></tr>
 <tr><td><kbd>F2</kbd></td><td>Urejanje izbranega prejemnika</td></tr>
 <tr><td><kbd>Delete</kbd></td><td>Odstranjevanje izbranega prejemnika</td></tr>
 <tr><td><kbd>Ctrl</kbd>+<kbd>T</kbd></td><td>Prikaz oken vseh prenosov, ki potekajo</td></tr>
@@ -336,6 +339,7 @@
 <tr><td><kbd>Alt</kbd>+<kbd>D</kbd></td><td>Odpiranje menija Datoteka</td></tr>
 <tr><td><kbd>Alt</kbd>+<kbd>R</kbd></td><td>Odpiranje menija Prenosi</td></tr>
 <tr><td><kbd>Alt</kbd>+<kbd>P</kbd></td><td>Odpiranje menija Pomoč</td></tr>
+<tr><td><kbd>Alt</kbd>+<kbd>M</kbd></td><td>Premik na seznam prejemnikov</td></tr>
 <tr><td><kbd>Tab</kbd> in <kbd>Shift</kbd>+<kbd>Tab</kbd></td><td>Premikanje med seznamom in gumbi</td></tr>
 </tbody>
 </table>
@@ -535,6 +539,25 @@
 <dt>Dodavo se ne zažene drugič</dt>
 <dd>Hkrati se lahko izvaja samo en primerek programa Dodavo. Če ga znova zaženete, se obstoječe okno prikaže v ospredju.</dd>
 </dl>
+</section>
+
+<section aria-labelledby="license">
+<h2 id="license">Licenca</h2>
+<p>Dodavo je prosta programska oprema, ki jo je izdelal Hrvoje Katić. Lahko jo uporabljate za kateri koli namen, delite z drugimi in spreminjate pod pogoji licence GNU General Public License (GPL), različice 3 ali katere koli poznejše različice. Če Dodavo posredujete drugim, spremenjen ali nespremenjen, morate pod isto licenco posredovati tudi njegovo izvorno kodo. Dodavo je na voljo brez kakršnega koli jamstva. To je le povzetek; velja besedilo licence.</p>
+<p>Izvorna koda je na <a href="https://github.com/hkatic/dodavo">strani programa Dodavo na GitHubu</a>. Dodavo vsebuje tudi odprtokodne komponente drugih avtorjev (pakete Rust, kot je iroh), vsako pod njeno lastno licenco, na primer pod licenco MIT ali Apache License 2.0.</p>
+<h3 id="license-window">Branje licence</h3>
+<p>V meniju <span class="ui">Pomoč</span> izberite <span class="ui">Licenca</span> (<kbd>Alt</kbd>+<kbd>P</kbd>, nato <kbd>L</kbd>). Odpre se okno <span class="ui">Licenca</span>; bralniki zaslona najprej preberejo njegov uvod. Okno vsebuje, v vrstnem redu tipke Tab:</p>
+<dl>
+<dt><span class="ui">Pokaži</span> (<kbd>Alt</kbd>+<kbd>P</kbd>)</dt>
+<dd>Spustni seznam, s katerim izberete, kaj pokaže besedilo pod njim: <span class="ui">Dodavo (GNU General Public License, različica 3)</span> ali <span class="ui">Komponente drugih avtorjev</span>, torej licence komponent, za vsako licenco pa komponente, ki jo uporabljajo, njihove različice in mesto, kjer je njihova izvorna koda. Izbirajte s puščičnimi tipkami; besedilo se takoj spremeni.</dd>
+<dt><span class="ui">Besedilo licence</span> (<kbd>Alt</kbd>+<kbd>B</kbd>)</dt>
+<dd>Besedilno polje samo za branje. Fokus je najprej tukaj, na začetku licence GNU General Public License. Berite ga s puščičnimi tipkami; <kbd>Ctrl</kbd>+<kbd>Home</kbd> in <kbd>Ctrl</kbd>+<kbd>End</kbd> vas premakneta na začetek in na konec. Besedila so v angleščini; pravno zavezujoča so le izvirna besedila.</dd>
+<dt><span class="ui">Zapri</span></dt>
+<dd>Zapre okno. Zapreta ga tudi tipki <kbd>Enter</kbd> in <kbd>Esc</kbd>.</dd>
+</dl>
+<p>Namestitveni program namesti obe besedili tudi v mapo, v katero je nameščen Dodavo, kot <code>LICENSE.txt</code> in <code>THIRD-PARTY-LICENSES.txt</code>.</p>
+<h3 id="about">O programu Dodavo</h3>
+<p>Ukaz <span class="ui">O programu</span> v meniju <span class="ui">Pomoč</span> (<kbd>Alt</kbd>+<kbd>P</kbd>, nato <kbd>O</kbd>) pokaže različico programa Dodavo, njegovega avtorja, naslov spletnega mesta in kratko obvestilo o licenci. Bralniki zaslona preberejo celotno besedilo, ko se okno odpre. Fokus je na gumbu <span class="ui">Zapri</span>; s tipko <kbd>Tab</kbd> se premikate med povezavo do spletnega mesta (tipka <kbd>Enter</kbd> jo odpre v spletnem brskalniku), gumbom <span class="ui">Licenca</span>, ki odpre okno Licenca, in gumbom <span class="ui">Zapri</span>. Tipka <kbd>Esc</kbd> zapre okno.</p>
 </section>
 
 </main>

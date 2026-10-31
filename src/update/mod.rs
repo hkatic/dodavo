@@ -647,12 +647,12 @@ mod tests {
 
     #[test]
     fn newer_versions_are_offered_with_the_right_notes() {
-        let m = signed_manifest("0.2.0", &[1u8; 32]);
-        let current = Version::parse("0.1.0").unwrap();
+        let m = signed_manifest("1.1.0", &[1u8; 32]);
+        let current = Version::parse("1.0.0").unwrap();
         let info = newer(&m, &current, "hr").expect("newer");
-        assert_eq!(info.version, "0.2.0");
+        assert_eq!(info.version, "1.1.0");
         assert_eq!(info.notes, "Što je novo\r\n\r\n- Automatska ažuriranja");
-        assert_eq!(info.file_name, "Dodavo-0.2.0-setup.exe");
+        assert_eq!(info.file_name, "Dodavo-1.1.0-setup.exe");
         assert_eq!(info.size, m.installer.size);
         assert_eq!(manifest::to_hex(&info.sha256), m.installer.sha256);
         // English for a language without notes.
@@ -663,8 +663,8 @@ mod tests {
                 .starts_with("What's new")
         );
         // Not newer: the same or an older version.
-        assert!(newer(&m, &Version::parse("0.2.0").unwrap(), "en").is_none());
-        assert!(newer(&m, &Version::parse("0.3.0-beta.1").unwrap(), "en").is_none());
+        assert!(newer(&m, &Version::parse("1.1.0").unwrap(), "en").is_none());
+        assert!(newer(&m, &Version::parse("1.2.0-beta.1").unwrap(), "en").is_none());
     }
 
     #[test]

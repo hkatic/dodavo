@@ -15,6 +15,7 @@ Send files and folders directly from one Windows computer to another. You don't 
 - Minimizes to the notification area so files can be received in the background, with an optional "Start with Windows" and "Always start minimized". Notifications report finished, paused and interrupted transfers, also while their windows are hidden.
 - Checks once a day whether a newer version has been released and installs it on request: the release notes are shown, the setup program is downloaded, checked against its published size, SHA-256 and Ed25519 signature, and run silently, and Dodavo starts again by itself. Help → Check for Updates… checks at any time; the daily check can be turned off in Settings.
 - Full help for keyboard and screen reader users (Help → View Help, or F1), in every supported language.
+- Free software under the GNU General Public License, version 3 or later: Help → License shows the license and the licenses of the components built into Dodavo, and Help → About the version, author and website.
 - Available in English, Croatian, Serbian (Latin) and Slovenian. It follows the Windows display language, and you can choose another one in Settings.
 
 ## System requirements
@@ -75,6 +76,8 @@ This builds the program four times (x64 and x86, each for Windows 10 and later w
 
 The four programs are also left in `target\installer\staging\<x64|x86|x64-win7|x86-win7>\Dodavo.exe`, so a single build can be copied to a test machine without running Setup.
 
+Before building, `build.ps1` runs `installer\licenses.ps1`, which writes `res\third-party-licenses.txt`: the licenses of every crate compiled into the program, which their licenses (MIT, Apache-2.0, BSD, ISC, MPL-2.0 and others) require to go with every copy. The program shows the file in Help → License, and Setup installs it as `THIRD-PARTY-LICENSES.txt` next to the program, together with `LICENSE.txt`. The script needs [cargo-about](https://github.com/EmbarkStudios/cargo-about) (`cargo install cargo-about --locked --features cli`) and reads `installer\about.toml` (which licenses are accepted) and `installer\about.hbs` (the layout). The file is committed, so a plain `cargo build` needs no extra tool; after changing dependencies, run the script and commit the file together with `Cargo.lock`.
+
 - Setup carries all four builds (about 20 MB) and installs the one for the running Windows: by version (`MinVersion`/`OnlyBelowVersion: 10.0`) and by install mode (64-bit on x64 and on Windows 11 on ARM, 32-bit otherwise).
 - By default Dodavo is installed for the current user (`%LOCALAPPDATA%\Programs\Dodavo`) without administrator rights. Setup also offers to install for all users.
 - Setup runs in English, Croatian, Serbian (Latin) or Slovenian, following the Windows display language. Croatian and Serbian come from `installer\languages`, which are adapted copies of the user-contributed Inno Setup translations.
@@ -126,5 +129,14 @@ A release therefore consists of three files on the GitHub release `v<version>`: 
 | `release-notes/` | release notes per version and language, embedded in the update manifest |
 | `src/ui/window.rs` | small framework over raw Win32 windows (DPI scaling, fonts, modal loops) |
 | `src/ui/theme.rs` | light/dark mode for title bar, menus, and controls |
-| `src/ui/*.rs` | main window, incoming dialog, progress, recipient, settings and update dialogs, tray |
+| `src/ui/*.rs` | main window, incoming dialog, progress, recipient, settings and update dialogs, About and License, tray |
+| `LICENSE`, `res/third-party-licenses.txt` | the GNU GPL v3, and the licenses of the crates built into the program (generated, see "Installer") |
 | `installer/` | Inno Setup script, build script, publish script, import check and Setup translations |
+
+## License
+
+Copyright © 2026 Hrvoje Katić
+
+Dodavo is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version. It is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See [LICENSE](LICENSE) for the full text.
+
+Dodavo contains open-source components by other authors, each under its own license; they are listed with their licenses in [res/third-party-licenses.txt](res/third-party-licenses.txt).

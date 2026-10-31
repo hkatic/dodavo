@@ -14,13 +14,17 @@ pub const SR_LATN: Strings = Strings {
     menu_add: "Dod&aj primaoca…\tCtrl+N",
     menu_edit: "&Uredi primaoca…\tF2",
     menu_remove: "U&kloni primaoca\tDel",
-    menu_copy_id: "Kopiraj moj &ID kontakta",
+    menu_copy_id: "Kopiraj moj &ID kontakta\tCtrl+Shift+C",
     menu_settings: "&Postavke…",
     menu_exit: "I&zlaz",
     menu_view_help: "&Prikaži pomoć\tF1",
     menu_how: "&Kako funkcioniše",
     menu_about: "&O programu",
+    menu_license: "&Licenca",
     menu_check_updates: "Proveri da li ima &ažuriranja…",
+    ctx_send_file: "Pošalji &datoteku…",
+    ctx_send_folder: "Pošalji &fasciklu…",
+    ctx_add: "Dod&aj primaoca…",
     ctx_edit: "&Uredi…",
     ctx_remove: "U&kloni",
     ctx_show_transfer: "Prikaži &prenos",
@@ -30,11 +34,11 @@ pub const SR_LATN: Strings = Strings {
     menu_no_transfers: "Nema prenosa u toku",
     transfer_menu_entry: "{name}: {status}",
 
-    recipients_label: "P&rimaoci:",
-    send_file: "Pošalji &datoteku…",
-    send_folder: "Pošalji &fasciklu…",
-    add_recipient: "Dod&aj primaoca…",
-    copy_my_id: "Kopiraj moj &ID kontakta",
+    recipients_label: "Pri&maoci:",
+    send_file: "Pošalji datoteku…",
+    send_folder: "Pošalji fasciklu…",
+    add_recipient: "Dodaj primaoca…",
+    copy_my_id: "Kopiraj moj ID kontakta",
     col_name: "Ime",
     col_contact_id: "ID kontakta",
     col_transfer: "Prenos",
@@ -73,11 +77,25 @@ pub const SR_LATN: Strings = Strings {
         računaru (nastavlja da radi u oblasti za obaveštenja kada se prozor zatvori).\n\n\
         Datoteke idu direktno sa računara na računar, potpuno šifrovane. Kada direktna veza \
         nije moguća, šifrovani podaci se prosleđuju preko javnog posredničkog servera.",
-    about_text: "{app}\nVerzija {version}\n\nŠaljite datoteke i fascikle direktno sa računara na računar – \
+    about_instruction: "{app}, verzija {version}",
+    about_text: "Šaljite datoteke i fascikle direktno sa računara na računar – \
         bez naloga, bez otpremanja u oblak, bez veza.\n\nVeze su potpuno šifrovane i \
         uspostavljaju se pomoću tehnologije iroh (iroh.computer).",
+    about_license: "Dodavo je slobodan softver: možete da ga delite i menjate pod uslovima licence GNU General \
+        Public License, verzije 3 ili bilo koje novije verzije. Dolazi bez ikakve garancije. Izaberite „Licenca“ \
+        da biste pročitali licencu i licence komponenti koje Dodavo sadrži.",
     tray_hint: "Dodavo nastavlja da radi ovde da biste mogli da primate datoteke. Za izlaz kliknite desnim tasterom miša na ikonu.",
     help_failed: "Pomoć nije moguće otvoriti:\n{error}",
+
+    license_title: "Licenca",
+    license_intro: "{app} je slobodan softver: možete da ga delite i menjate pod uslovima licence GNU General \
+        Public License, verzije 3 ili bilo koje novije verzije. Dolazi bez ikakve garancije. {app} sadrži i \
+        komponente otvorenog koda drugih autora, koje su dostupne pod njihovim sopstvenim licencama. Tekstovi \
+        licenci su na engleskom jeziku. Izvorni kod: {website}",
+    license_show_label: "&Prikaži:",
+    license_dodavo: "Dodavo (GNU General Public License, verzija 3)",
+    license_components: "Komponente drugih autora",
+    license_text_label: "&Tekst licence:",
 
     title_send_file: "Slanje datoteke – primalac: {name}",
     title_send_folder: "Slanje fascikle – primalac: {name}",

@@ -172,6 +172,11 @@ strings! {
         menu_view_help,
         menu_how,
         menu_about,
+        menu_license,
+        // The recipient's actions menu.
+        ctx_send_file,
+        ctx_send_folder,
+        ctx_add,
         ctx_edit,
         ctx_remove,
         ctx_show_transfer,
@@ -180,7 +185,9 @@ strings! {
         menu_show_transfers,
         menu_no_transfers,
         transfer_menu_entry,
-        // Main window: controls and messages.
+        // Main window: controls and messages. The buttons have no access
+        // keys: Alt+letter there belongs to the menu bar, and the buttons
+        // have shortcuts (Ctrl+O …) instead.
         recipients_label,
         send_file,
         send_folder,
@@ -214,9 +221,18 @@ strings! {
         id_copied,
         clipboard_busy,
         help_text,
+        about_instruction,
         about_text,
+        about_license,
         tray_hint,
         help_failed,
+        // License window.
+        license_title,
+        license_intro,
+        license_show_label,
+        license_dodavo,
+        license_components,
+        license_text_label,
         // Progress window.
         title_send_file,
         title_send_folder,
@@ -647,7 +663,7 @@ mod tests {
         }
         for lang in Lang::ALL {
             let s = lang.strings();
-            let groups: [(&str, Vec<&str>); 17] = [
+            let groups: [(&str, Vec<&str>); 20] = [
                 ("menu bar", vec![s.menu_file, s.menu_transfers, s.menu_help]),
                 (
                     "File menu",
@@ -668,6 +684,7 @@ mod tests {
                         s.menu_view_help,
                         s.menu_how,
                         s.menu_check_updates,
+                        s.menu_license,
                         s.menu_about,
                     ],
                 ),
@@ -676,26 +693,29 @@ mod tests {
                 (
                     "context menu",
                     vec![
-                        s.send_file,
-                        s.send_folder,
+                        s.ctx_send_file,
+                        s.ctx_send_folder,
                         s.ctx_show_transfer,
                         s.ctx_edit,
                         s.ctx_remove,
                     ],
                 ),
+                // Without a selected recipient.
+                ("context menu (empty list)", vec![s.ctx_add]),
                 ("Transfers menu", vec![s.menu_show_transfers]),
                 (
                     "tray menu",
                     vec![s.tray_open, s.menu_transfers, s.menu_copy_id, s.menu_exit],
                 ),
+                // Alt+letter in the main window reaches both the menu bar
+                // and the controls; the control would win.
                 (
                     "main window",
                     vec![
+                        s.menu_file,
+                        s.menu_transfers,
+                        s.menu_help,
                         s.recipients_label,
-                        s.send_file,
-                        s.send_folder,
-                        s.add_recipient,
-                        s.copy_my_id,
                     ],
                 ),
                 (
@@ -764,6 +784,10 @@ mod tests {
                         s.cancel_download,
                     ],
                 ),
+                // The Close button of both is Windows' own (task dialog) or
+                // has no access key (Enter and Escape close the window).
+                ("about", vec![s.menu_license]),
+                ("license", vec![s.license_show_label, s.license_text_label]),
             ];
             for (group, texts) in groups {
                 let mut seen = BTreeSet::new();
@@ -776,6 +800,14 @@ mod tests {
                         "{lang:?}: access key '{k}' repeats in {group}"
                     );
                 }
+            }
+            // The main window's buttons would take Alt+letter from the menu bar.
+            for text in [s.send_file, s.send_folder, s.add_recipient, s.copy_my_id] {
+                assert_eq!(
+                    key(text),
+                    None,
+                    "{lang:?}: the main window button {text:?} must not have an access key"
+                );
             }
         }
     }

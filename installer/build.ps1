@@ -27,6 +27,9 @@ When a code signing certificate is given (parameters or environment
 variables), every Dodavo.exe, the setup and the uninstaller are signed with
 signtool from the Windows SDK. Without one, everything is built unsigned.
 
+First, installer\licenses.ps1 brings res\third-party-licenses.txt up to date
+(it needs cargo-about), so the programs never ship outdated license notices.
+
 .PARAMETER Test
 Runs "cargo test" first. The end-to-end test needs internet access.
 
@@ -144,6 +147,10 @@ try {
         (Join-Path $env:ProgramFiles 'Inno Setup 6\ISCC.exe'),
         (Join-Path $env:LOCALAPPDATA 'Programs\Inno Setup 6\ISCC.exe')
     ) 'Install Inno Setup 6.6 or later (32-bit edition), e.g. "winget install JRSoftware.InnoSetup".'
+
+    # The licenses of the dependencies, which every build shows in
+    # Help > License: brought up to date before anything is built.
+    & (Join-Path $PSScriptRoot 'licenses.ps1')
 
     # Toolchains. "rustup target add" is a no-op when the target is installed.
     Invoke-Native 'rustup' @('target', 'add', 'i686-pc-windows-msvc')
