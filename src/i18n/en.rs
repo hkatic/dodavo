@@ -95,6 +95,7 @@ pub const EN: Strings = Strings {
     row_processed: "Processed:",
     row_speed: "Speed:",
     row_remaining: "Time remaining:",
+    progress_bar: "Progress",
     progress_of: "{done} of {total} ({percent}%)",
     speed_value: "{rate}/s",
     remaining_value: "about {left}",

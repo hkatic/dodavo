@@ -3,11 +3,14 @@
 //! themselves are in `crate::update`.
 //!
 //! Accessibility: the window is announced through a notification when it
-//! appears by itself (it is shown without taking the focus), and through its
-//! title and the focused button when the user asked for the check. Starting
-//! the download moves the focus to Cancel Download, which screen readers
-//! announce; progress itself is not announced (it is readable like in the
-//! progress window), and failures are message boxes.
+//! appears by itself (it is shown without taking the focus). It has the
+//! dialog role, so when it is activated screen readers read the headline,
+//! as in a message box, and then the release notes, which have the focus
+//! (the user reads them before choosing). Starting the download moves the
+//! focus to Cancel Download, which screen readers announce; the status line
+//! is a live region that announces the start of Setup, but not the progress
+//! (it is readable like in the progress window) or the check of the file,
+//! which takes no time; failures are message boxes.
 
 use std::{
     path::PathBuf,
@@ -19,16 +22,15 @@ use windows_sys::Win32::{
     UI::{
         Controls::{PBM_SETPOS, PBM_SETRANGE32},
         WindowsAndMessaging::{
-            ES_AUTOVSCROLL, ES_MULTILINE, ES_READONLY, IsWindowVisible, KillTimer, SW_SHOW,
-            SW_SHOWNOACTIVATE, SetForegroundWindow, SetTimer, ShowWindow, WM_TIMER, WS_CAPTION,
-            WS_CLIPCHILDREN, WS_EX_APPWINDOW, WS_EX_CLIENTEDGE, WS_EX_CONTROLPARENT,
-            WS_MINIMIZEBOX, WS_OVERLAPPED, WS_SYSMENU, WS_TABSTOP, WS_VSCROLL,
+            IsWindowVisible, KillTimer, SW_SHOW, SW_SHOWNOACTIVATE, SetForegroundWindow, SetTimer,
+            ShowWindow, WM_TIMER, WS_CAPTION, WS_CLIPCHILDREN, WS_EX_APPWINDOW,
+            WS_EX_CONTROLPARENT, WS_MINIMIZEBOX, WS_OVERLAPPED, WS_SYSMENU,
         },
     },
 };
 
 use super::{
-    confirm, error, format_size, info, main_window, send, set_text, shell,
+    accessibility, confirm, error, format_size, info, main_window, send, set_text, shell,
     tray::{self, BalloonAction},
     window::{self, CreateOptions, Handler, Window},
 };
@@ -438,6 +440,11 @@ impl UpdateWindow {
     /// window only watches whether Setup ends early instead.
     fn launch(&mut self, w: &Window, setup: PathBuf) {
         let mode = update::install_mode();
+        // Cancel Download can no longer be used; the focus moves before it
+        // is disabled, so it never gets lost, and before the announcement,
+        // which a change of focus would interrupt.
+        window::focus(self.notes);
+        window::enable(self.cancel_download, false);
         set_text(
             self.status,
             if mode == update::InstallMode::AllUsers {
@@ -446,7 +453,7 @@ impl UpdateWindow {
                 tr!(update_launching)
             },
         );
-        window::enable(self.cancel_download, false);
+        accessibility::announce(self.status);
         let main = app::main_window();
         let mut args = String::from("--updated");
         if let Some(profile) = app::with(|a| a.profile.clone()) {
@@ -491,6 +498,7 @@ impl UpdateWindow {
 
 impl Handler for UpdateWindow {
     fn on_create(&mut self, w: &Window) {
+        w.set_dialog_role();
         let headline = w.label(
             &tr!(
                 update_headline,
@@ -502,15 +510,9 @@ impl Handler for UpdateWindow {
         w.make_bold(headline);
         // The caption names the notes for screen readers.
         w.caption(tr!(release_notes_label), (14, 40, WIDTH - 28, 18));
-        self.notes = w.add_ex(
-            "EDIT",
-            &self.info.notes,
-            WS_TABSTOP | WS_VSCROLL | (ES_MULTILINE | ES_READONLY | ES_AUTOVSCROLL) as u32,
-            WS_EX_CLIENTEDGE,
-            ID_NOTES,
-            (14, 60, WIDTH - 28, 190),
-        );
+        self.notes = w.read_only_text(&self.info.notes, ID_NOTES, (14, 60, WIDTH - 28, 190));
         self.status = w.label("", (14, 262, WIDTH - 28, 18));
+        w.live_region(self.status);
         self.bar = w.add(
             "msctls_progress32",
             "",
@@ -518,6 +520,9 @@ impl Handler for UpdateWindow {
             ID_BAR,
             (14, 284, WIDTH - 28, 16),
         );
+        // Otherwise named after the status line, which screen readers would
+        // then leave out when they read the window.
+        w.set_accessible_name(self.bar, tr!(progress_bar));
         send(self.bar, PBM_SETRANGE32, 0, RANGE as isize);
         window::show(self.status, false);
         window::show(self.bar, false);
@@ -545,7 +550,8 @@ impl Handler for UpdateWindow {
         );
         window::show(self.cancel_download, false);
         w.default_id.set(ID_INSTALL);
-        window::focus(self.install);
+        // The user reads what is new before choosing; Enter still installs.
+        window::focus(self.notes);
     }
 
     fn on_command(&mut self, w: &Window, id: u16, _code: u16) -> bool {

@@ -23,11 +23,12 @@ use windows_sys::Win32::{
         Input::KeyboardAndMouse::{
             EnableWindow, GetFocus, IsWindowEnabled, SetActiveWindow, SetFocus,
         },
+        Shell::{DefSubclassProc, RemoveWindowSubclass, SetWindowSubclass},
         WindowsAndMessaging::*,
     },
 };
 
-use super::{theme, wide};
+use super::{accessibility, theme, wide};
 
 pub const MAIN_CLASS: &str = "Dodavo_Main";
 const WINDOW_CLASS: &str = "Dodavo_Window";
@@ -57,6 +58,9 @@ pub struct Window {
     modal_owner: Cell<HWND>,
     /// The control that gets the focus back when the window is activated again.
     last_focus: Cell<HWND>,
+    /// The window and controls with screen reader annotations, cleared when
+    /// the window is destroyed.
+    annotated: RefCell<Vec<HWND>>,
 }
 
 pub trait Handler: Any {
@@ -235,6 +239,7 @@ pub fn create(opts: CreateOptions, handler: Box<dyn Handler>) -> HWND {
             default_id: Cell::new(0),
             modal_owner: Cell::new(std::ptr::null_mut()),
             last_focus: Cell::new(std::ptr::null_mut()),
+            annotated: RefCell::new(Vec::new()),
         },
         handler: RefCell::new(handler),
         depth: Cell::new(0),
@@ -497,6 +502,50 @@ impl Window {
         )
     }
 
+    /// Read-only text of several lines for the user to read with the arrow
+    /// keys, such as release notes. Unlike an edit field, it does not select
+    /// its whole text when Tab or its access key moves the focus to it (the
+    /// caret would then be at the end, and reading would start there); Tab,
+    /// Shift+Tab, Enter and Escape act on the window as everywhere else.
+    pub fn read_only_text(&self, text: &str, id: u16, rect: (i32, i32, i32, i32)) -> HWND {
+        let h = self.add_ex(
+            "EDIT",
+            text,
+            WS_TABSTOP | WS_VSCROLL | (ES_MULTILINE | ES_READONLY | ES_AUTOVSCROLL) as u32,
+            WS_EX_CLIENTEDGE,
+            id,
+            rect,
+        );
+        unsafe { SetWindowSubclass(h, Some(read_only_text_proc), 0, 0) };
+        h
+    }
+
+    /// Screen readers present the window as a dialog: when it is activated,
+    /// they read its texts before the focused control (see `accessibility`).
+    pub fn set_dialog_role(&self) {
+        if accessibility::set_dialog_role(self.hwnd) {
+            self.annotated.borrow_mut().push(self.hwnd);
+        }
+    }
+
+    /// Gives a control an accessible name of its own. Windows names a control
+    /// without a label of its own (a progress bar) after the label before
+    /// it, and screen readers that read a dialog's texts skip a label whose
+    /// text is the name of the next control, as they take it for its label.
+    pub fn set_accessible_name(&self, ctl: HWND, name: &str) {
+        if accessibility::set_name(ctl, name) {
+            self.annotated.borrow_mut().push(ctl);
+        }
+    }
+
+    /// Makes a label a live region, whose new text screen readers read after
+    /// `accessibility::announce`.
+    pub fn live_region(&self, ctl: HWND) {
+        if accessibility::set_live_region(ctl) {
+            self.annotated.borrow_mut().push(ctl);
+        }
+    }
+
     /// A drop-down list (not editable) showing `items` with `selected` chosen.
     pub fn combobox(
         &self,
@@ -751,6 +800,30 @@ pub fn bring_to_front(hwnd: HWND) {
     }
 }
 
+/// A multiline edit control asks `IsDialogMessageW` for every key, Tab
+/// included, and outside real dialog boxes keeps the focus on Tab; it also
+/// asks to have its whole text selected when it gets the focus. Text that is
+/// only read wants neither.
+unsafe extern "system" fn read_only_text_proc(
+    hwnd: HWND,
+    msg: u32,
+    wp: WPARAM,
+    lp: LPARAM,
+    _id: usize,
+    _data: usize,
+) -> LRESULT {
+    unsafe {
+        if msg == WM_NCDESTROY {
+            RemoveWindowSubclass(hwnd, Some(read_only_text_proc), 0);
+        }
+        let r = DefSubclassProc(hwnd, msg, wp, lp);
+        if msg == WM_GETDLGCODE {
+            return r & !((DLGC_WANTALLKEYS | DLGC_HASSETSEL) as LRESULT);
+        }
+        r
+    }
+}
+
 fn loword(v: usize) -> u16 {
     (v & 0xFFFF) as u16
 }
@@ -903,6 +976,12 @@ unsafe fn dispatch(s: &State, hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> L
                     h.on_close(w);
                 }
                 0
+            }
+            WM_DESTROY => {
+                for h in w.annotated.take() {
+                    accessibility::clear(h);
+                }
+                DefWindowProcW(hwnd, msg, wp, lp)
             }
             WM_NCDESTROY => {
                 SetWindowLongPtrW(hwnd, GWLP_USERDATA, 0);

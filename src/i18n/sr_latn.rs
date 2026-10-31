@@ -98,6 +98,7 @@ pub const SR_LATN: Strings = Strings {
     row_processed: "Obrađeno:",
     row_speed: "Brzina:",
     row_remaining: "Preostalo vreme:",
+    progress_bar: "Napredak",
     progress_of: "{done} od {total} ({percent} %)",
     speed_value: "{rate}/s",
     remaining_value: "približno {left}",

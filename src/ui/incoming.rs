@@ -1,4 +1,7 @@
-//! The window asking whether to accept an incoming transfer.
+//! The window asking whether to accept an incoming transfer. It has the
+//! dialog role, so when it comes to the front screen readers read who sends
+//! what and whether it fits on the disk before the focused button; the
+//! notification says who sends what when it stays in the background.
 
 use std::path::{Path, PathBuf};
 
@@ -226,6 +229,7 @@ impl Incoming {
 
 impl Handler for Incoming {
     fn on_create(&mut self, w: &Window) {
+        w.set_dialog_role();
         let o = &self.offer;
         let (headline, description) = match o.kind {
             Kind::File => (

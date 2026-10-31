@@ -98,6 +98,7 @@ pub const HR: Strings = Strings {
     row_processed: "Obrađeno:",
     row_speed: "Brzina:",
     row_remaining: "Preostalo vrijeme:",
+    progress_bar: "Napredak",
     progress_of: "{done} od {total} ({percent} %)",
     speed_value: "{rate}/s",
     remaining_value: "približno {left}",

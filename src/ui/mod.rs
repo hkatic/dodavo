@@ -1,5 +1,6 @@
 //! Classic Win32 user interface.
 
+pub mod accessibility;
 pub mod help;
 pub mod incoming;
 pub mod main_window;

@@ -237,6 +237,7 @@ strings! {
         row_processed,
         row_speed,
         row_remaining,
+        progress_bar,
         progress_of,
         speed_value,
         remaining_value,

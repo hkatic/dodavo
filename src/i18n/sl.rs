@@ -98,6 +98,7 @@ pub const SL: Strings = Strings {
     row_processed: "Obdelano:",
     row_speed: "Hitrost:",
     row_remaining: "Preostali čas:",
+    progress_bar: "Napredek",
     progress_of: "{done} od {total} ({percent} %)",
     speed_value: "{rate}/s",
     remaining_value: "približno {left}",

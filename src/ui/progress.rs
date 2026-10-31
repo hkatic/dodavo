@@ -1,4 +1,7 @@
-//! Progress window shown for every transfer (sending and receiving).
+//! Progress window shown for every transfer (sending and receiving). It has
+//! the dialog role, so screen readers read all its lines whenever it comes
+//! to the front; later changes of a line are not announced (see
+//! `PhaseNotice` and `Finished` for what is).
 
 use std::{
     collections::VecDeque,
@@ -655,6 +658,7 @@ impl Progress {
 
 impl Handler for Progress {
     fn on_create(&mut self, w: &Window) {
+        w.set_dialog_role();
         // The buttons are as wide as their (translated) texts need; the
         // window grows with them.
         let pause_w = w
@@ -678,6 +682,9 @@ impl Handler for Progress {
         w.make_bold(self.title);
         self.status = w.label(tr!(starting), (14, 38, cw, 36));
         self.bar = w.add("msctls_progress32", "", 0, 0, (14, 78, cw, 16));
+        // Otherwise named after the status line, which screen readers would
+        // then leave out when they read the window.
+        w.set_accessible_name(self.bar, tr!(progress_bar));
         send(self.bar, PBM_SETRANGE32, 0, RANGE as isize);
 
         // "Caption: value" rows; the captions share the width of the longest one.
