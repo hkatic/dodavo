@@ -474,13 +474,17 @@ fn handle_event(event: Event) -> Option<Event> {
             }
         }
         Event::Progress { id, done, total } => {
-            with(|a| {
-                if let Some(t) = a.transfers.get_mut(&id) {
+            // The first report tells the size; show it right away (a paused
+            // transfer may not report again for a long time).
+            let size_known = with(|a| {
+                a.transfers.get_mut(&id).is_some_and(|t| {
+                    let changed = t.total != total;
                     t.done = done;
                     t.total = total;
-                }
+                    changed
+                })
             });
-            refresh_transfer_views(id, false);
+            refresh_transfer_views(id, size_known);
             if let Some(h) = transfer_window(id) {
                 // Progress updates are frequent; dropping one is harmless.
                 progress::set_progress(h, done, total);
@@ -536,7 +540,6 @@ pub fn transfer_window_closed(id: u64) {
         ui::main_window::update_transfer_status(&peer);
     }
 }
-
 
 pub fn offer_window_closed(id: u64) {
     with(|a| a.offers.remove(&id));
