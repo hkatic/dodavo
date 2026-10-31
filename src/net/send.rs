@@ -127,6 +127,9 @@ struct Sender<'a> {
     snapshots: Snapshots,
     paused_rx: watch::Receiver<bool>,
     peer_paused: bool,
+    /// The last connection was closed by the receiver on purpose (it is
+    /// exiting): the wait for the next one is not a network problem.
+    peer_suspended: bool,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -257,6 +260,7 @@ async fn start(
         snapshots: Snapshots::new(),
         paused_rx: ctl.paused.subscribe(),
         peer_paused: false,
+        peer_suspended: false,
     };
     sender.drive(Some(streams), 0).await
 }
@@ -291,6 +295,7 @@ async fn continue_record(
         snapshots: Snapshots::new(),
         paused_rx: ctl.paused.subscribe(),
         peer_paused: false,
+        peer_suspended: false,
     };
     *session.record.lock().unwrap() = Some(record);
     sender.emit_waiting();
@@ -321,8 +326,10 @@ async fn prepare(
                 id,
                 phase: Phase::Preparing,
             });
-            let zip_path =
-                archive::temp_dir()?.join(format!("send-{}.zip", protocol::token_hex(token)));
+            tokio::fs::create_dir_all(&shared.temp_dir).await?;
+            let zip_path = shared
+                .temp_dir
+                .join(format!("send-{}.zip", protocol::token_hex(token)));
             temp.0 = Some(zip_path.clone());
             let shared2 = shared.clone();
             let cancel = ctl.cancel.clone();
@@ -364,7 +371,9 @@ impl Sender<'_> {
         self.emit(if self.ctl.is_paused() {
             Phase::Paused
         } else {
-            Phase::WaitingForConnection
+            Phase::WaitingForConnection {
+                lost: !self.peer_suspended,
+            }
         });
     }
 
@@ -438,6 +447,12 @@ impl Sender<'_> {
                 }
             };
             if let Ok(conn) = dialed {
+                if self.shared.shutting_down.load(Ordering::SeqCst) {
+                    // Exiting since the dial began: this connection must not
+                    // carry data that the endpoint then cuts off without a word.
+                    conn.close(CLOSE_SUSPENDED.into(), b"exiting");
+                    continue;
+                }
                 match self.handshake(conn).await {
                     Ok(streams) => return Ok(streams),
                     Err(Some(completed)) => {
@@ -464,6 +479,9 @@ impl Sender<'_> {
     /// `Continue` on a new connection. `Err(Some(completed))` if the receiver
     /// no longer has the transfer, `Err(None)` to try again later.
     async fn handshake(&self, conn: Connection) -> Result<(Streams, u64), Option<bool>> {
+        // Known to shutdown from the first byte, so that it is suspended like
+        // any other and never cut off by the endpoint closing.
+        self.session.set_current(Some(conn.clone()));
         let token = self.token;
         let answer: anyhow::Result<_> = async {
             let (mut send, mut recv) = conn.open_bi().await?;
@@ -508,6 +526,7 @@ impl Sender<'_> {
             }
         }));
         self.peer_paused = false;
+        self.peer_suspended = false;
 
         let result = self.pump(&mut send, &mut ctl_rx, have).await;
         let data_dir = &self.shared.data_dir;
@@ -528,7 +547,7 @@ impl Sender<'_> {
                     )))
                 }
                 PeerClose::Suspended => {
-                    self.shared.emit(Event::PeerSuspended { id: self.id });
+                    self.peer_suspended = true;
                     self.session.set_current(None);
                     Err(End::Lost)
                 }

@@ -74,8 +74,13 @@ pub enum Phase {
     Paused,
     /// Paused by the user on the other side.
     PausedByPeer,
-    /// The connection was lost; the transfer continues when it is back.
-    WaitingForConnection,
+    /// Not connected; the transfer continues when the connection is back.
+    /// `lost` when the network dropped it, which the user may want to know
+    /// about; not when the other side closed it on purpose (it is exiting),
+    /// or when the transfer was just picked up after a restart.
+    WaitingForConnection {
+        lost: bool,
+    },
     /// Hashing data that was already transferred before continuing.
     Verifying,
     Unpacking,
@@ -112,11 +117,6 @@ pub enum Event {
     Phase {
         id: u64,
         phase: Phase,
-    },
-    /// The other side closed the connection on purpose (exiting, for now);
-    /// the `WaitingForConnection` that follows is not a network problem.
-    PeerSuspended {
-        id: u64,
     },
     Progress {
         id: u64,
@@ -173,6 +173,9 @@ pub(crate) struct Shared {
     sink: Sink,
     /// Where transfer records are kept.
     pub(crate) data_dir: PathBuf,
+    /// This profile's folder for temporary archives (see
+    /// `archive::temp_dir_for`); created on use.
+    pub(crate) temp_dir: PathBuf,
     pub(crate) pending: Mutex<HashMap<u64, oneshot::Sender<Option<PathBuf>>>>,
     controls: Mutex<HashMap<u64, Arc<Control>>>,
     sessions: Mutex<Vec<Arc<Session>>>,
@@ -312,16 +315,19 @@ impl NetHandle {
 }
 
 /// Starts the network thread. `sink` is called from network threads for
-/// every event. `data_dir` holds the records of unfinished transfers.
+/// every event. `data_dir` holds the records of unfinished transfers and
+/// `temp_dir` the temporary archives of folder transfers.
 pub fn start(
     secret: SecretKey,
     data_dir: PathBuf,
+    temp_dir: PathBuf,
     sink: impl Fn(Event) + Send + Sync + 'static,
 ) -> NetHandle {
     let (tx, rx) = mpsc::unbounded_channel();
     let shared = Arc::new(Shared {
         sink: Box::new(sink),
         data_dir,
+        temp_dir,
         pending: Mutex::new(HashMap::new()),
         controls: Mutex::new(HashMap::new()),
         sessions: Mutex::new(Vec::new()),
@@ -368,6 +374,11 @@ async fn accept(shared: Arc<Shared>, endpoint: Endpoint, conn: Connection) {
             return;
         }
         Msg::Continue { token } => {
+            if shared.shutting_down.load(Ordering::SeqCst) {
+                // Exiting: nothing continues now; the sender tries again later.
+                conn.close(CLOSE_SUSPENDED.into(), b"exiting");
+                return;
+            }
             let session = shared
                 .session_soon(&token)
                 .await
@@ -409,7 +420,7 @@ async fn accept(shared: Arc<Shared>, endpoint: Endpoint, conn: Connection) {
 /// Picks up the transfers that were interrupted in an earlier run.
 fn restore(shared: &Arc<Shared>, endpoint: &Endpoint) {
     let records = session::load_all(&shared.data_dir);
-    session::cleanup_temp(&records);
+    session::cleanup_temp(&shared.temp_dir, &records);
     // Known before any task runs, so that an early `Continue` or `Query`
     // from the other side waits instead of being answered with "gone".
     shared
@@ -438,11 +449,15 @@ fn restore(shared: &Arc<Shared>, endpoint: &Endpoint) {
         let ctl = shared.register(id, record.paused);
         let shared = shared.clone();
         let endpoint = endpoint.clone();
+        let token = record.token;
         tokio::spawn(async move {
             let outcome = match record.role() {
                 Role::Send => send::resume(&shared, &endpoint, id, record, ctl).await,
                 Role::Receive => receive::resume(&shared, &endpoint, id, record, ctl).await,
             };
+            // However it ended (also before the session was registered):
+            // questions about it must not wait any longer.
+            shared.restored(&token);
             shared.finish(id, outcome);
         });
     }
@@ -564,11 +579,26 @@ async fn run(secret: SecretKey, shared: Arc<Shared>, mut rx: mpsc::UnboundedRece
                     }
                     tokio::time::sleep(Duration::from_millis(50)).await;
                 }
-                let sessions: Vec<_> = shared.sessions.lock().unwrap().clone();
-                for session in sessions {
-                    session.close_current(CLOSE_SUSPENDED, b"exiting");
+                // Let the close reach the peers, and let receivers get what
+                // they have onto the disk and into their records: the next
+                // start continues from there.
+                let settle = Instant::now() + Duration::from_millis(200);
+                let deadline = Instant::now() + Duration::from_secs(10);
+                loop {
+                    // Every pass, so that a connection made meanwhile (a dial
+                    // that was already under way) ends the same way and not
+                    // with the endpoint, which would look like a loss.
+                    let sessions: Vec<_> = shared.sessions.lock().unwrap().clone();
+                    for session in &sessions {
+                        session.close_current(CLOSE_SUSPENDED, b"exiting");
+                    }
+                    let syncing = sessions.iter().any(|s| s.syncing.load(Ordering::Relaxed));
+                    let now = Instant::now();
+                    if (!syncing && now >= settle) || now >= deadline {
+                        break;
+                    }
+                    tokio::time::sleep(Duration::from_millis(50)).await;
                 }
-                tokio::time::sleep(Duration::from_millis(200)).await;
                 endpoint.close().await;
                 let _ = done.send(());
                 return;
@@ -654,8 +684,13 @@ mod tests {
         let (tx_b, rx_b) = mpsc::channel();
         let key_b = SecretKey::generate();
         let id_b = key_b.public();
-        let a = start(SecretKey::generate(), base.join("a"), sink(tx_a));
-        let b = Arc::new(start(key_b, base.join("b"), sink(tx_b)));
+        let a = start(
+            SecretKey::generate(),
+            base.join("a"),
+            base.join("temp"),
+            sink(tx_a),
+        );
+        let b = Arc::new(start(key_b, base.join("b"), base.join("temp"), sink(tx_b)));
 
         // Receiver: accept everything except offers named "decline.txt", and
         // pause the first transfer once for a moment.
@@ -802,8 +837,13 @@ mod tests {
         let (tx_b, rx_b) = mpsc::channel();
         let key_b = SecretKey::generate();
         let id_b = key_b.public();
-        let a = start(SecretKey::generate(), base.join("a"), sink(tx_a));
-        let b = Arc::new(start(key_b, base.join("b"), sink(tx_b)));
+        let a = start(
+            SecretKey::generate(),
+            base.join("a"),
+            base.join("temp"),
+            sink(tx_a),
+        );
+        let b = Arc::new(start(key_b, base.join("b"), base.join("temp"), sink(tx_b)));
         let recv_dir = base.join("received");
         let b_thread = {
             let recv_dir = recv_dir.clone();
@@ -855,7 +895,12 @@ mod tests {
             }
         };
         assert!(matches!(outcome, Outcome::Completed(_)), "{outcome:?}");
-        assert!(phases.contains(&Phase::WaitingForConnection), "{phases:?}");
+        assert!(
+            phases
+                .iter()
+                .any(|p| matches!(p, Phase::WaitingForConnection { .. })),
+            "{phases:?}"
+        );
         // The receiver usually gets the replacement connection within its
         // grace period and never shows the interruption; it must not fail.
         let (outcome_b, phases_b) = b_thread.join().unwrap();
@@ -884,8 +929,13 @@ mod tests {
         let key_b = SecretKey::generate();
         let id_b = key_b.public();
         let dir_b = base.join("b");
-        let a = start(SecretKey::generate(), base.join("a"), sink(tx_a));
-        let b = start(key_b.clone(), dir_b.clone(), sink(tx_b));
+        let a = start(
+            SecretKey::generate(),
+            base.join("a"),
+            base.join("temp"),
+            sink(tx_a),
+        );
+        let b = start(key_b.clone(), dir_b.clone(), base.join("temp"), sink(tx_b));
         let recv_dir = base.join("received");
 
         let file = base.join("big.bin");
@@ -923,13 +973,13 @@ mod tests {
             matches!(
                 e,
                 Event::Phase {
-                    phase: Phase::WaitingForConnection,
+                    phase: Phase::WaitingForConnection { .. },
                     ..
                 }
             )
         });
         let (tx_b2, rx_b2) = mpsc::channel();
-        let b2 = start(key_b, dir_b.clone(), sink(tx_b2));
+        let b2 = start(key_b, dir_b.clone(), base.join("temp"), sink(tx_b2));
         let Event::Restored {
             id: id_b2, have, ..
         } = wait_for(&rx_b2, |e| matches!(e, Event::Restored { .. }))
@@ -980,8 +1030,13 @@ mod tests {
         let key_b = SecretKey::generate();
         let id_b = key_b.public();
         let dir_b = base.join("b");
-        let a = start(SecretKey::generate(), base.join("a"), sink(tx_a));
-        let b = start(key_b.clone(), dir_b.clone(), sink(tx_b));
+        let a = start(
+            SecretKey::generate(),
+            base.join("a"),
+            base.join("temp"),
+            sink(tx_a),
+        );
+        let b = start(key_b.clone(), dir_b.clone(), base.join("temp"), sink(tx_b));
         let recv_dir = base.join("received");
 
         let folder = base.join("Photos");
@@ -1031,7 +1086,7 @@ mod tests {
         assert!(!recv_dir.join("Photos").exists());
 
         let (tx_b2, rx_b2) = mpsc::channel();
-        let b2 = start(key_b, dir_b.clone(), sink(tx_b2));
+        let b2 = start(key_b, dir_b.clone(), base.join("temp"), sink(tx_b2));
         let Event::Restored { id: id_b2, .. } =
             wait_for(&rx_b2, |e| matches!(e, Event::Restored { .. }))
         else {

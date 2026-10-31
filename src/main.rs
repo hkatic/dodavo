@@ -163,7 +163,12 @@ fn main() {
         ui::shell::set_start_with_windows(true);
     }
     let start_hidden = args.minimized || cfg.start_minimized;
-    let net = net::start(secret, data_dir.clone(), app::event_sink);
+    let net = net::start(
+        secret,
+        data_dir.clone(),
+        archive::temp_dir_for(profile),
+        app::event_sink,
+    );
     app::install(app::App {
         cfg,
         data_dir,

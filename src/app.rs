@@ -135,7 +135,7 @@ impl Transfer {
             },
             Some(Phase::Paused) => tr!(tx_paused),
             Some(Phase::PausedByPeer) => tr!(tx_paused_by_peer),
-            Some(Phase::WaitingForConnection) => tr!(tx_waiting_connection),
+            Some(Phase::WaitingForConnection { .. }) => tr!(tx_waiting_connection),
             Some(Phase::Verifying) => tr!(tx_verifying),
             Some(Phase::Unpacking) => tr!(tx_unpacking),
         };
@@ -146,7 +146,7 @@ impl Transfer {
                     Phase::Transferring
                         | Phase::Paused
                         | Phase::PausedByPeer
-                        | Phase::WaitingForConnection
+                        | Phase::WaitingForConnection { .. }
                 )
             );
         if with_percent {
@@ -607,13 +607,6 @@ fn handle_event(event: Event) -> Option<Event> {
                 }
             }
         }
-        Event::PeerSuspended { id } => {
-            if let Some(h) = transfer_window(id)
-                && !progress::peer_suspended(h)
-            {
-                return Some(Event::PeerSuspended { id });
-            }
-        }
         Event::Progress { id, done, total } => {
             // The first report tells the size; show it right away (a paused
             // transfer may not report again for a long time).
@@ -789,7 +782,7 @@ mod tests {
             (Some(Phase::Unpacking), true),
             (Some(Phase::Paused), false),
             (Some(Phase::PausedByPeer), false),
-            (Some(Phase::WaitingForConnection), false),
+            (Some(Phase::WaitingForConnection { lost: true }), false),
         ] {
             let mut t = transfer(phase, 1, 2);
             assert_eq!(t.moving_data(), busy, "{phase:?}");

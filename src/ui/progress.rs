@@ -70,9 +70,6 @@ struct Progress {
     /// connection something to ask about; a transfer picked up after a
     /// restart simply waits for the other side.
     had_data: bool,
-    /// The other side closed the connection on purpose (it is exiting for
-    /// now): the waiting that follows is not a network problem either.
-    peer_suspended: bool,
     samples: VecDeque<(Instant, u64)>,
     rate_shown: Option<Instant>,
     /// For a completed receive: where the item was saved.
@@ -136,7 +133,6 @@ pub fn open(
         active: true,
         background: false,
         had_data: false,
-        peer_suspended: false,
         samples: VecDeque::new(),
         rate_shown: None,
         result_path: None,
@@ -189,12 +185,6 @@ pub fn set_phase(hwnd: HWND, phase: Phase) -> Option<PhaseNotice> {
     window::with_handler::<Progress, _>(hwnd, |p, w| p.set_phase(w, phase))
 }
 
-/// The other side is going away on purpose: the coming wait is not a lost
-/// connection to ask about. `false` if the window is busy.
-pub fn peer_suspended(hwnd: HWND) -> bool {
-    window::with_handler::<Progress, _>(hwnd, |p, _| p.peer_suspended = true).is_some()
-}
-
 pub fn set_progress(hwnd: HWND, done: u64, total: u64) -> bool {
     window::with_handler::<Progress, _>(hwnd, |p, _| p.set_progress(done, total)).is_some()
 }
@@ -230,7 +220,10 @@ fn percent(done: u64, total: u64) -> u64 {
 fn keeps_progress(phase: Phase) -> bool {
     matches!(
         phase,
-        Phase::Transferring | Phase::Paused | Phase::PausedByPeer | Phase::WaitingForConnection
+        Phase::Transferring
+            | Phase::Paused
+            | Phase::PausedByPeer
+            | Phase::WaitingForConnection { .. }
     )
 }
 
@@ -278,7 +271,7 @@ impl Progress {
             },
             Phase::Paused => tr!(phase_paused).to_string(),
             Phase::PausedByPeer => tr!(phase_paused_by_peer, name = self.peer),
-            Phase::WaitingForConnection => tr!(phase_waiting_connection).to_string(),
+            Phase::WaitingForConnection { .. } => tr!(phase_waiting_connection).to_string(),
             Phase::Verifying => tr!(phase_verifying).to_string(),
             Phase::Unpacking => tr!(phase_unpacking).to_string(),
         };
@@ -315,10 +308,8 @@ impl Progress {
         // A connection lost while data was flowing asks (or acts) after a
         // moment. A transfer restored at startup just waits, which the
         // "unfinished transfer" notification already said, and so does one
-        // whose other side exited on purpose: that is not a network problem.
-        let lost = phase == Phase::WaitingForConnection
-            && self.had_data
-            && !std::mem::take(&mut self.peer_suspended);
+        // whose other side exited on purpose (`lost: false`).
+        let lost = matches!(phase, Phase::WaitingForConnection { lost: true }) && self.had_data;
         if lost {
             unsafe { SetTimer(w.hwnd, TIMER_LOST, LOST_PROMPT_DELAY_MS, None) };
         }
@@ -329,14 +320,14 @@ impl Progress {
                 tr!(paused_balloon_title).to_string(),
                 tr!(paused_by_peer_balloon, item = self.item, name = self.peer),
             )),
-            Phase::WaitingForConnection if lost && !will_ask => Some((
+            Phase::WaitingForConnection { .. } if lost && !will_ask => Some((
                 tr!(connection_lost_balloon_title).to_string(),
                 tr!(connection_lost_balloon, item = self.item),
             )),
             Phase::Transferring
                 if matches!(
                     previous,
-                    Some(Phase::PausedByPeer | Phase::WaitingForConnection)
+                    Some(Phase::PausedByPeer | Phase::WaitingForConnection { .. })
                 ) =>
             {
                 Some((
@@ -565,7 +556,10 @@ impl Progress {
     /// chosen now or in the settings. The network side waits anyway, so
     /// waiting needs nothing more.
     fn connection_lost(&mut self, w: &Window) {
-        if !self.active || !self.had_data || self.phase != Some(Phase::WaitingForConnection) {
+        if !self.active
+            || !self.had_data
+            || !matches!(self.phase, Some(Phase::WaitingForConnection { .. }))
+        {
             return;
         }
         let action = match app::cfg().connection_lost {

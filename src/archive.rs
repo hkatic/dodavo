@@ -221,6 +221,19 @@ pub fn temp_dir() -> io::Result<PathBuf> {
     Ok(dir)
 }
 
+/// Where a profile keeps the temporary archives of its transfers: the
+/// folder of [`temp_dir`], or a sub folder per `--profile`. Each profile
+/// cleans up leftovers in its own folder only, so that it never deletes the
+/// archive of a transfer that another profile is still running. The folder is
+/// created when it is used (temp cleaners may remove it meanwhile).
+pub fn temp_dir_for(profile: Option<&str>) -> PathBuf {
+    let base = std::env::temp_dir().join("Dodavo");
+    match profile {
+        Some(p) => base.join("profiles").join(p),
+        None => base,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

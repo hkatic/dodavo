@@ -26,6 +26,8 @@ use super::{
 
 /// Records and tombstones older than this are forgotten at startup.
 const MAX_AGE: Duration = Duration::from_secs(30 * 24 * 60 * 60);
+/// Temporary archives without a record are deleted once they are this old.
+const TEMP_MAX_AGE: Duration = Duration::from_secs(24 * 60 * 60);
 /// The sender keeps a copy of its hash state this often, so that it can
 /// continue from an earlier byte without hashing the whole file again.
 const SNAPSHOT_EVERY: u64 = 64 * 1024 * 1024;
@@ -221,12 +223,12 @@ pub fn tombstone(data_dir: &Path, token: &Token) -> Option<bool> {
         .map(|s| s.trim() == "completed")
 }
 
-fn is_old(path: &Path) -> bool {
+fn is_old(path: &Path, max_age: Duration) -> bool {
     fs::metadata(path)
         .and_then(|m| m.modified())
         .ok()
         .and_then(|t| SystemTime::now().duration_since(t).ok())
-        .is_some_and(|age| age > MAX_AGE)
+        .is_some_and(|age| age > max_age)
 }
 
 /// The unfinished transfers from earlier runs. Old records (with their
@@ -243,7 +245,7 @@ pub fn load_all(data_dir: &Path) -> Vec<TransferRecord> {
             .then(|| fs::read_to_string(&path).ok())
             .flatten()
             .and_then(|text| serde_json::from_str::<TransferRecord>(&text).ok());
-        if is_old(&path) {
+        if is_old(&path, MAX_AGE) {
             if let Some(record) = &record {
                 record.discard(data_dir);
             }
@@ -264,15 +266,14 @@ pub fn load_all(data_dir: &Path) -> Vec<TransferRecord> {
     records
 }
 
-/// Deletes temporary archives (`send-*.zip`, `recv-*.zip`) that no record
-/// refers to and that are older than a day: leftovers of transfers that
-/// ended before they had a record, such as a crash while packing a folder or
-/// an offer that was never accepted.
-pub fn cleanup_temp(records: &[TransferRecord]) {
-    let Ok(dir) = crate::archive::temp_dir() else {
-        return;
-    };
-    let Ok(entries) = fs::read_dir(&dir) else {
+/// Deletes temporary archives (`send-*.zip`, `recv-*.zip`) in `dir` that no
+/// record refers to and that are older than a day: leftovers of transfers
+/// that ended before they had a record, such as a crash while packing a
+/// folder or an offer that was never accepted. `dir` must be this profile's
+/// own temporary folder, because the archives of another profile's transfers
+/// are unknown here and would look like leftovers.
+pub fn cleanup_temp(dir: &Path, records: &[TransferRecord]) {
+    let Ok(entries) = fs::read_dir(dir) else {
         return;
     };
     let in_use: Vec<&Path> = records
@@ -287,15 +288,7 @@ pub fn cleanup_temp(records: &[TransferRecord]) {
         let name = entry.file_name().to_string_lossy().into_owned();
         let temp_archive =
             (name.starts_with("send-") || name.starts_with("recv-")) && name.ends_with(".zip");
-        if !temp_archive || in_use.contains(&path.as_path()) {
-            continue;
-        }
-        let old = fs::metadata(&path)
-            .and_then(|m| m.modified())
-            .ok()
-            .and_then(|t| SystemTime::now().duration_since(t).ok())
-            .is_some_and(|age| age > Duration::from_secs(24 * 60 * 60));
-        if old {
+        if temp_archive && !in_use.contains(&path.as_path()) && is_old(&path, TEMP_MAX_AGE) {
             let _ = fs::remove_file(&path);
         }
     }
@@ -389,6 +382,10 @@ pub(crate) struct Session {
     pub current: Mutex<Option<Connection>>,
     /// The record on disk, once the transfer was accepted.
     pub record: Mutex<Option<TransferRecord>>,
+    /// The receiver is writing data to the part file, or getting it onto the
+    /// disk and into the record after a connection ended. Shutdown waits for
+    /// that, so that the next start continues from everything received.
+    pub syncing: AtomicBool,
 }
 
 impl Session {
@@ -407,6 +404,7 @@ impl Session {
             new_conn: tx,
             current: Mutex::new(None),
             record: Mutex::new(None),
+            syncing: AtomicBool::new(false),
         };
         (std::sync::Arc::new(session), rx)
     }
@@ -689,7 +687,7 @@ mod tests {
 
     #[test]
     fn temp_cleanup_removes_only_old_orphans() {
-        let temp = crate::archive::temp_dir().unwrap();
+        let temp = scratch("cleanup-temp");
         let orphan = temp.join("send-00000000000000000000000000000001.zip");
         let used = temp.join("recv-00000000000000000000000000000002.zip");
         let fresh = temp.join("send-00000000000000000000000000000003.zip");
@@ -708,14 +706,12 @@ mod tests {
         }
         let dir = scratch("cleanup");
         let r = record(2, receive_side(&dir, &used, None));
-        cleanup_temp(&[r]);
+        cleanup_temp(&temp, &[r]);
         assert!(!orphan.exists(), "old and unreferenced: deleted");
         assert!(used.exists(), "referenced by a record: kept");
         assert!(fresh.exists(), "recent: kept");
         assert!(other.exists(), "not a Dodavo archive: kept");
-        for p in [&used, &fresh, &other] {
-            fs::remove_file(p).ok();
-        }
+        fs::remove_dir_all(&temp).ok();
         fs::remove_dir_all(&dir).ok();
     }
 

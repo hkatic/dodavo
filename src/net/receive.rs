@@ -4,7 +4,7 @@
 //! transfer at all.
 
 use std::{
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::{
         Arc,
         atomic::{AtomicBool, Ordering},
@@ -88,6 +88,34 @@ impl Drop for Cleanup {
 enum End {
     Lost,
     Final(Outcome),
+}
+
+/// Marks the session as syncing while it exists (see `Session::syncing`).
+struct Syncing(Arc<Session>);
+
+impl Syncing {
+    fn new(session: Arc<Session>) -> Self {
+        session.syncing.store(true, Ordering::Relaxed);
+        Syncing(session)
+    }
+}
+
+impl Drop for Syncing {
+    fn drop(&mut self) {
+        self.0.syncing.store(false, Ordering::Relaxed);
+    }
+}
+
+/// Runs `update` on the session's record off the runtime's worker threads:
+/// saving the record syncs it to disk, which can take a while on a slow one.
+async fn update_record(
+    session: &Arc<Session>,
+    shared: &Shared,
+    update: impl FnOnce(&Session, &Path) + Send + 'static,
+) {
+    let session = session.clone();
+    let data_dir = shared.data_dir.clone();
+    let _ = tokio::task::spawn_blocking(move || update(&session, &data_dir)).await;
 }
 
 /// The status while connected.
@@ -196,6 +224,9 @@ struct Receiver<'a> {
     /// The sender's hash of the whole item, once `Done` arrived.
     done_hash: Option<[u8; 32]>,
     peer_paused: Arc<AtomicBool>,
+    /// The last connection was closed by the sender on purpose (it is
+    /// exiting): the wait for the next one is not a network problem.
+    peer_suspended: bool,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -218,7 +249,10 @@ async fn accept(
         let part_path = match offer.kind {
             Kind::File => archive::unique_path(&dest_dir, &format!("{name}.part"), false),
             Kind::Folder => {
-                archive::temp_dir()?.join(format!("recv-{}.zip", protocol::token_hex(&offer.token)))
+                tokio::fs::create_dir_all(&shared.temp_dir).await?;
+                shared
+                    .temp_dir
+                    .join(format!("recv-{}.zip", protocol::token_hex(&offer.token)))
             }
         };
         tokio::fs::File::create(&part_path).await?;
@@ -273,6 +307,7 @@ async fn accept(
         hasher: Some(blake3::Hasher::new()),
         done_hash: None,
         peer_paused: Arc::new(AtomicBool::new(false)),
+        peer_suspended: false,
     };
     if protocol::write_msg(&mut send, &Msg::Accept).await.is_err() {
         // The sender never learnt that we accepted, so it will not come back.
@@ -324,6 +359,7 @@ async fn continue_record(
         hasher: None,
         done_hash: record.done_hash,
         peer_paused: Arc::new(AtomicBool::new(false)),
+        peer_suspended: false,
     };
     let token = record.token;
     *session.record.lock().unwrap() = Some(record);
@@ -385,7 +421,7 @@ async fn control_writer(
                     return;
                 }
                 let paused = *paused_rx.borrow_and_update();
-                session.save_paused(&shared.data_dir, paused);
+                update_record(&session, &shared, move |s, d| s.save_paused(d, paused)).await;
                 shared.emit(Event::Phase {
                     id,
                     phase: pause_phase(paused, peer_paused.load(Ordering::Relaxed)),
@@ -422,7 +458,9 @@ impl Receiver<'_> {
         self.emit(if self.ctl.is_paused() {
             Phase::Paused
         } else {
-            Phase::WaitingForConnection
+            Phase::WaitingForConnection {
+                lost: !self.peer_suspended,
+            }
         });
     }
 
@@ -519,6 +557,16 @@ impl Receiver<'_> {
     /// the sender (after a restart during the last step, or when the sender
     /// already counts the transfer as complete).
     async fn complete_alone(&mut self, expected: [u8; 32]) -> Outcome {
+        // A sender that comes back meanwhile is told to try again later; once
+        // this is over, the tombstone answers it. Without this, its
+        // connections would pile up unanswered until it gives up on each.
+        let (_unused, placeholder) = mpsc::unbounded_channel();
+        let mut new_conns = std::mem::replace(&mut self.session_rx, placeholder);
+        let _drain = AbortOnDrop(tokio::spawn(async move {
+            while let Some(s) = new_conns.recv().await {
+                s.conn.close(CLOSE_SUSPENDED.into(), b"finishing");
+            }
+        }));
         let data_dir = &self.shared.data_dir;
         self.hasher = None;
         if let Err(e) = self.rehash().await {
@@ -547,6 +595,7 @@ impl Receiver<'_> {
         self.session.set_current(Some(conn.clone()));
         let _watch = AbortOnDrop(spawn_path_watch(self.shared.clone(), self.id, conn.clone()));
         self.peer_paused.store(false, Ordering::Relaxed);
+        self.peer_suspended = false;
         let (result_tx, result_rx) = oneshot::channel();
         let writer = tokio::spawn(control_writer(
             send,
@@ -580,7 +629,7 @@ impl Receiver<'_> {
                         Err(End::Final(Outcome::Failed(tr!(error_sender_failed).into())))
                     }
                     PeerClose::Suspended => {
-                        self.shared.emit(Event::PeerSuspended { id: self.id });
+                        self.peer_suspended = true;
                         self.session.set_current(None);
                         Err(End::Lost)
                     }
@@ -650,6 +699,8 @@ impl Receiver<'_> {
             done: self.have,
             total: self.size,
         });
+        // Shutdown waits until what arrived is on disk and in the record.
+        let syncing = Syncing::new(self.session.clone());
         let mut out = tokio::fs::OpenOptions::new()
             .append(true)
             .open(&self.part_path)
@@ -660,7 +711,8 @@ impl Receiver<'_> {
         out.flush().await?;
         out.sync_data().await?;
         drop(out);
-        self.session.save_synced(&self.shared.data_dir, self.have);
+        self.save_synced().await;
+        drop(syncing);
         let hash = received?;
 
         if hash != *self.hasher.as_ref().unwrap().finalize().as_bytes() {
@@ -672,12 +724,24 @@ impl Receiver<'_> {
         }
         // From here on this side can finish on its own, even after a restart.
         self.done_hash = Some(hash);
-        self.session.save_done_hash(&self.shared.data_dir, hash);
+        update_record(&self.session, self.shared, move |s, d| {
+            s.save_done_hash(d, hash)
+        })
+        .await;
         let _ = result_tx.send(Msg::Result {
             ok: true,
             message: String::new(),
         });
         self.finalize().await
+    }
+
+    /// Notes in the record how much of the part file is on disk.
+    async fn save_synced(&self) {
+        let have = self.have;
+        update_record(&self.session, self.shared, move |s, d| {
+            s.save_synced(d, have)
+        })
+        .await;
     }
 
     /// Reads frames until `Done`; returns the sender's hash.
@@ -704,7 +768,7 @@ impl Receiver<'_> {
                     unsynced += len as u64;
                     if unsynced >= SYNC_EVERY {
                         out.sync_data().await?;
-                        self.session.save_synced(&self.shared.data_dir, self.have);
+                        self.save_synced().await;
                         unsynced = 0;
                     }
                     if throttle.ready() || self.have == self.size {
