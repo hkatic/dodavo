@@ -136,7 +136,7 @@ fn main() {
         ui::shell::set_start_with_windows(true);
     }
     let start_hidden = args.minimized || cfg.start_minimized;
-    let net = net::start(secret, app::event_sink);
+    let net = net::start(secret, data_dir.clone(), app::event_sink);
     app::install(app::App {
         cfg,
         data_dir,
@@ -145,7 +145,7 @@ fn main() {
         main: std::ptr::null_mut(),
         transfers: Default::default(),
         offers: Default::default(),
-        balloon_path: None,
+        balloon_action: None,
     });
 
     ui::main_window::create(profile, start_hidden);

@@ -13,6 +13,7 @@ use windows_sys::Win32::{
             PBM_SETMARQUEE, PBM_SETPOS, PBM_SETRANGE32, PBM_SETSTATE, PBS_MARQUEE, PBST_ERROR,
             PBST_NORMAL,
         },
+        Input::KeyboardAndMouse::GetFocus,
         WindowsAndMessaging::*,
     },
 };
@@ -23,22 +24,31 @@ use super::{
 };
 use crate::{
     app,
-    config::CloseAction,
+    config::{CloseAction, ConnectionLostAction},
     i18n::tr,
     net::{Command, Kind, Outcome, Phase},
 };
 
 const ID_CANCEL: u16 = 11;
+const ID_PAUSE: u16 = 12;
+const ID_BACKGROUND: u16 = 13;
 const RANGE: usize = 1000;
 /// Posted to itself after the transfer ended, to ask or close outside of event handling.
 const WM_APP_FINISHED: u32 = WM_APP + 10;
+/// Fires a few seconds after the connection was lost, if it is still lost:
+/// short interruptions should not bother the user with a question.
+const TIMER_LOST: usize = 1;
+const LOST_PROMPT_DELAY_MS: u32 = 3000;
 /// Command links of the questions.
 const CHOICE_BACKGROUND: i32 = 100;
 const CHOICE_CANCEL: i32 = 101;
 const CHOICE_OPEN_FILE: i32 = 102;
 const CHOICE_OPEN_FOLDER: i32 = 103;
+const CHOICE_WAIT: i32 = 104;
 /// How often the speed and the remaining time change, so they can be read.
 const RATE_INTERVAL: Duration = Duration::from_secs(1);
+const MIN_WIDTH: i32 = 460;
+const HEIGHT: i32 = 238;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Direction {
@@ -68,6 +78,8 @@ struct Progress {
     speed: HWND,
     remaining: HWND,
     connection: HWND,
+    pause: HWND,
+    background_button: HWND,
     cancel: HWND,
 }
 
@@ -83,6 +95,15 @@ pub struct Finished {
     pub notify: bool,
 }
 
+/// What to tell the user about a change of phase.
+pub struct PhaseNotice {
+    /// A notification (title and text): text changes in the window are not
+    /// announced by screen readers, and a hidden window is not seen at all.
+    pub balloon: Option<(String, String)>,
+}
+
+/// Opens the window. `activate` gives it the focus; transfers that start by
+/// themselves (automatic or restored) must not take it away from the user.
 pub fn open(
     id: u64,
     dir: Direction,
@@ -90,6 +111,7 @@ pub fn open(
     item: &str,
     kind: Kind,
     size: Option<u64>,
+    activate: bool,
 ) -> HWND {
     let window_title = match (dir, kind) {
         (Direction::Send, Kind::File) => tr!(title_send_file, name = peer),
@@ -117,6 +139,8 @@ pub fn open(
         speed: std::ptr::null_mut(),
         remaining: std::ptr::null_mut(),
         connection: std::ptr::null_mut(),
+        pause: std::ptr::null_mut(),
+        background_button: std::ptr::null_mut(),
         cancel: std::ptr::null_mut(),
     };
     let hwnd = window::create(
@@ -124,7 +148,7 @@ pub fn open(
             title: &window_title,
             style: WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_CLIPCHILDREN,
             ex_style: WS_EX_CONTROLPARENT | WS_EX_APPWINDOW,
-            client: (460, 238),
+            client: (MIN_WIDTH, HEIGHT),
             center_on: app::main_window(),
             ..Default::default()
         },
@@ -133,17 +157,13 @@ pub fn open(
     if let Some(size) = size {
         window::with_handler::<Progress, _>(hwnd, |p, _| p.set_progress(0, size));
     }
-    let main_visible = unsafe { IsWindowVisible(app::main_window()) } != 0;
     unsafe {
-        // Transfers that start by themselves (incoming) should not steal the focus.
-        ShowWindow(
-            hwnd,
-            if dir == Direction::Send || main_visible {
-                SW_SHOW
-            } else {
-                SW_SHOWNOACTIVATE
-            },
-        );
+        if activate {
+            ShowWindow(hwnd, SW_SHOW);
+            SetForegroundWindow(hwnd);
+        } else {
+            ShowWindow(hwnd, SW_SHOWNOACTIVATE);
+        }
     }
     hwnd
 }
@@ -152,8 +172,9 @@ pub fn is_active(hwnd: HWND) -> bool {
     window::with_handler::<Progress, _>(hwnd, |p, _| p.active).unwrap_or(true)
 }
 
-pub fn set_phase(hwnd: HWND, phase: Phase) -> bool {
-    window::with_handler::<Progress, _>(hwnd, |p, _| p.set_phase(phase)).is_some()
+/// Shows the new phase. Returns `None` if the window is busy.
+pub fn set_phase(hwnd: HWND, phase: Phase) -> Option<PhaseNotice> {
+    window::with_handler::<Progress, _>(hwnd, |p, w| p.set_phase(w, phase))
 }
 
 pub fn set_progress(hwnd: HWND, done: u64, total: u64) -> bool {
@@ -187,6 +208,19 @@ fn percent(done: u64, total: u64) -> u64 {
     }
 }
 
+/// Phases between which the progress so far stays on screen.
+fn keeps_progress(phase: Phase) -> bool {
+    matches!(
+        phase,
+        Phase::Transferring | Phase::Paused | Phase::PausedByPeer | Phase::WaitingForConnection
+    )
+}
+
+/// Phases in which the user can pause or resume.
+fn can_pause(phase: Phase) -> bool {
+    keeps_progress(phase)
+}
+
 impl Progress {
     fn marquee(&self, on: bool) {
         unsafe {
@@ -203,16 +237,16 @@ impl Progress {
         send(self.bar, PBM_SETMARQUEE, on as usize, 30);
     }
 
-    fn clear_rows(&mut self) {
-        for h in [self.done, self.speed, self.remaining] {
+    fn clear_rate(&mut self) {
+        for h in [self.speed, self.remaining] {
             set_text(h, "");
         }
         self.samples.clear();
         self.rate_shown = None;
     }
 
-    fn set_phase(&mut self, phase: Phase) {
-        self.phase = Some(phase);
+    fn set_phase(&mut self, w: &Window, phase: Phase) -> PhaseNotice {
+        let previous = self.phase.replace(phase);
         let text = match phase {
             Phase::Preparing => tr!(phase_preparing).to_string(),
             Phase::Connecting => tr!(phase_connecting, name = self.peer),
@@ -221,22 +255,71 @@ impl Progress {
                 Direction::Send => tr!(phase_sending).to_string(),
                 Direction::Receive => tr!(phase_receiving).to_string(),
             },
+            Phase::Paused => tr!(phase_paused).to_string(),
+            Phase::PausedByPeer => tr!(phase_paused_by_peer, name = self.peer),
+            Phase::WaitingForConnection => tr!(phase_waiting_connection).to_string(),
+            Phase::Verifying => tr!(phase_verifying).to_string(),
             Phase::Unpacking => tr!(phase_unpacking).to_string(),
         };
         set_text(self.status, &text);
         set_text(
             self.done_caption,
             match phase {
-                Phase::Preparing | Phase::Unpacking => tr!(row_processed),
+                Phase::Preparing | Phase::Unpacking | Phase::Verifying => tr!(row_processed),
                 _ => tr!(row_transferred),
             },
         );
         let waiting = matches!(phase, Phase::Connecting | Phase::WaitingForAccept);
         self.marquee(waiting);
-        if !waiting {
+        // A pause or a lost connection interrupts the transfer; the amount
+        // done so far stays (also what a restored transfer showed before its
+        // first phase). Other phases start their own count.
+        let continues = keeps_progress(phase) && previous.is_none_or(keeps_progress);
+        if !waiting && !continues {
             send(self.bar, PBM_SETPOS, 0, 0);
+            set_text(self.done, "");
         }
-        self.clear_rows();
+        self.clear_rate();
+
+        set_text(
+            self.pause,
+            if phase == Phase::Paused {
+                tr!(resume)
+            } else {
+                tr!(pause)
+            },
+        );
+        window::enable(self.pause, can_pause(phase));
+
+        if phase == Phase::WaitingForConnection {
+            unsafe { SetTimer(w.hwnd, TIMER_LOST, LOST_PROMPT_DELAY_MS, None) };
+        }
+        let will_ask = phase == Phase::WaitingForConnection
+            && !self.background
+            && app::cfg().connection_lost == ConnectionLostAction::Ask;
+        let balloon = match phase {
+            Phase::PausedByPeer => Some((
+                tr!(paused_balloon_title).to_string(),
+                tr!(paused_by_peer_balloon, item = self.item, name = self.peer),
+            )),
+            Phase::WaitingForConnection if !will_ask => Some((
+                tr!(connection_lost_balloon_title).to_string(),
+                tr!(connection_lost_balloon, item = self.item),
+            )),
+            Phase::Transferring
+                if matches!(
+                    previous,
+                    Some(Phase::PausedByPeer | Phase::WaitingForConnection)
+                ) =>
+            {
+                Some((
+                    tr!(continuing_balloon_title).to_string(),
+                    tr!(continuing_balloon, item = self.item),
+                ))
+            }
+            _ => None,
+        };
+        PhaseNotice { balloon }
     }
 
     fn set_progress(&mut self, done: u64, total: u64) {
@@ -296,6 +379,7 @@ impl Progress {
     fn finish(&mut self, w: &Window, outcome: &Outcome) -> Finished {
         self.active = false;
         self.marquee(false);
+        unsafe { KillTimer(w.hwnd, TIMER_LOST) };
         let file = self.kind == Kind::File;
         let mut completed = false;
         let (status, detail) = match (outcome, self.dir) {
@@ -344,6 +428,15 @@ impl Progress {
         } else {
             send(self.bar, PBM_SETSTATE, PBST_ERROR as usize, 0);
         }
+        // Only Close is left. If the focus was on a button that goes away,
+        // it moves to Close (the window is active then, so this takes nothing
+        // away from another window).
+        let focus = unsafe { GetFocus() };
+        if focus == self.pause || focus == self.background_button {
+            window::focus(self.cancel);
+        }
+        window::show(self.pause, false);
+        window::show(self.background_button, false);
         set_text(self.cancel, tr!(close));
         window::enable(self.cancel, true);
 
@@ -380,6 +473,27 @@ impl Progress {
         app::net_send(Command::Cancel { id: self.id });
         set_text(self.status, tr!(cancelling));
         window::enable(self.cancel, false);
+        window::enable(self.pause, false);
+    }
+
+    fn toggle_pause(&mut self) {
+        if self.phase == Some(Phase::Paused) {
+            app::net_send(Command::Resume { id: self.id });
+        } else {
+            app::net_send(Command::Pause { id: self.id });
+        }
+    }
+
+    /// Hides the window; the transfer goes on and reports with notifications.
+    fn go_background(&mut self, w: &Window) {
+        self.background = true;
+        window::show(w.hwnd, false);
+        tray::balloon(
+            app::main_window(),
+            tr!(background_balloon_title),
+            &tr!(background_balloon, item = self.item),
+            Some(tray::BalloonAction::Window(w.hwnd)),
+        );
     }
 
     /// Closing the window while the transfer runs: continue in the background
@@ -416,14 +530,49 @@ impl Progress {
                 w.close();
             }
         } else {
-            self.background = true;
-            window::show(w.hwnd, false);
-            tray::balloon(
-                app::main_window(),
-                tr!(background_balloon_title),
-                &tr!(background_balloon, item = self.item),
-                None,
-            );
+            self.go_background(w);
+        }
+    }
+
+    /// The connection has been lost for a few seconds: wait or cancel, as
+    /// chosen now or in the settings. The network side waits anyway, so
+    /// waiting needs nothing more.
+    fn connection_lost(&mut self, w: &Window) {
+        if !self.active || self.phase != Some(Phase::WaitingForConnection) {
+            return;
+        }
+        let action = match app::cfg().connection_lost {
+            ConnectionLostAction::Ask => {
+                if self.background {
+                    // A question needs a visible window.
+                    self.background = false;
+                    window::bring_to_front(w.hwnd);
+                }
+                let (choice, dont_ask) = ask(
+                    w.hwnd,
+                    tr!(connection_lost_instruction),
+                    tr!(connection_lost_text),
+                    &[
+                        (CHOICE_WAIT, tr!(wait_for_connection)),
+                        (CHOICE_CANCEL, tr!(cancel_transfer)),
+                    ],
+                    false,
+                    Some(tr!(dont_ask_again)),
+                );
+                let action = match choice {
+                    CHOICE_WAIT => ConnectionLostAction::Wait,
+                    CHOICE_CANCEL => ConnectionLostAction::Cancel,
+                    _ => return,
+                };
+                if dont_ask {
+                    app::update_cfg(|c| c.connection_lost = action);
+                }
+                action
+            }
+            remembered => remembered,
+        };
+        if action == ConnectionLostAction::Cancel && self.active {
+            self.cancel_transfer();
         }
     }
 
@@ -485,14 +634,29 @@ impl Progress {
 
 impl Handler for Progress {
     fn on_create(&mut self, w: &Window) {
+        // The buttons are as wide as their (translated) texts need; the
+        // window grows with them.
+        let pause_w = w
+            .button_width(tr!(pause), 92)
+            .max(w.button_width(tr!(resume), 92));
+        let background_w = w.button_width(tr!(minimize_background), 92);
+        let cancel_w = w
+            .button_width(tr!(cancel), 92)
+            .max(w.button_width(tr!(close), 92));
+        let width = MIN_WIDTH.max(pause_w + background_w + cancel_w + 2 * 6 + 28);
+        if width > MIN_WIDTH {
+            w.set_client_size(width, HEIGHT);
+        }
+        let cw = width - 28;
+
         let title = match self.dir {
             Direction::Send => tr!(to_peer, name = self.peer, item = self.item),
             Direction::Receive => tr!(from_peer, name = self.peer, item = self.item),
         };
-        self.title = w.label(&title, (14, 12, 432, 20));
+        self.title = w.label(&title, (14, 12, cw, 20));
         w.make_bold(self.title);
-        self.status = w.label(tr!(starting), (14, 38, 432, 36));
-        self.bar = w.add("msctls_progress32", "", 0, 0, (14, 78, 432, 16));
+        self.status = w.label(tr!(starting), (14, 38, cw, 36));
+        self.bar = w.add("msctls_progress32", "", 0, 0, (14, 78, cw, 16));
         send(self.bar, PBM_SETRANGE32, 0, RANGE as isize);
 
         // "Caption: value" rows; the captions share the width of the longest one.
@@ -504,7 +668,7 @@ impl Handler for Progress {
         ];
         let caption_w = captions.iter().map(|c| w.text_width(c)).max().unwrap_or(0) + 8;
         let value_x = 14 + caption_w;
-        let value_w = 432 - caption_w;
+        let value_w = cw - caption_w;
         let row = |caption: &str, y: i32| {
             let c = w.label(caption, (14, y, caption_w, 18));
             (c, w.label("", (value_x, y, value_w, 18)))
@@ -513,17 +677,27 @@ impl Handler for Progress {
         self.speed = row(tr!(row_speed), 124).1;
         self.remaining = row(tr!(row_remaining), 144).1;
 
-        self.connection = w.label("", (14, 168, 432, 34));
-        // Right-aligned button, as wide as its (translated) texts need.
-        let cancel_w = w
-            .button_width(tr!(cancel), 92)
-            .max(w.button_width(tr!(close), 92));
-        self.cancel = w.button(tr!(cancel), ID_CANCEL, (446 - cancel_w, 200, cancel_w, 28));
+        self.connection = w.label("", (14, 168, cw, 34));
+        // Right-aligned buttons: Pause, Minimize to background, Cancel.
+        let cancel_x = width - 14 - cancel_w;
+        let background_x = cancel_x - 6 - background_w;
+        let pause_x = background_x - 6 - pause_w;
+        self.pause = w.button(tr!(pause), ID_PAUSE, (pause_x, 200, pause_w, 28));
+        window::enable(self.pause, false);
+        self.background_button = w.button(
+            tr!(minimize_background),
+            ID_BACKGROUND,
+            (background_x, 200, background_w, 28),
+        );
+        self.cancel = w.button(tr!(cancel), ID_CANCEL, (cancel_x, 200, cancel_w, 28));
         w.default_id.set(ID_CANCEL);
+        window::focus(self.pause);
     }
 
     fn on_command(&mut self, w: &Window, id: u16, _code: u16) -> bool {
         match id {
+            ID_PAUSE if self.active => self.toggle_pause(),
+            ID_BACKGROUND if self.active => self.go_background(w),
             ID_CANCEL if self.active => {
                 if confirm(w.hwnd, tr!(cancel_confirm)) {
                     self.cancel_transfer();
@@ -537,16 +711,23 @@ impl Handler for Progress {
         true
     }
 
-    fn on_message(&mut self, w: &Window, msg: u32, _wp: WPARAM, _lp: LPARAM) -> Option<LRESULT> {
-        if msg != WM_APP_FINISHED {
-            return None;
+    fn on_message(&mut self, w: &Window, msg: u32, wp: WPARAM, _lp: LPARAM) -> Option<LRESULT> {
+        match msg {
+            WM_APP_FINISHED => {
+                if self.background {
+                    w.close();
+                } else {
+                    self.after_received(w);
+                }
+                Some(0)
+            }
+            WM_TIMER if wp == TIMER_LOST => {
+                unsafe { KillTimer(w.hwnd, TIMER_LOST) };
+                self.connection_lost(w);
+                Some(0)
+            }
+            _ => None,
         }
-        if self.background {
-            w.close();
-        } else {
-            self.after_received(w);
-        }
-        Some(0)
     }
 
     fn on_close(&mut self, w: &Window) {

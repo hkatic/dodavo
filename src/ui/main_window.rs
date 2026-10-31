@@ -14,7 +14,7 @@ use windows_sys::Win32::{
 };
 
 use super::{
-    APP_NAME, confirm, info, send, set_text, shell, short_id, tray, wide,
+    APP_NAME, ask, confirm, info, send, set_text, shell, short_id, tray, wide,
     window::{self, CreateOptions, Handler, Window},
 };
 use crate::{
@@ -39,6 +39,9 @@ const ID_VIEW_HELP: u16 = 112;
 const ID_LIST: u16 = 200;
 
 const NIN_BALLOONUSERCLICK: u32 = WM_USER + 5;
+/// Command links of the exit question.
+const CHOICE_EXIT_KEEP: i32 = 100;
+const CHOICE_EXIT_CANCEL: i32 = 101;
 
 thread_local! {
     static MAIN: Cell<HWND> = const { Cell::new(std::ptr::null_mut()) };
@@ -572,11 +575,27 @@ impl MainWindow {
     }
 }
 
-/// Exits the application (after confirmation if transfers are running).
+/// Exits the application. Running transfers are suspended and continue at
+/// the next start, unless the user chooses to cancel them.
 fn quit(w: &Window) {
     let active = app::active_transfer_count();
-    if active > 0 && !confirm(w.hwnd, &trn!(exit_confirm, active)) {
-        return;
+    if active > 0 {
+        let (choice, _) = ask(
+            w.hwnd,
+            &trn!(exit_instruction, active),
+            tr!(exit_text),
+            &[
+                (CHOICE_EXIT_KEEP, tr!(exit_keep)),
+                (CHOICE_EXIT_CANCEL, tr!(exit_cancel_transfers)),
+            ],
+            false,
+            None,
+        );
+        match choice {
+            CHOICE_EXIT_KEEP => {}
+            CHOICE_EXIT_CANCEL => app::cancel_all_transfers(),
+            _ => return,
+        }
     }
     // While the window still exists, so the icon is reliably removed.
     tray::remove(w.hwnd);
@@ -696,9 +715,12 @@ impl Handler for MainWindow {
                 match lp as u32 {
                     WM_LBUTTONUP | WM_LBUTTONDBLCLK => window::bring_to_front(w.hwnd),
                     WM_RBUTTONUP | WM_CONTEXTMENU => self.tray_menu(w),
-                    NIN_BALLOONUSERCLICK => match app::with(|a| a.balloon_path.take()) {
-                        Some(path) => shell::reveal_in_explorer(&path),
-                        None => window::bring_to_front(w.hwnd),
+                    NIN_BALLOONUSERCLICK => match app::with(|a| a.balloon_action.take()) {
+                        Some(tray::BalloonAction::Reveal(path)) => shell::reveal_in_explorer(&path),
+                        Some(tray::BalloonAction::Window(h)) if unsafe { IsWindow(h) } != 0 => {
+                            window::bring_to_front(h)
+                        }
+                        _ => window::bring_to_front(w.hwnd),
                     },
                     _ => {}
                 }

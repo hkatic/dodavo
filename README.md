@@ -8,9 +8,10 @@ Send files and folders directly from one Windows computer to another. You don't 
 - Folders are zipped automatically, sent, and unpacked on the recipient's computer.
 - The recipient sees an *Incoming Transfer* window with the name and size of the item and whether there is enough free disk space for it (folders need room for the download and for unpacking). They can accept or decline and choose where to save. The last location is remembered, and the default is the Downloads folder.
 - Settings let you choose "Always save to this folder" and "Start transfers automatically" (only for people in your recipient list; saved to the chosen folder, or to Downloads).
-- The progress window shows how much has been transferred, the total size, the current speed and the time remaining. Closing it lets the transfer continue in the background or cancels it. When a file or folder has been received, Dodavo offers to open it. Both questions have a "Don't ask me again" option, and both can be changed again in Settings.
+- The progress window shows how much has been transferred, the total size, the current speed and the time remaining, with buttons to pause and resume the transfer (on either side) and to minimize it to the background. Closing it lets the transfer continue in the background or cancels it. When a file or folder has been received, Dodavo offers to open it. Both questions have a "Don't ask me again" option, and both can be changed again in Settings.
+- A transfer survives a lost Internet connection, sleep, and even a restart of Dodavo on either computer: it waits and continues where it stopped as soon as both are online again, and the whole item is still checked with a checksum at the end. Dodavo asks whether to wait or to cancel; the answer can be made permanent in Settings.
 - A classic Win32 interface that follows the Windows light/dark app mode.
-- Minimizes to the notification area so files can be received in the background, with an optional "Start with Windows" and "Always start minimized".
+- Minimizes to the notification area so files can be received in the background, with an optional "Start with Windows" and "Always start minimized". Notifications report finished, paused and interrupted transfers, also while their windows are hidden.
 - Full help for keyboard and screen reader users (Help → View Help, or F1), in every supported language.
 - Available in English, Croatian, Serbian (Latin) and Slovenian. It follows the Windows display language, and you can choose another one in Settings.
 

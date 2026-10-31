@@ -213,20 +213,34 @@
 <p>Svaki prenos, poslat ili primljen, ima sopstveni prozor napretka. Njegov naslov kaže šta se dešava, na primer „Slanje datoteke – primalac: Ana“. Prozor prikazuje:</p>
 <ul>
 <li>Podebljan red sa nazivom stavke i osobom.</li>
-<li>Trenutni korak: <span class="ui">Pakovanje fascikle…</span>, <span class="ui">Povezivanje sa primaocem (…)…</span>, <span class="ui">Čeka se da primalac (…) prihvati prenos…</span>, <span class="ui">Slanje…</span>, <span class="ui">Primanje…</span> ili <span class="ui">Raspakivanje fascikle…</span>.</li>
+<li>Trenutni korak: <span class="ui">Pakovanje fascikle…</span>, <span class="ui">Povezivanje sa primaocem (…)…</span>, <span class="ui">Čeka se da primalac (…) prihvati prenos…</span>, <span class="ui">Slanje…</span>, <span class="ui">Primanje…</span>, <span class="ui">Provera već prenetih podataka…</span> ili <span class="ui">Raspakivanje fascikle…</span>. Dok je prenos pauziran ili je veza prekinuta, red koraka to navodi (pogledajte u nastavku).</li>
 <li>Traku napretka.</li>
 <li><span class="ui">Preneto:</span> (ili <span class="ui">Obrađeno:</span> dok se fascikla pakuje ili raspakuje) sa završenom količinom, ukupnom veličinom i procentom.</li>
 <li><span class="ui">Brzina:</span> i <span class="ui">Preostalo vreme:</span>, koji se ažuriraju jednom u sekundi.</li>
 <li>Vrstu veze: <span class="ui">Veza: direktna (sa računara na računar)</span> ili <span class="ui">Veza: preko posredničkog servera (potpuno šifrovana)</span>.</li>
-<li>Dugme <span class="ui">Otkaži</span>, koje pre otkazivanja prenosa traži potvrdu.</li>
+<li>Tri dugmeta: <span class="ui">Pauziraj</span> (<kbd>Alt</kbd>+<kbd>P</kbd>), koje dok je prenos pauziran postaje <span class="ui">Nastavi</span> (<kbd>Alt</kbd>+<kbd>N</kbd>); <span class="ui">Umanji u pozadinu</span> (<kbd>Alt</kbd>+<kbd>Z</kbd>), koje skriva prozor i pušta prenos da se nastavi; i <span class="ui">Otkaži</span>, koje pre otkazivanja prenosa traži potvrdu.</li>
 </ul>
-<p>Fokus tastature može da dobije samo dugme <span class="ui">Otkaži</span>. Da biste čuli napredak, upotrebite komandu čitača ekrana za čitanje celog prozora: <kbd>NVDA</kbd>+<kbd>B</kbd> u čitaču NVDA, <kbd>Insert</kbd>+<kbd>B</kbd> u čitaču JAWS ili <kbd>Narator</kbd>+<kbd>W</kbd> u Naratoru.</p>
+<p>Kada se prozor otvori, fokus je na dugmetu <span class="ui">Pauziraj</span>; tasterom <kbd>Tab</kbd> prelazite između dugmadi, a tasterom <kbd>Enter</kbd> aktivirate ono koje ima fokus. Ostali redovi ne mogu da dobiju fokus. Da biste čuli napredak, upotrebite komandu čitača ekrana za čitanje celog prozora: <kbd>NVDA</kbd>+<kbd>B</kbd> u čitaču NVDA, <kbd>Insert</kbd>+<kbd>B</kbd> u čitaču JAWS ili <kbd>Narator</kbd>+<kbd>W</kbd> u Naratoru.</p>
 <p>Kada se prenos završi, red koraka kaže kako se završio, na primer <span class="ui">Gotovo! Datoteka je isporučena primaocu (Ana).</span> ili <span class="ui">Prenos je otkazan.</span> Ako nešto nije uspelo, red ispod navodi razlog. Dugme <span class="ui">Otkaži</span> postaje <span class="ui">Zatvori</span>. Kada ste stavku primili, prozor napretka se zatvara sam čim se stavka sačuva (pogledajte <a href="#after-receiving">Kada je prenos završen</a>).</p>
+
+<h3 id="pausing">Pauziranje i nastavljanje</h3>
+<p>Aktivirajte <span class="ui">Pauziraj</span> (<kbd>Alt</kbd>+<kbd>P</kbd>) da biste prenos nakratko zaustavili; red koraka kaže <span class="ui">Pauzirano. Da biste nastavili, izaberite „Nastavi“.</span>, a dugme postaje <span class="ui">Nastavi</span> (<kbd>Alt</kbd>+<kbd>N</kbd>). Pauzirati može bilo koja strana, i pri slanju i pri primanju. Druga osoba vidi da je prenos pauziran na vašoj strani, a o tome je izveštava i obaveštenje. Kada nastavite, prenos se nastavlja tačno tamo gde je stao: ništa se ne šalje dvaput i ništa se ne gubi, a kontrolni zbir na kraju obuhvata celu stavku.</p>
+<p>Pauzirani prenos ostaje pauziran dok ga ne nastavite, čak i ako se u međuvremenu veza prekine ili se Dodavo ponovo pokrene. I dalje možete da ga otkažete.</p>
+
+<h3 id="connection-lost">Kada se veza prekine</h3>
+<p>Ako internet veza nestane, jedan od računara pređe u stanje spavanja ili se Dodavo zatvori na bilo kojoj strani, prenos nije izgubljen. Red koraka kaže <span class="ui">Veza je prekinuta. Prenos se nastavlja čim oboje ponovo budete na mreži, čak i posle ponovnog pokretanja.</span> Dodavo zadržava ono što je već stiglo i nastavlja od tog mesta čim računari ponovo mogu da se povežu – posle nekoliko sekundi ili danima kasnije.</p>
+<p>Ako veza ostane prekinuta nekoliko sekundi, Dodavo pita šta da uradi:</p>
+<ul>
+<li><span class="ui">Sačekaj vezu</span> ostavlja prenos da čeka. Nastavlja se sam.</li>
+<li><span class="ui">Otkaži prenos</span> ga završava. Delimično primljeni podaci se brišu.</li>
+</ul>
+<p>Izaberite <span class="ui">Ne pitaj me ponovo</span> da bi se uvek desilo isto. Izbor kasnije možete da promenite u postavkama, pod <span class="ui">Ako se veza prekine tokom prenosa</span>. Uz opciju <span class="ui">Sačekaj vezu i nastavi</span> Dodavo umesto pitanja prikazuje obaveštenje, a uz opciju <span class="ui">Otkaži prenos</span> odmah otkazuje.</p>
+<p>Pri pokretanju Dodavo preuzima prenose koji su prošli put prekinuti: za svaki od njih pojavljuje se obaveštenje <span class="ui">Nezavršeni prenos</span>, a njegov prozor napretka se otvara bez preuzimanja fokusa. Pre nego što podaci nastave da teku, red koraka kaže <span class="ui">Provera već prenetih podataka…</span> dok Dodavo proverava ono što već ima. Za to je na oba računara potrebna aktuelna verzija programa Dodavo; sa starijom verzijom na drugoj strani prenos ne može ni da počne.</p>
 
 <h3 id="closing-progress">Zatvaranje prozora napretka tokom prenosa</h3>
 <p>Ako zatvorite prozor napretka (tasterom <kbd>Esc</kbd>, tasterima <kbd>Alt</kbd>+<kbd>F4</kbd> ili dugmetom za zatvaranje prozora) dok je prenos još u toku, Dodavo pita šta da uradi:</p>
 <ul>
-<li><span class="ui">Nastavi u pozadini</span> skriva prozor. Prenos se nastavlja, a obaveštenje vas izveštava kada se završi.</li>
+<li><span class="ui">Nastavi u pozadini</span> skriva prozor (isto kao dugme <span class="ui">Umanji u pozadinu</span>). Prenos se nastavlja, a obaveštenje vas izveštava kada se završi.</li>
 <li><span class="ui">Otkaži prenos</span> ga zaustavlja nakon vaše potvrde.</li>
 </ul>
 <p>Izaberite <span class="ui">Ne pitaj me ponovo</span> da bi se uvek desilo isto. Izbor kasnije možete da promenite u postavkama, pod <span class="ui">Pri zatvaranju prozora prenosa koji je u toku</span>.</p>
@@ -240,8 +254,8 @@
 <li>Da biste do ikone došli tastaturom, pritisnite <kbd>Windows</kbd>+<kbd>B</kbd>, a zatim se tasterima sa strelicama pomerite do ikone <span class="ui">Dodavo</span>. Ako je nema, možda je među skrivenim ikonama: prvo izaberite dugme <span class="ui">Prikaži skrivene ikone</span>. Pritisnite <kbd>Enter</kbd> da biste otvorili prozor ili <kbd>Shift</kbd>+<kbd>F10</kbd>, odnosno taster kontekstualnog menija, da biste otvorili meni ikone.</li>
 <li>Meni ikone sadrži opcije <span class="ui">Otvori</span>, <span class="ui">Kopiraj moj ID kontakta</span> i <span class="ui">Izlaz</span>.</li>
 </ul>
-<p>Da biste potpuno zatvorili Dodavo, izaberite <span class="ui">Izlaz</span> u meniju <span class="ui">Datoteka</span> ili u meniju ikone. Ako su prenosi još u toku, Dodavo traži potvrdu jer će oni biti otkazani. Posle izlaza ne možete da primate datoteke dok ponovo ne pokrenete Dodavo.</p>
-<p>Dodavo o završenim prenosima, dolaznim prenosima i drugim događajima izveštava obaveštenjima sistema Windows, koja čitači ekrana obično najavljuju. Ako neko propustite ili je uključena opcija Ne uznemiravaj, pronaći ćete ga u centru za obaveštenja sistema Windows (<kbd>Windows</kbd>+<kbd>N</kbd> u sistemu Windows 11).</p>
+<p>Da biste potpuno zatvorili Dodavo, izaberite <span class="ui">Izlaz</span> u meniju <span class="ui">Datoteka</span> ili u meniju ikone. Ako su prenosi još u toku, Dodavo nudi dve opcije: <span class="ui">Izađi i nastavi prenose kasnije</span> (prenosi se prekidaju i nastavljaju kada Dodavo ponovo bude pokrenut na oba računara) ili <span class="ui">Otkaži prenose i izađi</span>. Posle izlaza ne možete da primate datoteke dok ponovo ne pokrenete Dodavo.</p>
+<p>Dodavo o završenim prenosima, dolaznim prenosima, pauziranju na drugoj strani, prekinutim i ponovo uspostavljenim vezama i drugim događajima izveštava obaveštenjima sistema Windows, i dok je prozor napretka umanjen u pozadinu. Čitači ekrana ih obično najavljuju. Izbor obaveštenja o prenosu dovodi njegov prozor u prednji plan. Ako neko propustite ili je uključena opcija Ne uznemiravaj, pronaći ćete ga u centru za obaveštenja sistema Windows (<kbd>Windows</kbd>+<kbd>N</kbd> u sistemu Windows 11).</p>
 </section>
 
 <section aria-labelledby="settings">
@@ -270,6 +284,8 @@
 <dd>Kada nije izabrano, zatvaranjem glavnog prozora izlazite iz programa Dodavo.</dd>
 <dt><span class="ui">Pri zatvaranju prozora prenosa koji je u toku</span></dt>
 <dd>Lista sa opcijama <span class="ui">Pitaj svaki put</span>, <span class="ui">Nastavi u pozadini</span> i <span class="ui">Otkaži prenos</span>. Pogledajte <a href="#closing-progress">Zatvaranje prozora napretka tokom prenosa</a>.</dd>
+<dt><span class="ui">Ako se veza prekine tokom prenosa</span></dt>
+<dd>Lista sa opcijama <span class="ui">Pitaj svaki put</span>, <span class="ui">Sačekaj vezu i nastavi</span> i <span class="ui">Otkaži prenos</span>. Pogledajte <a href="#connection-lost">Kada se veza prekine</a>.</dd>
 <dt><span class="ui">Jezik</span></dt>
 <dd>Jezik programa Dodavo i ove pomoći: <span class="ui">Podrazumevani jezik sistema Windows</span>, <span lang="en">English</span>, <span lang="hr">Hrvatski</span>, <span lang="sr-Latn">Srpski (latinica)</span> ili <span lang="sl">Slovenščina</span>. Uz opciju <span class="ui">Podrazumevani jezik sistema Windows</span> Dodavo koristi prvi od vaših jezika prikaza u sistemu Windows koji podržava, a inače engleski. Novi jezik se koristi nakon ponovnog pokretanja programa Dodavo.</dd>
 <dt><span class="ui">Vaš ID kontakta</span></dt>
@@ -322,6 +338,18 @@
 </tbody>
 </table>
 <table>
+<caption>Prozor napretka</caption>
+<thead>
+<tr><th scope="col">Tasteri</th><th scope="col">Radnja</th></tr>
+</thead>
+<tbody>
+<tr><td><kbd>Alt</kbd>+<kbd>P</kbd></td><td>Pauziranje prenosa</td></tr>
+<tr><td><kbd>Alt</kbd>+<kbd>N</kbd></td><td>Nastavljanje prenosa</td></tr>
+<tr><td><kbd>Alt</kbd>+<kbd>Z</kbd></td><td>Umanjivanje u pozadinu</td></tr>
+<tr><td><kbd>Esc</kbd></td><td>Zatvaranje prozora (pita da li želite da nastavite u pozadini ili da otkažete)</td></tr>
+</tbody>
+</table>
+<table>
 <caption>Windows</caption>
 <thead>
 <tr><th scope="col">Tasteri</th><th scope="col">Radnja</th></tr>
@@ -345,7 +373,7 @@
 <dt>Posrednički server</dt>
 <dd>Kada direktna veza nije moguća, na primer u strogo zaštićenim poslovnim mrežama, podaci idu preko javnog posredničkog servera. I dalje su potpuno šifrovani, pa server ne može da ih pročita. Prozor napretka pokazuje koja vrsta veze se koristi.</dd>
 <dt>Šifrovanje i integritet</dt>
-<dd>Svi prenosi su potpuno šifrovani. Svaki prenos se proverava i kontrolnim zbirom, pa se oštećena datoteka nikada ne čuva kao da je potpuna. Datoteka koja se prima prvo se upisuje sa oznakom tipa <code>.part</code>, a pravi naziv dobija tek kada je potpuna; ako prenos ne uspe, nepotpuni podaci se uklanjaju.</dd>
+<dd>Svi prenosi su potpuno šifrovani. Svaki prenos se proverava i kontrolnim zbirom, pa se oštećena datoteka nikada ne čuva kao da je potpuna. Datoteka koja se prima prvo se upisuje sa oznakom tipa <code>.part</code>, a pravi naziv dobija tek kada je potpuna; ako se veza prekine, datoteka <code>.part</code> ostaje dok se prenos ne nastavi; ako prenos ne uspe ili se otkaže, nepotpuni podaci se uklanjaju.</dd>
 <dt>Fascikle</dt>
 <dd>Dodavo odbija da raspakuje primljenu fasciklu koja sadrži nebezbedne putanje, na primer putanje koje bi upisivale van odredišne fascikle.</dd>
 </dl>
@@ -358,6 +386,12 @@
 <dl>
 <dt>„Povezivanje sa računarom (…) nije uspelo.“</dt>
 <dd>Dodavo nije pokrenut na drugom računaru ili neko od vas nije na mreži. Zamolite drugu osobu da pokrene Dodavo, proverite red statusa na dnu oba glavna prozora, a zatim pokušajte ponovo. Proverite i da li imate tačan ID kontakta te osobe.</dd>
+<dt>„Dodavo na drugom računaru je zastareo. Na oba računara je potrebna aktuelna verzija“</dt>
+<dd>Druga osoba koristi stariju verziju programa Dodavo, koja ne može da pauzira ni da nastavlja prenose. Zamolite je da instalira aktuelnu verziju.</dd>
+<dt>„Datoteka je promenjena posle početka prenosa“</dt>
+<dd>Datoteka koju šaljete izmenjena je dok je prenos čekao vezu, pa ne može da se nastavi. Pošaljite je ponovo.</dd>
+<dt>Prenos kaže da je veza prekinuta, a oboje smo na mreži</dt>
+<dd>Sačekajte trenutak: Dodavo pokušava ponovo svakih nekoliko sekundi. Ako je Dodavo na bilo kojoj strani ponovo pokrenut, proverite da li je pokrenut na oba računara. Prenos uvek možete da otkažete i da ga započnete iznova.</dd>
 <dt>Red statusa kaže Van mreže</dt>
 <dd>Proverite internet vezu. Prenosi na računare u vašoj lokalnoj mreži i dalje rade.</dd>
 <dt>„Ovo nije važeći ID kontakta.“</dt>

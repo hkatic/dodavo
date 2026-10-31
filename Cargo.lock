@@ -584,6 +584,7 @@ dependencies = [
  "iroh",
  "iroh-mdns-address-lookup",
  "postcard",
+ "rand",
  "serde",
  "serde_json",
  "tokio",

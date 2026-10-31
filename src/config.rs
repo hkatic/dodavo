@@ -31,6 +31,27 @@ impl CloseAction {
     ];
 }
 
+/// What happens when the connection is lost during a transfer. The transfer
+/// itself always waits for the other side; this only decides whether the user
+/// is asked, and whether the transfer is cancelled instead.
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ConnectionLostAction {
+    #[default]
+    Ask,
+    Wait,
+    Cancel,
+}
+
+impl ConnectionLostAction {
+    /// In the order shown in the settings.
+    pub const ALL: [ConnectionLostAction; 3] = [
+        ConnectionLostAction::Ask,
+        ConnectionLostAction::Wait,
+        ConnectionLostAction::Cancel,
+    ];
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(default)]
 pub struct Config {
@@ -51,6 +72,8 @@ pub struct Config {
     pub start_minimized: bool,
     /// What closing the window of a running transfer does.
     pub close_running_transfer: CloseAction,
+    /// What happens when the connection is lost during a transfer.
+    pub connection_lost: ConnectionLostAction,
     /// Ask whether to open a received item when its transfer is complete.
     pub ask_after_receive: bool,
     /// Whether the "still running in the notification area" hint was shown.
@@ -73,6 +96,7 @@ impl Default for Config {
             minimize_to_tray: true,
             start_minimized: false,
             close_running_transfer: CloseAction::Ask,
+            connection_lost: ConnectionLostAction::Ask,
             ask_after_receive: true,
             tray_hint_shown: false,
             language: None,
@@ -189,6 +213,7 @@ mod tests {
         cfg.always_save_dir = Some(PathBuf::from(r"C:\Temp"));
         cfg.language = Some("hr".into());
         cfg.close_running_transfer = CloseAction::Background;
+        cfg.connection_lost = ConnectionLostAction::Wait;
         cfg.save(&dir).unwrap();
         assert_eq!(Config::load(&dir).unwrap(), cfg);
         assert!(cfg.contact_by_id("ABC").is_some());
@@ -226,6 +251,7 @@ mod tests {
         assert!(!cfg.start_minimized);
         assert!(cfg.ask_after_receive);
         assert_eq!(cfg.close_running_transfer, CloseAction::Ask);
+        assert_eq!(cfg.connection_lost, ConnectionLostAction::Ask);
         assert_eq!(cfg.language, None);
     }
 }

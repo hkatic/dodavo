@@ -213,20 +213,34 @@
 <p>Vsak prenos, poslan ali prejet, ima lastno okno napredka. Njegov naslov pove, kaj se dogaja, na primer »Pošiljanje datoteke – prejemnik: Ana«. Okno prikazuje:</p>
 <ul>
 <li>Krepko vrstico z imenom elementa in osebo.</li>
-<li>Trenutni korak: <span class="ui">Pakiranje mape…</span>, <span class="ui">Povezovanje s prejemnikom (…)…</span>, <span class="ui">Čakanje, da prejemnik (…) sprejme prenos…</span>, <span class="ui">Pošiljanje…</span>, <span class="ui">Prejemanje…</span> ali <span class="ui">Razpakiranje mape…</span>.</li>
+<li>Trenutni korak: <span class="ui">Pakiranje mape…</span>, <span class="ui">Povezovanje s prejemnikom (…)…</span>, <span class="ui">Čakanje, da prejemnik (…) sprejme prenos…</span>, <span class="ui">Pošiljanje…</span>, <span class="ui">Prejemanje…</span>, <span class="ui">Preverjanje že prenesenih podatkov…</span> ali <span class="ui">Razpakiranje mape…</span>. Medtem ko je prenos začasno ustavljen ali je povezava prekinjena, vrstica koraka to pove (glejte spodaj).</li>
 <li>Vrstico napredka.</li>
 <li><span class="ui">Preneseno:</span> (ali <span class="ui">Obdelano:</span>, medtem ko se mapa pakira ali razpakira) z opravljeno količino, skupno velikostjo in odstotkom.</li>
 <li><span class="ui">Hitrost:</span> in <span class="ui">Preostali čas:</span>, ki se posodobita enkrat na sekundo.</li>
 <li>Vrsto povezave: <span class="ui">Povezava: neposredna (od računalnika do računalnika)</span> ali <span class="ui">Povezava: prek posredovalnega strežnika (celovito šifrirana)</span>.</li>
-<li>Gumb <span class="ui">Prekliči</span>, ki pred preklicem prenosa zahteva potrditev.</li>
+<li>Tri gumbe: <span class="ui">Začasno ustavi</span> (<kbd>Alt</kbd>+<kbd>Z</kbd>), ki se, medtem ko je prenos začasno ustavljen, spremeni v <span class="ui">Nadaljuj</span> (<kbd>Alt</kbd>+<kbd>N</kbd>); <span class="ui">Pomanjšaj v ozadje</span> (<kbd>Alt</kbd>+<kbd>P</kbd>), ki skrije okno in pusti, da se prenos nadaljuje; in <span class="ui">Prekliči</span>, ki pred preklicem prenosa zahteva potrditev.</li>
 </ul>
-<p>Fokus tipkovnice lahko dobi samo gumb <span class="ui">Prekliči</span>. Če želite slišati napredek, uporabite ukaz bralnika zaslona za branje celotnega okna: <kbd>NVDA</kbd>+<kbd>B</kbd> v bralniku NVDA, <kbd>Insert</kbd>+<kbd>B</kbd> v bralniku JAWS ali <kbd>Pripovedovalec</kbd>+<kbd>W</kbd> v Pripovedovalcu.</p>
+<p>Ko se okno odpre, je fokus na gumbu <span class="ui">Začasno ustavi</span>; s tipko <kbd>Tab</kbd> se premikate med gumbi, s tipko <kbd>Enter</kbd> pa aktivirate tistega, ki ima fokus. Druge vrstice ne morejo dobiti fokusa. Če želite slišati napredek, uporabite ukaz bralnika zaslona za branje celotnega okna: <kbd>NVDA</kbd>+<kbd>B</kbd> v bralniku NVDA, <kbd>Insert</kbd>+<kbd>B</kbd> v bralniku JAWS ali <kbd>Pripovedovalec</kbd>+<kbd>W</kbd> v Pripovedovalcu.</p>
 <p>Ko se prenos konča, vrstica koraka pove, kako se je končal, na primer <span class="ui">Končano! Datoteka je bila dostavljena prejemniku (Ana).</span> ali <span class="ui">Prenos je bil preklican.</span> Če kaj ni uspelo, vrstica pod njo navede razlog. Gumb <span class="ui">Prekliči</span> se spremeni v <span class="ui">Zapri</span>. Ko ste element prejeli, se okno napredka samo zapre, takoj ko je element shranjen (glejte <a href="#after-receiving">Ko je prenos končan</a>).</p>
+
+<h3 id="pausing">Začasna ustavitev in nadaljevanje</h3>
+<p>Aktivirajte <span class="ui">Začasno ustavi</span> (<kbd>Alt</kbd>+<kbd>Z</kbd>), da prenos za nekaj časa ustavite; vrstica koraka pove <span class="ui">Začasno ustavljeno. Za nadaljevanje izberite »Nadaljuj«.</span>, gumb pa se spremeni v <span class="ui">Nadaljuj</span> (<kbd>Alt</kbd>+<kbd>N</kbd>). Prenos lahko začasno ustavi katera koli stran, pri pošiljanju in pri prejemanju. Druga oseba vidi, da je bil prenos začasno ustavljen na vaši strani, o tem pa jo obvesti tudi obvestilo. Ko nadaljujete, se prenos nadaljuje natanko tam, kjer se je ustavil: nič se ne pošlje dvakrat in nič se ne izgubi, kontrolna vsota na koncu pa zajema celoten element.</p>
+<p>Začasno ustavljen prenos ostane ustavljen, dokler ga ne nadaljujete, tudi če se vmes povezava prekine ali se Dodavo znova zažene. Še vedno ga lahko prekličete.</p>
+
+<h3 id="connection-lost">Ko se povezava prekine</h3>
+<p>Če internetna povezava izgine, eden od računalnikov preide v spanje ali se Dodavo zapre na kateri koli strani, prenos ni izgubljen. Vrstica koraka pove <span class="ui">Povezava je bila prekinjena. Prenos se nadaljuje, takoj ko sta oba spet povezana, tudi po vnovičnem zagonu.</span> Dodavo obdrži, kar je že prispelo, in nadaljuje od tam, takoj ko se računalnika spet lahko povežeta – čez nekaj sekund ali čez nekaj dni.</p>
+<p>Če povezava ostane prekinjena nekaj sekund, Dodavo vpraša, kaj naj naredi:</p>
+<ul>
+<li><span class="ui">Počakaj na povezavo</span> pusti prenos čakati. Nadaljuje se sam.</li>
+<li><span class="ui">Prekliči prenos</span> ga konča. Delno prejeti podatki se izbrišejo.</li>
+</ul>
+<p>Izberite <span class="ui">Ne sprašuj me več</span>, če želite, da se vedno zgodi enako. Izbiro lahko pozneje spremenite v nastavitvah, pod <span class="ui">Če se povezava med prenosom prekine</span>. Z možnostjo <span class="ui">Počakaj na povezavo in nadaljuj</span> Dodavo namesto vprašanja prikaže obvestilo, z možnostjo <span class="ui">Prekliči prenos</span> pa takoj prekliče.</p>
+<p>Ob zagonu Dodavo prevzame prenose, ki so bili zadnjič prekinjeni: za vsakega od njih se prikaže obvestilo <span class="ui">Nedokončan prenos</span>, njegovo okno napredka pa se odpre, ne da bi prevzelo fokus. Preden podatki spet stečejo, vrstica koraka pove <span class="ui">Preverjanje že prenesenih podatkov…</span>, medtem ko Dodavo preverja, kar že ima. Za to oba računalnika potrebujeta trenutno različico programa Dodavo; s starejšo različico na drugi strani se prenos sploh ne more začeti.</p>
 
 <h3 id="closing-progress">Zapiranje okna napredka med prenosom</h3>
 <p>Če okno napredka zaprete (s tipko <kbd>Esc</kbd>, s tipkama <kbd>Alt</kbd>+<kbd>F4</kbd> ali z gumbom za zapiranje okna), medtem ko prenos še poteka, vas Dodavo vpraša, kaj naj naredi:</p>
 <ul>
-<li><span class="ui">Nadaljuj v ozadju</span> skrije okno. Prenos se nadaljuje, ko bo končan, pa vas o tem obvesti obvestilo.</li>
+<li><span class="ui">Nadaljuj v ozadju</span> skrije okno (enako kot gumb <span class="ui">Pomanjšaj v ozadje</span>). Prenos se nadaljuje, ko bo končan, pa vas o tem obvesti obvestilo.</li>
 <li><span class="ui">Prekliči prenos</span> ga po vaši potrditvi ustavi.</li>
 </ul>
 <p>Izberite <span class="ui">Ne sprašuj me več</span>, če želite, da se vedno zgodi enako. Izbiro lahko pozneje spremenite v nastavitvah, pod <span class="ui">Ob zapiranju okna prenosa, ki še poteka</span>.</p>
@@ -240,8 +254,8 @@
 <li>Če želite do ikone priti s tipkovnico, pritisnite <kbd>Windows</kbd>+<kbd>B</kbd> in se s puščičnimi tipkami premaknite do ikone <span class="ui">Dodavo</span>. Če je ni, je morda med skritimi ikonami: najprej izberite gumb <span class="ui">Pokaži skrite ikone</span>. Pritisnite <kbd>Enter</kbd>, da odprete okno, ali <kbd>Shift</kbd>+<kbd>F10</kbd> oziroma tipko za priročni meni, da odprete meni ikone.</li>
 <li>Meni ikone vsebuje ukaze <span class="ui">Odpri</span>, <span class="ui">Kopiraj moj ID stika</span> in <span class="ui">Izhod</span>.</li>
 </ul>
-<p>Če želite Dodavo popolnoma zapreti, izberite <span class="ui">Izhod</span> v meniju <span class="ui">Datoteka</span> ali v meniju ikone. Če prenosi še potekajo, Dodavo zahteva potrditev, ker bodo preklicani. Po izhodu ne morete prejemati datotek, dokler znova ne zaženete programa Dodavo.</p>
-<p>Dodavo o končanih prenosih, dohodnih prenosih in drugih dogodkih obvešča z obvestili sistema Windows, ki jih bralniki zaslona običajno najavijo. Če katero zamudite ali je vklopljena možnost Ne moti, ga najdete v središču za obvestila sistema Windows (<kbd>Windows</kbd>+<kbd>N</kbd> v sistemu Windows 11).</p>
+<p>Če želite Dodavo popolnoma zapreti, izberite <span class="ui">Izhod</span> v meniju <span class="ui">Datoteka</span> ali v meniju ikone. Če prenosi še potekajo, Dodavo ponudi dve možnosti: <span class="ui">Končaj in nadaljuj prenose pozneje</span> (prenosi se prekinejo in nadaljujejo, ko bo Dodavo znova zagnan v obeh računalnikih) ali <span class="ui">Prekliči prenose in končaj</span>. Po izhodu ne morete prejemati datotek, dokler znova ne zaženete programa Dodavo.</p>
+<p>Dodavo o končanih prenosih, dohodnih prenosih, začasnih ustavitvah na drugi strani, prekinjenih in znova vzpostavljenih povezavah ter drugih dogodkih obvešča z obvestili sistema Windows, tudi ko je okno napredka pomanjšano v ozadje. Bralniki zaslona jih običajno najavijo. Izbira obvestila o prenosu postavi njegovo okno v ospredje. Če katero zamudite ali je vklopljena možnost Ne moti, ga najdete v središču za obvestila sistema Windows (<kbd>Windows</kbd>+<kbd>N</kbd> v sistemu Windows 11).</p>
 </section>
 
 <section aria-labelledby="settings">
@@ -270,6 +284,8 @@
 <dd>Ko ni izbrano, z zaprtjem glavnega okna zaprete Dodavo.</dd>
 <dt><span class="ui">Ob zapiranju okna prenosa, ki še poteka</span></dt>
 <dd>Seznam z možnostmi <span class="ui">Vprašaj vsakič</span>, <span class="ui">Nadaljuj v ozadju</span> in <span class="ui">Prekliči prenos</span>. Glejte <a href="#closing-progress">Zapiranje okna napredka med prenosom</a>.</dd>
+<dt><span class="ui">Če se povezava med prenosom prekine</span></dt>
+<dd>Seznam z možnostmi <span class="ui">Vprašaj vsakič</span>, <span class="ui">Počakaj na povezavo in nadaljuj</span> in <span class="ui">Prekliči prenos</span>. Glejte <a href="#connection-lost">Ko se povezava prekine</a>.</dd>
 <dt><span class="ui">Jezik</span></dt>
 <dd>Jezik programa Dodavo in te pomoči: <span class="ui">Privzeto v sistemu Windows</span>, <span lang="en">English</span>, <span lang="hr">Hrvatski</span>, <span lang="sr-Latn">Srpski (latinica)</span> ali <span lang="sl">Slovenščina</span>. Z možnostjo <span class="ui">Privzeto v sistemu Windows</span> Dodavo uporabi prvega od vaših jezikov prikaza v sistemu Windows, ki ga podpira, sicer pa angleščino. Novi jezik bo uporabljen po vnovičnem zagonu programa Dodavo.</dd>
 <dt><span class="ui">Vaš ID stika</span></dt>
@@ -322,6 +338,18 @@
 </tbody>
 </table>
 <table>
+<caption>Okno napredka</caption>
+<thead>
+<tr><th scope="col">Tipke</th><th scope="col">Dejanje</th></tr>
+</thead>
+<tbody>
+<tr><td><kbd>Alt</kbd>+<kbd>Z</kbd></td><td>Začasna ustavitev prenosa</td></tr>
+<tr><td><kbd>Alt</kbd>+<kbd>N</kbd></td><td>Nadaljevanje prenosa</td></tr>
+<tr><td><kbd>Alt</kbd>+<kbd>P</kbd></td><td>Pomanjšanje v ozadje</td></tr>
+<tr><td><kbd>Esc</kbd></td><td>Zapiranje okna (vpraša, ali želite nadaljevati v ozadju ali preklicati)</td></tr>
+</tbody>
+</table>
+<table>
 <caption>Windows</caption>
 <thead>
 <tr><th scope="col">Tipke</th><th scope="col">Dejanje</th></tr>
@@ -345,7 +373,7 @@
 <dt>Posredovalni strežnik</dt>
 <dd>Ko neposredna povezava ni mogoča, na primer v strogo zaščitenih poslovnih omrežjih, podatki potujejo prek javnega posredovalnega strežnika. Še vedno so celovito šifrirani, zato jih strežnik ne more prebrati. Okno napredka pokaže, katera vrsta povezave je v uporabi.</dd>
 <dt>Šifriranje in celovitost</dt>
-<dd>Vsi prenosi so celovito šifrirani. Vsak prenos se preveri tudi s kontrolno vsoto, zato se poškodovana datoteka nikoli ne shrani, kot da bi bila popolna. Datoteka, ki se prejema, se najprej zapiše s pripono <code>.part</code> in dobi pravo ime šele, ko je popolna; če prenos ne uspe, se nepopolni podatki odstranijo.</dd>
+<dd>Vsi prenosi so celovito šifrirani. Vsak prenos se preveri tudi s kontrolno vsoto, zato se poškodovana datoteka nikoli ne shrani, kot da bi bila popolna. Datoteka, ki se prejema, se najprej zapiše s pripono <code>.part</code> in dobi pravo ime šele, ko je popolna; če se povezava prekine, datoteka <code>.part</code> ostane, dokler se prenos ne nadaljuje; če prenos ne uspe ali je preklican, se nepopolni podatki odstranijo.</dd>
 <dt>Mape</dt>
 <dd>Dodavo ne razpakira prejete mape, ki vsebuje nevarne poti, na primer poti, ki bi pisale zunaj ciljne mape.</dd>
 </dl>
@@ -358,6 +386,12 @@
 <dl>
 <dt>»Povezave z računalnikom (…) ni bilo mogoče vzpostaviti.«</dt>
 <dd>Dodavo se v drugem računalniku ne izvaja ali pa eden od vaju ni povezan. Prosite drugo osebo, naj zažene Dodavo, preverite vrstico stanja na dnu obeh glavnih oken in poskusite znova. Preverite tudi, ali imate pravilen ID stika te osebe.</dd>
+<dt>»Dodavo v drugem računalniku je zastarel. Oba računalnika potrebujeta trenutno različico«</dt>
+<dd>Druga oseba uporablja starejšo različico programa Dodavo, ki prenosov ne more začasno ustaviti ali nadaljevati. Prosite jo, naj namesti trenutno različico.</dd>
+<dt>»Datoteka je bila spremenjena po začetku prenosa«</dt>
+<dd>Datoteka, ki jo pošiljate, je bila spremenjena, medtem ko je prenos čakal na povezavo, zato se ne more nadaljevati. Pošljite jo znova.</dd>
+<dt>Prenos pravi, da je povezava prekinjena, a sva oba povezana</dt>
+<dd>Počakajte trenutek: Dodavo poskuša znova vsakih nekaj sekund. Če je bil Dodavo na kateri koli strani znova zagnan, preverite, ali se izvaja v obeh računalnikih. Prenos lahko vedno prekličete in ga začnete znova.</dd>
 <dt>Vrstica stanja pravi Brez povezave</dt>
 <dd>Preverite internetno povezavo. Prenosi na računalnike v vašem lokalnem omrežju še vedno delujejo.</dd>
 <dt>»To ni veljaven ID stika.«</dt>

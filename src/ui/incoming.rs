@@ -219,7 +219,7 @@ impl Incoming {
             super::main_window::refresh_list();
         }
         self.answered = true;
-        app::accept_offer(self.id, &sender, &self.offer, dir);
+        app::accept_offer(self.id, &sender, &self.offer, dir, true);
         w.close();
     }
 }
@@ -334,6 +334,7 @@ mod tests {
             file_count: 3,
             content_size: 150,
             sender_name: String::new(),
+            token: [0; 16],
         }
     }
 

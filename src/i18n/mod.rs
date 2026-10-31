@@ -238,6 +238,25 @@ strings! {
         notify_failed_title,
         notify_saved,
         notify_status,
+        // Progress window: pausing, the lost connection and restored transfers.
+        pause,
+        resume,
+        minimize_background,
+        phase_paused,
+        phase_paused_by_peer,
+        phase_waiting_connection,
+        phase_verifying,
+        connection_lost_instruction,
+        connection_lost_text,
+        wait_for_connection,
+        paused_balloon_title,
+        paused_by_peer_balloon,
+        connection_lost_balloon_title,
+        connection_lost_balloon,
+        continuing_balloon_title,
+        continuing_balloon,
+        restored_balloon_title,
+        restored_balloon,
         // Closing a running transfer.
         close_running_instruction,
         close_running_text,
@@ -301,6 +320,10 @@ strings! {
         close_ask,
         close_background,
         close_cancel,
+        connection_lost_label,
+        lost_ask,
+        lost_wait,
+        lost_cancel,
         language_label,
         language_default,
         language_restart,
@@ -308,6 +331,10 @@ strings! {
         copy,
         enter_my_name,
         invalid_save_folder,
+        // Exiting while transfers run.
+        exit_text,
+        exit_keep,
+        exit_cancel_transfers,
         // Common.
         ok,
         cancel,
@@ -337,12 +364,12 @@ strings! {
         untitled,
         error_cannot_read,
         error_timeout,
+        error_peer_outdated,
         error_unexpected_answer,
         error_file_shorter,
         error_peer_reported,
         error_recipient_failed,
         error_sender_failed,
-        error_sender_stopped,
         error_protocol_end,
         error_message_too_large,
         error_damaged,
@@ -350,10 +377,14 @@ strings! {
         error_cannot_read_folder,
         error_cannot_open,
         error_unsafe_path,
+        error_source_changed,
+        error_part_missing,
+        error_bad_resume,
+        error_connection_lost,
     }
     plurals {
         drop_confirm,
-        exit_confirm,
+        exit_instruction,
         folder_description,
         bytes,
         seconds,
@@ -555,7 +586,7 @@ mod tests {
         }
         for lang in Lang::ALL {
             let s = lang.strings();
-            let groups: [(&str, Vec<&str>); 12] = [
+            let groups: [(&str, Vec<&str>); 15] = [
                 ("menu bar", vec![s.menu_file, s.menu_help]),
                 (
                     "File menu",
@@ -602,14 +633,24 @@ mod tests {
                         s.start_minimized,
                         s.keep_in_tray,
                         s.close_running_label,
+                        s.connection_lost_label,
                         s.language_label,
                         s.copy,
                     ],
                 ),
                 (
+                    "progress window",
+                    vec![s.pause, s.resume, s.minimize_background],
+                ),
+                (
                     "close running transfer",
                     vec![s.continue_background, s.cancel_transfer, s.dont_ask_again],
                 ),
+                (
+                    "connection lost",
+                    vec![s.wait_for_connection, s.cancel_transfer, s.dont_ask_again],
+                ),
+                ("exit", vec![s.exit_keep, s.exit_cancel_transfers]),
                 (
                     "received file",
                     vec![s.open_file, s.open_containing_folder, s.dont_ask_again],

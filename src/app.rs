@@ -20,8 +20,11 @@ use crate::{
     config::{Config, Contact},
     i18n::tr,
     identity,
-    net::{self, Command, Event, Kind, NetHandle, Outcome},
-    ui::{self, incoming, progress, tray},
+    net::{self, Command, Event, Kind, NetHandle, Outcome, Role},
+    ui::{
+        self, incoming, progress,
+        tray::{self, BalloonAction},
+    },
 };
 
 pub const WM_APP_NET: u32 = WM_APP + 1;
@@ -36,8 +39,8 @@ pub struct App {
     pub transfers: HashMap<u64, HWND>,
     /// Open "incoming transfer" windows by transfer id.
     pub offers: HashMap<u64, HWND>,
-    /// Item revealed when the user clicks the last notification balloon.
-    pub balloon_path: Option<PathBuf>,
+    /// What selecting the last notification does.
+    pub balloon_action: Option<BalloonAction>,
 }
 
 thread_local! {
@@ -129,6 +132,7 @@ pub fn start_send(contact: &Contact, path: PathBuf, kind: Kind) {
         &item,
         kind,
         None,
+        true,
     );
     with(|a| a.transfers.insert(id, hwnd));
     let my_name = with(|a| a.cfg.my_name.clone());
@@ -138,11 +142,13 @@ pub fn start_send(contact: &Contact, path: PathBuf, kind: Kind) {
         path,
         kind,
         my_name,
+        peer_name: contact.name.clone(),
     });
 }
 
-/// Accepts an incoming offer: remembers the folder and opens a progress window.
-pub fn accept_offer(id: u64, sender: &str, offer: &net::Offer, dir: PathBuf) {
+/// Accepts an incoming offer: remembers the folder and opens a progress
+/// window, which gets the focus when the user accepted (`activate`).
+pub fn accept_offer(id: u64, sender: &str, offer: &net::Offer, dir: PathBuf, activate: bool) {
     update_cfg(|c| c.last_save_dir = Some(dir.clone()));
     let hwnd = progress::open(
         id,
@@ -151,6 +157,7 @@ pub fn accept_offer(id: u64, sender: &str, offer: &net::Offer, dir: PathBuf) {
         &offer.name,
         offer.kind,
         Some(offer.size),
+        activate,
     );
     with(|a| a.transfers.insert(id, hwnd));
     net_send(Command::Respond {
@@ -159,12 +166,23 @@ pub fn accept_offer(id: u64, sender: &str, offer: &net::Offer, dir: PathBuf) {
     });
 }
 
-pub fn active_transfer_count() -> usize {
-    let windows: Vec<HWND> = with(|a| a.transfers.values().copied().collect());
+fn active_transfers() -> Vec<(u64, HWND)> {
+    let windows: Vec<(u64, HWND)> = with(|a| a.transfers.iter().map(|(i, h)| (*i, *h)).collect());
     windows
         .into_iter()
-        .filter(|&h| progress::is_active(h))
-        .count()
+        .filter(|&(_, h)| progress::is_active(h))
+        .collect()
+}
+
+pub fn active_transfer_count() -> usize {
+    active_transfers().len()
+}
+
+/// Cancels every running transfer (before exiting).
+pub fn cancel_all_transfers() {
+    for (id, _) in active_transfers() {
+        net_send(Command::Cancel { id });
+    }
 }
 
 /// Drains the queue of network events (on the UI thread).
@@ -204,7 +222,7 @@ fn handle_event(event: Event) -> Option<Event> {
                     && incoming::check_space(&offer, d).enough != Some(false)
             });
             if let Some(dir) = auto_dir {
-                accept_offer(id, &name, &offer, dir);
+                accept_offer(id, &name, &offer, dir, false);
                 tray::balloon(
                     main_window(),
                     tr!(receiving_balloon_title),
@@ -216,11 +234,38 @@ fn handle_event(event: Event) -> Option<Event> {
                 with(|a| a.offers.insert(id, hwnd));
             }
         }
+        Event::Restored { id, record, have } => {
+            let (name, _) = peer_name(&record.peer, &record.peer_name);
+            let dir = match record.role() {
+                Role::Send => progress::Direction::Send,
+                Role::Receive => progress::Direction::Receive,
+            };
+            let hwnd = progress::open(
+                id,
+                dir,
+                &name,
+                &record.offer.name,
+                record.offer.kind,
+                Some(record.offer.size),
+                false,
+            );
+            progress::set_progress(hwnd, have, record.offer.size);
+            with(|a| a.transfers.insert(id, hwnd));
+            tray::balloon(
+                main_window(),
+                tr!(restored_balloon_title),
+                &tr!(restored_balloon, item = record.offer.name),
+                Some(BalloonAction::Window(hwnd)),
+            );
+        }
         Event::Phase { id, phase } => {
-            if let Some(h) = transfer_window(id)
-                && !progress::set_phase(h, phase)
-            {
-                return Some(Event::Phase { id, phase });
+            if let Some(h) = transfer_window(id) {
+                let Some(notice) = progress::set_phase(h, phase) else {
+                    return Some(Event::Phase { id, phase });
+                };
+                if let Some((title, text)) = notice.balloon {
+                    tray::balloon(main_window(), &title, &text, Some(BalloonAction::Window(h)));
+                }
             }
         }
         Event::Progress { id, done, total } => {
@@ -250,7 +295,11 @@ fn handle_event(event: Event) -> Option<Event> {
                 };
                 let main_visible = unsafe { IsWindowVisible(main_window()) } != 0;
                 if done.notify || (!main_visible && matches!(outcome, Outcome::Completed(_))) {
-                    tray::balloon(main_window(), &done.title, &done.text, done.path);
+                    let action = match done.path {
+                        Some(path) => Some(BalloonAction::Reveal(path)),
+                        None => Some(BalloonAction::Window(h)),
+                    };
+                    tray::balloon(main_window(), &done.title, &done.text, action);
                 }
             }
         }

@@ -213,20 +213,34 @@
 <p>Every transfer, sent or received, has its own progress window. Its title says what is happening, for example “Sending file to Ana”. The window shows:</p>
 <ul>
 <li>A bold line with the person and the name of the item.</li>
-<li>The current step: <span class="ui">Packing the folder…</span>, <span class="ui">Connecting to …</span>, <span class="ui">Waiting for … to accept…</span>, <span class="ui">Sending…</span>, <span class="ui">Receiving…</span> or <span class="ui">Unpacking the folder…</span>.</li>
+<li>The current step: <span class="ui">Packing the folder…</span>, <span class="ui">Connecting to …</span>, <span class="ui">Waiting for … to accept…</span>, <span class="ui">Sending…</span>, <span class="ui">Receiving…</span>, <span class="ui">Checking the data already transferred…</span> or <span class="ui">Unpacking the folder…</span>. While a transfer is paused or the connection is lost, the step line says so (see below).</li>
 <li>A progress bar.</li>
 <li><span class="ui">Transferred:</span> (or <span class="ui">Processed:</span> while a folder is packed or unpacked) with the amount done, the total and the percentage.</li>
 <li><span class="ui">Speed:</span> and <span class="ui">Time remaining:</span>, updated once a second.</li>
 <li>The type of connection: <span class="ui">Connection: direct (computer to computer)</span> or <span class="ui">Connection: through a relay server (end-to-end encrypted)</span>.</li>
-<li>The <span class="ui">Cancel</span> button, which asks for confirmation before it cancels the transfer.</li>
+<li>Three buttons: <span class="ui">Pause</span> (<kbd>Alt</kbd>+<kbd>P</kbd>), which becomes <span class="ui">Resume</span> (<kbd>Alt</kbd>+<kbd>R</kbd>) while the transfer is paused; <span class="ui">Minimize to background</span> (<kbd>Alt</kbd>+<kbd>B</kbd>), which hides the window and lets the transfer continue; and <span class="ui">Cancel</span>, which asks for confirmation before it cancels the transfer.</li>
 </ul>
-<p>Only the <span class="ui">Cancel</span> button can receive keyboard focus. To hear the progress, use your screen reader's command for reading the whole window: <kbd>NVDA</kbd>+<kbd>B</kbd> in NVDA, <kbd>Insert</kbd>+<kbd>B</kbd> in JAWS, or <kbd>Narrator</kbd>+<kbd>W</kbd> in Narrator.</p>
+<p>When the window opens, the focus is on <span class="ui">Pause</span>; <kbd>Tab</kbd> moves between the buttons, and <kbd>Enter</kbd> activates the focused one. The other lines cannot receive the focus. To hear the progress, use your screen reader's command for reading the whole window: <kbd>NVDA</kbd>+<kbd>B</kbd> in NVDA, <kbd>Insert</kbd>+<kbd>B</kbd> in JAWS, or <kbd>Narrator</kbd>+<kbd>W</kbd> in Narrator.</p>
 <p>When the transfer ends, the step line says how it ended, for example <span class="ui">Done! Ana has received the file.</span> or <span class="ui">The transfer was cancelled.</span> If something went wrong, the line below gives the reason. The <span class="ui">Cancel</span> button becomes <span class="ui">Close</span>. When you have received an item, the progress window closes by itself once the item is saved (see <a href="#after-receiving">When the transfer is complete</a>).</p>
+
+<h3 id="pausing">Pausing and resuming</h3>
+<p>Activate <span class="ui">Pause</span> (<kbd>Alt</kbd>+<kbd>P</kbd>) to stop the transfer for a while; the step line says <span class="ui">Paused. Select Resume to continue.</span> and the button becomes <span class="ui">Resume</span> (<kbd>Alt</kbd>+<kbd>R</kbd>). Either side can pause, whether sending or receiving. The other person sees that the transfer was paused on your side, and a notification tells them. When you resume, the transfer goes on exactly where it stopped: nothing is sent twice and nothing is lost, and the checksum at the end covers the whole item.</p>
+<p>A paused transfer stays paused until you resume it, even if the connection is lost in the meantime or Dodavo is restarted. You can still cancel it.</p>
+
+<h3 id="connection-lost">When the connection is lost</h3>
+<p>If the Internet connection drops, one of the computers goes to sleep, or Dodavo is closed on either side, the transfer is not lost. The step line says <span class="ui">The connection was lost. The transfer continues as soon as you are both online again, even after a restart.</span> Dodavo keeps what has already arrived and continues from that point when the two computers can reach each other again – after a few seconds, or days later.</p>
+<p>If the connection stays lost for a few seconds, Dodavo asks what to do:</p>
+<ul>
+<li><span class="ui">Wait for the connection</span> leaves the transfer waiting. It continues by itself.</li>
+<li><span class="ui">Cancel the transfer</span> ends it. Partly received data is deleted.</li>
+</ul>
+<p>Select <span class="ui">Don't ask me again</span> to always do the same. You can change the choice later in Settings, under <span class="ui">If the connection is lost during a transfer</span>. With <span class="ui">Wait for the connection and continue</span>, Dodavo shows a notification instead of the question; with <span class="ui">Cancel the transfer</span>, it cancels right away.</p>
+<p>When Dodavo starts, it picks up the transfers that were interrupted last time: a notification, <span class="ui">Unfinished transfer</span>, appears for each of them, and its progress window opens without taking the focus. Before the data continues to flow, the step line says <span class="ui">Checking the data already transferred…</span> while Dodavo verifies what it already has. Both computers need the current version of Dodavo for this; with an older version on the other side, a transfer cannot even start.</p>
 
 <h3 id="closing-progress">Closing a progress window during a transfer</h3>
 <p>If you close a progress window (with <kbd>Esc</kbd>, <kbd>Alt</kbd>+<kbd>F4</kbd> or the window's Close button) while the transfer is still running, Dodavo asks what to do:</p>
 <ul>
-<li><span class="ui">Continue in the background</span> hides the window. The transfer goes on, and a notification tells you when it is finished.</li>
+<li><span class="ui">Continue in the background</span> hides the window (the same as the <span class="ui">Minimize to background</span> button). The transfer goes on, and a notification tells you when it is finished.</li>
 <li><span class="ui">Cancel the transfer</span> stops it after you confirm.</li>
 </ul>
 <p>Select <span class="ui">Don't ask me again</span> to always do the same. You can change the choice later in Settings, under <span class="ui">When closing the window of a running transfer</span>.</p>
@@ -240,8 +254,8 @@
 <li>To reach the icon with the keyboard, press <kbd>Windows</kbd>+<kbd>B</kbd>, then use the arrow keys to move to <span class="ui">Dodavo</span>. If it is not there, it may be among the hidden icons: select the <span class="ui">Show hidden icons</span> button first. Press <kbd>Enter</kbd> to open the window, or <kbd>Shift</kbd>+<kbd>F10</kbd> or the Menu key for the icon's menu.</li>
 <li>The icon's menu contains <span class="ui">Open</span>, <span class="ui">Copy My Contact ID</span> and <span class="ui">Exit</span>.</li>
 </ul>
-<p>To quit Dodavo completely, choose <span class="ui">Exit</span> from the <span class="ui">File</span> menu or from the icon's menu. If transfers are still running, Dodavo asks you to confirm, because they will be cancelled. After exiting, you can no longer receive files until you start Dodavo again.</p>
-<p>Dodavo reports finished transfers, incoming transfers and other events with Windows notifications, which screen readers usually announce. If you miss one, or if Do not disturb is on, you can find it in the Windows notification center (<kbd>Windows</kbd>+<kbd>N</kbd> in Windows 11).</p>
+<p>To quit Dodavo completely, choose <span class="ui">Exit</span> from the <span class="ui">File</span> menu or from the icon's menu. If transfers are still running, Dodavo offers two choices: <span class="ui">Exit and continue the transfers later</span> (they are interrupted and continue the next time Dodavo and the other computer are both running) or <span class="ui">Cancel the transfers and exit</span>. After exiting, you can no longer receive files until you start Dodavo again.</p>
+<p>Dodavo reports finished transfers, incoming transfers, pauses by the other side, lost and restored connections and other events with Windows notifications, also while a progress window is minimized to the background. Screen readers usually announce them. Selecting a notification about a transfer brings its window to the front. If you miss one, or if Do not disturb is on, you can find it in the Windows notification center (<kbd>Windows</kbd>+<kbd>N</kbd> in Windows 11).</p>
 </section>
 
 <section aria-labelledby="settings">
@@ -270,6 +284,8 @@
 <dd>When cleared, closing the main window exits Dodavo.</dd>
 <dt><span class="ui">When closing the window of a running transfer</span></dt>
 <dd>A list with <span class="ui">Ask every time</span>, <span class="ui">Continue in the background</span> and <span class="ui">Cancel the transfer</span>. See <a href="#closing-progress">Closing a progress window during a transfer</a>.</dd>
+<dt><span class="ui">If the connection is lost during a transfer</span></dt>
+<dd>A list with <span class="ui">Ask every time</span>, <span class="ui">Wait for the connection and continue</span> and <span class="ui">Cancel the transfer</span>. See <a href="#connection-lost">When the connection is lost</a>.</dd>
 <dt><span class="ui">Language</span></dt>
 <dd>The language of Dodavo and of this help: <span class="ui">Windows default</span>, <span lang="en">English</span>, <span lang="hr">Hrvatski</span>, <span lang="sr-Latn">Srpski (latinica)</span> or <span lang="sl">Slovenščina</span>. With <span class="ui">Windows default</span>, Dodavo uses the first of your Windows display languages that it supports, or English. A new language is used after Dodavo is restarted.</dd>
 <dt><span class="ui">Your Contact ID</span></dt>
@@ -322,6 +338,18 @@
 </tbody>
 </table>
 <table>
+<caption>Progress window</caption>
+<thead>
+<tr><th scope="col">Keys</th><th scope="col">Action</th></tr>
+</thead>
+<tbody>
+<tr><td><kbd>Alt</kbd>+<kbd>P</kbd></td><td>Pause the transfer</td></tr>
+<tr><td><kbd>Alt</kbd>+<kbd>R</kbd></td><td>Resume the transfer</td></tr>
+<tr><td><kbd>Alt</kbd>+<kbd>B</kbd></td><td>Minimize to background</td></tr>
+<tr><td><kbd>Esc</kbd></td><td>Close the window (asks whether to continue in the background or cancel)</td></tr>
+</tbody>
+</table>
+<table>
 <caption>Windows</caption>
 <thead>
 <tr><th scope="col">Keys</th><th scope="col">Action</th></tr>
@@ -345,7 +373,7 @@
 <dt>Relay server</dt>
 <dd>When a direct connection is not possible, for example on strict company networks, the data goes through a public relay server. It stays end-to-end encrypted, so the relay cannot read it. The progress window tells you which kind of connection is used.</dd>
 <dt>Encryption and integrity</dt>
-<dd>All transfers are end-to-end encrypted. Every transfer is also checked with a checksum, so a damaged file is never saved as if it were complete. A file being received is first written with the extension <code>.part</code> and gets its real name only when it is complete; if a transfer fails, the incomplete data is removed.</dd>
+<dd>All transfers are end-to-end encrypted. Every transfer is also checked with a checksum, so a damaged file is never saved as if it were complete. A file being received is first written with the extension <code>.part</code> and gets its real name only when it is complete; if the connection is lost, the <code>.part</code> file is kept until the transfer continues; if the transfer fails or is cancelled, the incomplete data is removed.</dd>
 <dt>Folders</dt>
 <dd>Dodavo refuses to unpack a received folder that contains unsafe paths, such as paths that would write outside the destination folder.</dd>
 </dl>
@@ -358,6 +386,12 @@
 <dl>
 <dt>“Could not connect to …”</dt>
 <dd>Dodavo is not running on the other computer, or one of you is offline. Ask the other person to start Dodavo and check the status line at the bottom of both main windows, then try again. Also check that you have the right Contact ID for them.</dd>
+<dt>“Dodavo on the other computer is out of date. Both computers need the current version”</dt>
+<dd>The other person uses an older version of Dodavo, which cannot pause or continue transfers. Ask them to install the current version.</dd>
+<dt>“The file was changed after the transfer started”</dt>
+<dd>The file you are sending was modified while the transfer was waiting for the connection, so it cannot be continued. Send it again.</dd>
+<dt>The transfer says the connection was lost, but we are both online</dt>
+<dd>Wait a moment: Dodavo tries again every few seconds. If Dodavo was restarted on either side, make sure it is running on both. You can always cancel the transfer and start it again.</dd>
 <dt>The status line says Offline</dt>
 <dd>Check your internet connection. Transfers to computers on your local network still work.</dd>
 <dt>“This is not a valid Contact ID.”</dt>

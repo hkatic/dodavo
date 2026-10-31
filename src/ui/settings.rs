@@ -13,7 +13,7 @@ use super::{
 };
 use crate::{
     app,
-    config::CloseAction,
+    config::{CloseAction, ConnectionLostAction},
     i18n::{Lang, tr},
 };
 
@@ -30,6 +30,7 @@ const ID_LANGUAGE: u16 = 18;
 const ID_ASK_AFTER: u16 = 19;
 const ID_MINIMIZED: u16 = 20;
 const ID_CLOSE_RUNNING: u16 = 21;
+const ID_CONNECTION_LOST: u16 = 22;
 
 struct SettingsDialog {
     my_name: HWND,
@@ -43,6 +44,7 @@ struct SettingsDialog {
     minimized: HWND,
     tray: HWND,
     close_running: HWND,
+    connection_lost: HWND,
     language: HWND,
 }
 
@@ -59,12 +61,13 @@ pub fn show(owner: HWND) {
         minimized: std::ptr::null_mut(),
         tray: std::ptr::null_mut(),
         close_running: std::ptr::null_mut(),
+        connection_lost: std::ptr::null_mut(),
         language: std::ptr::null_mut(),
     };
     let hwnd = window::create(
         CreateOptions {
             title: tr!(settings_title),
-            client: (500, 594),
+            client: (500, 650),
             center_on: owner,
             ..Default::default()
         },
@@ -107,6 +110,9 @@ impl SettingsDialog {
         let close_running = window::combo_selection(self.close_running)
             .and_then(|i| CloseAction::ALL.get(i).copied())
             .unwrap_or_default();
+        let connection_lost = window::combo_selection(self.connection_lost)
+            .and_then(|i| ConnectionLostAction::ALL.get(i).copied())
+            .unwrap_or_default();
         // Entry 0 is "Windows default", followed by `Lang::ALL`.
         let language = window::combo_selection(self.language)
             .and_then(|i| i.checked_sub(1))
@@ -123,6 +129,7 @@ impl SettingsDialog {
             c.start_minimized = minimized;
             c.minimize_to_tray = tray;
             c.close_running_transfer = close_running;
+            c.connection_lost = connection_lost;
             c.language = language;
         });
         shell::set_start_with_windows(autostart);
@@ -199,7 +206,15 @@ impl Handler for SettingsDialog {
             .unwrap_or(0);
         self.close_running =
             w.combobox(&actions, selected, ID_CLOSE_RUNNING, (24, 392, 300, 24));
-        w.caption(tr!(language_label), (24, 428, 462, 18));
+        w.caption(tr!(connection_lost_label), (24, 428, 462, 18));
+        let actions = [tr!(lost_ask), tr!(lost_wait), tr!(lost_cancel)];
+        let selected = ConnectionLostAction::ALL
+            .iter()
+            .position(|&a| a == cfg.connection_lost)
+            .unwrap_or(0);
+        self.connection_lost =
+            w.combobox(&actions, selected, ID_CONNECTION_LOST, (24, 448, 300, 24));
+        w.caption(tr!(language_label), (24, 484, 462, 18));
         let mut languages = vec![tr!(language_default)];
         languages.extend(Lang::ALL.iter().map(|l| l.native_name()));
         let selected = cfg
@@ -208,21 +223,21 @@ impl Handler for SettingsDialog {
             .and_then(Lang::from_code)
             .and_then(|l| Lang::ALL.iter().position(|&x| x == l))
             .map_or(0, |i| i + 1);
-        self.language = w.combobox(&languages, selected, ID_LANGUAGE, (24, 448, 300, 24));
+        self.language = w.combobox(&languages, selected, ID_LANGUAGE, (24, 504, 300, 24));
 
         let my_id = app::with(|a| a.my_id.clone());
-        w.label(tr!(my_id_label), (14, 488, 472, 18));
-        let id_edit = w.edit(&my_id, 0, (14, 508, 380, 24));
+        w.label(tr!(my_id_label), (14, 544, 472, 18));
+        let id_edit = w.edit(&my_id, 0, (14, 564, 380, 24));
         super::send(
             id_edit,
             windows_sys::Win32::UI::Controls::EM_SETREADONLY,
             1,
             0,
         );
-        w.button(tr!(copy), ID_COPY, (400, 507, 86, 26));
+        w.button(tr!(copy), ID_COPY, (400, 563, 86, 26));
 
-        w.button(tr!(ok), ID_OK, (300, 550, 90, 30));
-        w.button(tr!(cancel), IDCANCEL as u16, (396, 550, 90, 30));
+        w.button(tr!(ok), ID_OK, (300, 606, 90, 30));
+        w.button(tr!(cancel), IDCANCEL as u16, (396, 606, 90, 30));
         w.default_id.set(ID_OK);
         self.update_enabled();
         window::focus(self.my_name);

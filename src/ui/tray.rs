@@ -22,6 +22,14 @@ use super::APP_NAME;
 pub const WM_APP_TRAY: u32 = WM_APP + 2;
 const TRAY_ID: u32 = 1;
 
+/// What selecting a notification does.
+pub enum BalloonAction {
+    /// Shows a file or folder in File Explorer.
+    Reveal(PathBuf),
+    /// Brings a window of the program to the front.
+    Window(HWND),
+}
+
 fn copy_into(dst: &mut [u16], text: &str) {
     let mut i = 0;
     for c in text.encode_utf16() {
@@ -68,9 +76,10 @@ pub fn remove(hwnd: HWND) {
     unsafe { Shell_NotifyIconW(NIM_DELETE, &nid) };
 }
 
-/// Shows a notification. Clicking it reveals `path` in Explorer (if given).
-pub fn balloon(hwnd: HWND, title: &str, text: &str, path: Option<PathBuf>) {
-    crate::app::with(|a| a.balloon_path = path);
+/// Shows a notification. Selecting it performs `action` (or shows the main
+/// window). Not to be called inside `app::with`.
+pub fn balloon(hwnd: HWND, title: &str, text: &str, action: Option<BalloonAction>) {
+    crate::app::with(|a| a.balloon_action = action);
     let mut nid = base(hwnd);
     nid.uFlags = NIF_INFO;
     nid.dwInfoFlags = NIIF_INFO;
