@@ -620,11 +620,13 @@ fn handle_net_event(event: Event) -> Option<Event> {
             if let Some(folder) = record.received_folder() {
                 progress::set_received_folder(hwnd, folder);
             }
-            // Cancelled in the last run, and still waiting for the receiver's
-            // verdict: the network side cancels it again.
+            // Cancelled in the last run: the network side cancels it again.
+            // The record tells whether the cancel waits on for the
+            // receiver's verdict (the data had all gone out) or ends the
+            // transfer as soon as it is issued.
             let cancelling = record.cancel_pending();
             if cancelling {
-                progress::set_cancelling(hwnd);
+                progress::set_cancelling(hwnd, record.done_sent);
             }
             let mut transfer = Transfer::new(
                 hwnd,
@@ -679,10 +681,18 @@ fn handle_net_event(event: Event) -> Option<Event> {
             }
         }
         Event::CancelWaits { id } => {
-            if let Some(h) = transfer_window(id)
-                && !progress::set_cancel_waits(h)
-            {
-                return Some(Event::CancelWaits { id });
+            if let Some(h) = transfer_window(id) {
+                let Some(notice) = progress::set_cancel_waits(h) else {
+                    return Some(Event::CancelWaits { id });
+                };
+                if let Some((title, text)) = notice.balloon {
+                    tray::balloon(
+                        main_window(),
+                        &title,
+                        &text,
+                        Some(BalloonAction::Transfer(id)),
+                    );
+                }
             }
         }
         Event::Progress { id, done, total } => {

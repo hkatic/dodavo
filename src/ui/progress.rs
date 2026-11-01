@@ -91,6 +91,11 @@ struct Progress {
     /// transfer goes on until that comes (`Event::CancelWaits`). What holds
     /// the transfer up meanwhile is then told, as it holds up the cancel.
     cancel_waits: bool,
+    /// The last phase change withheld its notification about what holds the
+    /// transfer up on the other side, because the cancel seemed to end the
+    /// transfer in a moment (see `set_phase`); it is given after all if the
+    /// cancel turns out to wait (`set_cancel_waits`).
+    balloon_withheld: bool,
     /// Data has flowed while this window was open. Only then is a lost
     /// connection something to ask about; a transfer picked up after a
     /// restart simply waits for the other side.
@@ -182,6 +187,7 @@ pub fn open(
         closing: false,
         cancel_requested: false,
         cancel_waits: false,
+        balloon_withheld: false,
         had_data: false,
         handed_over: false,
         samples: VecDeque::new(),
@@ -252,21 +258,25 @@ pub fn set_handed_over(hwnd: HWND) -> bool {
     window::with_handler::<Progress, _>(hwnd, |p, w| p.show_handed_over(w)).is_some()
 }
 
-/// A send restored with a cancel that still waits for the receiver's
-/// verdict (see `TransferRecord::cancel_pending`): the window shows it as
-/// being cancelled, as after the user's own cancel.
-pub fn set_cancelling(hwnd: HWND) {
-    window::with_handler::<Progress, _>(hwnd, |p, _| p.show_cancelling());
+/// A send restored with a cancel from the last run (see
+/// `TransferRecord::cancel_pending`): the window shows it as being
+/// cancelled, as after the user's own cancel. `waits` tells whether the
+/// cancel waits on for the receiver's verdict (`TransferRecord::done_sent`),
+/// as `Event::CancelWaits` would, rather than ending the transfer as soon as
+/// it is issued again.
+pub fn set_cancelling(hwnd: HWND, waits: bool) {
+    window::with_handler::<Progress, _>(hwnd, |p, _| {
+        p.show_cancelling();
+        if waits {
+            p.cancel_waits = true;
+        }
+    });
 }
 
 /// Sending side: the cancel waits for the receiver's verdict (see
-/// `Event::CancelWaits`). Returns `false` if the window is busy.
-pub fn set_cancel_waits(hwnd: HWND) -> bool {
-    window::with_handler::<Progress, _>(hwnd, |p, _| {
-        p.show_cancelling();
-        p.cancel_waits = true;
-    })
-    .is_some()
+/// `Event::CancelWaits`). Returns `None` if the window is busy.
+pub fn set_cancel_waits(hwnd: HWND) -> Option<PhaseNotice> {
+    window::with_handler::<Progress, _>(hwnd, |p, _| p.set_cancel_waits())
 }
 
 pub fn set_progress(hwnd: HWND, done: u64, total: u64) -> bool {
@@ -441,6 +451,20 @@ impl Progress {
         // (`handed_over`): then the transfer goes on until the receiver has
         // answered, which a lost connection can hold up for long.
         let ends_for_cancel = self.cancel_requested && !self.cancel_waits && !self.handed_over;
+        // What holds the transfer up on the other side holds up a cancel
+        // that waits for it, or the end of a transfer whose cancel came too
+        // late, just the same, so it is told also to a user who has
+        // cancelled, perhaps with the window minimized or closed, who would
+        // otherwise not learn why the transfer does not end. Withheld from
+        // one whose cancel ends the transfer in a moment, and given after
+        // all if the cancel turns out to wait (`set_cancel_waits`: whether
+        // it does may only be known a moment after the cancel).
+        let held_up = if will_ask {
+            None
+        } else {
+            self.held_up_balloon(phase)
+        };
+        self.balloon_withheld = ends_for_cancel && held_up.is_some();
         let balloon = match phase {
             // The status line changes, and Cancel goes away (perhaps with
             // the focus on it): this says why, also to a user who cancelled
@@ -455,19 +479,11 @@ impl Progress {
                 .to_string(),
                 tr!(peer_unpacking_balloon, item = self.item, name = self.peer),
             )),
-            // What holds the transfer up on the other side holds up a cancel
-            // that waits for it, or the end of a transfer whose cancel came
-            // too late, just the same, so these are told also to a user who
-            // has cancelled, perhaps with the window minimized or closed, who
-            // would otherwise not learn why it does not end.
-            Phase::PausedByPeer if !ends_for_cancel => Some((
-                tr!(paused_balloon_title).to_string(),
-                tr!(paused_by_peer_balloon, item = self.item, name = self.peer),
-            )),
-            Phase::WaitingForConnection { .. } if lost && !will_ask && !ends_for_cancel => Some((
-                tr!(connection_lost_balloon_title).to_string(),
-                tr!(connection_lost_balloon, item = self.item),
-            )),
+            Phase::PausedByPeer | Phase::WaitingForConnection { .. }
+                if held_up.is_some() && !ends_for_cancel =>
+            {
+                held_up
+            }
             // Being cancelled otherwise: the transfer ends for the cancel in
             // a moment, and the result says so.
             _ if self.closing || self.cancel_requested => None,
@@ -483,6 +499,42 @@ impl Progress {
                 ))
             }
             _ => None,
+        };
+        PhaseNotice { balloon }
+    }
+
+    /// What holds the transfer up on the other side, if `phase` says so (the
+    /// peer paused it, or the connection was lost while data flowed): the
+    /// notification that tells it.
+    fn held_up_balloon(&self, phase: Phase) -> Option<(String, String)> {
+        match phase {
+            Phase::PausedByPeer => Some((
+                tr!(paused_balloon_title).to_string(),
+                tr!(paused_by_peer_balloon, item = self.item, name = self.peer),
+            )),
+            Phase::WaitingForConnection { lost: true } if self.had_data => Some((
+                tr!(connection_lost_balloon_title).to_string(),
+                tr!(connection_lost_balloon, item = self.item),
+            )),
+            _ => None,
+        }
+    }
+
+    /// `Event::CancelWaits`: the cancel waits for the receiver's verdict, so
+    /// what holds the transfer up holds up the cancel (see `cancel_waits`).
+    /// A notification about that which the last phase change withheld, as
+    /// the cancel seemed to end the transfer in a moment, is given now: the
+    /// phase is still the one it was withheld for.
+    fn set_cancel_waits(&mut self) -> PhaseNotice {
+        if !self.active {
+            return PhaseNotice { balloon: None };
+        }
+        self.show_cancelling();
+        self.cancel_waits = true;
+        let balloon = if std::mem::take(&mut self.balloon_withheld) {
+            self.phase.and_then(|phase| self.held_up_balloon(phase))
+        } else {
+            None
         };
         PhaseNotice { balloon }
     }
