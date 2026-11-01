@@ -71,10 +71,19 @@ struct Progress {
     active: bool,
     /// The window was hidden and the transfer continues without it.
     background: bool,
+    /// The user closed the window and cancelled the transfer. The window is
+    /// only hidden until the transfer has ended: then it closes without a
+    /// word if the transfer was cancelled, and reports how it ended if the
+    /// cancel came too late (the item was being saved already).
+    closing: bool,
     /// Data has flowed while this window was open. Only then is a lost
     /// connection something to ask about; a transfer picked up after a
     /// restart simply waits for the other side.
     had_data: bool,
+    /// Sending side: all of the item has arrived and it is the receiver's
+    /// (`Phase::PeerUnpacking`). Cancelling is no longer possible, and a
+    /// lost connection asks nothing: the receiver finishes without it.
+    handed_over: bool,
     samples: VecDeque<(Instant, u64)>,
     rate_shown: Option<Instant>,
     /// For a completed receive: where the item was saved.
@@ -154,7 +163,9 @@ pub fn open(
         phase: None,
         active: true,
         background: false,
+        closing: false,
         had_data: false,
+        handed_over: false,
         samples: VecDeque::new(),
         rate_shown: None,
         result_path: None,
@@ -201,10 +212,14 @@ pub fn set_received_folder(hwnd: HWND, folder: ReceivedFolder) {
     window::with_handler::<Progress, _>(hwnd, |p, _| p.received_folder = Some(folder));
 }
 
-/// Brings a transfer's window back, also from the background: the user asked
-/// for it, so it takes part in the finishing questions again.
+/// Brings a transfer's window back, also from the background or after it
+/// was closed while being cancelled: the user asked for it, so it takes part
+/// in the finishing questions again and stays to show how the transfer ended.
 pub fn show(hwnd: HWND) {
-    window::with_handler::<Progress, _>(hwnd, |p, _| p.background = false);
+    window::with_handler::<Progress, _>(hwnd, |p, _| {
+        p.background = false;
+        p.closing = false;
+    });
     window::bring_to_front(hwnd);
 }
 
@@ -308,6 +323,7 @@ impl Progress {
             Phase::WaitingForConnection { .. } => tr!(phase_waiting_connection).to_string(),
             Phase::Verifying => tr!(phase_verifying).to_string(),
             Phase::Unpacking => tr!(phase_unpacking).to_string(),
+            Phase::PeerUnpacking => tr!(phase_peer_unpacking, name = self.peer),
         };
         set_text(self.status, &text);
         set_text(
@@ -317,7 +333,11 @@ impl Progress {
                 _ => tr!(row_transferred),
             },
         );
-        let waiting = matches!(phase, Phase::Connecting | Phase::WaitingForAccept);
+        // Waiting for the other side, with nothing to count here.
+        let waiting = matches!(
+            phase,
+            Phase::Connecting | Phase::WaitingForAccept | Phase::PeerUnpacking
+        );
         self.marquee(waiting);
         // A pause or a lost connection interrupts the transfer; the amount
         // done so far stays (also what a restored transfer showed before its
@@ -338,6 +358,17 @@ impl Progress {
             },
         );
         window::enable(self.pause, can_pause(phase));
+        // All of the folder has arrived, and it is the receiver's now: a
+        // cancel here would come too late (the network side no longer ends
+        // the transfer for it), so the button is unavailable from now on,
+        // and the focus moves on from it.
+        if phase == Phase::PeerUnpacking {
+            self.handed_over = true;
+            if unsafe { GetFocus() } == self.cancel {
+                window::focus(self.background_button);
+            }
+            window::enable(self.cancel, false);
+        }
 
         // A connection lost while data was flowing asks (or acts) after a
         // moment. A transfer restored at startup just waits, which the
@@ -347,9 +378,13 @@ impl Progress {
         if lost {
             unsafe { SetTimer(w.hwnd, TIMER_LOST, LOST_PROMPT_DELAY_MS, None) };
         }
-        let will_ask =
-            lost && !self.background && app::cfg().connection_lost == ConnectionLostAction::Ask;
+        let will_ask = lost
+            && !self.background
+            && !self.handed_over
+            && app::cfg().connection_lost == ConnectionLostAction::Ask;
         let balloon = match phase {
+            // Being cancelled after the user closed the window: nothing to tell.
+            _ if self.closing => None,
             Phase::PausedByPeer => Some((
                 tr!(paused_balloon_title).to_string(),
                 tr!(paused_by_peer_balloon, item = self.item, name = self.peer),
@@ -516,7 +551,9 @@ impl Progress {
             unsafe { PostMessageW(w.hwnd, WM_APP_FINISHED, 0, 0) };
         }
 
-        let title = if completed {
+        let title = if completed && self.closing {
+            tr!(notify_too_late_title)
+        } else if completed {
             tr!(notify_done_title)
         } else {
             tr!(notify_failed_title)
@@ -528,16 +565,19 @@ impl Progress {
             tr!(notify_status, item = self.item, status = status)
         };
         // The question asked after a receive and the message after a send
-        // are announced by themselves; every other outcome is reported with
-        // a notification too.
+        // are announced by themselves, and a cancel that the user closed the
+        // window for needs no word; every other outcome is reported with a
+        // notification too.
+        let announced = matches!(
+            self.after,
+            AfterFinish::AskOpen(_) | AfterFinish::TellSent(_)
+        );
+        let expected = self.closing && matches!(outcome, Outcome::Cancelled);
         Finished {
             title,
             text,
             path: self.result_path.clone(),
-            notify: !matches!(
-                self.after,
-                AfterFinish::AskOpen(_) | AfterFinish::TellSent(_)
-            ),
+            notify: !announced && !expected,
         }
     }
 
@@ -599,7 +639,13 @@ impl Progress {
         if action == CloseAction::Cancel {
             if confirm(w.hwnd, tr!(cancel_confirm)) {
                 self.cancel_transfer();
-                w.close();
+                // Hidden, not closed, until the transfer has ended: a cancel
+                // that comes too late leaves the item saved, and the user
+                // must learn that (see `closing`).
+                self.closing = true;
+                self.background = true;
+                unsafe { KillTimer(w.hwnd, TIMER_LOST) };
+                window::show(w.hwnd, false);
             }
         } else {
             self.go_background(w);
@@ -611,6 +657,8 @@ impl Progress {
     /// waiting needs nothing more.
     fn connection_lost(&mut self, w: &Window) {
         if !self.active
+            || self.closing
+            || self.handed_over
             || !self.had_data
             || !matches!(self.phase, Some(Phase::WaitingForConnection { .. }))
         {

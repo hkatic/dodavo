@@ -7,6 +7,7 @@ use std::{
     os::windows::{
         ffi::OsStrExt,
         fs::{FileTimesExt, MetadataExt, OpenOptionsExt},
+        io::AsRawHandle,
     },
     path::{Path, PathBuf},
     sync::atomic::{AtomicBool, Ordering},
@@ -14,11 +15,18 @@ use std::{
 };
 
 use anyhow::{Context, bail};
+use serde::{Deserialize, Serialize};
 use windows_sys::Win32::{
     Foundation::{
-        ERROR_ACCESS_DENIED, ERROR_LOCK_VIOLATION, ERROR_SHARING_VIOLATION, FILETIME, SYSTEMTIME,
+        ERROR_ACCESS_DENIED, ERROR_LOCK_VIOLATION, ERROR_SHARING_VIOLATION, FILETIME, HANDLE,
+        INVALID_HANDLE_VALUE, MAX_PATH, SYSTEMTIME,
     },
-    Storage::FileSystem::{FILE_FLAG_BACKUP_SEMANTICS, FILE_WRITE_ATTRIBUTES, MoveFileExW},
+    Storage::FileSystem::{
+        BY_HANDLE_FILE_INFORMATION, FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_OPEN_REPARSE_POINT,
+        FILE_ID_INFO, FILE_WRITE_ATTRIBUTES, FileIdInfo, FindClose, FindFirstFileW,
+        GetFileInformationByHandle, GetFileInformationByHandleEx, GetVolumeInformationByHandleW,
+        MoveFileExW, WIN32_FIND_DATAW,
+    },
     System::Time::{FileTimeToSystemTime, SystemTimeToTzSpecificLocalTime},
 };
 use zip::{
@@ -40,6 +48,32 @@ pub(crate) const FILETIME_UNIX_EPOCH: u64 = 116_444_736_000_000_000;
 /// The pauses between attempts of a rename that another program blocks
 /// (see [`rename_new`]): about nine seconds in all.
 const RENAME_RETRY_MS: &[u64] = &[100, 200, 400, 800, 1600, 2000, 2000, 2000];
+
+/// The error of work that stopped because the user cancelled it: packing or
+/// unpacking a folder, or the last step of a receive. Telling it apart from
+/// a failure matters when a cancel came too late and something then failed
+/// for real; check for it with [`is_cancelled`].
+#[derive(Debug)]
+pub struct Cancelled;
+
+impl std::fmt::Display for Cancelled {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("Cancelled")
+    }
+}
+
+impl std::error::Error for Cancelled {}
+
+/// Whether `error` is a [`Cancelled`], also inside an I/O error (whose
+/// `source` skips the error it carries).
+pub fn is_cancelled(error: &anyhow::Error) -> bool {
+    error.chain().any(|e| {
+        e.is::<Cancelled>()
+            || e.downcast_ref::<io::Error>()
+                .and_then(io::Error::get_ref)
+                .is_some_and(|inner| inner.is::<Cancelled>())
+    })
+}
 
 /// The dates of a file or folder as Windows file times (100 ns since 1601,
 /// UTC). `None` when not known.
@@ -300,7 +334,7 @@ pub fn zip_folder(
     let mut buf = vec![0u8; BUF_SIZE];
     for entry in &entries {
         if cancel.load(Ordering::Relaxed) {
-            bail!("Cancelled");
+            bail!(Cancelled);
         }
         if entry.is_dir {
             zip.add_directory(
@@ -333,7 +367,7 @@ pub fn zip_folder(
             done += n as u64;
             progress(done, total);
             if cancel.load(Ordering::Relaxed) {
-                bail!("Cancelled");
+                bail!(Cancelled);
             }
         }
     }
@@ -341,7 +375,9 @@ pub fn zip_folder(
     Ok((file_count, total))
 }
 
-/// Extracts `zip_path` into the (new) folder `dest`. Entries trying to escape
+/// Extracts `zip_path` into the folder `dest`, which must be new (see
+/// [`create_unique_dir`]): what is created in it follows links, so nothing
+/// but this extraction may have put anything there. Entries trying to escape
 /// the destination ("../", absolute paths) are rejected. Files and folders
 /// get the dates stored with them; with `mark`, files also get the mark of
 /// the web. The dates of `dest` itself are the caller's business.
@@ -365,7 +401,7 @@ pub fn unzip(
     let mut folders = Vec::new();
     for i in 0..archive.len() {
         if cancel.load(Ordering::Relaxed) {
-            bail!("Cancelled");
+            bail!(Cancelled);
         }
         let mut entry = archive.by_index(i)?;
         let Some(rel) = entry.enclosed_name() else {
@@ -396,6 +432,11 @@ pub fn unzip(
             out.write_all(&buf[..n])?;
             done += n as u64;
             progress(done, total);
+            // Also within a file: a large one would keep being written
+            // long after the cancel.
+            if cancel.load(Ordering::Relaxed) {
+                bail!(Cancelled);
+            }
         }
         out.flush()?;
         // All written: the dates go on through the same handle.
@@ -440,8 +481,11 @@ pub fn sanitize_file_name(name: &str) -> String {
     s
 }
 
-/// `name`, then `name (2).ext`, `name (3).ext`, … (a folder's number goes at
-/// the end, as folder names have no extension).
+/// The names to try for a new item, in order: `name`, then `name (2).ext`,
+/// `name (3).ext`, … (a folder's number goes at the end, as folder names
+/// have no extension). A name that looks free may be taken by the time it is
+/// used, so nothing checks for a free name first and uses it later: the
+/// functions below take each name in one step that never replaces anything.
 fn numbered(name: &str, is_folder: bool) -> impl Iterator<Item = String> + '_ {
     let (stem, ext) = match (is_folder, name.rfind('.')) {
         (false, Some(pos)) if pos > 0 => (&name[..pos], &name[pos..]),
@@ -450,31 +494,152 @@ fn numbered(name: &str, is_folder: bool) -> impl Iterator<Item = String> + '_ {
     std::iter::once(name.to_string()).chain((2..).map(move |i| format!("{stem} ({i}){ext}")))
 }
 
-/// Returns `dir\name`, or `dir\name (2).ext`, `dir\name (3).ext`, ... if it
-/// already exists. The name may be taken by the time it is used; to put
-/// something there, use the functions below, which never replace anything.
-pub fn unique_path(dir: &Path, name: &str, is_folder: bool) -> PathBuf {
-    numbered(name, is_folder)
-        .map(|n| dir.join(n))
-        .find(|p| !p.exists())
-        .expect("infinite iterator")
+/// Whether something has the name `path`. Also true for a file that was
+/// deleted while another program still had it open: it keeps its name until
+/// it is closed, but cannot be opened, and creating something under that
+/// name fails with "access denied" instead of "already exists".
+pub fn name_taken(path: &Path) -> bool {
+    path.symlink_metadata().is_ok() || listed(path)
 }
 
-/// Creates an empty file under the first free name of [`unique_path`]. The
+/// Whether the folder lists `path`, which it still does for a deleted file
+/// that is open somewhere (opening it fails then, at least on Windows
+/// versions whose metadata calls open the file).
+fn listed(path: &Path) -> bool {
+    // FindFirstFileW takes the name as a pattern, in which `*` and `?` are
+    // wildcards, and so are `<`, `>` and `"` (the DOS wildcards). A name with
+    // one of them would match other names; Windows allows none of them in a
+    // name anyway (see `sanitize_file_name`), so nothing is listed under it.
+    let pattern = path
+        .file_name()
+        .is_some_and(|n| n.to_string_lossy().contains(['*', '?', '<', '>', '"']));
+    if pattern {
+        return false;
+    }
+    let Ok(wide) = wide_path(path) else {
+        return false;
+    };
+    let mut found = WIN32_FIND_DATAW::default();
+    // SAFETY: `wide` is a NUL-terminated wide string and `found` a local
+    // structure that the call fills; both outlive it.
+    let search = unsafe { FindFirstFileW(wide.as_ptr(), &mut found) };
+    if search == INVALID_HANDLE_VALUE {
+        return false;
+    }
+    // SAFETY: a search handle that FindFirstFileW returned, closed once.
+    unsafe { FindClose(search) };
+    true
+}
+
+/// Whether creating something at `path` failed because the name is taken.
+fn is_taken(error: &io::Error, path: &Path) -> bool {
+    error.kind() == io::ErrorKind::AlreadyExists
+        || (error.raw_os_error() == Some(ERROR_ACCESS_DENIED as i32) && name_taken(path))
+}
+
+/// The identity of a file or folder: its volume and its number there (the
+/// 128-bit file ID, which is unique on ReFS too; on Windows 7, which has
+/// none, the 64-bit file index). It stays with the item when the item is
+/// renamed, and no other item has it while this one exists; NTFS and ReFS
+/// never give it to another item later either.
+///
+/// FAT and exFAT have no such numbers: the one they report can change when
+/// an item is renamed, and a new item can get the one of a deleted item.
+/// There every item of a volume has the same identity, so an item counts as
+/// the same one while it has its name, as if there were no identities.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FileId {
+    volume: u64,
+    file: [u8; 16],
+}
+
+/// The [`FileId`] of what is at `path` (a link itself, not what it points to).
+pub fn file_id(path: &Path) -> io::Result<FileId> {
+    // Reading it needs no access rights; backup semantics open folders too.
+    let item = OpenOptions::new()
+        .access_mode(0)
+        .custom_flags(FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT)
+        .open(path)?;
+    let handle = item.as_raw_handle();
+    let numbered = !on_fat(handle);
+    let mut info = FILE_ID_INFO::default();
+    // SAFETY: the handle stays open during the call, which only fills the
+    // local structure of the given size.
+    let ok = unsafe {
+        GetFileInformationByHandleEx(
+            handle,
+            FileIdInfo,
+            (&raw mut info).cast(),
+            size_of::<FILE_ID_INFO>() as u32,
+        )
+    } != 0;
+    if ok {
+        return Ok(FileId {
+            volume: info.VolumeSerialNumber,
+            file: if numbered {
+                info.FileId.Identifier
+            } else {
+                [0; 16]
+            },
+        });
+    }
+    // Windows 7 does not know the 128-bit IDs.
+    let mut info = BY_HANDLE_FILE_INFORMATION::default();
+    // SAFETY: as above.
+    if unsafe { GetFileInformationByHandle(handle, &mut info) } == 0 {
+        return Err(io::Error::last_os_error());
+    }
+    let mut file = [0; 16];
+    if numbered {
+        let index = (u64::from(info.nFileIndexHigh) << 32) | u64::from(info.nFileIndexLow);
+        file[..8].copy_from_slice(&index.to_le_bytes());
+    }
+    Ok(FileId {
+        volume: u64::from(info.dwVolumeSerialNumber),
+        file,
+    })
+}
+
+/// Whether an open file or folder is on a FAT or exFAT volume (see
+/// [`FileId`]).
+fn on_fat(handle: HANDLE) -> bool {
+    let mut name = [0u16; MAX_PATH as usize + 1];
+    // SAFETY: the handle is open; the call writes at most `name.len()`
+    // characters to the local buffer, and the other outputs are not wanted.
+    let ok = unsafe {
+        GetVolumeInformationByHandleW(
+            handle,
+            std::ptr::null_mut(),
+            0,
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            name.as_mut_ptr(),
+            name.len() as u32,
+        )
+    } != 0;
+    let len = name.iter().position(|&c| c == 0).unwrap_or(name.len());
+    // "FAT", "FAT32" or "exFAT".
+    ok && String::from_utf16_lossy(&name[..len])
+        .to_ascii_uppercase()
+        .contains("FAT")
+}
+
+/// Creates an empty file under the first free one of the numbered names. The
 /// name is the caller's from then on.
 pub fn create_unique_file(dir: &Path, name: &str) -> io::Result<PathBuf> {
     for candidate in numbered(name, false) {
         let path = dir.join(candidate);
         match OpenOptions::new().write(true).create_new(true).open(&path) {
             Ok(_) => return Ok(path),
-            Err(e) if e.kind() == io::ErrorKind::AlreadyExists => continue,
+            Err(e) if is_taken(&e, &path) => continue,
             Err(e) => return Err(e),
         }
     }
     unreachable!("infinite iterator")
 }
 
-/// Creates a folder under the first free name of [`unique_path`] for which
+/// Creates a folder under the first free one of the numbered names for which
 /// `also_free(name)` holds as well, for a name that goes with it (such as
 /// its ZIP file's). The folder did not exist before, so everything in it is
 /// the caller's.
@@ -487,22 +652,35 @@ pub fn create_unique_dir(
         let path = dir.join(candidate);
         match std::fs::create_dir(&path) {
             Ok(()) => return Ok(path),
-            Err(e) if e.kind() == io::ErrorKind::AlreadyExists => continue,
+            Err(e) if is_taken(&e, &path) => continue,
             Err(e) => return Err(e),
         }
     }
     unreachable!("infinite iterator")
 }
 
-/// Moves the file `from` to `dir\name`, or to the next free name of
-/// [`unique_path`], never replacing anything (see [`rename_new`]). Returns
+/// Moves the file `from` to `dir\name`, or under the next free one of the
+/// numbered names, never replacing anything (see [`rename_new`]). Returns
 /// where it went.
 pub fn move_to_unique(from: &Path, dir: &Path, name: &str, is_folder: bool) -> io::Result<PathBuf> {
+    move_to_unique_noted(from, dir, name, is_folder, &mut |_| Ok(()))
+}
+
+/// Like [`move_to_unique`], calling `before(to)` before each attempt to move
+/// `from` to `to`; an error there ends it.
+pub fn move_to_unique_noted(
+    from: &Path,
+    dir: &Path,
+    name: &str,
+    is_folder: bool,
+    before: &mut dyn FnMut(&Path) -> io::Result<()>,
+) -> io::Result<PathBuf> {
     for candidate in numbered(name, is_folder) {
         let to = dir.join(candidate);
-        if to.symlink_metadata().is_ok() {
+        if name_taken(&to) {
             continue;
         }
+        before(&to)?;
         match rename_new(from, &to) {
             Ok(()) => return Ok(to),
             // Taken since the check.
@@ -514,19 +692,23 @@ pub fn move_to_unique(from: &Path, dir: &Path, name: &str, is_folder: bool) -> i
 }
 
 /// Renames `from` to `to` on the same volume, failing with `AlreadyExists`
-/// where `std::fs::rename` would replace a file that is there. A rename that
+/// where `std::fs::rename` would replace a file that is there, and also where
+/// a deleted file still holds the name (see [`name_taken`]). A rename that
 /// another program blocks for a moment (a virus scanner reading the new
 /// file, typically) is tried again for a few seconds.
 pub fn rename_new(from: &Path, to: &Path) -> io::Result<()> {
-    let (from, to) = (wide_path(from)?, wide_path(to)?);
+    let (wide_from, wide_to) = (wide_path(from)?, wide_path(to)?);
     let mut pauses = RENAME_RETRY_MS.iter();
     loop {
         // SAFETY: both are NUL-terminated wide strings that outlive the call;
         // no flags: fail rather than replace, and stay on the volume.
-        if unsafe { MoveFileExW(from.as_ptr(), to.as_ptr(), 0) } != 0 {
+        if unsafe { MoveFileExW(wide_from.as_ptr(), wide_to.as_ptr(), 0) } != 0 {
             return Ok(());
         }
         let error = io::Error::last_os_error();
+        if is_taken(&error, to) {
+            return Err(io::Error::new(io::ErrorKind::AlreadyExists, error));
+        }
         let blocked = matches!(
             error.raw_os_error().map(|c| c as u32),
             Some(ERROR_SHARING_VIOLATION | ERROR_LOCK_VIOLATION | ERROR_ACCESS_DENIED)
@@ -733,17 +915,118 @@ mod tests {
     }
 
     #[test]
-    fn unique_names() {
-        let base = scratch("unique");
-        assert_eq!(unique_path(&base, "a.txt", false), base.join("a.txt"));
-        std::fs::write(base.join("a.txt"), b"").unwrap();
-        std::fs::write(base.join("a (2).txt"), b"").unwrap();
-        assert_eq!(unique_path(&base, "a.txt", false), base.join("a (3).txt"));
-        std::fs::create_dir(base.join("my.folder")).unwrap();
+    fn numbered_names() {
+        let first = |name, is_folder| numbered(name, is_folder).take(3).collect::<Vec<_>>();
+        assert_eq!(first("a.txt", false), ["a.txt", "a (2).txt", "a (3).txt"]);
         assert_eq!(
-            unique_path(&base, "my.folder", true),
-            base.join("my.folder (2)")
+            first("my.folder", true),
+            ["my.folder", "my.folder (2)", "my.folder (3)"]
         );
+        assert_eq!(
+            first(".hidden", false),
+            [".hidden", ".hidden (2)", ".hidden (3)"]
+        );
+    }
+
+    /// An item keeps its identity when renamed; another item of the same
+    /// name, later, has a different one.
+    #[test]
+    fn file_ids_follow_the_item() {
+        let base = scratch("ids");
+        let (a, b) = (base.join("a"), base.join("b"));
+        std::fs::create_dir(&a).unwrap();
+        let id = file_id(&a).unwrap();
+        std::fs::rename(&a, &b).unwrap();
+        assert_eq!(file_id(&b).unwrap(), id);
+        std::fs::create_dir(&a).unwrap();
+        assert_ne!(file_id(&a).unwrap(), id);
+        let f = base.join("f.txt");
+        std::fs::write(&f, b"x").unwrap();
+        assert_ne!(file_id(&f).unwrap(), file_id(&a).unwrap());
+        assert_eq!(
+            file_id(&base.join("missing")).unwrap_err().kind(),
+            io::ErrorKind::NotFound
+        );
+        std::fs::remove_dir_all(&base).ok();
+    }
+
+    /// A file that was deleted while another program still has it open
+    /// keeps its name until it is closed: the next free name is used then,
+    /// instead of failing with "access denied".
+    #[test]
+    fn a_name_that_is_being_deleted_is_taken() {
+        use windows_sys::Win32::Storage::FileSystem::{
+            DELETE, FILE_DISPOSITION_INFO, FileDispositionInfo, SetFileInformationByHandle,
+        };
+        let base = scratch("pending");
+        let path = base.join("a.txt");
+        std::fs::write(&path, b"x").unwrap();
+        let other = File::open(&path).unwrap();
+        // Deleted the classic way, as on Windows before 10 and on file
+        // systems without POSIX deletion: pending while `other` is open.
+        let deleting = OpenOptions::new().access_mode(DELETE).open(&path).unwrap();
+        let info = FILE_DISPOSITION_INFO { DeleteFile: true };
+        // SAFETY: an open handle, and a local structure of the given size.
+        let ok = unsafe {
+            SetFileInformationByHandle(
+                deleting.as_raw_handle(),
+                FileDispositionInfo,
+                (&raw const info).cast(),
+                size_of::<FILE_DISPOSITION_INFO>() as u32,
+            )
+        };
+        assert_ne!(ok, 0, "{}", io::Error::last_os_error());
+        drop(deleting);
+        assert!(File::open(&path).is_err(), "cannot be opened now");
+        assert!(listed(&path) && name_taken(&path));
+        assert!(!listed(&base.join("b.txt")) && !listed(&base.join("a*.txt")));
+        // `<`, `>` and `"` are wildcards too: never used as a pattern.
+        assert!(!listed(&base.join("a<")) && !listed(&base.join("a\"txt")));
+        assert_eq!(
+            create_unique_file(&base, "a.txt").unwrap(),
+            base.join("a (2).txt")
+        );
+        let part = base.join("b.part");
+        std::fs::write(&part, b"mine").unwrap();
+        assert_eq!(
+            rename_new(&part, &path).unwrap_err().kind(),
+            io::ErrorKind::AlreadyExists
+        );
+        assert_eq!(
+            move_to_unique(&part, &base, "a.txt", false).unwrap(),
+            base.join("a (3).txt")
+        );
+        drop(other);
+        assert!(!name_taken(&path), "free once it is closed");
+        std::fs::remove_dir_all(&base).ok();
+    }
+
+    /// Unpacking stops within a file when cancelled, with an error that
+    /// says so.
+    #[test]
+    fn unzip_stops_when_cancelled() {
+        let base = scratch("unzip-cancel");
+        let src = base.join("src");
+        std::fs::create_dir_all(&src).unwrap();
+        let big = vec![3u8; 3 * BUF_SIZE];
+        std::fs::write(src.join("big.bin"), &big).unwrap();
+        std::fs::write(src.join("small.txt"), b"small").unwrap();
+        let zip = base.join("x.zip");
+        let cancel = AtomicBool::new(false);
+        zip_folder(&src, &zip, &cancel, &mut |_, _| {}).unwrap();
+
+        let out = base.join("out");
+        let mut calls = 0;
+        let stopped = unzip(&zip, &out, false, &cancel, &mut |_, _| {
+            calls += 1;
+            cancel.store(true, Ordering::Relaxed);
+        });
+        assert!(is_cancelled(&stopped.unwrap_err()));
+        assert_eq!(calls, 1, "stopped after the first block");
+        // Also when it comes wrapped in an I/O error.
+        let wrapped: anyhow::Error = io::Error::other(Cancelled).into();
+        assert!(is_cancelled(&wrapped));
+        assert!(!is_cancelled(&anyhow::anyhow!("disk full")));
         std::fs::remove_dir_all(&base).ok();
     }
 
@@ -771,9 +1054,10 @@ mod tests {
         // taken, so the pair is "Photos (3)" and "Photos (3).zip".
         std::fs::create_dir(base.join("Photos")).unwrap();
         std::fs::write(base.join("Photos (2).zip"), b"").unwrap();
-        let folder =
-            create_unique_dir(&base, "Photos", |n| !base.join(format!("{n}.zip")).exists())
-                .unwrap();
+        let folder = create_unique_dir(&base, "Photos", |n| {
+            !name_taken(&base.join(format!("{n}.zip")))
+        })
+        .unwrap();
         assert_eq!(folder, base.join("Photos (3)"));
         assert!(folder.is_dir());
         std::fs::remove_dir_all(&base).ok();

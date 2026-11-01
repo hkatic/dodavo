@@ -17,12 +17,11 @@ use tokio::{
 };
 
 use super::{
-    CLOSE_CANCELLED, CLOSE_FAILED, CLOSE_OK, CLOSE_SUSPENDED, Event, Outcome, Phase, Shared,
-    Throttle,
+    CLOSE_FAILED, CLOSE_OK, CLOSE_SUSPENDED, CancelToken, Event, Outcome, Phase, Shared, Throttle,
     protocol::{self, CHUNK, Kind, Msg, Offer, Token},
     session::{
-        self, Control, Lost, PeerClose, Role, Session, Side, Snapshots, Streams, TransferRecord,
-        lost, peer_close,
+        self, Cancel, Control, Ending, Lost, PeerClose, Role, Session, Side, Snapshots, Streams,
+        TransferRecord, lost, off_runtime, peer_close,
     },
     spawn_path_watch,
 };
@@ -78,7 +77,10 @@ pub(super) async fn run(
     let cancel = ctl.cancel.clone();
     tokio::select! {
         outcome = start(shared, endpoint, id, to, path, kind, my_name, peer_name, &ctl) => outcome,
-        _ = cancel.cancelled() => cancelled(shared, id),
+        ending = cancelled(shared, id, &cancel) => {
+            ending.forget(&shared.data_dir).await;
+            Outcome::Cancelled
+        }
     }
 }
 
@@ -91,19 +93,32 @@ pub(super) async fn resume(
     ctl: Arc<Control>,
 ) -> Outcome {
     let cancel = ctl.cancel.clone();
+    // The record first: it registers the session before it waits for
+    // anything, so that a cancel always finds it.
     tokio::select! {
+        biased;
         outcome = continue_record(shared, endpoint, id, record, &ctl) => outcome,
-        _ = cancel.cancelled() => cancelled(shared, id),
+        ending = cancelled(shared, id, &cancel) => {
+            ending.forget(&shared.data_dir).await;
+            Outcome::Cancelled
+        }
     }
 }
 
-/// The user cancelled: tell the receiver if connected, otherwise leave a
-/// tombstone for its next `Query`, and delete what is no longer needed.
-fn cancelled(shared: &Arc<Shared>, id: u64) -> Outcome {
-    if let Some(session) = shared.session_by_id(id) {
-        session.end(&shared.data_dir, Some(CLOSE_CANCELLED), false);
+/// Finishes once the user has cancelled and the transfer has ended for it:
+/// the receiver is told if connected, otherwise a tombstone waits for its
+/// next `Query`; the result deletes what is no longer needed. Never
+/// finishes once the receiver has confirmed all of the item: then the cancel
+/// comes too late, and the transfer ends by itself (`Session::hand_over`).
+async fn cancelled(shared: &Arc<Shared>, id: u64, cancel: &CancelToken) -> Ending {
+    cancel.cancelled().await;
+    let Some(session) = shared.session_by_id(id) else {
+        return Ending::nothing();
+    };
+    match session.cancel() {
+        Cancel::Ended(ending) => ending,
+        Cancel::LeftToStep | Cancel::TooLate => std::future::pending().await,
     }
-    Outcome::Cancelled
 }
 
 async fn dial(endpoint: &Endpoint, to: EndpointId) -> Result<Connection, String> {
@@ -246,13 +261,18 @@ async fn start(
             data_path: data_path.clone(),
         },
         done_hash: None,
+        ended: false,
     };
-    if let Err(e) = record.save(&shared.data_dir) {
+    let saved = {
+        let (record, data_dir) = (record.clone(), shared.data_dir.clone());
+        off_runtime(move || record.save(&data_dir)).await
+    };
+    if let Err(e) = saved {
         session.close_current(CLOSE_FAILED, b"failed");
         return Outcome::Failed(format!("{e:#}"));
     }
     temp.0 = None;
-    *session.record.lock().unwrap() = Some(record);
+    session.set_record(record);
     let mut sender = Sender {
         shared,
         endpoint,
@@ -279,7 +299,8 @@ async fn continue_record(
     ctl: &Control,
 ) -> Outcome {
     let Some(to) = record.peer_id() else {
-        record.discard(&shared.data_dir);
+        let data_dir = shared.data_dir.clone();
+        off_runtime(move || record.discard(&data_dir)).await;
         return Outcome::Failed(tr!(error_bad_resume).into());
     };
     let Side::Send { data_path, .. } = &record.side else {
@@ -303,7 +324,11 @@ async fn continue_record(
         peer_paused: false,
         peer_suspended: false,
     };
-    *session.record.lock().unwrap() = Some(record);
+    // The receiver had confirmed all of it before the restart.
+    if record.done_hash.is_some() {
+        session.hand_over();
+    }
+    session.set_record(record);
     sender.emit_waiting();
     sender.drive(None, 0).await
 }
@@ -381,10 +406,19 @@ impl Sender<'_> {
         });
     }
 
+    /// Ends the transfer on this side (see `Session::end`) and deletes what
+    /// goes, off the runtime's worker threads.
+    async fn end(&self, code: Option<u32>, completed: bool) {
+        let ending = self.session.end(code, completed);
+        ending.forget(&self.shared.data_dir).await;
+    }
+
     /// The user paused or resumed: remember it and show it.
-    fn pause_changed(&mut self, connected: bool) -> bool {
+    async fn pause_changed(&mut self, connected: bool) -> bool {
         let paused = *self.paused_rx.borrow_and_update();
-        self.session.save_paused(&self.shared.data_dir, paused);
+        self.session
+            .update(&self.shared.data_dir, move |s, d| s.save_paused(d, paused))
+            .await;
         if connected {
             self.emit_pause_phase();
         } else {
@@ -429,24 +463,23 @@ impl Sender<'_> {
             if *self.paused_rx.borrow() {
                 // Paused: nothing to do until the user resumes.
                 let _ = self.paused_rx.changed().await;
-                self.pause_changed(false);
+                self.pause_changed(false).await;
                 continue;
             }
-            let unchanged = self
-                .session
-                .record
-                .lock()
-                .unwrap()
-                .as_ref()
-                .is_none_or(|r| r.source_unchanged());
+            // Once the receiver has all of it, the source no longer matters.
+            let session = self.session.clone();
+            let unchanged = session.handed_over()
+                || off_runtime(move || session.with_record(TransferRecord::source_unchanged))
+                    .await
+                    .is_none_or(|unchanged| unchanged);
             if !unchanged {
-                self.session.end(&self.shared.data_dir, None, false);
+                self.end(None, false).await;
                 return Err(Outcome::Failed(tr!(error_source_changed).into()));
             }
             let dialed = tokio::select! {
                 r = dial(self.endpoint, self.to) => r,
                 _ = self.paused_rx.changed() => {
-                    self.pause_changed(false);
+                    self.pause_changed(false).await;
                     continue;
                 }
             };
@@ -460,7 +493,7 @@ impl Sender<'_> {
                 match self.handshake(conn).await {
                     Ok(streams) => return Ok(streams),
                     Err(Some(completed)) => {
-                        self.session.end(&self.shared.data_dir, None, completed);
+                        self.end(None, completed).await;
                         return Err(if completed {
                             Outcome::Completed(None)
                         } else {
@@ -473,7 +506,7 @@ impl Sender<'_> {
             tokio::select! {
                 _ = tokio::time::sleep(delay) => {}
                 _ = self.paused_rx.changed() => {
-                    self.pause_changed(false);
+                    self.pause_changed(false).await;
                 }
             }
             delay = (delay * 2).min(RETRY_MAX);
@@ -533,19 +566,18 @@ impl Sender<'_> {
         self.peer_suspended = false;
 
         let result = self.pump(&mut send, &mut ctl_rx, have).await;
-        let data_dir = &self.shared.data_dir;
         match result {
             Ok(outcome) => {
-                self.session.end(data_dir, Some(CLOSE_OK), true);
+                self.end(Some(CLOSE_OK), true).await;
                 Ok(outcome)
             }
             Err(e) if e.is::<Lost>() => match peer_close(&conn) {
                 PeerClose::Cancelled => {
-                    self.session.end(data_dir, None, false);
+                    self.end(None, false).await;
                     Err(End::Final(Outcome::CancelledByPeer))
                 }
                 PeerClose::Failed => {
-                    self.session.end(data_dir, None, false);
+                    self.end(None, false).await;
                     Err(End::Final(Outcome::Failed(
                         tr!(error_recipient_failed).into(),
                     )))
@@ -561,7 +593,7 @@ impl Sender<'_> {
                 }
             },
             Err(e) => {
-                self.session.end(data_dir, Some(CLOSE_FAILED), false);
+                self.end(Some(CLOSE_FAILED), false).await;
                 Err(End::Final(Outcome::Failed(format!("{e:#}"))))
             }
         }
@@ -685,7 +717,7 @@ impl Sender<'_> {
                     None => return Err(lost(tr!(error_connection_lost))),
                 },
                 _ = self.paused_rx.changed() => {
-                    let paused = self.pause_changed(true);
+                    let paused = self.pause_changed(true).await;
                     if pending.is_empty() {
                         let msg = if paused { Msg::Paused } else { Msg::Resumed };
                         protocol::write_msg(send, &msg).await.map_err(lost)?;
@@ -696,19 +728,26 @@ impl Sender<'_> {
             }
         }
 
-        protocol::write_msg(
-            send,
-            &Msg::Done {
-                hash: *hasher.finalize().as_bytes(),
-            },
-        )
-        .await
-        .map_err(lost)?;
+        let hash = *hasher.finalize().as_bytes();
+        protocol::write_msg(send, &Msg::Done { hash })
+            .await
+            .map_err(lost)?;
         send.finish().map_err(lost)?;
 
-        // Wait for the receiver's verdict.
+        // Wait for the receiver's verdict: first that all of it arrived
+        // intact, then, once it is saved there, the result.
         loop {
             match ctl_rx.recv().await {
+                Some(Msg::Verified { unpacking }) => {
+                    // The item is the receiver's now (also after a restart).
+                    self.session.hand_over();
+                    self.session
+                        .update(&self.shared.data_dir, move |s, d| s.save_done_hash(d, hash))
+                        .await;
+                    if unpacking {
+                        self.emit(Phase::PeerUnpacking);
+                    }
+                }
                 Some(Msg::Result { ok: true, .. }) => return Ok(Outcome::Completed(None)),
                 Some(Msg::Result { ok: false, message }) => {
                     bail!(tr!(error_peer_reported, message = message))

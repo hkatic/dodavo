@@ -156,6 +156,7 @@ impl Transfer {
             Some(Phase::WaitingForConnection { .. }) => tr!(tx_waiting_connection),
             Some(Phase::Verifying) => tr!(tx_verifying),
             Some(Phase::Unpacking) => tr!(tx_unpacking),
+            Some(Phase::PeerUnpacking) => tr!(tx_peer_unpacking),
         };
         let with_percent = self.total > 0
             && matches!(
@@ -834,6 +835,7 @@ mod tests {
             (Some(Phase::Transferring), true),
             (Some(Phase::Verifying), true),
             (Some(Phase::Unpacking), true),
+            (Some(Phase::PeerUnpacking), false),
             (Some(Phase::Paused), false),
             (Some(Phase::PausedByPeer), false),
             (Some(Phase::WaitingForConnection { lost: true }), false),

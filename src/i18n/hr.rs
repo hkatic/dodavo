@@ -54,6 +54,7 @@ pub const HR: Strings = Strings {
     tx_waiting_connection: "Čeka se veza",
     tx_verifying: "Provjera",
     tx_unpacking: "Raspakiravanje",
+    tx_peer_unpacking: "Raspakiravanje na drugoj strani",
     status_connecting: "Povezivanje s mrežom…",
     status_online: "Na mreži – spremno za slanje i primanje datoteka.",
     status_offline: "Izvan mreže – provjerite internetsku vezu. Prijenosi unutar lokalne mreže i dalje rade.",
@@ -113,6 +114,7 @@ pub const HR: Strings = Strings {
     phase_sending: "Slanje…",
     phase_receiving: "Primanje…",
     phase_unpacking: "Raspakiravanje mape…",
+    phase_peer_unpacking: "Primatelj ({name}) raspakirava mapu…",
     row_transferred: "Preneseno:",
     row_processed: "Obrađeno:",
     row_speed: "Brzina:",
@@ -138,6 +140,7 @@ pub const HR: Strings = Strings {
     cancel_confirm: "Jeste li sigurni da želite otkazati ovaj prijenos?",
     notify_done_title: "Prijenos je dovršen",
     notify_failed_title: "Prijenos nije dovršen",
+    notify_too_late_title: "Prekasno za otkazivanje",
     notify_saved: "Spremljeno: „{item}” (pošiljatelj: {name}). Kliknite za prikaz.",
     notify_status: "„{item}”: {status}",
 

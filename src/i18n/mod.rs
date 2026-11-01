@@ -209,6 +209,7 @@ strings! {
         tx_waiting_connection,
         tx_verifying,
         tx_unpacking,
+        tx_peer_unpacking,
         status_connecting,
         status_online,
         status_offline,
@@ -250,6 +251,7 @@ strings! {
         phase_sending,
         phase_receiving,
         phase_unpacking,
+        phase_peer_unpacking,
         row_transferred,
         row_processed,
         row_speed,
@@ -275,6 +277,7 @@ strings! {
         cancel_confirm,
         notify_done_title,
         notify_failed_title,
+        notify_too_late_title,
         notify_saved,
         notify_status,
         // Progress window: pausing, the lost connection and restored transfers.

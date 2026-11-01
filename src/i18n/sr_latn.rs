@@ -54,6 +54,7 @@ pub const SR_LATN: Strings = Strings {
     tx_waiting_connection: "Čeka se veza",
     tx_verifying: "Provera",
     tx_unpacking: "Raspakivanje",
+    tx_peer_unpacking: "Raspakivanje na drugoj strani",
     status_connecting: "Povezivanje sa mrežom…",
     status_online: "Na mreži – spremno za slanje i primanje datoteka.",
     status_offline: "Van mreže – proverite internet vezu. Prenosi unutar lokalne mreže i dalje rade.",
@@ -113,6 +114,7 @@ pub const SR_LATN: Strings = Strings {
     phase_sending: "Slanje…",
     phase_receiving: "Primanje…",
     phase_unpacking: "Raspakivanje fascikle…",
+    phase_peer_unpacking: "Primalac ({name}) raspakuje fasciklu…",
     row_transferred: "Preneto:",
     row_processed: "Obrađeno:",
     row_speed: "Brzina:",
@@ -138,6 +140,7 @@ pub const SR_LATN: Strings = Strings {
     cancel_confirm: "Da li ste sigurni da želite da otkažete ovaj prenos?",
     notify_done_title: "Prenos je završen",
     notify_failed_title: "Prenos nije završen",
+    notify_too_late_title: "Prekasno za otkazivanje",
     notify_saved: "Sačuvano: „{item}“ (pošiljalac: {name}). Kliknite za prikaz.",
     notify_status: "„{item}“: {status}",
 

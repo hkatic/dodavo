@@ -173,8 +173,9 @@ impl Config {
         match serde_json::from_slice(&bytes) {
             Ok(cfg) => Ok(cfg),
             Err(e) => {
-                let backup = crate::archive::unique_path(dir, "config.json.bad", false);
-                let backup = std::fs::rename(&path, &backup).ok().map(|_| backup);
+                // Under a free name, never over an earlier one.
+                let backup =
+                    crate::archive::move_to_unique(&path, dir, "config.json.bad", false).ok();
                 Err(LoadError {
                     path,
                     error: e.to_string(),

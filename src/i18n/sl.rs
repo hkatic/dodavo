@@ -54,6 +54,7 @@ pub const SL: Strings = Strings {
     tx_waiting_connection: "Čakanje na povezavo",
     tx_verifying: "Preverjanje",
     tx_unpacking: "Razpakiranje",
+    tx_peer_unpacking: "Razpakiranje na drugi strani",
     status_connecting: "Povezovanje z omrežjem…",
     status_online: "Povezano – pripravljeno za pošiljanje in prejemanje datotek.",
     status_offline: "Brez povezave – preverite internetno povezavo. Prenosi v lokalnem omrežju še vedno delujejo.",
@@ -113,6 +114,7 @@ pub const SL: Strings = Strings {
     phase_sending: "Pošiljanje…",
     phase_receiving: "Prejemanje…",
     phase_unpacking: "Razpakiranje mape…",
+    phase_peer_unpacking: "Prejemnik ({name}) razpakira mapo…",
     row_transferred: "Preneseno:",
     row_processed: "Obdelano:",
     row_speed: "Hitrost:",
@@ -138,6 +140,7 @@ pub const SL: Strings = Strings {
     cancel_confirm: "Ali ste prepričani, da želite preklicati ta prenos?",
     notify_done_title: "Prenos je končan",
     notify_failed_title: "Prenos ni bil dokončan",
+    notify_too_late_title: "Prepozno za preklic",
     notify_saved: "Shranjeno: »{item}« (pošiljatelj: {name}). Kliknite za prikaz.",
     notify_status: "»{item}«: {status}",
 

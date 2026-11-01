@@ -51,6 +51,7 @@ pub const EN: Strings = Strings {
     tx_waiting_connection: "Waiting for the connection",
     tx_verifying: "Checking",
     tx_unpacking: "Unpacking",
+    tx_peer_unpacking: "Unpacking on the other side",
     status_connecting: "Connecting to the network…",
     status_online: "Online – ready to send and receive files.",
     status_offline: "Offline – check your internet connection. Transfers within your local network still work.",
@@ -110,6 +111,7 @@ pub const EN: Strings = Strings {
     phase_sending: "Sending…",
     phase_receiving: "Receiving…",
     phase_unpacking: "Unpacking the folder…",
+    phase_peer_unpacking: "{name} is unpacking the folder…",
     row_transferred: "Transferred:",
     row_processed: "Processed:",
     row_speed: "Speed:",
@@ -135,6 +137,7 @@ pub const EN: Strings = Strings {
     cancel_confirm: "Are you sure you want to cancel this transfer?",
     notify_done_title: "Transfer complete",
     notify_failed_title: "Transfer not completed",
+    notify_too_late_title: "Too late to cancel",
     notify_saved: "“{item}” from {name} has been saved. Click to show it.",
     notify_status: "“{item}”: {status}",
 

@@ -4,6 +4,7 @@
 //! transfer at all.
 
 use std::{
+    io,
     path::{Path, PathBuf},
     sync::{
         Arc,
@@ -29,13 +30,13 @@ use super::{
     protocol::{self, CHUNK, Kind, Msg, Offer, Token},
     send::AbortOnDrop,
     session::{
-        self, Control, Lost, PeerClose, Role, Session, Side, Streams, TransferRecord, lost,
-        peer_close,
+        self, Cancel, Control, Ending, Lost, Owned, PeerClose, ReceiveFiles, Role, Session, Side,
+        Streams, TransferRecord, lost, off_runtime, peer_close,
     },
     spawn_path_watch,
 };
 use crate::{
-    archive::{self, ItemTimes},
+    archive::{self, Cancelled, FileId, ItemTimes},
     i18n::tr,
 };
 
@@ -77,6 +78,18 @@ impl std::fmt::Display for Reported {
 
 impl std::error::Error for Reported {}
 
+/// The outcome of a receive that ended with `error` in its last step:
+/// cancelled if the step stopped because the user cancelled, which it says
+/// with [`Cancelled`]. Any other error is a failure, also one after a cancel
+/// that came too late.
+fn failed_or_cancelled(error: anyhow::Error) -> Outcome {
+    if archive::is_cancelled(&error) {
+        Outcome::Cancelled
+    } else {
+        Outcome::Failed(format!("{error:#}"))
+    }
+}
+
 /// Removes a partially unpacked folder unless disarmed.
 struct Cleanup(Option<PathBuf>);
 
@@ -107,18 +120,6 @@ impl Drop for Syncing {
     fn drop(&mut self) {
         self.0.syncing.store(false, Ordering::Relaxed);
     }
-}
-
-/// Runs `update` on the session's record off the runtime's worker threads:
-/// saving the record syncs it to disk, which can take a while on a slow one.
-async fn update_record(
-    session: &Arc<Session>,
-    shared: &Shared,
-    update: impl FnOnce(&Session, &Path) + Send + 'static,
-) {
-    let session = session.clone();
-    let data_dir = shared.data_dir.clone();
-    let _ = tokio::task::spawn_blocking(move || update(&session, &data_dir)).await;
 }
 
 /// The status while connected.
@@ -182,10 +183,10 @@ pub(super) async fn handle(
         return;
     };
 
-    let outcome = tokio::select! {
-        o = accept(&shared, &endpoint, id, &ctl, conn.clone(), send, recv, offer, from, dest_dir, folder) => o,
-        () = cancelled(&shared, id, &ctl.cancel, Some(&conn)) => Outcome::Cancelled,
-    };
+    let outcome = accept(
+        &shared, &endpoint, id, &ctl, conn, send, recv, offer, from, dest_dir, folder,
+    )
+    .await;
     shared.finish(id, outcome);
 }
 
@@ -197,31 +198,78 @@ pub(super) async fn resume(
     record: TransferRecord,
     ctl: Arc<Control>,
 ) -> Outcome {
+    let data_dir = shared.data_dir.clone();
+    let checked = off_runtime(move || check_restored(record, &data_dir)).await;
+    let restored = checked
+        .and_then(|(record, peer)| Receiver::restore(shared, endpoint, id, record, peer, &ctl));
+    let mut receiver = match restored {
+        Ok(receiver) => receiver,
+        Err(outcome) => return outcome,
+    };
     tokio::select! {
-        o = continue_record(shared, endpoint, id, record, &ctl) => o,
-        () = cancelled(shared, id, &ctl.cancel, None) => Outcome::Cancelled,
+        biased;
+        ending = cancelled(shared, id, &ctl.cancel, None) => {
+            ending.forget(&shared.data_dir).await;
+            Outcome::Cancelled
+        }
+        o = receiver.continue_restored() => o,
     }
 }
 
-/// Finishes once the user has cancelled and the transfer has ended for it:
-/// the sender is told if connected, otherwise a tombstone waits for its next
-/// `Continue`, and the partial data is deleted. Never finishes if the cancel
-/// came too late, when the item is already being put in place: the transfer
-/// then ends by itself, completed (or failed).
-async fn cancelled(shared: &Shared, id: u64, cancel: &CancelToken, conn: Option<&Connection>) {
-    cancel.cancelled().await;
-    match shared.session_by_id(id) {
-        Some(session) => {
-            if !session.cancel(&shared.data_dir) {
-                std::future::pending::<()>().await;
-            }
-        }
-        None => {
-            if let Some(conn) = conn {
-                conn.close(CLOSE_CANCELLED.into(), b"cancelled");
-            }
-        }
+/// Checks a receive from an earlier run before it goes on: the sender's
+/// Contact ID, and the part file, which is cut back to what is known to be
+/// on disk. What fails ends the transfer. Blocking.
+fn check_restored(
+    record: TransferRecord,
+    data_dir: &Path,
+) -> Result<(TransferRecord, EndpointId), Outcome> {
+    let Some(peer) = record.peer_id() else {
+        record.discard(data_dir);
+        return Err(Outcome::Failed(tr!(error_bad_resume).into()));
+    };
+    // Data beyond the last flush may never have reached the disk.
+    if let Err(e) = record.truncate_to_synced() {
+        record.discard(data_dir);
+        return Err(Outcome::Failed(format!("{e:#}")));
     }
+    Ok((record, peer))
+}
+
+/// Finishes once the user has cancelled and the transfer has ended for it:
+/// the sender is told if connected (on the offer's connection `conn` until
+/// the transfer has one of its own), otherwise a tombstone waits for its next
+/// `Continue`; the result deletes the partial data. Never finishes while the
+/// last step runs: a cancel during unpacking is left to that step, which
+/// stops and ends the transfer as cancelled, and one that comes when the
+/// item is already being put in place is too late, so the transfer ends by
+/// itself, completed (see `Session::cancel`). Raced against a transfer only
+/// once its session is registered, so that it always finds the session.
+async fn cancelled(
+    shared: &Shared,
+    id: u64,
+    cancel: &CancelToken,
+    conn: Option<&Connection>,
+) -> Ending {
+    cancel.cancelled().await;
+    let ending = match shared.session_by_id(id) {
+        Some(session) => match session.cancel() {
+            Cancel::Ended(ending) => ending,
+            Cancel::LeftToStep => {
+                // A later start deletes the files instead of finishing them.
+                session
+                    .update(&shared.data_dir, |s, d| s.save_record(d))
+                    .await;
+                std::future::pending().await
+            }
+            Cancel::TooLate => std::future::pending().await,
+        },
+        None => Ending::nothing(),
+    };
+    // Also when the transfer had not got to its own connection yet.
+    if let Some(conn) = conn {
+        conn.close(CLOSE_CANCELLED.into(), b"cancelled");
+    }
+    ending
 }
 
 struct Receiver<'a> {
@@ -261,7 +309,7 @@ async fn accept(
     id: u64,
     ctl: &Control,
     conn: Connection,
-    mut send: SendStream,
+    send: SendStream,
     recv: RecvStream,
     offer: Offer,
     from: EndpointId,
@@ -269,35 +317,19 @@ async fn accept(
     folder: ReceivedFolder,
 ) -> Outcome {
     let name = archive::sanitize_file_name(&offer.name);
-    let prepared: anyhow::Result<PathBuf> = async {
-        tokio::fs::create_dir_all(&dest_dir).await?;
-        // A zip that is only unpacked arrives in the temp folder; files go
-        // straight to the destination folder, and so do the zips of folders
-        // that are kept as such.
-        if session::temporary_part(offer.kind, folder) {
-            tokio::fs::create_dir_all(&shared.temp_dir).await?;
-            let zip = session::temp_archive(&shared.temp_dir, Role::Receive, &offer.token);
-            tokio::fs::File::create(&zip).await?;
-            return Ok(zip);
-        }
-        let part_name = match offer.kind {
-            Kind::File => format!("{name}.part"),
-            Kind::Folder => format!("{name}.zip.part"),
-        };
-        // Created here and not over anything, also when another transfer of
-        // the same name starts at the same moment.
-        let dir = dest_dir.clone();
-        let part =
-            tokio::task::spawn_blocking(move || archive::create_unique_file(&dir, &part_name))
-                .await??;
-        // Marked from the start: the mark stays with the file when it is
-        // renamed into place, so it is never there unmarked.
-        let _ = archive::mark_of_the_web(&part);
-        Ok(part)
-    }
-    .await;
-    let part_path = match prepared {
+    // Not raced against a cancel, which could not delete the part before the
+    // session below knows it; a cancel meanwhile takes effect right after.
+    let prepared = {
+        let (dir, temp_dir, name) = (dest_dir.clone(), shared.temp_dir.clone(), name.clone());
+        let (kind, token) = (offer.kind, offer.token);
+        off_runtime(move || prepare_part(&dir, &temp_dir, &name, kind, folder, &token)).await
+    };
+    let (part_path, part_id) = match prepared {
         Ok(p) => p,
+        Err(_) if ctl.cancel.flag().load(Ordering::Relaxed) => {
+            conn.close(CLOSE_CANCELLED.into(), b"cancelled");
+            return Outcome::Cancelled;
+        }
         Err(e) => {
             conn.close(CLOSE_FAILED.into(), b"failed");
             return Outcome::Failed(format!("{e:#}"));
@@ -312,15 +344,29 @@ async fn accept(
         side: Side::Receive {
             dest_dir: dest_dir.clone(),
             part_path: part_path.clone(),
+            part_id: Some(part_id),
             synced: Some(0),
             folder,
             unpacking: None,
+            moving: None,
+            leftovers: Vec::new(),
         },
         offer,
         done_hash: None,
+        ended: false,
     };
-    if let Err(e) = record.save(&shared.data_dir) {
-        let _ = std::fs::remove_file(&part_path);
+    let saved = {
+        let (record, data_dir, part) = (record.clone(), shared.data_dir.clone(), part_path.clone());
+        off_runtime(move || {
+            let saved = record.save(&data_dir);
+            if saved.is_err() {
+                let _ = std::fs::remove_file(&part);
+            }
+            saved
+        })
+        .await
+    };
+    if let Err(e) = saved {
         conn.close(CLOSE_FAILED.into(), b"failed");
         return Outcome::Failed(format!("{e:#}"));
     }
@@ -328,7 +374,7 @@ async fn accept(
     let size = record.offer.size;
     let kind = record.offer.kind;
     let times = offer_times(&record.offer);
-    *session.record.lock().unwrap() = Some(record);
+    session.set_record(record);
     shared.add_session(session.clone());
     let mut receiver = Receiver {
         shared,
@@ -351,86 +397,60 @@ async fn accept(
         peer_paused: Arc::new(AtomicBool::new(false)),
         peer_suspended: false,
     };
-    if protocol::write_msg(&mut send, &Msg::Accept).await.is_err() {
-        // The sender never learnt that we accepted, so it will not come back.
-        session.end(&shared.data_dir, None, false);
-        return Outcome::Failed(tr!(error_connection_lost).into());
+    let streams = Streams {
+        conn: conn.clone(),
+        send,
+        recv,
+    };
+    tokio::select! {
+        biased;
+        ending = cancelled(shared, id, &ctl.cancel, Some(&conn)) => {
+            ending.forget(&shared.data_dir).await;
+            Outcome::Cancelled
+        }
+        o = receiver.start(streams) => o,
     }
-    receiver.drive(Some(Streams { conn, send, recv })).await
 }
 
-async fn continue_record(
-    shared: &Arc<Shared>,
-    endpoint: &Endpoint,
-    id: u64,
-    mut record: TransferRecord,
-    ctl: &Control,
-) -> Outcome {
-    let Some(peer) = record.peer_id() else {
-        record.discard(&shared.data_dir);
-        return Outcome::Failed(tr!(error_bad_resume).into());
+/// Creates the part file of a new receive, without replacing anything, and
+/// returns it with its identity. Blocking.
+fn prepare_part(
+    dest_dir: &Path,
+    temp_dir: &Path,
+    name: &str,
+    kind: Kind,
+    folder: ReceivedFolder,
+    token: &Token,
+) -> anyhow::Result<(PathBuf, FileId)> {
+    std::fs::create_dir_all(dest_dir)?;
+    // A zip that is only unpacked arrives in the temp folder; files go
+    // straight to the destination folder, and so do the zips of folders that
+    // are kept as such.
+    let part = if session::temporary_part(kind, folder) {
+        std::fs::create_dir_all(temp_dir)?;
+        let zip = session::temp_archive(temp_dir, Role::Receive, token);
+        std::fs::File::create(&zip)?;
+        zip
+    } else {
+        let part_name = match kind {
+            Kind::File => format!("{name}.part"),
+            Kind::Folder => format!("{name}.zip.part"),
+        };
+        // Created here and not over anything, also when another transfer of
+        // the same name starts at the same moment.
+        let part = archive::create_unique_file(dest_dir, &part_name)?;
+        // Marked from the start: the mark stays with the file when it is
+        // renamed into place, so it is never there unmarked.
+        let _ = archive::mark_of_the_web(&part);
+        part
     };
-    // The program ended while unpacking: that folder is incomplete. Gone
-    // before anything else, however the transfer goes on.
-    let data_dir = shared.data_dir.clone();
-    let record = match tokio::task::spawn_blocking(move || {
-        record.remove_unpacked(&data_dir);
-        record
-    })
-    .await
-    {
-        Ok(record) => record,
-        Err(e) => return Outcome::Failed(e.to_string()),
-    };
-    let Side::Receive {
-        dest_dir,
-        part_path,
-        folder,
-        ..
-    } = &record.side
-    else {
-        return Outcome::Failed(tr!(error_bad_resume).into());
-    };
-    // Data beyond the last flush may never have reached the disk.
-    if let Err(e) = record.truncate_to_synced() {
-        record.discard(&shared.data_dir);
-        return Outcome::Failed(format!("{e:#}"));
+    match archive::file_id(&part) {
+        Ok(id) => Ok((part, id)),
+        Err(e) => {
+            let _ = std::fs::remove_file(&part);
+            Err(e.into())
+        }
     }
-    let (session, session_rx) = Session::new(id, record.token, peer, Role::Receive);
-    let mut receiver = Receiver {
-        shared,
-        endpoint,
-        id,
-        peer,
-        ctl,
-        session: session.clone(),
-        session_rx,
-        kind: record.offer.kind,
-        name: archive::sanitize_file_name(&record.offer.name),
-        dest_dir: dest_dir.clone(),
-        part_path: part_path.clone(),
-        folder: *folder,
-        times: offer_times(&record.offer),
-        size: record.offer.size,
-        have: record.have().min(record.offer.size),
-        hasher: None,
-        done_hash: record.done_hash,
-        peer_paused: Arc::new(AtomicBool::new(false)),
-        peer_suspended: false,
-    };
-    let token = record.token;
-    *session.record.lock().unwrap() = Some(record);
-    shared.add_session(session);
-    shared.restored(&token);
-    // Everything had arrived and the sender was told so: only the last step
-    // (renaming, or unpacking the folder) was interrupted.
-    if let Some(hash) = receiver.done_hash
-        && receiver.have == receiver.size
-    {
-        return receiver.complete_alone(hash).await;
-    }
-    receiver.emit_waiting();
-    receiver.drive(None).await
 }
 
 /// Asks the sender whether it still has the transfer. `Some(completed)` if it
@@ -457,11 +477,12 @@ async fn query_gone(endpoint: Endpoint, peer: EndpointId, token: Token) -> Optio
 }
 
 /// Owns the sending half of the stream while receiving: tells the sender
-/// about pauses and resumes by the user, and finally sends the `Result`.
+/// about pauses and resumes by the user, and sends what the receive has to
+/// say (`Verified`, then the `Result`, which is the last message).
 async fn control_writer(
     mut send: SendStream,
     mut paused_rx: watch::Receiver<bool>,
-    mut result_rx: oneshot::Receiver<Msg>,
+    mut msgs: mpsc::UnboundedReceiver<Msg>,
     shared: Arc<Shared>,
     id: u64,
     session: Arc<Session>,
@@ -478,7 +499,7 @@ async fn control_writer(
                     return;
                 }
                 let paused = *paused_rx.borrow_and_update();
-                update_record(&session, &shared, move |s, d| s.save_paused(d, paused)).await;
+                session.update(&shared.data_dir, move |s, d| s.save_paused(d, paused)).await;
                 shared.emit(Event::Phase {
                     id,
                     phase: pause_phase(paused, peer_paused.load(Ordering::Relaxed)),
@@ -488,20 +509,145 @@ async fn control_writer(
                     return;
                 }
             }
-            result = &mut result_rx => {
-                if let Ok(msg) = result {
-                    let _ = protocol::write_msg(&mut send, &msg).await;
-                    let _ = send.finish();
+            msg = msgs.recv() => {
+                let Some(msg) = msg else { return };
+                let last = matches!(msg, Msg::Result { .. });
+                if protocol::write_msg(&mut send, &msg).await.is_err() {
+                    return;
                 }
-                return;
+                if last {
+                    let _ = send.finish();
+                    return;
+                }
             }
         }
     }
 }
 
-impl Receiver<'_> {
+impl<'a> Receiver<'a> {
+    /// A receive from an earlier run (checked by `check_restored`), with its
+    /// session registered right away (before anything waits), so that a
+    /// cancel, or a `Continue` from the sender, finds it.
+    fn restore(
+        shared: &'a Arc<Shared>,
+        endpoint: &'a Endpoint,
+        id: u64,
+        record: TransferRecord,
+        peer: EndpointId,
+        ctl: &'a Control,
+    ) -> Result<Self, Outcome> {
+        let Side::Receive {
+            dest_dir,
+            part_path,
+            folder,
+            ..
+        } = &record.side
+        else {
+            return Err(Outcome::Failed(tr!(error_bad_resume).into()));
+        };
+        let (session, session_rx) = Session::new(id, record.token, peer, Role::Receive);
+        let receiver = Receiver {
+            shared,
+            endpoint,
+            id,
+            peer,
+            ctl,
+            session: session.clone(),
+            session_rx,
+            kind: record.offer.kind,
+            name: archive::sanitize_file_name(&record.offer.name),
+            dest_dir: dest_dir.clone(),
+            part_path: part_path.clone(),
+            folder: *folder,
+            times: offer_times(&record.offer),
+            size: record.offer.size,
+            have: record.have().min(record.offer.size),
+            hasher: None,
+            done_hash: record.done_hash,
+            peer_paused: Arc::new(AtomicBool::new(false)),
+            peer_suspended: false,
+        };
+        let token = record.token;
+        session.set_record(record);
+        shared.add_session(session);
+        shared.restored(&token);
+        Ok(receiver)
+    }
+
+    /// Goes on with a receive from an earlier run.
+    async fn continue_restored(&mut self) -> Outcome {
+        // The item was in place already: only the end of the transfer was
+        // interrupted (see `TransferRecord::placed_item`).
+        let placed = self
+            .session
+            .with_record(|r| r.placed_item().map(Path::to_path_buf))
+            .flatten();
+        if let Some(path) = placed {
+            let times = (self.kind == Kind::File).then_some(self.times);
+            let ending = self.session.end(None, true);
+            let (data_dir, item) = (self.shared.data_dir.clone(), path.clone());
+            off_runtime(move || {
+                if let Some(times) = times {
+                    times.apply(&item);
+                }
+                ending.forget_blocking(&data_dir);
+            })
+            .await;
+            return Outcome::Completed(Some(path));
+        }
+        // Everything had arrived and the sender was told so: only the last
+        // step (renaming, or unpacking the folder) was interrupted.
+        if let Some(hash) = self.done_hash
+            && self.have == self.size
+        {
+            return self.complete_alone(hash).await;
+        }
+        self.emit_waiting();
+        self.drive(None).await
+    }
+
+    /// Starts a new receive on the connection of its offer.
+    async fn start(&mut self, mut streams: Streams) -> Outcome {
+        if protocol::write_msg(&mut streams.send, &Msg::Accept)
+            .await
+            .is_err()
+        {
+            // The sender never learnt that we accepted, so it will not come back.
+            self.end(None, false).await;
+            return Outcome::Failed(tr!(error_connection_lost).into());
+        }
+        self.drive(Some(streams)).await
+    }
+
     fn emit(&self, phase: Phase) {
         self.shared.emit(Event::Phase { id: self.id, phase });
+    }
+
+    /// Ends the transfer on this side (see `Session::end`) and deletes what
+    /// goes, off the runtime's worker threads.
+    async fn end(&self, code: Option<u32>, completed: bool) {
+        let ending = self.session.end(code, completed);
+        ending.forget(&self.shared.data_dir).await;
+    }
+
+    /// Whether the last step unpacks the folder.
+    fn unpacks(&self) -> bool {
+        self.kind == Kind::Folder && self.folder != ReceivedFolder::KeepZip
+    }
+
+    /// Answers senders that come back while the last step runs (which
+    /// nothing reads new connections in) with "try again later" while the
+    /// result exists. Once the step is over, the tombstone answers them;
+    /// without this, their connections would pile up unanswered until they
+    /// give up on each.
+    fn turn_away_new_connections(&mut self) -> AbortOnDrop {
+        let (_unused, placeholder) = mpsc::unbounded_channel();
+        let mut new_conns = std::mem::replace(&mut self.session_rx, placeholder);
+        AbortOnDrop(tokio::spawn(async move {
+            while let Some(s) = new_conns.recv().await {
+                s.conn.close(CLOSE_SUSPENDED.into(), b"finishing");
+            }
+        }))
     }
 
     fn emit_pause_phase(&self) {
@@ -597,13 +743,15 @@ impl Receiver<'_> {
                         {
                             return Err(self.complete_alone(hash).await);
                         }
-                        self.session.end(&self.shared.data_dir, None, false);
+                        self.end(None, false).await;
                         return Err(Outcome::CancelledByPeer);
                     }
                 }
                 _ = paused_rx.changed() => {
                     let paused = *paused_rx.borrow_and_update();
-                    self.session.save_paused(&self.shared.data_dir, paused);
+                    self.session
+                        .update(&self.shared.data_dir, move |s, d| s.save_paused(d, paused))
+                        .await;
                     self.emit_waiting();
                 }
             }
@@ -614,31 +762,21 @@ impl Receiver<'_> {
     /// the sender (after a restart during the last step, or when the sender
     /// already counts the transfer as complete).
     async fn complete_alone(&mut self, expected: [u8; 32]) -> Outcome {
-        // A sender that comes back meanwhile is told to try again later; once
-        // this is over, the tombstone answers it. Without this, its
-        // connections would pile up unanswered until it gives up on each.
-        let (_unused, placeholder) = mpsc::unbounded_channel();
-        let mut new_conns = std::mem::replace(&mut self.session_rx, placeholder);
-        let _drain = AbortOnDrop(tokio::spawn(async move {
-            while let Some(s) = new_conns.recv().await {
-                s.conn.close(CLOSE_SUSPENDED.into(), b"finishing");
-            }
-        }));
-        let data_dir = &self.shared.data_dir;
+        let _turn_away = self.turn_away_new_connections();
         self.hasher = None;
         if let Err(e) = self.rehash().await {
-            self.session.end(data_dir, None, false);
+            self.end(None, false).await;
             return Outcome::Failed(format!("{e:#}"));
         }
         if *self.hasher.as_ref().unwrap().finalize().as_bytes() != expected {
-            self.session.end(data_dir, None, false);
+            self.end(None, false).await;
             return Outcome::Failed(tr!(error_damaged).into());
         }
         match self.finalize().await {
             Ok(path) => Outcome::Completed(Some(path)),
             Err(e) => {
-                self.session.end(data_dir, None, false);
-                Outcome::Failed(format!("{e:#}"))
+                self.end(None, false).await;
+                failed_or_cancelled(e)
             }
         }
     }
@@ -650,19 +788,18 @@ impl Receiver<'_> {
         let _watch = AbortOnDrop(spawn_path_watch(self.shared.clone(), self.id, conn.clone()));
         self.peer_paused.store(false, Ordering::Relaxed);
         self.peer_suspended = false;
-        let (result_tx, result_rx) = oneshot::channel();
+        let (msgs_tx, msgs_rx) = mpsc::unbounded_channel();
         let writer = tokio::spawn(control_writer(
             send,
             self.ctl.paused.subscribe(),
-            result_rx,
+            msgs_rx,
             self.shared.clone(),
             self.id,
             self.session.clone(),
             self.peer_paused.clone(),
         ));
 
-        let result = self.pump(recv, result_tx).await;
-        let data_dir = &self.shared.data_dir;
+        let result = self.pump(recv, msgs_tx).await;
         match result {
             Ok(path) => {
                 // The item is in place and the transfer has ended (see
@@ -677,11 +814,11 @@ impl Receiver<'_> {
                 writer.abort();
                 match peer_close(&conn) {
                     PeerClose::Cancelled => {
-                        self.session.end(data_dir, None, false);
+                        self.end(None, false).await;
                         Err(End::Final(Outcome::CancelledByPeer))
                     }
                     PeerClose::Failed => {
-                        self.session.end(data_dir, None, false);
+                        self.end(None, false).await;
                         Err(End::Final(Outcome::Failed(tr!(error_sender_failed).into())))
                     }
                     PeerClose::Suspended => {
@@ -699,13 +836,18 @@ impl Receiver<'_> {
                 // The sender is told over the stream; closing now would discard that.
                 let _ = tokio::time::timeout(Duration::from_secs(10), writer).await;
                 let _ = tokio::time::timeout(Duration::from_secs(5), conn.closed()).await;
-                self.session.end(data_dir, None, false);
+                self.end(None, false).await;
                 Err(End::Final(Outcome::Failed(format!("{e:#}"))))
             }
             Err(e) => {
                 writer.abort();
-                self.session.end(data_dir, Some(CLOSE_FAILED), false);
-                Err(End::Final(Outcome::Failed(format!("{e:#}"))))
+                let outcome = failed_or_cancelled(e);
+                let code = match outcome {
+                    Outcome::Cancelled => CLOSE_CANCELLED,
+                    _ => CLOSE_FAILED,
+                };
+                self.end(Some(code), false).await;
+                Err(End::Final(outcome))
             }
         }
     }
@@ -743,10 +885,12 @@ impl Receiver<'_> {
         Ok(())
     }
 
+    /// Receives the rest of the data, checks it and puts the item in place,
+    /// telling the sender through `msgs` (see `control_writer`).
     async fn pump(
         &mut self,
         mut recv: RecvStream,
-        result_tx: oneshot::Sender<Msg>,
+        msgs: mpsc::UnboundedSender<Msg>,
     ) -> anyhow::Result<PathBuf> {
         self.rehash().await?;
         self.emit_pause_phase();
@@ -772,7 +916,7 @@ impl Receiver<'_> {
         let hash = received?;
 
         if hash != *self.hasher.as_ref().unwrap().finalize().as_bytes() {
-            let _ = result_tx.send(Msg::Result {
+            let _ = msgs.send(Msg::Result {
                 ok: false,
                 message: tr!(error_checksum).into(),
             });
@@ -780,24 +924,29 @@ impl Receiver<'_> {
         }
         // From here on this side can finish on its own, even after a restart.
         self.done_hash = Some(hash);
-        update_record(&self.session, self.shared, move |s, d| {
-            s.save_done_hash(d, hash)
-        })
-        .await;
-        let _ = result_tx.send(Msg::Result {
+        self.session
+            .update(&self.shared.data_dir, move |s, d| s.save_done_hash(d, hash))
+            .await;
+        // The item is this side's now: the sender waits for the result, and
+        // its cancel comes too late (see `Msg::Verified`).
+        let _ = msgs.send(Msg::Verified {
+            unpacking: self.unpacks(),
+        });
+        let _turn_away = self.turn_away_new_connections();
+        let placed = self.finalize().await?;
+        let _ = msgs.send(Msg::Result {
             ok: true,
             message: String::new(),
         });
-        self.finalize().await
+        Ok(placed)
     }
 
     /// Notes in the record how much of the part file is on disk.
     async fn save_synced(&self) {
         let have = self.have;
-        update_record(&self.session, self.shared, move |s, d| {
-            s.save_synced(d, have)
-        })
-        .await;
+        self.session
+            .update(&self.shared.data_dir, move |s, d| s.save_synced(d, have))
+            .await;
     }
 
     /// Reads frames until `Done`; returns the sender's hash.
@@ -855,7 +1004,7 @@ impl Receiver<'_> {
     /// Moves the file into place, or unpacks the folder and keeps its zip
     /// as chosen. Once it succeeds, the transfer has ended as completed.
     async fn finalize(&mut self) -> anyhow::Result<PathBuf> {
-        if self.kind == Kind::Folder && self.folder != ReceivedFolder::KeepZip {
+        if self.unpacks() {
             self.emit(Phase::Unpacking);
             #[cfg(test)]
             while HOLD_FINALIZE.load(Ordering::SeqCst) {
@@ -866,112 +1015,223 @@ impl Receiver<'_> {
         let id = self.id;
         let cancel = self.ctl.cancel.clone();
         let (kind, folder, times) = (self.kind, self.folder, self.times);
-        let (part, dest, name) = (
-            self.part_path.clone(),
-            self.dest_dir.clone(),
-            self.name.clone(),
-        );
+        let (dest, name) = (self.dest_dir.clone(), self.name.clone());
         let transfer = Transfer {
             session: self.session.clone(),
             data_dir: shared.data_dir.clone(),
         };
-        tokio::task::spawn_blocking(move || match kind {
-            Kind::File => transfer.place(&mut || finish_file(&part, &dest, &name, times)),
-            Kind::Folder => {
-                let mut throttle = Throttle::new();
-                let mut progress = |done, total| {
-                    if throttle.ready() || done == total {
-                        shared.emit(Event::Progress { id, done, total });
-                    }
-                };
-                finish_folder(
-                    &part,
-                    &dest,
-                    &name,
-                    folder,
-                    times,
-                    cancel.flag(),
-                    &mut progress,
-                    &transfer,
-                )
+        tokio::task::spawn_blocking(move || {
+            // Until this is over, a cancel is left to it.
+            let _finishing = transfer.session.finishing()?;
+            match kind {
+                Kind::File => finish_file(&transfer, &dest, &name, times),
+                Kind::Folder => {
+                    let mut throttle = Throttle::new();
+                    let mut progress = |done, total| {
+                        if throttle.ready() || done == total {
+                            shared.emit(Event::Progress { id, done, total });
+                        }
+                    };
+                    finish_folder(
+                        &transfer,
+                        &dest,
+                        &name,
+                        folder,
+                        times,
+                        cancel.flag(),
+                        &mut progress,
+                    )
+                }
             }
         })
         .await?
     }
 }
 
-/// What finishing a received item needs from its transfer.
-trait Finishing {
-    /// Notes the new folder that is about to be unpacked into.
-    fn unpacking(&self, folder: &Path);
-    /// Runs the last step and ends the transfer as completed
-    /// (`Session::place`).
-    fn place(&self, step: &mut dyn FnMut() -> anyhow::Result<PathBuf>) -> anyhow::Result<PathBuf>;
-}
-
-/// A running transfer: its session, and the data folder for its record.
+/// A running receive as its last step sees it: the session, and the data
+/// folder for its record.
 struct Transfer {
     session: Arc<Session>,
     data_dir: PathBuf,
 }
 
-impl Finishing for Transfer {
-    fn unpacking(&self, folder: &Path) {
-        self.session.save_unpacking(&self.data_dir, folder);
+impl Transfer {
+    fn files(&self) -> anyhow::Result<ReceiveFiles> {
+        self.session.receive_files().ok_or_else(|| Cancelled.into())
     }
 
+    /// Notes `files` in the record (see `Session::save_receive_files`).
+    fn save(&self, files: &ReceiveFiles) -> io::Result<()> {
+        self.session.save_receive_files(&self.data_dir, files)
+    }
+
+    /// Runs the step that puts the item in place, and ends the transfer as
+    /// completed (`Session::place`).
     fn place(&self, step: &mut dyn FnMut() -> anyhow::Result<PathBuf>) -> anyhow::Result<PathBuf> {
         self.session.place(&self.data_dir, step)
+    }
+
+    /// Renames the part file to `dir\name`, or to the next free name, and
+    /// returns where it went. Each name is noted in the record before it is
+    /// tried (`Side::Receive::moving`), so that a crash in between never
+    /// loses the part; once the transfer is to end, nothing is tried.
+    fn move_part(&self, files: &mut ReceiveFiles, dir: &Path, name: &str) -> io::Result<PathBuf> {
+        let id = archive::file_id(&files.part)?;
+        let part = files.part.clone();
+        let to = archive::move_to_unique_noted(&part, dir, name, false, &mut |to| {
+            files.moving = Some(Owned {
+                path: to.to_path_buf(),
+                id,
+            });
+            self.save(files)
+        })?;
+        files.part.clone_from(&to);
+        // Best effort: the note above finds the part after a crash.
+        let _ = self.save(files);
+        Ok(to)
+    }
+
+    /// Notes the new folder `folder` that is about to be unpacked into (and
+    /// whatever else `files` says by now). A folder with anything in it is
+    /// always noted, so that a later start or the end of the transfer can
+    /// delete it: the record keeps the note also when saving it fails (see
+    /// `Session::save_receive_files`), and only a folder that could not be
+    /// noted at all is removed here.
+    fn note_folder(&self, files: &mut ReceiveFiles, folder: &Path) -> io::Result<()> {
+        let owned = match Owned::at(folder) {
+            Ok(owned) => owned,
+            Err(e) => {
+                let _ = std::fs::remove_dir(folder);
+                return Err(e);
+            }
+        };
+        files.unpacking = Some(owned);
+        self.save(files)
     }
 }
 
 /// Puts a received file in place under a free name, with the sender's
 /// dates. Returns where it went.
-fn finish_file(part: &Path, dest: &Path, name: &str, times: ItemTimes) -> anyhow::Result<PathBuf> {
-    let path = archive::move_to_unique(part, dest, name, false)?;
-    times.apply(&path);
-    Ok(path)
+fn finish_file(
+    transfer: &Transfer,
+    dest: &Path,
+    name: &str,
+    times: ItemTimes,
+) -> anyhow::Result<PathBuf> {
+    let mut files = transfer.files()?;
+    transfer.place(&mut || {
+        let path = transfer.move_part(&mut files, dest, name)?;
+        times.apply(&path);
+        Ok(path)
+    })
 }
 
-/// Unpacks a received folder from its zip `part`, keeps the zip as
-/// `<name>.zip`, or both, as `folder` says. The unpacked folder gets the
-/// sender's dates. Returns the folder, or the zip when only that is kept.
-/// Either all of it is in place or, after a failure, none of it.
-#[allow(clippy::too_many_arguments)]
+fn zip_name(stem: &str) -> String {
+    format!("{stem}.zip")
+}
+
+/// Unpacks a received folder from its zip, keeps the zip as `<name>.zip`,
+/// or both, as `folder` says. The unpacked folder gets the sender's dates.
+/// Returns the folder, or the zip when only that is kept. Either all of it
+/// is in place or, after a failure, none of it: the folder is removed here,
+/// and a zip that already has its name goes with the part when the transfer
+/// ends.
+///
+/// The folder is always a new one, so that everything in it is this
+/// transfer's. After a restart, the folder that an earlier run began to
+/// unpack into (`Side::Receive::unpacking`) is deleted first, since what is
+/// in it may have changed since or be in use, and the archive is unpacked
+/// again into a new folder, which gets the same name when the old one could
+/// be deleted. One that cannot be deleted yet is noted as a leftover and
+/// goes later.
 fn finish_folder(
-    part: &Path,
+    transfer: &Transfer,
     dest: &Path,
     name: &str,
     folder: ReceivedFolder,
     times: ItemTimes,
     cancel: &AtomicBool,
     progress: &mut dyn FnMut(u64, u64),
-    transfer: &dyn Finishing,
 ) -> anyhow::Result<PathBuf> {
-    let zip_name = |stem: &str| format!("{stem}.zip");
+    let mut files = transfer.files()?;
     if folder == ReceivedFolder::KeepZip {
         return transfer
-            .place(&mut || Ok(archive::move_to_unique(part, dest, &zip_name(name), false)?));
+            .place(&mut || Ok(transfer.move_part(&mut files, dest, &zip_name(name))?));
     }
-    // A new folder, so that everything in it is this transfer's. With its
-    // zip, both get the same number: "Photos (2)" and "Photos (2).zip".
-    let target = archive::create_unique_dir(dest, name, |stem| {
-        folder != ReceivedFolder::Both || !dest.join(zip_name(stem)).exists()
-    })?;
+    if cancel.load(Ordering::Relaxed) {
+        anyhow::bail!(Cancelled);
+    }
+    // Noted with the new folder (until then the record still names it).
+    if let Some(earlier) = files.unpacking.take()
+        && !earlier.remove_folder()
+    {
+        files.leftovers.push(earlier);
+    }
+    let both = folder == ReceivedFolder::Both;
+    let target = if both && !files.part_in_place() {
+        new_pair(transfer, &mut files, dest, name)?
+    } else {
+        // With its zip in place already (after a restart), the folder gets
+        // the zip's name.
+        let stem = match files.part.file_stem() {
+            Some(stem) if both => stem.to_string_lossy().into_owned(),
+            _ => name.to_string(),
+        };
+        let target = archive::create_unique_dir(dest, &stem, |_| true)?;
+        transfer.note_folder(&mut files, &target)?;
+        target
+    };
     let mut partial = Cleanup(Some(target.clone()));
-    transfer.unpacking(&target);
-    archive::unzip(part, &target, true, cancel, progress)?;
+    archive::unzip(&files.part, &target, true, cancel, progress)?;
     times.apply(&target);
-    // Last, the zip: until then, the part is what a restart finishes from.
-    let placed = transfer.place(&mut || {
-        if folder == ReceivedFolder::Both {
-            let stem = target.file_name().unwrap_or_default().to_string_lossy();
-            archive::move_to_unique(part, dest, &zip_name(&stem), false)?;
-        }
-        Ok(target.clone())
-    })?;
+    let placed = transfer.place(&mut || Ok(target.clone()))?;
     partial.0 = None;
     Ok(placed)
+}
+
+/// For a folder that is kept with its zip: a new folder, and the part moved
+/// next to it under the zip's name, both with the same number ("Photos (2)"
+/// and "Photos (2).zip"), before anything is unpacked. Both are noted in the
+/// record first. Returns the folder.
+fn new_pair(
+    transfer: &Transfer,
+    files: &mut ReceiveFiles,
+    dest: &Path,
+    name: &str,
+) -> anyhow::Result<PathBuf> {
+    let id = archive::file_id(&files.part)?;
+    let zip_of = |stem: &str| dest.join(zip_name(stem));
+    loop {
+        let target =
+            archive::create_unique_dir(dest, name, |stem| !archive::name_taken(&zip_of(stem)))?;
+        let zip = zip_of(&target.file_name().unwrap_or_default().to_string_lossy());
+        files.moving = Some(Owned {
+            path: zip.clone(),
+            id,
+        });
+        // A failure from here on leaves the folder noted: the end of the
+        // transfer deletes it.
+        transfer.note_folder(files, &target)?;
+        match archive::rename_new(&files.part, &zip) {
+            Ok(()) => {
+                files.part = zip;
+                // Best effort: `moving` finds the part after a crash.
+                let _ = transfer.save(files);
+                return Ok(target);
+            }
+            // The zip's name was taken after all: the next pair. The empty
+            // folder goes now, or later as a leftover (the next note keeps
+            // that in the record).
+            Err(e) if e.kind() == io::ErrorKind::AlreadyExists => {
+                if let Some(empty) = files.unpacking.take()
+                    && std::fs::remove_dir(&empty.path).is_err()
+                {
+                    files.leftovers.push(empty);
+                }
+            }
+            Err(e) => return Err(e.into()),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -1010,61 +1270,82 @@ mod tests {
         part
     }
 
-    /// Finishing without a running transfer. `place` fails when `ended` (a
-    /// cancel came first).
-    #[derive(Default)]
-    struct Alone {
-        unpacking: std::cell::RefCell<Vec<PathBuf>>,
-        ended: bool,
+    /// A receive of "Photos" (or of a file "a.txt") with its part at `part`,
+    /// as a running transfer has it, with its record in `base\data`.
+    fn receiving(base: &Path, part: &Path, kind: Kind, folder: ReceivedFolder) -> Transfer {
+        let data_dir = base.join("data");
+        let token = [7; 16];
+        let name = match kind {
+            Kind::File => "a.txt",
+            Kind::Folder => "Photos",
+        };
+        let record = TransferRecord {
+            token,
+            peer: "ab".repeat(32),
+            offer: Offer {
+                kind,
+                name: name.into(),
+                size: 5,
+                file_count: 1,
+                content_size: 5,
+                sender_name: "Ana".into(),
+                token,
+                modified: None,
+                created: None,
+            },
+            peer_name: "Ana".into(),
+            paused: false,
+            created: SystemTime::now(),
+            side: Side::Receive {
+                dest_dir: part.parent().unwrap().to_path_buf(),
+                part_path: part.to_path_buf(),
+                part_id: archive::file_id(part).ok(),
+                synced: None,
+                folder,
+                unpacking: None,
+                moving: None,
+                leftovers: Vec::new(),
+            },
+            done_hash: None,
+            ended: false,
+        };
+        record.save(&data_dir).unwrap();
+        let peer = iroh::SecretKey::generate().public();
+        let (session, _) = Session::new(1, token, peer, Role::Receive);
+        session.set_record(record);
+        Transfer { session, data_dir }
     }
 
-    impl Finishing for Alone {
-        fn unpacking(&self, folder: &Path) {
-            assert!(
-                std::fs::read_dir(folder).unwrap().next().is_none(),
-                "noted before anything is in it"
-            );
-            self.unpacking.borrow_mut().push(folder.to_path_buf());
-        }
-
-        fn place(
-            &self,
-            step: &mut dyn FnMut() -> anyhow::Result<PathBuf>,
-        ) -> anyhow::Result<PathBuf> {
-            anyhow::ensure!(!self.ended, "Cancelled");
-            step()
-        }
-    }
-
+    /// Runs the last step of a received folder, as `finalize` does.
     fn finish_with(
-        transfer: &Alone,
-        part: &Path,
+        transfer: &Transfer,
         dest: &Path,
         folder: ReceivedFolder,
         t: ItemTimes,
+        cancel: &AtomicBool,
+        progress: &mut dyn FnMut(u64, u64),
     ) -> anyhow::Result<PathBuf> {
-        let cancel = AtomicBool::new(false);
-        finish_folder(
-            part,
-            dest,
-            "Photos",
-            folder,
-            t,
-            &cancel,
-            &mut |_, _| {},
-            transfer,
-        )
+        let _finishing = transfer.session.finishing()?;
+        finish_folder(transfer, dest, "Photos", folder, t, cancel, progress)
     }
 
-    fn finish(part: &Path, dest: &Path, folder: ReceivedFolder, t: ItemTimes) -> PathBuf {
-        let transfer = Alone::default();
-        let path = finish_with(&transfer, part, dest, folder, t).unwrap();
-        let noted = transfer.unpacking.take();
-        match folder {
-            ReceivedFolder::KeepZip => assert!(noted.is_empty()),
-            _ => assert_eq!(noted, vec![path.clone()]),
-        }
+    fn finish(transfer: &Transfer, dest: &Path, folder: ReceivedFolder, t: ItemTimes) -> PathBuf {
+        let cancel = AtomicBool::new(false);
+        let path = finish_with(transfer, dest, folder, t, &cancel, &mut |_, _| {}).unwrap();
+        // The transfer has ended as completed.
+        assert!(transfer.session.with_record(|_| ()).is_none());
+        assert_eq!(session::tombstone(&transfer.data_dir, &[7; 16]), Some(true));
+        assert!(session::load_all(&transfer.data_dir).is_empty());
         path
+    }
+
+    fn names_in(dir: &Path) -> Vec<String> {
+        let mut names: Vec<String> = std::fs::read_dir(dir)
+            .unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+            .collect();
+        names.sort();
+        names
     }
 
     #[test]
@@ -1074,7 +1355,8 @@ mod tests {
         let part = base.join("a.txt.part");
         std::fs::write(&part, b"new").unwrap();
         let (t, at) = times(1_500_000_000);
-        let path = finish_file(&part, &base, "a.txt", t).unwrap();
+        let transfer = receiving(&base, &part, Kind::File, ReceivedFolder::Extract);
+        let path = finish_file(&transfer, &base, "a.txt", t).unwrap();
         assert_eq!(path, base.join("a (2).txt"));
         assert_eq!(std::fs::read(&path).unwrap(), b"new");
         assert!(!part.exists());
@@ -1083,6 +1365,7 @@ mod tests {
             (meta.modified().unwrap(), meta.created().unwrap()),
             (at, at)
         );
+        assert!(transfer.session.with_record(|_| ()).is_none());
         std::fs::remove_dir_all(&base).ok();
     }
 
@@ -1095,54 +1378,227 @@ mod tests {
         // Only unpacked: the zip stays where it is (a temp file that the
         // end of the transfer deletes).
         let part = received_zip(&base, "recv.zip");
-        let path = finish(&part, &dest, ReceivedFolder::Extract, t);
+        let transfer = receiving(&base, &part, Kind::Folder, ReceivedFolder::Extract);
+        let path = finish(&transfer, &dest, ReceivedFolder::Extract, t);
         assert_eq!(path, dest.join("Photos"));
         assert_eq!(std::fs::read(path.join("a.txt")).unwrap(), b"alpha");
         assert_eq!(std::fs::metadata(&path).unwrap().modified().unwrap(), at);
         assert!(path.join("a.txt:Zone.Identifier").exists());
-        assert!(part.exists());
-        std::fs::remove_file(&part).unwrap();
+        assert!(!part.exists(), "the temporary zip goes when it ends");
 
         // Only the zip.
         let part = received_zip(&base, "Photos.zip.part");
-        let path = finish(&part, &dest, ReceivedFolder::KeepZip, t);
+        let transfer = receiving(&base, &part, Kind::Folder, ReceivedFolder::KeepZip);
+        let path = finish(&transfer, &dest, ReceivedFolder::KeepZip, t);
         assert_eq!(path, dest.join("Photos.zip"));
         assert!(path.is_file());
         assert!(!part.exists());
         assert!(!dest.join("Photos (2)").exists());
 
-        // Both, with matching names: "Photos" and "Photos.zip" are taken.
+        // Both, with matching names: "Photos" and "Photos.zip" are taken,
+        // and so is "Photos (2).zip".
+        std::fs::write(dest.join("Photos (2).zip"), b"theirs").unwrap();
         let part = received_zip(&base, "Photos.zip.part");
-        let path = finish(&part, &dest, ReceivedFolder::Both, t);
-        assert_eq!(path, dest.join("Photos (2)"));
+        let transfer = receiving(&base, &part, Kind::Folder, ReceivedFolder::Both);
+        let path = finish(&transfer, &dest, ReceivedFolder::Both, t);
+        assert_eq!(path, dest.join("Photos (3)"));
         assert_eq!(std::fs::read(path.join("a.txt")).unwrap(), b"alpha");
-        assert!(dest.join("Photos (2).zip").is_file());
+        assert!(dest.join("Photos (3).zip").is_file());
+        assert_eq!(
+            std::fs::read(dest.join("Photos (2).zip")).unwrap(),
+            b"theirs"
+        );
         assert!(!part.exists());
         std::fs::remove_dir_all(&base).ok();
     }
 
-    /// When the last step cannot happen (here: the transfer was cancelled
-    /// meanwhile), nothing of the item stays: no unpacked folder and no
-    /// kept zip, only the part, which the end of the transfer deletes.
+    /// A cancel during unpacking stops it; the folder goes at once, and the
+    /// rest (the part, or the zip that already had its name) goes when the
+    /// transfer ends: nothing of the item stays. A cancel before the last
+    /// step lets it make nothing at all.
     #[test]
-    fn a_folder_that_cannot_be_placed_leaves_nothing() {
-        let base = scratch("unplaced");
+    fn a_cancelled_folder_leaves_nothing() {
+        let base = scratch("cancelled");
         let dest = base.join("dest");
         let (t, _) = times(1_400_000_000);
         for folder in [ReceivedFolder::Extract, ReceivedFolder::Both] {
             let part = received_zip(&base, "Photos.zip.part");
-            let transfer = Alone {
-                ended: true,
-                ..Alone::default()
-            };
-            assert!(finish_with(&transfer, &part, &dest, folder, t).is_err());
-            assert!(part.is_file());
-            let left: Vec<_> = std::fs::read_dir(&dest)
-                .unwrap()
-                .map(|e| e.unwrap().file_name())
-                .collect();
-            assert_eq!(left, vec![std::ffi::OsString::from("Photos.zip.part")]);
+            let transfer = receiving(&base, &part, Kind::Folder, folder);
+            let cancel = AtomicBool::new(false);
+            let unpacked = finish_with(&transfer, &dest, folder, t, &cancel, &mut |_, _| {
+                cancel.store(true, Ordering::Relaxed);
+                // As the network side does: the cancel is left to the step.
+                assert!(!transfer.session.cancel_blocking(&transfer.data_dir));
+            });
+            assert!(unpacked.is_err());
+            assert!(
+                session::load_all(&transfer.data_dir)[0].ended,
+                "a crash now deletes the files at the next start"
+            );
+            let left = names_in(&dest);
+            assert_eq!(left.len(), 1, "only the part or the zip: {left:?}");
+            transfer
+                .session
+                .end(None, false)
+                .forget_blocking(&transfer.data_dir);
+            assert!(names_in(&dest).is_empty());
+            assert!(session::load_all(&transfer.data_dir).is_empty());
+
+            let part = received_zip(&base, "Photos.zip.part");
+            let transfer = receiving(&base, &part, Kind::Folder, folder);
+            let cancel = AtomicBool::new(true);
+            assert!(finish_with(&transfer, &dest, folder, t, &cancel, &mut |_, _| {}).is_err());
+            assert_eq!(names_in(&dest), ["Photos.zip.part"]);
+            transfer
+                .session
+                .end(None, false)
+                .forget_blocking(&transfer.data_dir);
         }
+        std::fs::remove_dir_all(&base).ok();
+    }
+
+    /// Notes in the record that the receive was unpacking into `folder`, as
+    /// an earlier run that ended halfway left it.
+    fn was_unpacking_into(transfer: &Transfer, folder: &Path) {
+        let mut files = transfer.files().unwrap();
+        files.unpacking = Some(Owned::at(folder).unwrap());
+        transfer.save(&files).unwrap();
+    }
+
+    /// After a restart, the folder that was being unpacked into is replaced
+    /// by a new one under the same name, not left next to a new copy; one
+    /// that is no longer this transfer's is left alone.
+    #[test]
+    fn an_interrupted_unpacking_starts_over() {
+        let base = scratch("again");
+        let dest = base.join("dest");
+        let (t, _) = times(1_400_000_000);
+        for folder in [ReceivedFolder::Extract, ReceivedFolder::Both] {
+            let part = received_zip(&base, "Photos.zip.part");
+            let partial = dest.join("Photos");
+            std::fs::create_dir_all(&partial).unwrap();
+            std::fs::write(partial.join("a.txt"), b"al").unwrap();
+            std::fs::write(partial.join("stale.txt"), b"not in the archive").unwrap();
+            let transfer = receiving(&base, &part, Kind::Folder, folder);
+            was_unpacking_into(&transfer, &partial);
+            let path = finish(&transfer, &dest, folder, t);
+            assert_eq!(path, partial);
+            assert_eq!(names_in(&partial), ["a.txt"]);
+            assert_eq!(std::fs::read(partial.join("a.txt")).unwrap(), b"alpha");
+            let expected: &[&str] = match folder {
+                ReceivedFolder::Both => &["Photos", "Photos.zip"],
+                _ => &["Photos"],
+            };
+            assert_eq!(names_in(&dest), expected);
+            std::fs::remove_dir_all(&dest).unwrap();
+        }
+
+        // The user deleted the folder and made one of the same name.
+        let part = received_zip(&base, "recv.zip");
+        let partial = dest.join("Photos");
+        std::fs::create_dir_all(&partial).unwrap();
+        let transfer = receiving(&base, &part, Kind::Folder, ReceivedFolder::Extract);
+        was_unpacking_into(&transfer, &partial);
+        std::fs::remove_dir(&partial).unwrap();
+        std::fs::create_dir(&partial).unwrap();
+        std::fs::write(partial.join("mine.txt"), b"mine").unwrap();
+        let path = finish(&transfer, &dest, ReceivedFolder::Extract, t);
+        assert_eq!(path, dest.join("Photos (2)"));
+        assert_eq!(names_in(&partial), ["mine.txt"]);
+        std::fs::remove_dir_all(&dest).unwrap();
+
+        // After a restart with the zip in place already ("Both"): the
+        // folder gets the zip's name, and the zip stays.
+        let zip = received_zip(&base, "Photos (5).zip");
+        let transfer = receiving(&base, &zip, Kind::Folder, ReceivedFolder::Both);
+        let mut files = transfer.files().unwrap();
+        files.moving = Some(Owned::at(&zip).unwrap());
+        transfer.save(&files).unwrap();
+        let path = finish(&transfer, &dest, ReceivedFolder::Both, t);
+        assert_eq!(path, dest.join("Photos (5)"));
+        assert!(zip.is_file());
+        std::fs::remove_dir_all(&base).ok();
+    }
+
+    /// A file of the earlier folder that another program holds open does
+    /// not stop the receive: the archive is unpacked into a new folder, and
+    /// what is left of the old one is the transfer's to delete later, not
+    /// forgotten.
+    #[test]
+    fn a_held_file_in_the_earlier_folder_does_not_stop_it() {
+        use std::os::windows::fs::OpenOptionsExt;
+        let base = scratch("held");
+        let dest = base.join("dest");
+        let (t, _) = times(1_400_000_000);
+        let part = received_zip(&base, "recv.zip");
+        let partial = dest.join("Photos");
+        std::fs::create_dir_all(&partial).unwrap();
+        std::fs::write(partial.join("a.txt"), b"al").unwrap();
+        let held = std::fs::OpenOptions::new()
+            .read(true)
+            .share_mode(0)
+            .open(partial.join("a.txt"))
+            .unwrap();
+        let transfer = receiving(&base, &part, Kind::Folder, ReceivedFolder::Extract);
+        was_unpacking_into(&transfer, &partial);
+        let cancel = AtomicBool::new(false);
+        let path = finish_with(
+            &transfer,
+            &dest,
+            ReceivedFolder::Extract,
+            t,
+            &cancel,
+            &mut |_, _| {
+                // The leftover is in the record while the folder is unpacked.
+                let files = transfer.files().unwrap();
+                assert_eq!(files.leftovers.len(), 1);
+                assert_eq!(files.leftovers[0].path, partial);
+            },
+        )
+        .unwrap();
+        assert_eq!(path, dest.join("Photos (2)"));
+        assert_eq!(std::fs::read(path.join("a.txt")).unwrap(), b"alpha");
+        assert!(partial.exists(), "still held when the transfer ended");
+        drop(held);
+        std::fs::remove_dir_all(&base).ok();
+    }
+
+    /// A link that was put into the earlier folder between the runs goes
+    /// with that folder, and nothing is written, or deleted, where it
+    /// pointed.
+    #[test]
+    fn nothing_goes_through_a_link_in_the_earlier_folder() {
+        let base = scratch("junction");
+        let dest = base.join("dest");
+        let (t, _) = times(1_400_000_000);
+        // An archive with a file in a sub folder.
+        let src = base.join("src");
+        std::fs::create_dir_all(src.join("sub")).unwrap();
+        std::fs::write(src.join("sub").join("x.dll"), b"from the peer").unwrap();
+        let part = base.join("recv.zip");
+        archive::zip_folder(&src, &part, &AtomicBool::new(false), &mut |_, _| {}).unwrap();
+        let outside = base.join("outside");
+        std::fs::create_dir_all(&outside).unwrap();
+        std::fs::write(outside.join("keep.txt"), b"keep").unwrap();
+        let partial = dest.join("Photos");
+        std::fs::create_dir_all(&partial).unwrap();
+        let made = std::process::Command::new("cmd")
+            .args(["/C", "mklink", "/J"])
+            .arg(partial.join("sub"))
+            .arg(&outside)
+            .output()
+            .unwrap();
+        assert!(made.status.success(), "{made:?}");
+        let transfer = receiving(&base, &part, Kind::Folder, ReceivedFolder::Extract);
+        was_unpacking_into(&transfer, &partial);
+        let path = finish(&transfer, &dest, ReceivedFolder::Extract, t);
+        assert_eq!(path, partial);
+        assert!(!path.join("sub").is_symlink());
+        assert_eq!(
+            std::fs::read(path.join("sub").join("x.dll")).unwrap(),
+            b"from the peer"
+        );
+        assert_eq!(names_in(&outside), ["keep.txt"]);
         std::fs::remove_dir_all(&base).ok();
     }
 }

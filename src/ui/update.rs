@@ -125,7 +125,7 @@ pub fn open(info: UpdateInfo, trigger: Trigger) -> HWND {
                 app::main_window(),
                 tr!(update_balloon_title),
                 &tr!(update_balloon, version = version),
-                Some(BalloonAction::Window(hwnd)),
+                Some(BalloonAction::Update),
             );
         }
     }

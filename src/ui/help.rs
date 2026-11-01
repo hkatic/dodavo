@@ -250,6 +250,7 @@ mod tests {
                 s.close_running_label,
                 s.language_label,
                 s.cancelled,
+                s.notify_too_late_title,
                 s.menu_check_updates,
                 s.check_updates,
                 s.update_title,

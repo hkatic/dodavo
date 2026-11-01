@@ -10,7 +10,8 @@
 //!   Paused | Resumed ─────────────▶    sent by either side at any time)
 //!                    ◀─────────────  Paused | Resumed
 //!   Done{hash}       ─────────────▶
-//!                    ◀─────────────  Result{ok, message}
+//!                    ◀─────────────  Verified{unpacking}   (if the hash matches)
+//!                    ◀─────────────  Result{ok, message}   (once the item is saved)
 //!
 //! later connection (sender dials again):
 //!   Continue{token}  ─────────────▶
@@ -98,6 +99,13 @@ pub enum Msg {
     /// First message on a connection the receiver opens to ask whether the
     /// sender still has the transfer.
     Query { token: Token },
+    /// After `Done`: all of the data arrived intact. The receiver now puts
+    /// the item in place (unpacking the folder first, if `unpacking`) and
+    /// then sends `Result`. From now on only the receiver can end the
+    /// transfer without the item; a cancel on the sending side comes too
+    /// late.
+    Verified { unpacking: bool },
+    /// The last message: whether the item was saved, or why it was not.
     Result { ok: bool, message: String },
     // Either direction.
     /// Answer to `Continue` or `Query`: this side no longer has the transfer,
@@ -158,6 +166,7 @@ mod tests {
             Msg::Decline,
             Msg::ContinueFrom { have: 1 << 40 },
             Msg::Query { token: [2; 16] },
+            Msg::Verified { unpacking: true },
             Msg::Result {
                 ok: false,
                 message: "nope".into(),

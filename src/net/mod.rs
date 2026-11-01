@@ -95,6 +95,9 @@ pub enum Phase {
     /// Hashing data that was already transferred before continuing.
     Verifying,
     Unpacking,
+    /// Sending side: all of the folder arrived, and the receiver is
+    /// unpacking it. The transfer is complete once it has.
+    PeerUnpacking,
 }
 
 #[derive(Debug)]
@@ -429,29 +432,85 @@ async fn accept(shared: Arc<Shared>, endpoint: Endpoint, conn: Connection) {
     conn.close(CLOSE_OK.into(), b"done");
 }
 
+/// A record of an earlier run, as `restore` finds it.
+struct Found {
+    record: TransferRecord,
+    /// Bytes already transferred.
+    have: u64,
+    /// Whether the files it needs are there.
+    present: bool,
+}
+
+impl Found {
+    /// Looks at the files of a record of an earlier run. Blocking.
+    fn look(mut record: TransferRecord, data_dir: &std::path::Path) -> Found {
+        // The part file was renamed right before the program ended. Also
+        // when the transfer had ended: its files are where the part went,
+        // and its old name may belong to another transfer by now.
+        if record.follow_moved_part() {
+            let _ = record.save(data_dir);
+        }
+        let (have, present) = (record.have(), record.files_present());
+        Found {
+            record,
+            have,
+            present,
+        }
+    }
+}
+
 /// Picks up the transfers that were interrupted in an earlier run.
-fn restore(shared: &Arc<Shared>, endpoint: &Endpoint) {
-    let records = session::load_all(&shared.data_dir);
-    session::cleanup_temp(&shared.temp_dir, &records);
+async fn restore(shared: &Arc<Shared>, endpoint: &Endpoint) {
+    // Reading the records and looking at their files is file work.
+    let found = {
+        let (data_dir, temp_dir) = (shared.data_dir.clone(), shared.temp_dir.clone());
+        session::off_runtime(move || {
+            let records = session::load_all(&data_dir);
+            session::cleanup_temp(&temp_dir, &records);
+            records
+                .into_iter()
+                .map(|record| Found::look(record, &data_dir))
+                .collect::<Vec<_>>()
+        })
+        .await
+    };
     // Known before any task runs, so that an early `Continue` or `Query`
     // from the other side waits instead of being answered with "gone".
     shared
         .restoring
         .lock()
         .unwrap()
-        .extend(records.iter().map(|r| r.token));
-    for record in records {
+        .extend(found.iter().map(|f| f.record.token));
+    // Ends a transfer from the last run without it, in the background:
+    // deleting its files can take a while, and nothing waits for that.
+    let end = |record: TransferRecord| {
+        shared.restored(&record.token);
+        let data_dir = shared.data_dir.clone();
+        tokio::task::spawn_blocking(move || {
+            session::write_tombstone(&data_dir, &record.token, false);
+            record.discard(&data_dir);
+        });
+    };
+    for Found {
+        record,
+        have,
+        present,
+    } in found
+    {
+        if record.ended {
+            // It ended in the last run while its files were being deleted
+            // (or one could not be deleted then): only that is left to do.
+            end(record);
+            continue;
+        }
         let id = next_transfer_id();
-        let have = record.have();
         shared.emit(Event::Restored {
             id,
             record: Box::new(record.clone()),
             have,
         });
-        if !record.files_present() {
-            shared.restored(&record.token);
-            session::write_tombstone(&shared.data_dir, &record.token, false);
-            record.discard(&shared.data_dir);
+        if !present {
+            end(record);
             shared.emit(Event::Finished {
                 id,
                 outcome: Outcome::Failed(crate::i18n::tr!(error_part_missing).into()),
@@ -505,7 +564,7 @@ async fn run(secret: SecretKey, shared: Arc<Shared>, mut rx: mpsc::UnboundedRece
     }
 
     // The transfers of the last run, before anyone can ask about them.
-    restore(&shared, &endpoint);
+    restore(&shared, &endpoint).await;
 
     // Incoming connections.
     {
@@ -1088,7 +1147,9 @@ mod tests {
 
     /// The receiver is stopped after all data has arrived, while it is still
     /// unpacking the folder, and started again: it finishes on its own from
-    /// the hash the sender gave it, without the sender, which is already done.
+    /// the hash the sender gave it. The sender waits for that (a cancel there
+    /// comes too late once the receiver has confirmed the data), and learns
+    /// that the item was saved when it dials again.
     #[test]
     fn finish_alone_after_restart_during_unpacking() {
         let base = scratch("finish-alone");
@@ -1132,8 +1193,18 @@ mod tests {
                 folder: ReceivedFolder::Extract,
             }),
         });
-        // The sender is done as soon as the receiver has confirmed the data…
-        assert!(matches!(wait_finished(&rx_a, id), Outcome::Completed(_)));
+        // The sender waits while the receiver unpacks; cancelling there is
+        // too late…
+        wait_for(&rx_a, |e| {
+            matches!(
+                e,
+                Event::Phase {
+                    phase: Phase::PeerUnpacking,
+                    ..
+                }
+            )
+        });
+        a.send(Command::Cancel { id });
         // …while the receiver is held right before unpacking: stop it there.
         wait_for(&rx_b, |e| {
             matches!(
@@ -1158,10 +1229,10 @@ mod tests {
         // with part of the contents, which the record names.
         let partial = recv_dir.join("Photos");
         std::fs::create_dir_all(&partial).unwrap();
-        std::fs::write(partial.join("half.bin"), b"half").unwrap();
+        std::fs::write(partial.join("a.bin"), &data[..1000]).unwrap();
         let mut record = records[0].clone();
         if let session::Side::Receive { unpacking, .. } = &mut record.side {
-            *unpacking = Some(partial.clone());
+            *unpacking = Some(session::Owned::at(&partial).unwrap());
         }
         record.save(&dir_b).unwrap();
 
@@ -1185,11 +1256,65 @@ mod tests {
             std::fs::read(recv_dir.join("Photos").join("a.bin")).unwrap(),
             data
         );
-        // The incomplete folder was removed, not left next to a copy.
-        assert!(!partial.join("half.bin").exists());
-        assert_eq!(leftovers(&recv_dir).len(), 1);
+        // The incomplete folder was replaced, not left next to a copy.
+        assert_eq!(leftovers(&recv_dir), ["Photos"]);
         assert!(session::load_all(&dir_b).is_empty());
+        // The sender learns on its next dial that the item was saved.
+        let outcome = wait_finished(&rx_a, id);
+        assert!(matches!(outcome, Outcome::Completed(_)), "{outcome:?}");
+        assert!(session::load_all(&base.join("a")).is_empty());
         drop(b2);
         std::fs::remove_dir_all(&base).ok();
+    }
+
+    /// A record whose transfer had ended right after its part was renamed
+    /// follows the part, so that ending it deletes the renamed part and not
+    /// another transfer's part that has the old name by now.
+    #[test]
+    fn an_ended_record_follows_its_moved_part() {
+        let dir = scratch("ended-moved");
+        let part = dir.join("Photos.zip.part");
+        std::fs::write(&part, b"zip").unwrap();
+        let record = TransferRecord {
+            token: [5; 16],
+            peer: "ab".repeat(32),
+            offer: Offer {
+                kind: Kind::Folder,
+                name: "Photos".into(),
+                size: 3,
+                file_count: 1,
+                content_size: 3,
+                sender_name: "Ana".into(),
+                token: [5; 16],
+                modified: None,
+                created: None,
+            },
+            peer_name: "Ana".into(),
+            paused: false,
+            created: SystemTime::now(),
+            side: session::Side::Receive {
+                dest_dir: dir.clone(),
+                part_path: part.clone(),
+                part_id: Some(crate::archive::file_id(&part).unwrap()),
+                synced: Some(3),
+                folder: ReceivedFolder::Both,
+                unpacking: None,
+                moving: Some(session::Owned {
+                    path: dir.join("Photos (2).zip"),
+                    id: crate::archive::file_id(&part).unwrap(),
+                }),
+                leftovers: Vec::new(),
+            },
+            done_hash: Some([0; 32]),
+            ended: true,
+        };
+        record.save(&dir).unwrap();
+        std::fs::rename(&part, dir.join("Photos (2).zip")).unwrap();
+        std::fs::write(&part, b"another transfer").unwrap();
+        Found::look(record, &dir).record.discard(&dir);
+        assert_eq!(std::fs::read(&part).unwrap(), b"another transfer");
+        assert!(!dir.join("Photos (2).zip").exists());
+        assert!(session::load_all(&dir).is_empty());
+        std::fs::remove_dir_all(&dir).ok();
     }
 }
