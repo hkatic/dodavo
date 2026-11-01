@@ -560,11 +560,21 @@ impl TransferRecord {
     /// sizes decide: the part is renamed only in the last step, when it has
     /// all of the item, so it has moved if what has the new name is as large
     /// as the item and what has the old name (if anything) is not. When
-    /// both are (another transfer of the same item got the old name and
-    /// completed there, say), the content decides: what has the new name is
-    /// the part if it hashes to what the sender sent (`done_hash`, known
-    /// since before the last step).
-    pub fn follow_moved_part(&mut self) -> bool {
+    /// both are, the other records tell first: the part has moved if another
+    /// record of this profile names the old name as its own part (`parts`:
+    /// the token and the part of every record read at this start), since
+    /// another transfer could only take the name once this one's rename had
+    /// freed it. Otherwise the content tells, against what the sender sent
+    /// (`done_hash`, known since before the last step): what has the old
+    /// name is the part if it hashes to that (also when what has the new
+    /// name does too, an identical copy of the item received earlier, say:
+    /// this transfer keeps its part, which then gets a free name, and no
+    /// renamed part is left behind as an orphan), and otherwise what has
+    /// the new name is the part if it hashes to that (what has the old name
+    /// is then something else's, such as the part of another profile that
+    /// receives into the same folder). Reading the files is blocking, and
+    /// rare: only this twice-ambiguous case does it.
+    pub fn follow_moved_part(&mut self, parts: &[(Token, PathBuf)]) -> bool {
         let Some(files) = self.receive_files() else {
             return false;
         };
@@ -577,9 +587,21 @@ impl TransferRecord {
                 .filter(fs::Metadata::is_file)
                 .is_some_and(|m| m.len() == self.offer.size)
         };
+        let claimed = |path: &Path| {
+            parts
+                .iter()
+                .any(|(token, part)| *token != self.token && part == path)
+        };
+        let has_content = |path: &Path| {
+            self.done_hash
+                .is_some_and(|hash| hash_file(path).is_ok_and(|got| got == hash))
+        };
         let moved = moving.is_there()
             && (moving.id.tells_apart()
-                || (full(&moving.path) && (!full(&files.part) || self.has_content(&moving.path))));
+                || (full(&moving.path)
+                    && (!full(&files.part)
+                        || claimed(&files.part)
+                        || (!has_content(&files.part) && has_content(&moving.path)))));
         if !moved {
             return false;
         }
@@ -587,13 +609,6 @@ impl TransferRecord {
             files.part = moving.path;
         }
         true
-    }
-
-    /// Whether the file at `path` holds exactly what the sender sent, as far
-    /// as the record knows (`done_hash`). Blocking: it reads the whole file.
-    fn has_content(&self, path: &Path) -> bool {
-        self.done_hash
-            .is_some_and(|hash| hash_file(path).is_ok_and(|got| got == hash))
     }
 
     /// After a restart: the received item, if it was in place already and
@@ -653,10 +668,19 @@ pub fn load_all(data_dir: &Path) -> Vec<TransferRecord> {
         .partition(|path| path.extension().and_then(|e| e.to_str()) == Some("json"));
     // The records first: whether a transfer completed is in its tombstone,
     // which may be about to go.
-    for path in json {
-        let record = fs::read_to_string(&path)
-            .ok()
-            .and_then(|text| serde_json::from_str::<TransferRecord>(&text).ok());
+    let read = json
+        .into_iter()
+        .map(|path| {
+            let record = fs::read_to_string(&path)
+                .ok()
+                .and_then(|text| serde_json::from_str::<TransferRecord>(&text).ok());
+            (path, record)
+        })
+        .collect::<Vec<_>>();
+    // Whose part is under which name, for `follow_moved_part`: all the
+    // records read, before any of them is followed or deleted.
+    let parts = parts_of(read.iter().filter_map(|(_, record)| record.as_ref()));
+    for (path, record) in read {
         match record {
             // Its item is in place: nothing of it may be deleted.
             Some(record) if tombstone(data_dir, &record.token) == Some(true) => {
@@ -664,11 +688,20 @@ pub fn load_all(data_dir: &Path) -> Vec<TransferRecord> {
             }
             Some(mut record) if is_old(&path, MAX_AGE) && !record.finishes_alone() => {
                 // Its files are where a rename right before the end put them.
-                record.follow_moved_part();
+                record.follow_moved_part(&parts);
                 record.delete_files();
                 let _ = fs::remove_file(&path);
             }
-            Some(record) => records.push(record),
+            Some(mut record) => {
+                // The part file was renamed right before the program ended.
+                // Also when the transfer had ended: its files are where the
+                // part went, and its old name may belong to another transfer
+                // by now.
+                if record.follow_moved_part(&parts) {
+                    let _ = record.save(data_dir);
+                }
+                records.push(record);
+            }
             None if is_old(&path, MAX_AGE) => {
                 let _ = fs::remove_file(&path);
             }
@@ -686,6 +719,15 @@ pub fn load_all(data_dir: &Path) -> Vec<TransferRecord> {
     }
     records.sort_by_key(|r| r.created);
     records
+}
+
+/// The part file of every receive among `records`, with the record's token
+/// (see [`TransferRecord::follow_moved_part`]).
+fn parts_of<'a>(records: impl IntoIterator<Item = &'a TransferRecord>) -> Vec<(Token, PathBuf)> {
+    records
+        .into_iter()
+        .filter_map(|r| Some((r.token, r.receive_files()?.part.clone())))
+        .collect()
 }
 
 /// Deletes temporary archives (`send-*.zip`, `recv-*.zip`) in `dir` that no
@@ -1049,9 +1091,13 @@ impl Session {
         Some((value, record.save(data_dir)))
     }
 
-    /// Updates the stored pause state of the record.
+    /// Updates the stored pause state of the record. A cancelled send stays
+    /// unpaused (see `TransferRecord::cancelled`): the transfer's task may
+    /// still note a pause that the cancel has undone meanwhile.
     pub fn save_paused(&self, data_dir: &Path, paused: bool) {
-        self.save_with(data_dir, |record| record.paused = paused);
+        self.save_with(data_dir, |record| {
+            record.paused = paused && !record.cancelled;
+        });
     }
 
     /// Remembers how much of the part file is on disk.
@@ -1068,12 +1114,11 @@ impl Session {
         self.save_with(data_dir, |record| record.done_hash = Some(hash));
     }
 
-    /// Remembers whether all of the data and `Done` have gone out (see
-    /// `TransferRecord::done_sent`), unless the record knows it already.
-    pub fn save_done_sent(&self, data_dir: &Path, sent: bool) {
-        if self.with_record(|record| record.done_sent != sent) == Some(true) {
-            self.save_with(data_dir, |record| record.done_sent = sent);
-        }
+    /// Sending side: the receiver asked to continue, so it does not have all
+    /// of the item after all, and `Done` goes out again later (see
+    /// `TransferRecord::done_sent`, noted by [`done_sent`](Self::done_sent)).
+    pub fn clear_done_sent(&self, data_dir: &Path) {
+        self.save_with(data_dir, |record| record.done_sent = false);
     }
 
     /// Saves the record as it is now (the first time, or after a cancel left
@@ -1172,7 +1217,7 @@ impl Session {
                             Role::Send => {
                                 record.cancelled = true;
                                 // A cancelled send is not paused any more
-                                // (see `Command::Cancel`); the record says so
+                                // (see `Control::cancel`); the record says so
                                 // at once, in case the run ends before the
                                 // transfer's task notes it.
                                 record.paused = false;
@@ -1216,9 +1261,31 @@ impl Session {
     /// `TransferRecord::cancelled`). And while the record is saved for the
     /// first time, so that a cancel meanwhile cannot leave it behind.
     pub fn defer_cancel(&self) {
-        let mut state = self.state();
+        Self::defer(&mut self.state());
+    }
+
+    fn defer(state: &mut State) {
         if state.stage == Stage::Running {
             state.stage = Stage::Finishing;
+        }
+    }
+
+    /// Sending side: all of the data has gone out and `Done` follows. From
+    /// now on a cancel waits for the receiver's verdict
+    /// ([`defer_cancel`](Self::defer_cancel)), and the record says so
+    /// (`TransferRecord::done_sent`) in the same step, so that a cancel
+    /// which finds the one finds the other too (`net::cancelled` tells by
+    /// it whether the cancel waits). Whether the record changed; the caller
+    /// saves it then ([`save_record`](Self::save_record)).
+    pub fn done_sent(&self) -> bool {
+        let mut state = self.state();
+        Self::defer(&mut state);
+        match state.record.as_mut() {
+            Some(record) if !record.done_sent => {
+                record.done_sent = true;
+                true
+            }
+            _ => false,
         }
     }
 
@@ -1342,6 +1409,18 @@ impl Control {
 
     pub fn is_paused(&self) -> bool {
         *self.paused.borrow()
+    }
+
+    /// The user cancelled the transfer. A cancelled transfer is not paused
+    /// any more (the window offers no Resume then), and the cancel of a send
+    /// that waits for the receiver's verdict needs the connection: it is
+    /// resumed first, so that the transfer never finds itself paused and
+    /// cancelled at once (its tasks wait for a pause to end without watching
+    /// the cancel).
+    pub fn cancel(&self) {
+        self.paused
+            .send_if_modified(|paused| std::mem::replace(paused, false));
+        self.cancel.cancel();
     }
 
     /// Whether the user cancelled the transfer.
@@ -1696,17 +1775,17 @@ mod tests {
         }
         // Noted, but not renamed yet: nothing to follow, not even when a
         // file of the new name appeared meanwhile.
-        assert!(!r.follow_moved_part());
+        assert!(!r.follow_moved_part(&[]));
         assert_eq!(r.placed_item(), None);
         fs::write(&placed, b"the user's").unwrap();
-        assert!(!r.follow_moved_part());
+        assert!(!r.follow_moved_part(&[]));
         fs::remove_file(&placed).unwrap();
 
         fs::rename(&part, &placed).unwrap();
         fs::write(&part, b"another transfer").unwrap();
-        assert!(r.follow_moved_part());
+        assert!(r.follow_moved_part(&[]));
         assert_eq!(r.placed_item(), Some(placed.as_path()));
-        assert!(!r.follow_moved_part(), "once");
+        assert!(!r.follow_moved_part(&[]), "once");
 
         // A folder kept with its zip is unpacked after its zip was moved.
         let mut both = r.clone();
@@ -1720,8 +1799,10 @@ mod tests {
 
     /// On FAT and exFAT, where every item of a volume has the same identity,
     /// the sizes tell whether the part moved: in the last step it has all of
-    /// the item. When both names have something of its size, the content
-    /// tells.
+    /// the item. When both names have something of its size, the other
+    /// records tell, and then the content: the old name keeps the part
+    /// unless another transfer's record names it, or only what has the new
+    /// name holds what the sender sent.
     #[test]
     fn a_moved_part_is_followed_on_fat() {
         let dir = scratch("moved-fat");
@@ -1739,38 +1820,53 @@ mod tests {
             });
         }
         assert!(r.part_is_there());
+        // The records of this start: this one, and one of another transfer
+        // whose part has the same name (it can only have taken it once this
+        // one's part was renamed).
+        let mine = parts_of([&r]);
+        assert_eq!(mine, vec![(r.token, part.clone())]);
+        let mut other = r.clone();
+        other.token = [19; 16];
+        let theirs = parts_of([&r, &other]);
 
         // Noted, but not renamed: what has the new name is the user's, also
-        // when it is as large as the item.
+        // when it is as large as the item, even an identical copy of it
+        // (the item received before): this transfer keeps its part, which
+        // then gets a free name, and is not left behind.
         fs::write(&placed, b"the user's file").unwrap();
-        assert!(!r.clone().follow_moved_part());
+        assert!(!r.clone().follow_moved_part(&mine));
         fs::write(&placed, b"exactly 10").unwrap();
-        assert!(!r.clone().follow_moved_part());
+        assert!(!r.clone().follow_moved_part(&mine));
+        fs::write(&placed, b"0123456789").unwrap();
+        assert!(!r.clone().follow_moved_part(&mine));
         fs::remove_file(&placed).unwrap();
 
         // Renamed, and another transfer's part got the old name since.
         fs::rename(&part, &placed).unwrap();
         fs::write(&part, b"another").unwrap();
         let mut moved = r.clone();
-        assert!(moved.follow_moved_part());
+        assert!(moved.follow_moved_part(&mine));
         assert_eq!(moved.placed_item(), Some(placed.as_path()));
         // Renamed, and the other transfer (of the same item) has all of it
-        // under the old name: the content tells the two apart.
+        // under the old name: its record tells the two apart; without one
+        // (another profile's transfer, say), the content does, as far as
+        // it can: an identical copy under the old name is kept as the part.
         fs::write(&part, b"0123456789").unwrap();
-        let mut moved = r.clone();
-        assert!(moved.follow_moved_part());
+        assert!(!r.clone().follow_moved_part(&mine));
+        assert!(r.clone().follow_moved_part(&theirs));
         fs::write(&part, b"ten others").unwrap();
-        let mut moved = r.clone();
-        assert!(moved.follow_moved_part());
+        assert!(r.clone().follow_moved_part(&mine));
+        assert!(r.clone().follow_moved_part(&theirs));
         // Without the hash (a record of an earlier version), the old name
-        // keeps the part, as before.
+        // keeps the part unless a record claims it.
         let mut unknown = r.clone();
         unknown.done_hash = None;
-        assert!(!unknown.follow_moved_part());
+        assert!(!unknown.clone().follow_moved_part(&mine));
+        assert!(unknown.follow_moved_part(&theirs));
         // Renamed, with nothing under the old name.
         fs::remove_file(&part).unwrap();
         let mut moved = r.clone();
-        assert!(moved.follow_moved_part());
+        assert!(moved.follow_moved_part(&mine));
         archive::PRETEND_FAT.set(false);
         fs::remove_dir_all(&dir).ok();
     }
@@ -1910,8 +2006,8 @@ mod tests {
         let (mut r, zip) = send_record(&dir, 20);
         r.paused = true;
         session.set_record(r);
-        session.save_done_sent(&dir, true);
-        session.defer_cancel();
+        assert!(session.done_sent());
+        session.save_record(&dir);
         assert!(session.deferring());
         assert!(!session.cancel_blocking(&dir), "it waits");
         assert!(zip.exists() && !session.running());
@@ -1948,11 +2044,21 @@ mod tests {
         let (session, _rx) = Session::new(3, [22; 16], peer, Role::Send);
         let (r, _zip) = send_record(&dir, 22);
         session.set_record(r);
-        session.save_done_sent(&dir, true);
-        session.defer_cancel();
+        // `Done` goes out: the cancel waits from the same moment on as the
+        // record says so, before anything is saved.
+        assert!(session.done_sent(), "noted");
+        assert!(session.deferring());
+        assert_eq!(session.with_record(|r| r.done_sent), Some(true));
+        assert!(!session.done_sent(), "noted once");
+        session.save_record(&dir);
+        assert!(
+            load_all(&dir)
+                .iter()
+                .any(|r| r.token == [22; 16] && r.done_sent)
+        );
         assert!(session.stop_deferring().is_none());
         assert!(session.running() && !session.deferring());
-        session.save_done_sent(&dir, false);
+        session.clear_done_sent(&dir);
         let stored = load_all(&dir);
         let stored = stored.iter().find(|r| r.token == [22; 16]).unwrap();
         assert!(!stored.done_sent && !stored.receiver_may_have_item());

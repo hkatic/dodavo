@@ -479,7 +479,7 @@ impl Sender<'_> {
             }
             if *self.paused_rx.borrow() {
                 // Paused: nothing to do until the user resumes (a cancel
-                // resumes the transfer too, see `Command::Cancel`).
+                // resumes the transfer too, see `Control::cancel`).
                 if self.paused_rx.changed().await.is_err() {
                     std::future::pending::<()>().await;
                 }
@@ -526,7 +526,7 @@ impl Sender<'_> {
                             // also after a restart. The data is needed again,
                             // as it was.
                             self.session
-                                .update(&self.shared.data_dir, |s, d| s.save_done_sent(d, false))
+                                .update(&self.shared.data_dir, |s, d| s.clear_done_sent(d))
                                 .await;
                             if !self.source_unchanged().await {
                                 self.end(Some(CLOSE_FAILED), false).await;
@@ -792,11 +792,13 @@ impl Sender<'_> {
         // receiver's once it has checked it: a cancel waits for its verdict
         // (also after a restart), and so the two sides never disagree on
         // whether the item arrived. Before `Done` goes out, so that no cancel
-        // can close the connection behind it.
-        self.session.defer_cancel();
-        self.session
-            .update(&self.shared.data_dir, |s, d| s.save_done_sent(d, true))
-            .await;
+        // can close the connection behind it; the record says so in the same
+        // step, so that a cancel meanwhile knows that it waits.
+        if self.session.done_sent() {
+            self.session
+                .update(&self.shared.data_dir, |s, d| s.save_record(d))
+                .await;
+        }
         protocol::write_msg(send, &Msg::Done { hash })
             .await
             .map_err(lost)?;

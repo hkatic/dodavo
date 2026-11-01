@@ -338,13 +338,10 @@ impl Progress {
             // have all of), which still says how the transfer is doing.
             _ if self.cancel_requested && !self.handed_over => tr!(cancelling).to_string(),
             // Sending side, waiting for the receiver to save the item: this
-            // also says why Cancel is unavailable. A cancelled transfer is
-            // not paused (see `Command::Cancel`), and Pause is unavailable
-            // then, so the wait is what to show until the phase says so too.
+            // also says why Cancel is unavailable. A pause still says so
+            // itself: the sender does not reconnect while paused, so the
+            // result only comes once the user resumes.
             Phase::Transferring | Phase::WaitingForConnection { .. } if self.handed_over => {
-                tr!(phase_handed_over, name = self.peer)
-            }
-            Phase::Paused if self.handed_over && self.cancel_requested => {
                 tr!(phase_handed_over, name = self.peer)
             }
             Phase::Preparing => tr!(phase_preparing).to_string(),
@@ -413,9 +410,10 @@ impl Progress {
         // moment. A transfer restored at startup just waits, which the
         // "unfinished transfer" notification already said, and so does one
         // whose other side exited on purpose (`lost: false`), and one that
-        // the user has cancelled already.
+        // the user has cancelled already (a window closed with the cancel
+        // stays without the timer, see `hide_while_cancelling`).
         let lost = matches!(phase, Phase::WaitingForConnection { lost: true }) && self.had_data;
-        if lost {
+        if lost && !self.closing {
             unsafe { SetTimer(w.hwnd, TIMER_LOST, LOST_PROMPT_DELAY_MS, None) };
         }
         let will_ask = lost
@@ -437,10 +435,11 @@ impl Progress {
                 .to_string(),
                 tr!(peer_unpacking_balloon, item = self.item, name = self.peer),
             )),
-            // Being cancelled (perhaps after the user closed the window):
-            // the status line says so whatever the phase, and what is left
-            // to tell is how the transfer ends.
-            _ if self.closing || self.cancel_requested => None,
+            // What holds the transfer up on the other side holds up a cancel
+            // that waits for it (a send whose data the receiver may have all
+            // of) just the same, so these are told also to a user who has
+            // cancelled, perhaps minimized or closed the window, and would
+            // otherwise not learn why it does not end.
             Phase::PausedByPeer => Some((
                 tr!(paused_balloon_title).to_string(),
                 tr!(paused_by_peer_balloon, item = self.item, name = self.peer),
@@ -449,6 +448,9 @@ impl Progress {
                 tr!(connection_lost_balloon_title).to_string(),
                 tr!(connection_lost_balloon, item = self.item),
             )),
+            // Being cancelled: a transfer that goes on again ends for the
+            // cancel in a moment, and the result says so.
+            _ if self.closing || self.cancel_requested => None,
             Phase::Transferring
                 if matches!(
                     previous,
@@ -644,13 +646,14 @@ impl Progress {
     /// Sending side: all of the item has arrived, and it is the receiver's
     /// now. A cancel would come too late (the network side no longer ends
     /// the transfer for it), so the button is unavailable from now on, and
-    /// the focus moves on from it. Returns whether that is a change to tell
-    /// the user about: the user has cancelled, which came too late, or the
-    /// focus was on the button, since screen readers announce only where the
-    /// focus went. The caller sets the status line, which says why.
-    fn hand_over(&mut self) -> bool {
+    /// the focus moves on from it. `None` if nothing changed (handed over
+    /// already, or the transfer is over), otherwise whether that is a change
+    /// to tell the user about: the user has cancelled, which came too late,
+    /// or the focus was on the button, since screen readers announce only
+    /// where the focus went. The caller sets the status line, which says why.
+    fn hand_over(&mut self) -> Option<bool> {
         if self.handed_over || !self.active {
-            return false;
+            return None;
         }
         self.handed_over = true;
         let had_focus = unsafe { GetFocus() } == self.cancel;
@@ -658,7 +661,7 @@ impl Progress {
             window::focus(self.background_button);
         }
         window::enable(self.cancel, false);
-        self.cancel_requested || had_focus
+        Some(self.cancel_requested || had_focus)
     }
 
     /// `Event::HandedOver`: the hand-over, with the status line that says
@@ -667,10 +670,9 @@ impl Progress {
     /// file in an instant, and the result says it all (a folder that is
     /// being unpacked there is announced with its phase instead).
     fn show_handed_over(&mut self, w: &Window) {
-        if self.handed_over || !self.active {
+        let Some(tell) = self.hand_over() else {
             return;
-        }
-        let tell = self.hand_over();
+        };
         if let Some(phase) = self.phase {
             set_text(self.status, &self.status_text(phase));
         }

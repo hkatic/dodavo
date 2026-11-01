@@ -491,14 +491,9 @@ struct Found {
 }
 
 impl Found {
-    /// Looks at the files of a record of an earlier run. Blocking.
-    fn look(mut record: TransferRecord, data_dir: &std::path::Path) -> Found {
-        // The part file was renamed right before the program ended. Also
-        // when the transfer had ended: its files are where the part went,
-        // and its old name may belong to another transfer by now.
-        if record.follow_moved_part() {
-            let _ = record.save(data_dir);
-        }
+    /// Looks at the files of a record of an earlier run (as `load_all`
+    /// returns it, with a moved part followed). Blocking.
+    fn look(record: TransferRecord) -> Found {
         // A send whose data the receiver may have goes on without the data
         // until the receiver says whether it needs it (see `Sender::reconnect`).
         let present = record.files_present() || record.receiver_may_have_item();
@@ -519,10 +514,7 @@ async fn restore(shared: &Arc<Shared>, endpoint: &Endpoint) {
         session::off_runtime(move || {
             let records = session::load_all(&data_dir);
             session::cleanup_temp(&temp_dir, &records);
-            records
-                .into_iter()
-                .map(|record| Found::look(record, &data_dir))
-                .collect::<Vec<_>>()
+            records.into_iter().map(Found::look).collect::<Vec<_>>()
         })
         .await
     };
@@ -544,7 +536,7 @@ async fn restore(shared: &Arc<Shared>, endpoint: &Endpoint) {
         });
     };
     for Found {
-        mut record,
+        record,
         have,
         present,
     } in found
@@ -569,17 +561,12 @@ async fn restore(shared: &Arc<Shared>, endpoint: &Endpoint) {
             });
             continue;
         }
-        let cancelling = record.cancel_pending();
-        if cancelling {
-            // A cancelled send is not paused (see `Command::Cancel`), also
-            // when the last run ended before it could note that.
-            record.paused = false;
-        }
         let ctl = shared.register(id, record.paused);
-        if cancelling {
+        if record.cancel_pending() {
             // The user cancelled a send in the last run, and the cancel was
-            // still waiting for the receiver's verdict: it waits on.
-            ctl.cancel.cancel();
+            // still waiting for the receiver's verdict: it waits on (and the
+            // transfer is not paused, as after any cancel).
+            ctl.cancel();
         }
         let shared = shared.clone();
         let endpoint = endpoint.clone();
@@ -676,14 +663,7 @@ async fn run(secret: SecretKey, shared: Arc<Shared>, mut rx: mpsc::UnboundedRece
             }
             Command::Cancel { id } => {
                 if let Some(ctl) = shared.control(id) {
-                    // A cancelled transfer is not paused any more (the window
-                    // offers no Resume then), and the cancel of a send that
-                    // waits for the receiver's verdict needs the connection.
-                    // First, so that the transfer never finds itself paused
-                    // and cancelled at once.
-                    ctl.paused
-                        .send_if_modified(|paused| std::mem::replace(paused, false));
-                    ctl.cancel.cancel();
+                    ctl.cancel();
                 }
             }
             Command::Pause { id } => {
@@ -1385,7 +1365,9 @@ mod tests {
         record.save(&dir).unwrap();
         std::fs::rename(&part, dir.join("Photos (2).zip")).unwrap();
         std::fs::write(&part, b"another transfer").unwrap();
-        Found::look(record, &dir).record.discard(&dir);
+        let mut loaded = session::load_all(&dir);
+        assert_eq!(loaded.len(), 1);
+        Found::look(loaded.remove(0)).record.discard(&dir);
         assert_eq!(std::fs::read(&part).unwrap(), b"another transfer");
         assert!(!dir.join("Photos (2).zip").exists());
         assert!(session::load_all(&dir).is_empty());
@@ -1461,7 +1443,7 @@ mod tests {
         send.defer_cancel();
         shared.add_session(send.clone());
         let ctl = shared.register(1, false);
-        ctl.cancel.cancel();
+        ctl.cancel();
         assert!(ctl.cancelling(), "shutdown waits");
         let waited =
             tokio::time::timeout(Duration::from_secs(1), cancelled(&shared, 1, &ctl)).await;
@@ -1488,7 +1470,7 @@ mod tests {
         let _finishing = receive.finishing().unwrap();
         shared.add_session(receive.clone());
         let ctl = shared.register(2, false);
-        ctl.cancel.cancel();
+        ctl.cancel();
         let waited =
             tokio::time::timeout(Duration::from_secs(1), cancelled(&shared, 2, &ctl)).await;
         assert!(waited.is_err(), "left to the last step");
@@ -1522,7 +1504,7 @@ mod tests {
         send.defer_cancel();
         shared.add_session(send.clone());
         let ctl = shared.register(1, false);
-        ctl.cancel.cancel();
+        ctl.cancel();
         let waited =
             tokio::time::timeout(Duration::from_secs(1), cancelled(&shared, 1, &ctl)).await;
         assert!(waited.is_err(), "left to the task");
@@ -1561,7 +1543,7 @@ mod tests {
         send.defer_cancel();
         shared.add_session(send.clone());
         let ctl = shared.register(1, false);
-        ctl.cancel.cancel();
+        ctl.cancel();
         let shared2 = shared.clone();
         let ctl2 = ctl.clone();
         let waiting = tokio::spawn(async move { cancelled(&shared2, 1, &ctl2).await });
@@ -1593,12 +1575,12 @@ mod tests {
             data_path: dir.join("gone.bin"),
         };
         let mut record = file_record(3, &peer, 3, side);
-        assert!(!Found::look(record.clone(), &dir).present);
+        assert!(!Found::look(record.clone()).present);
         record.done_sent = true;
-        assert!(Found::look(record.clone(), &dir).present);
+        assert!(Found::look(record.clone()).present);
         record.done_sent = false;
         record.done_hash = Some([1; 32]);
-        assert!(Found::look(record, &dir).present);
+        assert!(Found::look(record).present);
         std::fs::remove_dir_all(&dir).ok();
     }
 
