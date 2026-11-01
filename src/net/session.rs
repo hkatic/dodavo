@@ -522,8 +522,10 @@ impl TransferRecord {
     }
 
     /// Deletes what a transfer that ends without its item leaves behind (see
-    /// [`discard`](Self::discard)); whether all of it is gone.
-    fn delete_files(&self) -> bool {
+    /// [`discard`](Self::discard)), and nothing else: for a record that
+    /// [`load_all`] has given up, whose record file is gone already and is
+    /// not written again. Whether all of it is gone.
+    pub fn delete_files(&self) -> bool {
         match &self.side {
             Side::Send {
                 source, data_path, ..
@@ -669,18 +671,22 @@ fn is_old(path: &Path, max_age: Duration) -> bool {
         .is_some_and(|age| age > max_age)
 }
 
-/// The unfinished transfers from earlier runs. On the way, the records of
-/// transfers that completed are forgotten (their tombstone says so; only the
-/// record, or something temporary, could not be deleted then), old records
-/// go with their partial data, and old tombstones go. A receive that has all
-/// of its item never gets old: it finishes without the sender (its item may
-/// even be in place already, see [`TransferRecord::placed_item`]). A record
-/// that has ended is returned with the rest, `ended`, for the start to
-/// delete its files (see `net::restore`), and kept until they are gone, but
-/// at most for [`MAX_AGE`]: an older one is given up, that is, its record
-/// goes here, and the start deletes what it can of its files once more,
-/// like those of any ended record, without a later start trying again.
-pub fn load_all(data_dir: &Path) -> Vec<TransferRecord> {
+/// The unfinished transfers from earlier runs, each with its [`Fate`]. On
+/// the way, the records of transfers that completed are forgotten here
+/// (their tombstone says so; only the record, or something temporary, could
+/// not be deleted then), and so are old tombstones. Every other record is
+/// returned: one whose transfer goes on; one that has ended, `ended`, for
+/// the start to delete its files (see `net::restore`), whose record is kept
+/// until they are gone, but at most for [`MAX_AGE`]; and an old one, which
+/// is given up: its record goes here, and it is returned `ended`, for the
+/// start to delete what it can of its files once more, like those of any
+/// ended record, without a later start trying again. Old is older than
+/// [`MAX_AGE`], and a receive that has all of its item never gets old
+/// unless it has ended: it finishes without the sender (its item may even
+/// be in place already, see [`TransferRecord::placed_item`]). The files of
+/// a transfer that does not complete are not deleted here: deleting a
+/// folder can take a while, and the transfers that go on would wait for it.
+pub fn load_all(data_dir: &Path) -> Vec<(TransferRecord, Fate)> {
     let mut records = Vec::new();
     let Ok(entries) = fs::read_dir(records_dir(data_dir)) else {
         return records;
@@ -707,11 +713,7 @@ pub fn load_all(data_dir: &Path) -> Vec<TransferRecord> {
                     let fate = if tombstone(data_dir, &record.token) == Some(true) {
                         Fate::Completed
                     } else if record.ended {
-                        if old {
-                            Fate::GivenUp
-                        } else {
-                            Fate::Ended
-                        }
+                        if old { Fate::GivenUp } else { Fate::Ended }
                     } else if old && !record.finishes_alone() {
                         Fate::Expired
                     } else {
@@ -732,26 +734,20 @@ pub fn load_all(data_dir: &Path) -> Vec<TransferRecord> {
         match read {
             // Its item is in place: nothing of it may be deleted.
             Some((record, Fate::Completed)) => record.complete(data_dir),
-            // Its files go, where a rename right before the end put them,
-            // and so does the record, whether or not all of them could be
-            // deleted.
-            Some((mut record, Fate::Expired)) => {
-                record.follow_moved_part(&parts);
-                record.delete_files();
-                let _ = fs::remove_file(&path);
-            }
             // Given up: the record goes now, so that no later start tries
-            // again, and the record is returned, `ended`, for this start to
-            // delete what it can of its files in the background, as it does
-            // with the files of every ended record (see `net::restore`).
-            // Not here: deleting a folder can take a while, and the
-            // transfers that go on would wait for it.
-            Some((mut record, Fate::GivenUp)) => {
+            // again, and is returned, `ended`, for this start to delete what
+            // it can of its files in the background, as it does with the
+            // files of every ended record (see `net::restore`): where a
+            // rename right before the end put them. Not here: deleting a
+            // folder can take a while, and the transfers that go on would
+            // wait for it.
+            Some((mut record, fate @ (Fate::GivenUp | Fate::Expired))) => {
                 record.follow_moved_part(&parts);
+                record.ended = true;
                 let _ = fs::remove_file(&path);
-                records.push(record);
+                records.push((record, fate));
             }
-            Some((mut record, Fate::GoesOn | Fate::Ended)) => {
+            Some((mut record, fate @ (Fate::GoesOn | Fate::Ended))) => {
                 // The part file was renamed right before the program ended.
                 // Also when the transfer had ended: its files are where the
                 // part went, and its old name may belong to another transfer
@@ -766,9 +762,21 @@ pub fn load_all(data_dir: &Path) -> Vec<TransferRecord> {
                     changed = true;
                 }
                 if changed {
+                    // An ended record's age counts from its end: following
+                    // its part, which was renamed before that, does not make
+                    // it younger (see `Fate::GivenUp`).
+                    let age = (fate == Fate::Ended)
+                        .then(|| fs::metadata(&path).and_then(|m| m.modified()).ok())
+                        .flatten();
                     let _ = record.save(data_dir);
+                    if let Some(modified) = age {
+                        let _ = fs::File::options()
+                            .write(true)
+                            .open(&path)
+                            .and_then(|file| file.set_modified(modified));
+                    }
                 }
-                records.push(record);
+                records.push((record, fate));
             }
             None if is_old(&path, MAX_AGE) => {
                 let _ = fs::remove_file(&path);
@@ -785,27 +793,41 @@ pub fn load_all(data_dir: &Path) -> Vec<TransferRecord> {
             let _ = fs::remove_file(&path);
         }
     }
-    records.sort_by_key(|r| r.created);
+    records.sort_by_key(|(r, _)| r.created);
     records
 }
 
-/// What a start does with a record it read (see [`load_all`]).
+/// Test helper: the records [`load_all`] returns, without their fates.
+#[cfg(test)]
+pub(crate) fn records(data_dir: &Path) -> Vec<TransferRecord> {
+    load_all(data_dir)
+        .into_iter()
+        .map(|(record, _)| record)
+        .collect()
+}
+
+/// What a start does with a record it read (see [`load_all`], which
+/// returns every record but a completed one with its fate).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Fate {
+pub enum Fate {
     /// Its item is in place (the tombstone says so): only the record, or
-    /// something temporary, is left to delete.
+    /// something temporary, is left to delete, which `load_all` does.
     Completed,
     /// Its transfer ended in an earlier run, and only its files are left to
     /// delete, which the next start does (see `net::restore`) and keeps the
     /// record until they are gone.
     Ended,
     /// Ended too, but older than [`MAX_AGE`]: the transfer ended that long
-    /// ago (the age is the record's, counted from when it was last saved,
-    /// whether or not a start tried to delete its files meanwhile), so its
-    /// files are given up. The record goes at once, and the start deletes
-    /// what it can of the files, once more.
+    /// ago (the age is the record file's, counted from when the transfer
+    /// ended, which saved it last: a start that tries to delete its files,
+    /// or follows its renamed part, does not make it younger), so its files
+    /// are given up. The record goes at once, and the start deletes what it
+    /// can of the files, once more, without a tombstone: the one from the
+    /// end has gone with the record, and a peer that asks is told the same
+    /// without it.
     GivenUp,
-    /// Older than [`MAX_AGE`] and not finishing alone: it goes, with its files.
+    /// Older than [`MAX_AGE`] and not finishing alone: given up like
+    /// [`GivenUp`](Fate::GivenUp), that is, it ends now, with its files.
     Expired,
     /// Its transfer goes on.
     GoesOn,
@@ -843,12 +865,12 @@ fn parts_of<'a>(
 /// folder or an offer that was never accepted. `dir` must be this profile's
 /// own temporary folder, because the archives of another profile's transfers
 /// are unknown here and would look like leftovers.
-pub fn cleanup_temp(dir: &Path, records: &[TransferRecord]) {
+pub fn cleanup_temp<'a>(dir: &Path, records: impl IntoIterator<Item = &'a TransferRecord>) {
     let Ok(entries) = fs::read_dir(dir) else {
         return;
     };
     let in_use: Vec<&Path> = records
-        .iter()
+        .into_iter()
         .map(|r| match &r.side {
             Side::Send { data_path, .. } => data_path.as_path(),
             Side::Receive { files, .. } => files.part.as_path(),
@@ -1667,12 +1689,12 @@ mod tests {
         r.save(&dir).unwrap();
         assert_eq!(r.have(), 5);
         assert!(r.files_present());
-        let loaded = load_all(&dir);
+        let loaded = records(&dir);
         assert_eq!(loaded, vec![r.clone()]);
         assert_eq!(loaded[0].role(), Role::Receive);
         r.discard(&dir);
         assert!(!part.exists());
-        assert!(load_all(&dir).is_empty());
+        assert!(records(&dir).is_empty());
 
         let zip = dir.join("send.zip");
         fs::write(&zip, b"zip").unwrap();
@@ -1707,7 +1729,7 @@ mod tests {
         r.save(&dir).unwrap();
         r.complete(&dir);
         assert!(part.exists(), "the name belongs to another transfer now");
-        assert!(load_all(&dir).is_empty());
+        assert!(records(&dir).is_empty());
 
         let mut folder = record(4, receive_side(&dir, &dir.join("recv-4.zip"), None));
         folder.offer.kind = Kind::Folder;
@@ -1769,7 +1791,7 @@ mod tests {
         assert!(!session.cancel_blocking(&dir));
         assert_eq!(fs::read(&placed).unwrap(), b"data");
         assert_eq!(tombstone(&dir, &[2; 16]), Some(true));
-        assert!(load_all(&dir).is_empty());
+        assert!(records(&dir).is_empty());
 
         // A step that fails leaves the transfer running, so it can still
         // be cancelled (or ended as failed).
@@ -1801,7 +1823,7 @@ mod tests {
         let finishing = session.finishing().unwrap();
         assert!(!session.cancel_blocking(&dir), "left to the step");
         assert!(part.exists());
-        assert!(load_all(&dir)[0].ended);
+        assert!(records(&dir)[0].ended);
         // The step learns about it when it notes its next change, which the
         // record keeps all the same, so that it always knows the files.
         let mut files = session.receive_files().unwrap();
@@ -1811,13 +1833,13 @@ mod tests {
         });
         let error = session.save_receive_files(&dir, &files).unwrap_err();
         assert!(archive::is_cancelled(&error.into()));
-        assert_eq!(load_all(&dir)[0].receive_files(), Some(&files));
+        assert_eq!(records(&dir)[0].receive_files(), Some(&files));
         assert!(session.place(&dir, &mut || Ok(dir.join("a.bin"))).is_err());
         drop(finishing);
         assert!(session.finishing().is_err(), "it has ended");
         session.end(None, false).forget_blocking(&dir);
         assert!(!part.exists());
-        assert!(load_all(&dir).is_empty());
+        assert!(records(&dir).is_empty());
         assert_eq!(tombstone(&dir, &[1; 16]), Some(false));
         fs::remove_dir_all(&dir).ok();
     }
@@ -1846,7 +1868,7 @@ mod tests {
         let r = with_folder(10, &part, &partial);
         r.discard(&dir);
         assert!(!partial.exists() && !part.exists());
-        assert!(load_all(&dir).is_empty());
+        assert!(records(&dir).is_empty());
 
         // The user deleted it and made a folder of the same name.
         fs::write(&part, b"zip").unwrap();
@@ -1858,7 +1880,7 @@ mod tests {
         r.discard(&dir);
         assert_eq!(fs::read(partial.join("mine.txt")).unwrap(), b"mine");
         assert!(!part.exists());
-        assert!(load_all(&dir).is_empty());
+        assert!(records(&dir).is_empty());
 
         // A part that another program holds open cannot be deleted yet.
         fs::write(&part, b"zip").unwrap();
@@ -1873,13 +1895,13 @@ mod tests {
         let r = record(12, receive_side(&dir, &part, None));
         r.save(&dir).unwrap();
         r.discard(&dir);
-        let left = load_all(&dir);
+        let left = records(&dir);
         assert_eq!(left.len(), 1);
         assert!(left[0].ended, "the next start deletes it");
         drop(held);
         left[0].discard(&dir);
         assert!(!part.exists());
-        assert!(load_all(&dir).is_empty());
+        assert!(records(&dir).is_empty());
         fs::remove_dir_all(&dir).ok();
     }
 
@@ -2045,7 +2067,7 @@ mod tests {
         r.save(&dir).unwrap();
         r.discard(&dir);
         assert_eq!(fs::read(&zip).unwrap(), b"a download");
-        assert!(load_all(&dir).is_empty());
+        assert!(records(&dir).is_empty());
         fs::remove_dir_all(&dir).ok();
     }
 
@@ -2077,16 +2099,16 @@ mod tests {
             .open(old.join("half.jpg"))
             .unwrap();
         r.discard(&dir);
-        assert!(load_all(&dir)[0].ended, "the next start tries again");
+        assert!(records(&dir)[0].ended, "the next start tries again");
         drop(held);
-        load_all(&dir)[0].discard(&dir);
+        records(&dir)[0].discard(&dir);
         assert!(!old.exists() && !part.exists());
-        assert!(load_all(&dir).is_empty());
+        assert!(records(&dir).is_empty());
 
         let r = with_leftover(16);
         r.complete(&dir);
         assert!(!old.exists() && !part.exists());
-        assert!(load_all(&dir).is_empty());
+        assert!(records(&dir).is_empty());
         fs::remove_dir_all(&dir).ok();
     }
 
@@ -2154,14 +2176,14 @@ mod tests {
         assert!(zip.exists() && !session.running());
         // A restart keeps the transfer, and the cancel, which waits on (not
         // paused: the window offers no Resume once cancelled).
-        let stored = &load_all(&dir)[0];
+        let stored = &records(&dir)[0];
         assert!(!stored.ended && stored.cancelled && stored.cancel_pending());
         assert!(!stored.paused);
         assert!(stored.receiver_may_have_item());
         let ending = session.stop_deferring().expect("the cancel ends it now");
         ending.forget_blocking(&dir);
         assert!(!zip.exists());
-        assert!(load_all(&dir).is_empty());
+        assert!(records(&dir).is_empty());
         assert_eq!(tombstone(&dir, &[20; 16]), Some(false));
         assert!(!session.cancel_blocking(&dir), "it has ended");
 
@@ -2173,7 +2195,7 @@ mod tests {
         assert!(!session.cancel_blocking(&dir));
         session.hand_over();
         session.save_done_hash(&dir, [1; 32]);
-        assert!(!load_all(&dir)[0].cancel_pending());
+        assert!(!records(&dir)[0].cancel_pending());
         assert!(session.stop_deferring().is_none());
         assert!(!session.cancel_blocking(&dir));
         session.end(None, true).forget_blocking(&dir);
@@ -2193,14 +2215,14 @@ mod tests {
         assert!(!session.done_sent(), "noted once");
         session.save_record(&dir);
         assert!(
-            load_all(&dir)
+            records(&dir)
                 .iter()
                 .any(|r| r.token == [22; 16] && r.done_sent)
         );
         assert!(session.stop_deferring().is_none());
         assert!(session.running() && !session.deferring());
         session.clear_done_sent(&dir);
-        let stored = load_all(&dir);
+        let stored = records(&dir);
         let stored = stored.iter().find(|r| r.token == [22; 16]).unwrap();
         assert!(!stored.done_sent && !stored.receiver_may_have_item());
         assert!(session.cancel_blocking(&dir));
@@ -2218,7 +2240,7 @@ mod tests {
         r.cancelled = true;
         r.done_sent = true;
         r.save(&dir).unwrap();
-        let loaded = load_all(&dir);
+        let loaded = records(&dir);
         assert_eq!(loaded.len(), 1);
         assert!(loaded[0].cancel_pending() && !loaded[0].paused);
         let text = fs::read_to_string(record_path(&dir, &r.token)).unwrap();
@@ -2227,7 +2249,7 @@ mod tests {
         // A pause that is not contradicted stays.
         r.cancelled = false;
         r.save(&dir).unwrap();
-        assert!(load_all(&dir)[0].paused);
+        assert!(records(&dir)[0].paused);
         fs::remove_dir_all(&dir).ok();
     }
 
@@ -2262,14 +2284,14 @@ mod tests {
         }
         other.save(&dir).unwrap();
         write_tombstone(&dir, &other.token, true);
-        let loaded = load_all(&dir);
+        let loaded = records(&dir);
         assert_eq!(loaded.len(), 1);
         assert_eq!(loaded[0].receive_files().unwrap().part, part);
         assert!(part.exists() && placed.exists());
         // A transfer that goes on with that name took it after the rename.
         other.save(&dir).unwrap();
         let _ = fs::remove_file(tombstone_path(&dir, &other.token));
-        let loaded = load_all(&dir);
+        let loaded = records(&dir);
         assert_eq!(loaded.len(), 2);
         let mine = loaded.iter().find(|l| l.token == r.token).unwrap();
         assert_eq!(mine.receive_files().unwrap().part, placed);
@@ -2318,10 +2340,17 @@ mod tests {
             .set_modified(long_ago)
             .unwrap();
         let loaded = load_all(&dir);
-        assert_eq!(loaded.len(), 1);
-        assert_eq!(loaded[0].token, r.token);
-        assert_eq!(loaded[0].receive_files().unwrap().part, placed);
-        assert_eq!(loaded[0].placed_item(), Some(placed.as_path()));
+        assert_eq!(loaded.len(), 2);
+        let (mine, fate) = loaded.iter().find(|(l, _)| l.token == r.token).unwrap();
+        assert_eq!(*fate, Fate::GoesOn);
+        assert_eq!(mine.receive_files().unwrap().part, placed);
+        assert_eq!(mine.placed_item(), Some(placed.as_path()));
+        let (expired, fate) = loaded.iter().find(|(l, _)| l.token == other.token).unwrap();
+        assert_eq!(*fate, Fate::Expired);
+        assert!(expired.ended && !record_path(&dir, &other.token).exists());
+        assert_eq!(expired.receive_files().unwrap().part, part);
+        assert!(part.exists(), "left to the start to delete");
+        expired.delete_files();
         assert!(!part.exists(), "the expired record took its part along");
         assert!(placed.exists());
         archive::PRETEND_FAT.set(false);
@@ -2364,7 +2393,7 @@ mod tests {
         }
         r.save(&dir).unwrap();
         write_tombstone(&dir, &r.token, true);
-        assert!(load_all(&dir).is_empty());
+        assert!(records(&dir).is_empty());
         assert_eq!(fs::read(folder.join("a.jpg")).unwrap(), b"received");
         assert!(!temp.exists(), "only what was temporary goes");
         assert!(!record_path(&dir, &r.token).exists());
@@ -2391,7 +2420,7 @@ mod tests {
         for saver in savers {
             saver.join().unwrap();
         }
-        assert!(load_all(&dir).is_empty());
+        assert!(records(&dir).is_empty());
         assert!(!record_path(&dir, &[25; 16]).exists());
         fs::remove_dir_all(&dir).ok();
     }
@@ -2428,7 +2457,7 @@ mod tests {
         offer.remove("created");
         fs::create_dir_all(records_dir(&dir)).unwrap();
         fs::write(record_path(&dir, &[7; 16]), json.to_string()).unwrap();
-        let loaded = load_all(&dir);
+        let loaded = records(&dir);
         assert_eq!(loaded.len(), 1);
         assert_eq!(loaded[0].done_hash, None);
         assert_eq!(loaded[0].received_folder(), Some(ReceivedFolder::Extract));
@@ -2454,7 +2483,7 @@ mod tests {
             }
             fs::write(record_path(&dir, &[token; 16]), json.to_string()).unwrap();
         }
-        let loaded = load_all(&dir);
+        let loaded = records(&dir);
         assert_eq!(loaded.len(), 3);
         let unpacking = |token: u8| {
             let r = loaded.iter().find(|r| r.token == [token; 16]).unwrap();
@@ -2468,7 +2497,7 @@ mod tests {
 
         // A damaged record is set aside, not read again and again.
         fs::write(record_path(&dir, &[8; 16]), "{ not json").unwrap();
-        assert_eq!(load_all(&dir).len(), 1);
+        assert_eq!(records(&dir).len(), 1);
         assert!(!record_path(&dir, &[8; 16]).exists());
         assert!(
             records_dir(&dir)
@@ -2509,11 +2538,22 @@ mod tests {
             .unwrap()
             .set_modified(long_ago)
             .unwrap();
-        assert!(load_all(&dir).is_empty());
+        let loaded = load_all(&dir);
+        assert_eq!(loaded.len(), 1);
+        let (expired, fate) = &loaded[0];
+        assert_eq!(*fate, Fate::Expired);
+        assert!(expired.ended, "ends now");
+        assert!(
+            !record_path(&dir, &r.token).exists(),
+            "the record went at once"
+        );
+        assert!(part.exists(), "left to the start to delete");
+        expired.delete_files();
         assert!(
             !part.exists(),
             "the partial data of an expired record is deleted"
         );
+        assert!(records(&dir).is_empty());
 
         // A receive that has all of its item does not expire: its item is
         // in place already, or it is put in place without the sender.
@@ -2540,7 +2580,7 @@ mod tests {
         let mut verified = record(27, receive_side(&dir, &whole, Some(10)));
         verified.done_hash = Some([1; 32]);
         make_old(&verified);
-        let loaded = load_all(&dir);
+        let loaded = records(&dir);
         assert_eq!(loaded.len(), 2);
         assert_eq!(
             loaded
@@ -2564,16 +2604,39 @@ mod tests {
             });
         }
         ended.save(&dir).unwrap();
+        // It ended some days ago: following its part now does not make it
+        // younger, so that it is given up `MAX_AGE` after its end.
+        let days_ago = SystemTime::now() - Duration::from_secs(10 * 24 * 60 * 60);
+        fs::File::options()
+            .write(true)
+            .open(record_path(&dir, &ended.token))
+            .unwrap()
+            .set_modified(days_ago)
+            .unwrap();
         fs::rename(&whole, dir.join("b.bin")).unwrap();
         let loaded = load_all(&dir);
         assert_eq!(loaded.len(), 2);
-        let ended = loaded.iter().find(|r| r.token == [27; 16]).unwrap();
+        let (ended, fate) = loaded.iter().find(|(r, _)| r.token == [27; 16]).unwrap();
+        assert_eq!(*fate, Fate::Ended);
         assert!(ended.ended);
         assert_eq!(ended.receive_files().unwrap().part, dir.join("b.bin"));
+        let saved = fs::read_to_string(record_path(&dir, &ended.token)).unwrap();
+        assert!(
+            saved.contains("b.bin\"") && !saved.contains("b.bin.part"),
+            "saved as followed"
+        );
+        assert_eq!(
+            fs::metadata(record_path(&dir, &ended.token))
+                .unwrap()
+                .modified()
+                .unwrap(),
+            days_ago,
+            "as old as before"
+        );
         assert!(dir.join("b.bin").exists(), "left to the start to delete");
         ended.discard(&dir);
         assert!(!dir.join("b.bin").exists());
-        assert_eq!(load_all(&dir).len(), 1);
+        assert_eq!(records(&dir).len(), 1);
         assert!(item.exists());
         fs::remove_dir_all(&dir).ok();
     }
@@ -2601,7 +2664,7 @@ mod tests {
                 .open(&part)
                 .unwrap()
         };
-        let loaded = load_all(&dir);
+        let loaded = records(&dir);
         assert_eq!(loaded.len(), 1);
         assert!(loaded[0].ended);
         loaded[0].discard(&dir);
@@ -2619,15 +2682,17 @@ mod tests {
             .unwrap();
         let loaded = load_all(&dir);
         assert_eq!(loaded.len(), 1, "given up: its files are tried once more");
-        assert!(loaded[0].ended);
+        let (given_up, fate) = &loaded[0];
+        assert_eq!(*fate, Fate::GivenUp);
+        assert!(given_up.ended);
         assert!(
             !record_path(&dir, &r.token).exists(),
             "the record went at once"
         );
-        loaded[0].discard(&dir);
+        assert!(!given_up.delete_files());
         assert!(part.exists(), "still cannot be deleted");
         assert!(!record_path(&dir, &r.token).exists());
-        assert!(load_all(&dir).is_empty(), "no later start tries again");
+        assert!(records(&dir).is_empty(), "no later start tries again");
         drop(held);
         fs::remove_dir_all(&dir).ok();
     }
@@ -2679,12 +2744,15 @@ mod tests {
         make_old(&r);
         fs::rename(&part, &placed).unwrap();
         // A send of a folder, whose zip could not be deleted then.
+        let source = dir.join("Photos");
+        fs::create_dir_all(&source).unwrap();
+        fs::write(source.join("one.jpg"), b"1").unwrap();
         let zip = dir.join("send.zip");
         fs::write(&zip, b"zip").unwrap();
         let mut s = record(
             33,
             Side::Send {
-                source: dir.clone(),
+                source: source.clone(),
                 source_len: 0,
                 source_mtime: None,
                 data_path: zip.clone(),
@@ -2695,7 +2763,12 @@ mod tests {
 
         let loaded = load_all(&dir);
         assert_eq!(loaded.len(), 2);
-        assert!(loaded.iter().all(|l| l.ended));
+        assert!(
+            loaded
+                .iter()
+                .all(|(l, fate)| l.ended && *fate == Fate::GivenUp)
+        );
+        let loaded: Vec<TransferRecord> = loaded.into_iter().map(|(l, _)| l).collect();
         assert!(
             !record_path(&dir, &r.token).exists() && !record_path(&dir, &s.token).exists(),
             "the records went at once"
@@ -2711,13 +2784,16 @@ mod tests {
             "left to the start to delete"
         );
         for l in &loaded {
-            l.discard(&dir);
+            assert!(l.delete_files());
         }
         assert!(!placed.exists() && !part.exists());
         assert!(!unpacking.exists());
         assert!(!zip.exists());
-        assert!(dir.exists(), "what the user chose to send stays");
-        assert!(load_all(&dir).is_empty());
+        assert!(
+            source.join("one.jpg").exists(),
+            "what the user chose to send stays"
+        );
+        assert!(records(&dir).is_empty());
         fs::remove_dir_all(&dir).ok();
     }
 

@@ -1426,7 +1426,7 @@ mod tests {
         // The transfer has ended as completed.
         assert!(transfer.session.with_record(|_| ()).is_none());
         assert_eq!(session::tombstone(&transfer.data_dir, &[7; 16]), Some(true));
-        assert!(session::load_all(&transfer.data_dir).is_empty());
+        assert!(session::records(&transfer.data_dir).is_empty());
         path
     }
 
@@ -1477,14 +1477,14 @@ mod tests {
         assert!(cancel_first.take(), "the cancel comes first");
         assert!(archive::is_cancelled(&make(&cancel_first).unwrap_err()));
         assert!(names_in(&dest).is_empty());
-        assert!(session::load_all(&data_dir).is_empty());
+        assert!(session::records(&data_dir).is_empty());
 
         // Made first: the transfer has the part and the record.
         let first = First::default();
         let record = make(&first).unwrap();
         assert!(!first.take(), "a cancel now ends the transfer instead");
         assert_eq!(names_in(&dest), ["a.txt.part"]);
-        assert_eq!(session::load_all(&data_dir), [record]);
+        assert_eq!(session::records(&data_dir), [record]);
         std::fs::remove_dir_all(&base).ok();
     }
 
@@ -1520,7 +1520,7 @@ mod tests {
         let transfer = receiving(&base, &part, Kind::File, ReceivedFolder::Extract);
         assert!(finish_file(&transfer, &base.join("gone"), "a.txt", t).is_err());
         assert_eq!(transfer.files().unwrap().moving, None);
-        let records = session::load_all(&transfer.data_dir);
+        let records = session::records(&transfer.data_dir);
         assert_eq!(records[0].receive_files().unwrap().moving, None);
         assert!(part.exists());
         // The transfer still runs: it can end as failed or be cancelled.
@@ -1546,7 +1546,7 @@ mod tests {
         assert_eq!(path, base.join("a.txt"));
         assert_eq!(std::fs::read(&path).unwrap(), b"new");
         assert!(transfer.session.with_record(|_| ()).is_none(), "completed");
-        assert!(session::load_all(&transfer.data_dir).is_empty());
+        assert!(session::records(&transfer.data_dir).is_empty());
         std::fs::remove_dir_all(&base).ok();
     }
 
@@ -1613,7 +1613,7 @@ mod tests {
             });
             assert!(unpacked.is_err());
             assert!(
-                session::load_all(&transfer.data_dir)[0].ended,
+                session::records(&transfer.data_dir)[0].ended,
                 "a crash now deletes the files at the next start"
             );
             let left = names_in(&dest);
@@ -1623,7 +1623,7 @@ mod tests {
                 .end(None, false)
                 .forget_blocking(&transfer.data_dir);
             assert!(names_in(&dest).is_empty());
-            assert!(session::load_all(&transfer.data_dir).is_empty());
+            assert!(session::records(&transfer.data_dir).is_empty());
 
             let part = received_zip(&base, "Photos.zip.part");
             let transfer = receiving(&base, &part, Kind::Folder, folder);

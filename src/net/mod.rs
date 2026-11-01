@@ -26,7 +26,7 @@ use tokio::sync::{mpsc, oneshot, watch};
 
 pub use crate::config::ReceivedFolder;
 pub use protocol::{Kind, Offer};
-use session::{Control, Session, Streams};
+use session::{Control, Fate, Session, Streams};
 pub use session::{Role, TransferRecord};
 
 pub enum Command {
@@ -507,17 +507,23 @@ async fn accept(shared: Arc<Shared>, endpoint: Endpoint, conn: Connection) {
 /// Picks up the transfers that were interrupted in an earlier run.
 async fn restore(shared: &Arc<Shared>, endpoint: &Endpoint) {
     // Reading the records and looking at their files is file work: each
-    // record with how many bytes it has and whether it can go on.
+    // record with its fate and, if its transfer goes on, how many bytes it
+    // has and whether it can go on (the files of one that does not are only
+    // deleted, so they are not looked at: zero and false there).
     let found = {
         let (data_dir, temp_dir) = (shared.data_dir.clone(), shared.temp_dir.clone());
         session::off_runtime(move || {
             let records = session::load_all(&data_dir);
-            session::cleanup_temp(&temp_dir, &records);
+            session::cleanup_temp(&temp_dir, records.iter().map(|(record, _)| record));
             records
                 .into_iter()
-                .map(|record| {
-                    let (have, present) = (record.have(), record.can_go_on());
-                    (record, have, present)
+                .map(|(record, fate)| {
+                    let (have, present) = if fate == Fate::GoesOn {
+                        (record.have(), record.can_go_on())
+                    } else {
+                        (0, false)
+                    };
+                    (record, fate, have, present)
                 })
                 .collect::<Vec<_>>()
         })
@@ -529,25 +535,44 @@ async fn restore(shared: &Arc<Shared>, endpoint: &Endpoint) {
         .restoring
         .lock()
         .unwrap()
-        .extend(found.iter().map(|(record, _, _)| record.token));
-    // Ends a transfer from the last run without it, in the background:
-    // deleting its files can take a while, and nothing waits for that.
-    let end = |record: TransferRecord| {
+        .extend(found.iter().map(|(record, ..)| record.token));
+    // Deletes the files of a transfer that does not go on, in the
+    // background: that can take a while, and nothing waits for it. One that
+    // ends now, or ended in an earlier run while its files were being
+    // deleted (or one could not be deleted then), is discarded: its record
+    // is kept until they are gone, and its tombstone is written, in case the
+    // end did not get to it. One that `load_all` has given up has no record
+    // any more, so that what cannot be deleted now is not tried again, and
+    // gets no tombstone (see `session::Fate::GivenUp`).
+    let delete_files = |record: TransferRecord, given_up: bool| {
         shared.restored(&record.token);
         let data_dir = shared.data_dir.clone();
         tokio::task::spawn_blocking(move || {
-            session::write_tombstone(&data_dir, &record.token, false);
-            record.discard(&data_dir);
+            if given_up {
+                record.delete_files();
+            } else {
+                session::write_tombstone(&data_dir, &record.token, false);
+                record.discard(&data_dir);
+            }
         });
     };
-    for (record, have, present) in found {
-        if record.ended {
-            // It ended in an earlier run while its files were being deleted
-            // (or one could not be deleted then): only that is left to do.
-            // Also one that `load_all` has given up: its record is gone
-            // already, so what cannot be deleted now is not tried again.
-            end(record);
-            continue;
+    for (record, fate, have, present) in found {
+        match fate {
+            Fate::GoesOn => {}
+            Fate::GivenUp | Fate::Expired => {
+                delete_files(record, true);
+                continue;
+            }
+            Fate::Ended => {
+                delete_files(record, false);
+                continue;
+            }
+            // `load_all` has completed it, and does not return it: its item
+            // is in place, so nothing of it may be deleted here.
+            Fate::Completed => {
+                shared.restored(&record.token);
+                continue;
+            }
         }
         let id = next_transfer_id();
         // The user cancelled a send in the last run, and the cancel was
@@ -560,7 +585,7 @@ async fn restore(shared: &Arc<Shared>, endpoint: &Endpoint) {
             have,
         });
         if !present {
-            end(record);
+            delete_files(record, false);
             shared.emit(Event::Finished {
                 id,
                 outcome: Outcome::Failed(crate::i18n::tr!(error_part_missing).into()),
@@ -998,8 +1023,8 @@ mod tests {
         assert!(!recv_dir.join("decline.txt").exists());
         let left = leftovers(&recv_dir);
         assert_eq!(left.len(), 4, "unexpected files: {left:?}");
-        assert!(session::load_all(&base.join("a")).is_empty());
-        assert!(session::load_all(&base.join("b")).is_empty());
+        assert!(session::records(&base.join("a")).is_empty());
+        assert!(session::records(&base.join("b")).is_empty());
         std::fs::remove_dir_all(&base).ok();
     }
 
@@ -1145,7 +1170,7 @@ mod tests {
         );
         b.shutdown(Duration::from_secs(5));
         drop(b);
-        let records = session::load_all(&dir_b);
+        let records = session::records(&dir_b);
         assert_eq!(records.len(), 1, "the record survives the shutdown");
         let written = records[0].have();
         assert!(written > 0);
@@ -1195,7 +1220,7 @@ mod tests {
         assert!(matches!(wait_finished(&rx_a, id), Outcome::Completed(_)));
         assert_eq!(std::fs::read(recv_dir.join("big.bin")).unwrap(), data);
         assert_eq!(leftovers(&recv_dir).len(), 1);
-        assert!(session::load_all(&dir_b).is_empty());
+        assert!(session::records(&dir_b).is_empty());
         drop(b2);
         std::fs::remove_dir_all(&base).ok();
     }
@@ -1273,7 +1298,7 @@ mod tests {
         b.shutdown(Duration::from_secs(5));
         drop(b);
         receive::HOLD_FINALIZE.store(false, Ordering::SeqCst);
-        let records = session::load_all(&dir_b);
+        let records = session::records(&dir_b);
         assert_eq!(records.len(), 1, "the record survives");
         assert!(
             records[0].done_hash.is_some(),
@@ -1313,11 +1338,11 @@ mod tests {
         );
         // The incomplete folder was replaced, not left next to a copy.
         assert_eq!(leftovers(&recv_dir), ["Photos"]);
-        assert!(session::load_all(&dir_b).is_empty());
+        assert!(session::records(&dir_b).is_empty());
         // The sender learns on its next dial that the item was saved.
         let outcome = wait_finished(&rx_a, id);
         assert!(matches!(outcome, Outcome::Completed(_)), "{outcome:?}");
-        assert!(session::load_all(&base.join("a")).is_empty());
+        assert!(session::records(&base.join("a")).is_empty());
         drop(b2);
         std::fs::remove_dir_all(&base).ok();
     }
@@ -1368,12 +1393,12 @@ mod tests {
         record.save(&dir).unwrap();
         std::fs::rename(&part, dir.join("Photos (2).zip")).unwrap();
         std::fs::write(&part, b"another transfer").unwrap();
-        let mut loaded = session::load_all(&dir);
+        let mut loaded = session::records(&dir);
         assert_eq!(loaded.len(), 1);
         loaded.remove(0).discard(&dir);
         assert_eq!(std::fs::read(&part).unwrap(), b"another transfer");
         assert!(!dir.join("Photos (2).zip").exists());
-        assert!(session::load_all(&dir).is_empty());
+        assert!(session::records(&dir).is_empty());
         std::fs::remove_dir_all(&dir).ok();
     }
 
@@ -1466,7 +1491,7 @@ mod tests {
             tokio::time::timeout(Duration::from_secs(1), cancelled(&shared, 1, &ctl)).await;
         assert!(waited.is_err(), "the transfer goes on");
         assert!(!ctl.cancelling(), "shutdown no longer waits");
-        assert!(session::load_all(&dir)[0].cancel_pending());
+        assert!(session::records(&dir)[0].cancel_pending());
         assert!(cancel_waits_told(&events, 1), "the UI is told");
 
         let part = dir.join("b.bin.part");
@@ -1494,7 +1519,7 @@ mod tests {
         assert!(waited.is_err(), "left to the last step");
         assert!(ctl.cancelling(), "which ends the transfer soon");
         assert!(!cancel_waits_told(&events, 2), "nothing to tell the UI");
-        let stored = session::load_all(&dir);
+        let stored = session::records(&dir);
         assert!(stored.iter().find(|r| r.token == [2; 16]).unwrap().ended);
         std::fs::remove_dir_all(&dir).ok();
     }
@@ -1533,7 +1558,7 @@ mod tests {
             .unwrap()
             .set_modified(written)
             .unwrap();
-        let record = session::load_all(&dir).remove(0);
+        let record = session::records(&dir).remove(0);
         assert!(record.cancel_pending());
         let (send, _rx) = Session::new(1, record.token, peer, Role::Send);
         send.defer_cancel();
@@ -1586,11 +1611,11 @@ mod tests {
         assert!(waited.is_err(), "left to the task");
         assert!(ctl.cancelling(), "which ends the transfer soon");
         assert!(!cancel_waits_told(&events, 1), "nothing to tell the UI");
-        let stored = session::load_all(&dir);
+        let stored = session::records(&dir);
         assert!(stored[0].cancelled && !stored[0].done_sent, "{stored:?}");
         let ending = send.stop_deferring().expect("the cancel ends it");
         ending.forget_blocking(&dir);
-        assert!(session::load_all(&dir).is_empty());
+        assert!(session::records(&dir).is_empty());
         std::fs::remove_dir_all(&dir).ok();
     }
 
@@ -1629,14 +1654,14 @@ mod tests {
         tokio::time::sleep(Duration::from_millis(300)).await;
         assert!(ctl.cancelling(), "not on disk yet: shutdown waits");
         assert!(cancel_waits_told(&events, 1), "the UI is told already");
-        assert!(session::load_all(&dir).is_empty());
+        assert!(session::records(&dir).is_empty());
         std::fs::remove_file(session::records_dir(&dir)).unwrap();
         let deadline = Instant::now() + Duration::from_secs(5);
         while ctl.cancelling() {
             assert!(Instant::now() < deadline, "the save was not tried again");
             tokio::time::sleep(Duration::from_millis(50)).await;
         }
-        let stored = session::load_all(&dir);
+        let stored = session::records(&dir);
         assert!(stored[0].cancel_pending(), "{stored:?}");
         waiting.abort();
         std::fs::remove_dir_all(&dir).ok();
@@ -1715,7 +1740,7 @@ mod tests {
             "{outcome:?}"
         );
         assert_eq!(std::fs::read(&item).unwrap(), b"0123456789");
-        assert!(session::load_all(&data_dir).is_empty());
+        assert!(session::records(&data_dir).is_empty());
         assert_eq!(session::tombstone(&data_dir, &[4; 16]), Some(true));
         net.shutdown(Duration::from_secs(5));
         std::fs::remove_dir_all(&base).ok();
@@ -1781,7 +1806,7 @@ mod tests {
         a.shutdown(Duration::from_secs(5));
         b.shutdown(Duration::from_secs(5));
         receive::HOLD_VERIFY.lock().unwrap().retain(|n| n != name);
-        let records = session::load_all(&dir_a);
+        let records = session::records(&dir_a);
         assert_eq!(records.len(), 1);
         assert!(records[0].done_sent, "{:?}", records[0]);
         assert_eq!(records[0].cancel_pending(), cancel, "{:?}", records[0]);
@@ -1825,7 +1850,7 @@ mod tests {
         let stopped = send_until_verdict(&base, "cancel-me.bin", true);
         // Paused too (while it waited for the connection, say): it is not
         // paused for the verdict, since the window offers no Resume any more.
-        let mut record = session::load_all(&stopped.dir_a).remove(0);
+        let mut record = session::records(&stopped.dir_a).remove(0);
         record.paused = true;
         record.save(&stopped.dir_a).unwrap();
 
@@ -1834,8 +1859,8 @@ mod tests {
         assert!(matches!(outcome, Outcome::Cancelled), "{outcome:?}");
         let outcome = wait_finished(&rx_b, id_b);
         assert!(matches!(outcome, Outcome::CancelledByPeer), "{outcome:?}");
-        assert!(session::load_all(&stopped.dir_a).is_empty());
-        assert!(session::load_all(&stopped.dir_b).is_empty());
+        assert!(session::records(&stopped.dir_a).is_empty());
+        assert!(session::records(&stopped.dir_b).is_empty());
         assert!(leftovers(&stopped.recv_dir).is_empty());
         assert_eq!(std::fs::read(&stopped.file).unwrap(), stopped.data);
         a.shutdown(Duration::from_secs(5));
@@ -1860,8 +1885,8 @@ mod tests {
         );
         let outcome = wait_finished(&rx_b, id_b);
         assert!(matches!(outcome, Outcome::Failed(_)), "{outcome:?}");
-        assert!(session::load_all(&stopped.dir_a).is_empty());
-        assert!(session::load_all(&stopped.dir_b).is_empty());
+        assert!(session::records(&stopped.dir_a).is_empty());
+        assert!(session::records(&stopped.dir_b).is_empty());
         assert!(leftovers(&stopped.recv_dir).is_empty());
         a.shutdown(Duration::from_secs(5));
         b.shutdown(Duration::from_secs(5));
