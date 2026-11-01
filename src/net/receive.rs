@@ -24,7 +24,10 @@ use tokio::{
     sync::{mpsc, oneshot, watch},
     task::JoinHandle,
 };
-use windows_sys::Win32::Storage::FileSystem::FILE_SHARE_READ;
+use windows_sys::Win32::Storage::FileSystem::{
+    DELETE, FILE_GENERIC_READ, FILE_GENERIC_WRITE, FILE_SHARE_READ, FILE_WRITE_ATTRIBUTES,
+    FILE_WRITE_DATA,
+};
 
 use super::{
     Accept, CLOSE_CANCELLED, CLOSE_FAILED, CLOSE_OK, CLOSE_SUSPENDED, Event, Outcome, Phase,
@@ -32,8 +35,8 @@ use super::{
     protocol::{self, CHUNK, Kind, Msg, Offer, Token},
     send::AbortOnDrop,
     session::{
-        self, Control, Ending, Lost, Owned, PeerClose, ReceiveFiles, Role, Session, Side, Streams,
-        TransferRecord, lost, off_runtime, peer_close,
+        self, Control, Ending, KeptPart, Lost, Owned, PeerClose, ReceiveFiles, Role, Session, Side,
+        Streams, TransferRecord, lost, off_runtime, peer_close,
     },
     spawn_path_watch,
 };
@@ -49,6 +52,10 @@ const QUERY_TIMEOUT: Duration = Duration::from_secs(20);
 /// The part file is flushed to disk, and the amount noted in the record,
 /// after this much new data.
 const SYNC_EVERY: u64 = 64 * 1024 * 1024;
+/// The pauses between attempts to open the part file for a connection while
+/// another program keeps it out (see `open_own_part`): about a second and a
+/// half, after which the sender dials again.
+const OPEN_RETRY_MS: &[u64] = &[50, 100, 200, 400, 800];
 /// Tests set this to stop a folder transfer right before unpacking, to
 /// simulate a shutdown during the last step.
 #[cfg(test)]
@@ -532,18 +539,33 @@ fn prepare_part(
 /// by its name for each connection: only while it is still the transfer's,
 /// as told by the handle that is written to (see
 /// `TransferRecord::open_part`), not once it has been deleted and another
-/// file has taken the name while the transfer waited. While it is open no
-/// other program can write to it, delete it or rename it, so it stays the
-/// part until the connection is over; the user who wants it gone cancels
-/// the transfer. Without a record the transfer is ending, and nothing is
-/// written. Blocking.
-fn open_own_part(record: Option<&TransferRecord>) -> anyhow::Result<std::fs::File> {
-    let Some(record) = record else {
+/// file has taken the name while the transfer waited. It is open for the
+/// connection while the result's `KeptPart` exists, and meanwhile no other
+/// program can write to it, delete it or rename it, so it stays the part
+/// until the connection is over; the user who wants it gone cancels the
+/// transfer, which deletes it through the handle (see `Session::keep_part`).
+/// Another program that has it open keeps it out for a moment at most:
+/// then the connection counts as lost (`Lost`), and the transfer goes on
+/// at the sender's next one. Without a record the transfer is ending, and
+/// nothing is written. Blocking.
+fn open_own_part(session: &Arc<Session>) -> anyhow::Result<(std::fs::File, KeptPart)> {
+    let Some(record) = session.with_record(TransferRecord::clone) else {
         bail!(Cancelled);
     };
     let mut options = std::fs::OpenOptions::new();
-    options.append(true).share_mode(FILE_SHARE_READ);
-    Ok(record.open_part(&options)?)
+    // What `append` asks for, and delete for a cancel.
+    options
+        .access_mode((FILE_GENERIC_WRITE & !FILE_WRITE_DATA) | DELETE)
+        .share_mode(FILE_SHARE_READ);
+    let part = archive::while_busy(OPEN_RETRY_MS, || record.open_part(&options)).map_err(|e| {
+        if archive::is_busy(&e) {
+            lost(e)
+        } else {
+            e.into()
+        }
+    })?;
+    let kept = session.keep_part(&part)?;
+    Ok((part, kept))
 }
 
 /// Asks the sender whether it still has the transfer. `Some(completed)` if it
@@ -673,14 +695,18 @@ impl<'a> Receiver<'a> {
     async fn continue_restored(&mut self, placed: Option<PathBuf>) -> Outcome {
         if let Some(path) = placed {
             let times = (self.kind == Kind::File).then_some(self.times);
+            let id = self
+                .session
+                .with_record(TransferRecord::part_identity)
+                .flatten();
             let ending = self.session.end(None, true);
             let (data_dir, item) = (self.shared.data_dir.clone(), path.clone());
             off_runtime(move || {
-                // Once the record is gone (see `finish_file`).
+                // As in `finish_file`.
+                let (now, later) = times.unwrap_or_default().split(id.as_ref());
+                now.apply(&item);
                 ending.forget_blocking(&data_dir);
-                if let Some(times) = times {
-                    times.apply(&item);
-                }
+                later.apply(&item);
             })
             .await;
             return Outcome::Completed(Some(path));
@@ -985,8 +1011,17 @@ impl<'a> Receiver<'a> {
         // Opened before anything else: the part is checked on the handle
         // that is written to, and stays the part while it is hashed after a
         // restart (see `open_own_part`).
-        let record = self.session.with_record(TransferRecord::clone);
-        let out = off_runtime(move || open_own_part(record.as_ref())).await?;
+        let session = self.session.clone();
+        let (out, kept) = match off_runtime(move || open_own_part(&session)).await {
+            Ok(opened) => opened,
+            Err(e) => {
+                // Held by another program for now: the sender dials again.
+                if e.is::<Lost>() {
+                    self.session.close_current(CLOSE_SUSPENDED, b"busy");
+                }
+                return Err(e);
+            }
+        };
         let mut out = tokio::fs::File::from_std(out);
         self.rehash().await?;
         self.emit_pause_phase();
@@ -1003,6 +1038,7 @@ impl<'a> Receiver<'a> {
         out.flush().await?;
         out.sync_data().await?;
         drop(out);
+        drop(kept);
         self.save_synced().await;
         drop(syncing);
         let hash = received?;
@@ -1167,45 +1203,57 @@ impl Transfer {
         self.session.place(&self.data_dir, step)
     }
 
-    /// The part file of the receive as the record knows it (see
-    /// `TransferRecord::part_identity`), or as it is now in a record of an
-    /// earlier version, which trusts the name.
-    fn part(&self, files: &ReceiveFiles) -> io::Result<Owned> {
-        let id = match self.session.with_record(TransferRecord::part_identity) {
-            Some(Some(id)) => id,
-            Some(None) => archive::file_id(&files.part)?,
-            None => return Err(io::Error::other(Cancelled)),
+    /// Opens the part file for the last step, if it is still the part (see
+    /// `TransferRecord::open_part`): nothing holds it open between the
+    /// connection and this step, so it may have been deleted and its name
+    /// taken by another file, which is not this transfer's. Returns it with
+    /// its identity: as the record knows it, or as it is now in a record of
+    /// an earlier version, which trusts the name. While it is open, other
+    /// programs can only read it, so what the step renames or unpacks is
+    /// what was checked.
+    fn open_part(&self) -> io::Result<(std::fs::File, FileId)> {
+        let record = self
+            .session
+            .with_record(TransferRecord::clone)
+            .ok_or_else(|| io::Error::other(Cancelled))?;
+        let mut options = std::fs::OpenOptions::new();
+        // To unpack it, to give it its creation time back after a rename
+        // (see `moved`), and to rename it.
+        options
+            .access_mode(FILE_GENERIC_READ | FILE_WRITE_ATTRIBUTES | DELETE)
+            .share_mode(FILE_SHARE_READ);
+        let part = archive::while_busy(archive::RENAME_RETRY_MS, || record.open_part(&options))?;
+        let id = match record.part_identity() {
+            Some(id) => id,
+            None => FileId::of(&part)?,
         };
-        Ok(Owned {
-            path: files.part.clone(),
-            id,
-        })
+        Ok((part, id))
     }
 
-    /// Renames the part file to `dir\name`, or to the next free name, and
-    /// returns where it went. Each name is noted in the record before it is
-    /// tried (`Side::Receive::moving`), so that a crash in between never
-    /// loses the part; once the transfer is to end, nothing is tried. Right
-    /// before each try, what has the part's name is checked to be still the
-    /// part: nothing holds it open between the connection and this step, so
-    /// it may have been deleted and its name taken by another file, which is
-    /// not this transfer's to rename.
-    fn move_part(&self, files: &mut ReceiveFiles, dir: &Path, name: &str) -> io::Result<PathBuf> {
-        let part = self.part(files)?;
-        let moved = archive::move_to_unique_noted(&part.path, dir, name, false, &mut |to| {
-            still_the_part(&part)?;
+    /// Renames the part file `part`, whose identity is `id` (see
+    /// [`open_part`](Self::open_part)), to `dir\name`, or to the next free
+    /// name, and returns where it went. Each name is noted in the record
+    /// before it is tried (`Side::Receive::moving`), so that a crash in
+    /// between never loses the part; once the transfer is to end, nothing is
+    /// tried.
+    fn move_part(
+        &self,
+        files: &mut ReceiveFiles,
+        part: &std::fs::File,
+        id: FileId,
+        dir: &Path,
+        name: &str,
+    ) -> io::Result<PathBuf> {
+        let moved = archive::move_open_to_unique_noted(part, dir, name, &mut |to| {
             files.moving = Some(Owned {
                 path: to.to_path_buf(),
-                id: part.id,
+                id,
             });
             self.save(files)
         });
         match moved {
             Ok(to) => {
-                archive::keep_creation_time(&to, &part.id);
-                files.part.clone_from(&to);
-                // Best effort: the note above finds the part after a crash.
-                let _ = self.save(files);
+                self.moved(files, part, id, to.clone());
                 Ok(to)
             }
             Err(e) => {
@@ -1213,6 +1261,25 @@ impl Transfer {
                 Err(e)
             }
         }
+    }
+
+    /// Notes that the part file `part`, whose identity is `id`, has been
+    /// renamed to `to`, once it has its creation time back where the rename
+    /// may have given it another's (see `archive::keep_creation_time`); if
+    /// that cannot be done, with the identity it has now. Best effort: the
+    /// note of the rename (`Side::Receive::moving`) finds the part after a
+    /// crash. Only a power cut right between the rename and giving the time
+    /// back, on FAT or exFAT, leaves a part that a later start cannot tell:
+    /// the item stays in place, and the transfer is reported as failed.
+    fn moved(&self, files: &mut ReceiveFiles, part: &std::fs::File, id: FileId, to: PathBuf) {
+        files.part = to;
+        let now = archive::keep_creation_time(part, &id)
+            .err()
+            .and_then(|_| FileId::of(part).ok());
+        let _ = match now {
+            Some(now) => self.session.save_moved_part(&self.data_dir, files, now),
+            None => self.save(files),
+        };
     }
 
     /// Forgets the note of a rename of the part that did not happen, so that
@@ -1243,26 +1310,15 @@ impl Transfer {
     }
 }
 
-/// Fails with "the partly transferred data is no longer there" unless
-/// `part` is still at its path.
-fn still_the_part(part: &Owned) -> io::Result<()> {
-    if part.is_there() {
-        Ok(())
-    } else {
-        Err(io::Error::new(
-            io::ErrorKind::NotFound,
-            tr!(error_part_missing),
-        ))
-    }
-}
-
 /// Puts a received file in place under a free name, with the sender's
 /// dates. Returns where it went.
 ///
-/// The dates are given once the transfer has ended and its record is gone:
-/// until then, on FAT and exFAT, the part's own creation time tells it from
-/// other files (see `FileId`). After a crash in between, a later start
-/// gives them (see `Receiver::continue_restored`).
+/// The dates are given before the transfer ends, but for a creation time
+/// that waits until its record is gone: on FAT and exFAT, the part's own
+/// creation time tells it from other files until then (see `FileId` and
+/// `ItemTimes::split`). After a crash before the record is gone, a later
+/// start gives them (see `Receiver::continue_restored`); one right after it
+/// leaves the item with its own creation time.
 fn finish_file(
     transfer: &Transfer,
     dest: &Path,
@@ -1270,8 +1326,15 @@ fn finish_file(
     times: ItemTimes,
 ) -> anyhow::Result<PathBuf> {
     let mut files = transfer.files()?;
-    let path = transfer.place(&mut || Ok(transfer.move_part(&mut files, dest, name)?))?;
-    times.apply(&path);
+    let (part, id) = transfer.open_part()?;
+    let (now, later) = times.split(Some(&id));
+    let path = transfer.place(&mut || {
+        let path = transfer.move_part(&mut files, &part, id, dest, name)?;
+        now.apply_to(&part);
+        Ok(path)
+    })?;
+    drop(part);
+    later.apply(&path);
     Ok(path)
 }
 
@@ -1303,9 +1366,11 @@ fn finish_folder(
     progress: &mut dyn FnMut(u64, u64),
 ) -> anyhow::Result<PathBuf> {
     let mut files = transfer.files()?;
+    let (part, id) = transfer.open_part()?;
     if folder == ReceivedFolder::KeepZip {
-        return transfer
-            .place(&mut || Ok(transfer.move_part(&mut files, dest, &zip_name(name))?));
+        return transfer.place(&mut || {
+            Ok(transfer.move_part(&mut files, &part, id, dest, &zip_name(name))?)
+        });
     }
     if cancel.load(Ordering::Relaxed) {
         anyhow::bail!(Cancelled);
@@ -1318,7 +1383,7 @@ fn finish_folder(
     }
     let both = folder == ReceivedFolder::Both;
     let target = if both && !files.part_in_place() {
-        new_pair(transfer, &mut files, dest, name)?
+        new_pair(transfer, &mut files, &part, id, dest, name)?
     } else {
         // With its zip in place already (after a restart), the folder gets
         // the zip's name.
@@ -1331,25 +1396,32 @@ fn finish_folder(
         target
     };
     let mut partial = Cleanup(Some(target.clone()));
-    archive::unzip(&files.part, &target, true, cancel, progress)?;
-    let placed = transfer.place(&mut || Ok(target.clone()))?;
+    // From the part that was checked, which is closed after it.
+    archive::unzip(part, &target, true, cancel, progress)?;
+    // As for a file (see `finish_file`), by the folder's identity.
+    let folder_id = files.unpacking.as_ref().map(|folder| folder.id);
+    let (now, later) = times.split(folder_id.as_ref());
+    let placed = transfer.place(&mut || {
+        now.apply(&target);
+        Ok(target.clone())
+    })?;
     partial.0 = None;
-    // Once the record is gone, as for a file (see `finish_file`).
-    times.apply(&target);
+    later.apply(&target);
     Ok(placed)
 }
 
-/// For a folder that is kept with its zip: a new folder, and the part moved
-/// next to it under the zip's name, both with the same number ("Photos (2)"
-/// and "Photos (2).zip"), before anything is unpacked. Both are noted in the
-/// record first. Returns the folder.
+/// For a folder that is kept with its zip: a new folder, and the part `part`
+/// (whose identity is `id`) moved next to it under the zip's name, both with
+/// the same number ("Photos (2)" and "Photos (2).zip"), before anything is
+/// unpacked. Both are noted in the record first. Returns the folder.
 fn new_pair(
     transfer: &Transfer,
     files: &mut ReceiveFiles,
+    part: &std::fs::File,
+    id: FileId,
     dest: &Path,
     name: &str,
 ) -> anyhow::Result<PathBuf> {
-    let part = transfer.part(files)?;
     let zip_of = |stem: &str| dest.join(zip_name(stem));
     loop {
         let target =
@@ -1357,7 +1429,7 @@ fn new_pair(
         let zip = zip_of(&target.file_name().unwrap_or_default().to_string_lossy());
         files.moving = Some(Owned {
             path: zip.clone(),
-            id: part.id,
+            id,
         });
         // A failure from here on leaves the folder noted: the end of the
         // transfer deletes it.
@@ -1366,13 +1438,9 @@ fn new_pair(
             return Err(e.into());
         }
         // As in `Transfer::move_part`.
-        let renamed = still_the_part(&part).and_then(|()| archive::rename_new(&part.path, &zip));
-        match renamed {
+        match archive::rename_open(part, &zip) {
             Ok(()) => {
-                archive::keep_creation_time(&zip, &part.id);
-                files.part = zip;
-                // Best effort: `moving` finds the part after a crash.
-                let _ = transfer.save(files);
+                transfer.moved(files, part, id, zip);
                 return Ok(target);
             }
             // The zip's name was taken after all: the next pair. The empty
@@ -1475,8 +1543,7 @@ mod tests {
         std::fs::create_dir_all(part.parent().unwrap()).unwrap();
         std::fs::write(&part, b"abc").unwrap();
         let transfer = receiving(&base, &part, Kind::File, ReceivedFolder::Extract);
-        let record = || transfer.session.with_record(TransferRecord::clone);
-        let open = open_own_part(record().as_ref()).unwrap();
+        let open = open_own_part(&transfer.session).unwrap();
         assert!(std::fs::remove_file(&part).is_err());
         assert!(std::fs::rename(&part, base.join("elsewhere")).is_err());
         assert!(std::fs::OpenOptions::new().write(true).open(&part).is_err());
@@ -1484,7 +1551,7 @@ mod tests {
         drop(open);
         std::fs::remove_file(&part).unwrap();
         std::fs::write(&part, b"another").unwrap();
-        let missing = open_own_part(record().as_ref()).unwrap_err();
+        let missing = open_own_part(&transfer.session).err().unwrap();
         assert_eq!(missing.to_string(), tr!(error_part_missing));
         assert_eq!(std::fs::read(&part).unwrap(), b"another");
         transfer
@@ -1492,7 +1559,7 @@ mod tests {
             .end(None, false)
             .forget_blocking(&transfer.data_dir);
         assert!(archive::is_cancelled(
-            &open_own_part(record().as_ref()).unwrap_err()
+            &open_own_part(&transfer.session).err().unwrap()
         ));
         assert_eq!(std::fs::read(&part).unwrap(), b"another");
 
@@ -1501,42 +1568,87 @@ mod tests {
         std::fs::remove_file(&part).unwrap();
         std::fs::write(&part, b"abc").unwrap();
         let transfer = receiving(&base, &part, Kind::File, ReceivedFolder::Extract);
-        let record = transfer.session.with_record(TransferRecord::clone);
-        drop(open_own_part(record.as_ref()).unwrap());
+        drop(open_own_part(&transfer.session).unwrap());
         let created = std::fs::metadata(&part).unwrap().created().unwrap();
         std::fs::remove_file(&part).unwrap();
         std::fs::write(&part, b"another").unwrap();
         archive::set_times(&part, None, Some(created + Duration::from_secs(2))).unwrap();
-        assert!(open_own_part(record.as_ref()).is_err());
+        assert!(open_own_part(&transfer.session).is_err());
         archive::PRETEND_FAT.set(false);
         std::fs::remove_dir_all(&base).ok();
     }
 
     /// A cancel during a connection deletes the part also while the last
-    /// write of the connection still holds it open for a moment (which lets
-    /// nothing delete it), rather than leaving it to the next start.
+    /// write of the connection still holds it open (which lets nothing
+    /// delete it by its name), however long that takes: it goes once the
+    /// write is over, rather than at the next start.
     #[test]
     fn a_cancel_deletes_a_part_that_a_write_still_holds() {
         let base = scratch("held-part");
         let part = base.join("a.txt.part");
         std::fs::write(&part, b"abc").unwrap();
         let transfer = receiving(&base, &part, Kind::File, ReceivedFolder::Extract);
-        let record = transfer.session.with_record(TransferRecord::clone);
-        let open = open_own_part(record.as_ref()).unwrap();
-        let writing = std::thread::spawn(move || {
-            std::thread::sleep(Duration::from_millis(200));
-            drop(open);
-        });
+        let (writing, kept) = open_own_part(&transfer.session).unwrap();
         assert!(transfer.session.cancel_blocking(&transfer.data_dir));
-        writing.join().unwrap();
-        assert!(!part.exists());
         assert!(session::records(&transfer.data_dir).is_empty());
+        // The connection is gone, and its last write still holds the part.
+        drop(kept);
+        assert!(archive::name_taken(&part), "until the write is over");
+        drop(writing);
+        assert!(!archive::name_taken(&part));
+        std::fs::remove_dir_all(&base).ok();
+    }
+
+    /// A cancel that comes while a connection opens the part, before the
+    /// connection keeps it (see `Session::keep_part`), deletes it too: the
+    /// connection gives up as cancelled, and the part goes once it is closed.
+    #[test]
+    fn a_cancel_while_the_part_is_opened_deletes_it() {
+        let base = scratch("opened-part");
+        let part = base.join("a.txt.part");
+        std::fs::write(&part, b"abc").unwrap();
+        let transfer = receiving(&base, &part, Kind::File, ReceivedFolder::Extract);
+        let record = transfer.session.with_record(TransferRecord::clone).unwrap();
+        let mut options = std::fs::OpenOptions::new();
+        options
+            .access_mode((FILE_GENERIC_WRITE & !FILE_WRITE_DATA) | DELETE)
+            .share_mode(FILE_SHARE_READ);
+        let opened = record.open_part(&options).unwrap();
+        assert!(transfer.session.cancel_blocking(&transfer.data_dir));
+        let e = transfer.session.keep_part(&opened).err().unwrap();
+        assert!(archive::is_cancelled(&e.into()));
+        drop(opened);
+        assert!(!archive::name_taken(&part));
+        std::fs::remove_dir_all(&base).ok();
+    }
+
+    /// Another program that has the part open for writing keeps a
+    /// connection out for a moment, after which the connection counts as
+    /// lost, never as failed, which would throw the data away; one that lets
+    /// go of it in time keeps nothing out.
+    #[test]
+    fn a_part_held_elsewhere_loses_the_connection() {
+        let base = scratch("busy-part");
+        let part = base.join("a.txt.part");
+        std::fs::write(&part, b"abc").unwrap();
+        let transfer = receiving(&base, &part, Kind::File, ReceivedFolder::Extract);
+        let other = std::fs::OpenOptions::new().write(true).open(&part).unwrap();
+        let e = open_own_part(&transfer.session).err().unwrap();
+        assert!(e.is::<Lost>(), "{e:#}");
+        let letting_go = std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(300));
+            drop(other);
+        });
+        drop(open_own_part(&transfer.session).unwrap());
+        letting_go.join().unwrap();
+        assert_eq!(std::fs::read(&part).unwrap(), b"abc");
         std::fs::remove_dir_all(&base).ok();
     }
 
     /// The last step renames the part only while it is still the part: in
     /// between the connection and the step nothing holds it open, so the user
-    /// may have deleted it and another file may have taken its name.
+    /// may have deleted it and another file may have taken its name. The step
+    /// opens it first, and makes nothing for a part that is not there.
     #[test]
     fn only_its_own_part_is_put_in_place() {
         let base = scratch("own-placed");
@@ -1572,8 +1684,8 @@ mod tests {
         )
         .unwrap_err();
         assert_eq!(format!("{e:#}"), tr!(error_part_missing));
-        // The new folder stays noted until the transfer ends.
-        assert_eq!(names_in(&dest), ["Photos", "Photos.zip.part"]);
+        // Checked before anything is made for it.
+        assert_eq!(names_in(&dest), ["Photos.zip.part"]);
         assert_eq!(transfer.files().unwrap().moving, None, "no note left");
         transfer
             .session

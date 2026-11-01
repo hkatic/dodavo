@@ -19,7 +19,6 @@ use iroh::{
 };
 use serde::{Deserialize, Deserializer, Serialize};
 use tokio::sync::{mpsc, watch};
-use windows_sys::Win32::Foundation::ERROR_SHARING_VIOLATION;
 
 use super::{
     CLOSE_CANCELLED, CLOSE_FAILED, CLOSE_SUSPENDED, CancelToken, ReceivedFolder,
@@ -224,27 +223,24 @@ impl Owned {
     }
 }
 
-/// Deletes a file; whether it is gone. One that is open for a moment where
-/// it cannot be deleted is tried again for about a second and a half: a
-/// part of a receive that was cancelled during a connection, whose last
-/// write may still be under way (the receiver lets nothing delete the part
-/// while it is open, see `receive::open_own_part`), or a file that a virus
-/// scanner reads. Blocking.
+/// Deletes a file; whether it is gone. One that another program holds open
+/// now stays for a later try (see [`TransferRecord::discard`]). The part of
+/// a receive that a connection writes to is deleted through the
+/// connection's handle instead (see [`Session::keep_part`]).
 fn remove_file(path: &Path) -> bool {
-    let mut pauses = [50, 100, 200, 400, 800].into_iter();
-    loop {
-        match fs::remove_file(path) {
-            Ok(()) => return true,
-            Err(e) if e.kind() == io::ErrorKind::NotFound => return true,
-            Err(e) if e.raw_os_error() == Some(ERROR_SHARING_VIOLATION as i32) => {
-                match pauses.next() {
-                    Some(ms) => std::thread::sleep(Duration::from_millis(ms)),
-                    None => return false,
-                }
-            }
-            Err(_) => return false,
-        }
+    match fs::remove_file(path) {
+        Ok(()) => true,
+        Err(e) => e.kind() == io::ErrorKind::NotFound,
     }
+}
+
+/// The error of a receive whose part file is gone, or is no longer the part:
+/// "the partly transferred data is no longer there".
+pub(crate) fn part_missing() -> io::Error {
+    io::Error::new(
+        io::ErrorKind::NotFound,
+        crate::i18n::tr!(error_part_missing),
+    )
 }
 
 /// Whether the part file of a receive is only temporary: the zip of a folder
@@ -375,13 +371,9 @@ impl TransferRecord {
             ..
         } = &self.side
         {
-            let len = self
-                .open_part(fs::OpenOptions::new().access_mode(0))?
-                .metadata()?
-                .len();
-            if len > *synced {
-                self.open_part(fs::OpenOptions::new().write(true))?
-                    .set_len(*synced)?;
+            let part = self.open_part(fs::OpenOptions::new().write(true))?;
+            if part.metadata()?.len() > *synced {
+                part.set_len(*synced)?;
             }
         }
         Ok(())
@@ -393,22 +385,18 @@ impl TransferRecord {
     /// that took the name in between. Fails with "the partly transferred
     /// data is no longer there" otherwise.
     pub fn open_part(&self, options: &fs::OpenOptions) -> io::Result<fs::File> {
-        let missing = || {
-            io::Error::new(
-                io::ErrorKind::NotFound,
-                crate::i18n::tr!(error_part_missing),
-            )
-        };
         let files = self
             .receive_files()
             .filter(|files| !files.part_gone)
-            .ok_or_else(missing)?;
+            .ok_or_else(part_missing)?;
         let part = options.open(&files.part).map_err(|e| match e.kind() {
-            io::ErrorKind::NotFound => missing(),
+            io::ErrorKind::NotFound => part_missing(),
             _ => e,
         })?;
         match self.part_identity() {
-            Some(id) if !FileId::of(&part).is_ok_and(|now| id.same_item(&now)) => Err(missing()),
+            Some(id) if !FileId::of(&part).is_ok_and(|now| id.same_item(&now)) => {
+                Err(part_missing())
+            }
             _ => Ok(part),
         }
     }
@@ -668,6 +656,14 @@ impl TransferRecord {
         match &mut self.side {
             Side::Receive { files, .. } => Some(files),
             Side::Send { .. } => None,
+        }
+    }
+
+    /// Notes that the part file of a receive is gone (see
+    /// [`ReceiveFiles::part_gone`]).
+    fn mark_part_gone(&mut self) {
+        if let Some(files) = self.receive_files_mut() {
+            files.part_gone = true;
         }
     }
 
@@ -1199,7 +1195,7 @@ pub(crate) async fn joined<T>(task: &mut tokio::task::JoinHandle<T>) -> T {
     }
 }
 
-fn lock(mutex: &Mutex<()>) -> MutexGuard<'_, ()> {
+fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
     mutex.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
@@ -1258,6 +1254,20 @@ pub(crate) struct Session {
     /// disk and into the record after a connection ended. Shutdown waits for
     /// that, so that the next start continues from everything received.
     pub syncing: AtomicBool,
+    /// Receiving side: a second handle to the part file while a connection
+    /// writes to it (see [`keep_part`](Self::keep_part)), which the end of
+    /// the transfer takes to delete the part through.
+    open_part: Mutex<Option<fs::File>>,
+}
+
+/// The part file of a receive is open for a connection while this exists
+/// (see [`Session::keep_part`]).
+pub(crate) struct KeptPart(Arc<Session>);
+
+impl Drop for KeptPart {
+    fn drop(&mut self) {
+        lock(&self.0.open_part).take();
+    }
 }
 
 /// The last step of a receive runs while this exists (see
@@ -1284,6 +1294,9 @@ pub(crate) struct Ending {
     completed: bool,
     /// The session's lock for writing the record (see `Session::writing`).
     writing: Option<Arc<Mutex<()>>>,
+    /// The part file of a receive, if a connection was writing to it (see
+    /// [`Session::keep_part`]).
+    part: Option<fs::File>,
 }
 
 impl Ending {
@@ -1293,6 +1306,7 @@ impl Ending {
             record: None,
             completed: false,
             writing: None,
+            part: None,
         }
     }
 
@@ -1300,7 +1314,17 @@ impl Ending {
         // After a save that is still under way, which would otherwise bring
         // the record back once it is deleted.
         let _writing = self.writing.as_deref().map(lock);
-        forget(data_dir, self.record.map(|r| *r), self.completed);
+        let mut record = self.record.map(|r| *r);
+        // A part that a connection still writes to cannot be deleted by its
+        // name; it goes once that is over.
+        if let (Some(part), Some(record)) = (&self.part, &mut record)
+            && !self.completed
+            && archive::delete_on_close(part).is_ok()
+        {
+            record.mark_part_gone();
+        }
+        drop(self.part);
+        forget(data_dir, record, self.completed);
     }
 
     /// Like [`forget_blocking`](Self::forget_blocking), off the runtime's
@@ -1363,6 +1387,7 @@ impl Session {
             }),
             writing: Arc::new(Mutex::new(())),
             syncing: AtomicBool::new(false),
+            open_part: Mutex::new(None),
         };
         (Arc::new(session), rx)
     }
@@ -1376,7 +1401,31 @@ impl Session {
             record: record.map(Box::new),
             completed,
             writing: Some(self.writing.clone()),
+            part: lock(&self.open_part).take(),
         }
+    }
+
+    /// Receiving side: `part`, the part file that a connection has just
+    /// opened to write to, stays open until the result is dropped, with a
+    /// second handle kept here. Nothing else can delete the part meanwhile
+    /// (see `receive::open_own_part`), and its last write may still be under
+    /// way when a cancel ends the transfer, so the end deletes it through
+    /// that handle: it goes once the write is over (see
+    /// [`Ending::forget_blocking`]). Fails with [`Cancelled`] if the transfer
+    /// has ended while the part was opened, which only a cancel does then:
+    /// the part goes once `part` is closed. Blocking.
+    pub fn keep_part(self: &Arc<Self>, part: &fs::File) -> io::Result<KeptPart> {
+        let second = part.try_clone()?;
+        let mut kept = lock(&self.open_part);
+        // Under that lock: the end takes the handle after the record (see
+        // `ending`), so it gets this one, or the record is gone already.
+        if self.state().record.is_none() {
+            drop(kept);
+            let _ = archive::delete_on_close(part);
+            return Err(io::Error::other(Cancelled));
+        }
+        *kept = Some(second);
+        Ok(KeptPart(self.clone()))
     }
 
     /// The transfer was accepted: from now on it has this record.
@@ -1484,9 +1533,38 @@ impl Session {
     /// (the end of the transfer deletes its files): the note is made all the
     /// same, and only a crash before the next save that works loses it.
     pub fn save_receive_files(&self, data_dir: &Path, files: &ReceiveFiles) -> io::Result<()> {
+        self.save_files(data_dir, files, None)
+    }
+
+    /// Like [`save_receive_files`](Self::save_receive_files), noting also
+    /// that the part file, which the last step has renamed, has the identity
+    /// `id` now (see `receive::Transfer::moved`).
+    pub fn save_moved_part(
+        &self,
+        data_dir: &Path,
+        files: &ReceiveFiles,
+        id: FileId,
+    ) -> io::Result<()> {
+        self.save_files(data_dir, files, Some(id))
+    }
+
+    fn save_files(
+        &self,
+        data_dir: &Path,
+        files: &ReceiveFiles,
+        id: Option<FileId>,
+    ) -> io::Result<()> {
         let ended = self.save_with(data_dir, |record| {
-            if let Some(noted) = record.receive_files_mut() {
+            if let Side::Receive {
+                files: noted,
+                part_id,
+                ..
+            } = &mut record.side
+            {
                 noted.clone_from(files);
+                if id.is_some() {
+                    *part_id = id;
+                }
             }
             record.ended
         });

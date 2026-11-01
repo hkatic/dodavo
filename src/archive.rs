@@ -9,7 +9,7 @@ use std::{
         fs::{FileTimesExt, MetadataExt, OpenOptionsExt},
         io::AsRawHandle,
     },
-    path::{Path, PathBuf},
+    path::{Component, Path, PathBuf},
     sync::atomic::{AtomicBool, Ordering},
     time::{Duration, SystemTime},
 };
@@ -22,10 +22,11 @@ use windows_sys::Win32::{
         INVALID_HANDLE_VALUE, MAX_PATH, SYSTEMTIME,
     },
     Storage::FileSystem::{
-        BY_HANDLE_FILE_INFORMATION, FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_OPEN_REPARSE_POINT,
-        FILE_ID_INFO, FILE_WRITE_ATTRIBUTES, FileIdInfo, FindClose, FindFirstFileW,
+        BY_HANDLE_FILE_INFORMATION, FILE_DISPOSITION_INFO, FILE_FLAG_BACKUP_SEMANTICS,
+        FILE_FLAG_OPEN_REPARSE_POINT, FILE_ID_INFO, FILE_RENAME_INFO, FILE_WRITE_ATTRIBUTES,
+        FileDispositionInfo, FileIdInfo, FileRenameInfo, FindClose, FindFirstFileW,
         GetFileInformationByHandle, GetFileInformationByHandleEx, GetVolumeInformationByHandleW,
-        MoveFileExW, WIN32_FIND_DATAW,
+        MoveFileExW, SetFileInformationByHandle, WIN32_FIND_DATAW,
     },
     System::Time::{FileTimeToSystemTime, SystemTimeToTzSpecificLocalTime},
 };
@@ -46,8 +47,9 @@ const NTFS_EXTRA_FIELD: u16 = 0x000a;
 /// 100 ns intervals from 1601-01-01 to 1970-01-01.
 pub(crate) const FILETIME_UNIX_EPOCH: u64 = 116_444_736_000_000_000;
 /// The pauses between attempts of a rename that another program blocks
-/// (see [`rename_new`]): about nine seconds in all.
-const RENAME_RETRY_MS: &[u64] = &[100, 200, 400, 800, 1600, 2000, 2000, 2000];
+/// (see [`rename_new`]), or of opening a file that another program has open
+/// for now (see [`while_busy`]): about nine seconds in all.
+pub const RENAME_RETRY_MS: &[u64] = &[100, 200, 400, 800, 1600, 2000, 2000, 2000];
 
 /// The error of work that stopped because the user cancelled it: packing or
 /// unpacking a folder, or the last step of a receive. Telling it apart from
@@ -103,6 +105,27 @@ impl ItemTimes {
             self.modified.and_then(filetime_to_system),
             self.created.and_then(filetime_to_system),
         );
+    }
+
+    /// The dates that can be given to an item of a transfer at once, and
+    /// those that wait until its record is gone: where the identity `id`
+    /// that the record notes for it tells it by its creation time (on FAT
+    /// and exFAT, see [`FileId`]), the sender's creation time would make it
+    /// look like another item until then, so that one waits.
+    pub fn split(self, id: Option<&FileId>) -> (ItemTimes, ItemTimes) {
+        if id.is_some_and(FileId::by_creation_time) {
+            let later = ItemTimes {
+                created: self.created,
+                ..ItemTimes::default()
+            };
+            let now = ItemTimes {
+                created: None,
+                ..self
+            };
+            (now, later)
+        } else {
+            (self, ItemTimes::default())
+        }
     }
 
     /// Like [`apply`](Self::apply), on a file that is open for writing and
@@ -375,20 +398,21 @@ pub fn zip_folder(
     Ok((file_count, total))
 }
 
-/// Extracts `zip_path` into the folder `dest`, which must be new (see
-/// [`create_unique_dir`]): what is created in it follows links, so nothing
-/// but this extraction may have put anything there. Entries trying to escape
-/// the destination ("../", absolute paths) are rejected. Files and folders
-/// get the dates stored with them; with `mark`, files also get the mark of
-/// the web. The dates of `dest` itself are the caller's business.
+/// Extracts the open zip file `zip` into the folder `dest`, which must be new
+/// (see [`create_unique_dir`]): what is created in it follows links, so
+/// nothing but this extraction may have put anything there. Entries trying
+/// to escape the destination ("../", absolute paths) are rejected. Files and
+/// folders get the dates stored with them; with `mark`, files also get the
+/// mark of the web. The dates of `dest` itself are the caller's business: an
+/// entry for it ("./") is skipped.
 pub fn unzip(
-    zip_path: &Path,
+    zip: File,
     dest: &Path,
     mark: bool,
     cancel: &AtomicBool,
     progress: &mut dyn FnMut(u64, u64),
 ) -> anyhow::Result<()> {
-    let mut archive = ZipArchive::new(File::open(zip_path)?)?;
+    let mut archive = ZipArchive::new(zip)?;
     let mut total = 0u64;
     for i in 0..archive.len() {
         total += archive.by_index(i)?.size();
@@ -404,9 +428,15 @@ pub fn unzip(
             bail!(Cancelled);
         }
         let mut entry = archive.by_index(i)?;
-        let Some(rel) = entry.enclosed_name() else {
+        let Some(rel) = entry.enclosed_name().map(|rel| inside(&rel)) else {
             bail!(tr!(error_unsafe_path, path = format!("{:?}", entry.name())));
         };
+        if rel.as_os_str().is_empty() {
+            if entry.is_dir() {
+                continue;
+            }
+            bail!(tr!(error_unsafe_path, path = format!("{:?}", entry.name())));
+        }
         let target = dest.join(rel);
         let times = ItemTimes::of_entry(&entry);
         if entry.is_dir() {
@@ -449,6 +479,23 @@ pub fn unzip(
         times.apply(path);
     }
     Ok(())
+}
+
+/// The path of a zip entry inside the folder it is unpacked into, without
+/// "." and ".." ("a/../b" is "b", and nothing creates "a"): empty for the
+/// folder itself. `rel` is an enclosed name, which never goes above it.
+fn inside(rel: &Path) -> PathBuf {
+    let mut path = PathBuf::new();
+    for part in rel.components() {
+        match part {
+            Component::Normal(name) => path.push(name),
+            Component::ParentDir => {
+                path.pop();
+            }
+            _ => {}
+        }
+    }
+    path
 }
 
 /// Makes a name received from the network safe to use as a single file or
@@ -623,6 +670,12 @@ impl FileId {
         self.file != [0; 16]
     }
 
+    /// Whether the identity tells the item by its creation time (on FAT and
+    /// exFAT): giving the item another one makes it look like another item.
+    pub fn by_creation_time(&self) -> bool {
+        self.created.is_some()
+    }
+
     /// Whether `now`, the identity of what has the item's name now, is this
     /// item: the same volume and number, and on FAT and exFAT the same
     /// creation time (see [`same_creation`]). Where this identity has no
@@ -672,14 +725,24 @@ fn same_creation(a: u64, b: u64) -> bool {
 /// returns its identity: Windows may give a new item the creation time of
 /// one of the same name that was deleted moments before, which on FAT and
 /// exFAT would make it look like that one (see [`FileId`]), so there a time
-/// that cannot be set is an error. The time is a whole multiple of the 10 ms
-/// that those file systems keep, so that it reads back the same however they
-/// round it.
+/// that cannot be set is an error. Elsewhere the item's number tells it, and
+/// an item whose dates may not be changed is fine as it is. The time is a
+/// whole multiple of the 10 ms that those file systems keep, so that it reads
+/// back the same however they round it.
 pub fn created_now(path: &Path) -> io::Result<FileId> {
-    let item = OpenOptions::new()
+    let opened = OpenOptions::new()
         .access_mode(FILE_WRITE_ATTRIBUTES)
         .custom_flags(FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT)
-        .open(path)?;
+        .open(path);
+    let item = match opened {
+        Ok(item) => item,
+        Err(e) => {
+            return match file_id(path) {
+                Ok(id) if id.numbered() => Ok(id),
+                _ => Err(e),
+            };
+        }
+    };
     let set = match filetime_to_system(filetime_now() / FAT_CREATION_STEP * FAT_CREATION_STEP) {
         Some(now) => item.set_times(FileTimes::new().set_created(now)),
         None => Err(io::ErrorKind::InvalidData.into()),
@@ -701,17 +764,20 @@ fn filetime_now() -> u64 {
         + u64::from(since_epoch.subsec_nanos() / 100)
 }
 
-/// Gives the item at `path`, which has just been renamed there, its creation
+/// Gives the open file `file`, which has just been renamed, its creation
 /// time back where the identity `id` that it had before has one (on FAT and
 /// exFAT): a rename gives it the time of an item of its new name that was
-/// deleted moments before (see [`FileId`]). Best effort.
-pub fn keep_creation_time(path: &Path, id: &FileId) {
-    let Some(created) = id.created.and_then(filetime_to_system) else {
-        return;
+/// deleted moments before (see [`FileId`]). Fails if that was needed and
+/// could not be done. The handle needs the right to write attributes.
+pub fn keep_creation_time(file: &File, id: &FileId) -> io::Result<()> {
+    let Some(created) = id.created else {
+        return Ok(());
     };
-    if !id.numbered() && !file_id(path).is_ok_and(|now| id.same_item(&now)) {
-        let _ = set_times(path, None, Some(created));
+    if id.numbered() || id.same_item(&FileId::of(file)?) {
+        return Ok(());
     }
+    let created = filetime_to_system(created).ok_or(io::ErrorKind::InvalidData)?;
+    file.set_times(FileTimes::new().set_created(created))
 }
 
 #[cfg(test)]
@@ -797,17 +863,31 @@ pub fn create_unique_dir(
 /// numbered names, never replacing anything (see [`rename_new`]). Returns
 /// where it went.
 pub fn move_to_unique(from: &Path, dir: &Path, name: &str, is_folder: bool) -> io::Result<PathBuf> {
-    move_to_unique_noted(from, dir, name, is_folder, &mut |_| Ok(()))
+    move_unique(dir, name, is_folder, &mut |_| Ok(()), &mut |to| {
+        rename_new(from, to)
+    })
 }
 
-/// Like [`move_to_unique`], calling `before(to)` before each attempt to move
-/// `from` to `to`; an error there ends it.
-pub fn move_to_unique_noted(
-    from: &Path,
+/// Like [`move_to_unique`], for the open file `file` (see [`rename_open`]),
+/// calling `before(to)` before each attempt to rename it to `to`; an error
+/// there ends it.
+pub fn move_open_to_unique_noted(
+    file: &File,
+    dir: &Path,
+    name: &str,
+    before: &mut dyn FnMut(&Path) -> io::Result<()>,
+) -> io::Result<PathBuf> {
+    move_unique(dir, name, false, before, &mut |to| rename_open(file, to))
+}
+
+/// Renames something with `rename(to)` to `dir\name`, or under the next free
+/// one of the numbered names, calling `before(to)` before each attempt.
+fn move_unique(
     dir: &Path,
     name: &str,
     is_folder: bool,
     before: &mut dyn FnMut(&Path) -> io::Result<()>,
+    rename: &mut dyn FnMut(&Path) -> io::Result<()>,
 ) -> io::Result<PathBuf> {
     for candidate in numbered(name, is_folder) {
         let to = dir.join(candidate);
@@ -815,7 +895,7 @@ pub fn move_to_unique_noted(
             continue;
         }
         before(&to)?;
-        match rename_new(from, &to) {
+        match rename(&to) {
             Ok(()) => return Ok(to),
             // Taken since the check.
             Err(e) if e.kind() == io::ErrorKind::AlreadyExists => continue,
@@ -832,24 +912,125 @@ pub fn move_to_unique_noted(
 /// file, typically) is tried again for a few seconds.
 pub fn rename_new(from: &Path, to: &Path) -> io::Result<()> {
     let (wide_from, wide_to) = (wide_path(from)?, wide_path(to)?);
-    let mut pauses = RENAME_RETRY_MS.iter();
-    loop {
+    renamed(to, || {
         // SAFETY: both are NUL-terminated wide strings that outlive the call;
         // no flags: fail rather than replace, and stay on the volume.
         if unsafe { MoveFileExW(wide_from.as_ptr(), wide_to.as_ptr(), 0) } != 0 {
-            return Ok(());
+            Ok(())
+        } else {
+            Err(io::Error::last_os_error())
         }
-        let error = io::Error::last_os_error();
-        if is_taken(&error, to) {
-            return Err(io::Error::new(io::ErrorKind::AlreadyExists, error));
+    })
+}
+
+/// Renames the open file `file` to `to` on the same volume, never replacing
+/// anything, as [`rename_new`] does: what is renamed is the file that is
+/// open, whatever has its old name by then. The handle needs delete access.
+pub fn rename_open(file: &File, to: &Path) -> io::Result<()> {
+    let name = wide_path(to)?;
+    let offset = std::mem::offset_of!(FILE_RENAME_INFO, FileName);
+    let size = offset + name.len() * size_of::<u16>();
+    // Zeroed: replace nothing, no root folder (the name is a full path). In
+    // whole words, aligned for the structure.
+    let mut info = vec![0usize; size.div_ceil(size_of::<usize>())];
+    let start = info.as_mut_ptr().cast::<u8>();
+    // SAFETY: the buffer is large enough for the structure with the whole
+    // name (and its NUL) after its header, and aligned for it; the name is
+    // copied into the buffer, which it does not overlap.
+    unsafe {
+        (*start.cast::<FILE_RENAME_INFO>()).FileNameLength =
+            ((name.len() - 1) * size_of::<u16>()) as u32;
+        std::ptr::copy_nonoverlapping(name.as_ptr(), start.add(offset).cast(), name.len());
+    }
+    renamed(to, || {
+        // SAFETY: the handle is open, and the call reads `size` bytes of the
+        // buffer, which outlives it.
+        let ok = unsafe {
+            SetFileInformationByHandle(
+                file.as_raw_handle(),
+                FileRenameInfo,
+                info.as_ptr().cast(),
+                size as u32,
+            )
+        } != 0;
+        if ok {
+            Ok(())
+        } else {
+            Err(io::Error::last_os_error())
         }
-        let blocked = matches!(
-            error.raw_os_error().map(|c| c as u32),
-            Some(ERROR_SHARING_VIOLATION | ERROR_LOCK_VIOLATION | ERROR_ACCESS_DENIED)
-        );
-        match pauses.next() {
-            Some(ms) if blocked => std::thread::sleep(Duration::from_millis(*ms)),
-            _ => return Err(error),
+    })
+}
+
+/// Runs `rename`, which renames something to `to` and replaces nothing:
+/// fails with `AlreadyExists` where the name is taken (see [`is_taken`]), and
+/// tries again for a few seconds while another program blocks it.
+fn renamed(to: &Path, rename: impl FnMut() -> io::Result<()>) -> io::Result<()> {
+    let blocked = |e: &io::Error| {
+        !is_taken(e, to) && (is_busy(e) || e.raw_os_error() == Some(ERROR_ACCESS_DENIED as i32))
+    };
+    retried(RENAME_RETRY_MS, blocked, rename).map_err(|e| {
+        if is_taken(&e, to) {
+            io::Error::new(io::ErrorKind::AlreadyExists, e)
+        } else {
+            e
+        }
+    })
+}
+
+/// Deletes the open file `file` once the last handle to it is closed; until
+/// then it keeps its name (see [`name_taken`]), and nothing can open it. The
+/// handle needs delete access.
+pub fn delete_on_close(file: &File) -> io::Result<()> {
+    let info = FILE_DISPOSITION_INFO { DeleteFile: true };
+    // SAFETY: the handle is open, and the call reads the local structure of
+    // the given size.
+    let ok = unsafe {
+        SetFileInformationByHandle(
+            file.as_raw_handle(),
+            FileDispositionInfo,
+            (&raw const info).cast(),
+            size_of::<FILE_DISPOSITION_INFO>() as u32,
+        )
+    } != 0;
+    if ok {
+        Ok(())
+    } else {
+        Err(io::Error::last_os_error())
+    }
+}
+
+/// Whether another program has the file open in a way that keeps this one
+/// out for now: a sharing or lock violation.
+pub fn is_busy(error: &io::Error) -> bool {
+    matches!(
+        error.raw_os_error().map(|c| c as u32),
+        Some(ERROR_SHARING_VIOLATION | ERROR_LOCK_VIOLATION)
+    )
+}
+
+/// Runs `open`, which opens a file, again while another program keeps it
+/// out (see [`is_busy`]), pausing between attempts as `pauses` says (in ms):
+/// a virus scanner reading the file, say. The last error once they are over.
+pub fn while_busy<T>(pauses: &[u64], open: impl FnMut() -> io::Result<T>) -> io::Result<T> {
+    retried(pauses, is_busy, open)
+}
+
+/// Runs `op` until it works or fails other than as `busy` says, pausing
+/// between attempts as `pauses` says (in ms); the last error once they are
+/// over.
+fn retried<T>(
+    pauses: &[u64],
+    busy: impl Fn(&io::Error) -> bool,
+    mut op: impl FnMut() -> io::Result<T>,
+) -> io::Result<T> {
+    let mut pauses = pauses.iter();
+    loop {
+        match op() {
+            Err(e) if busy(&e) => match pauses.next() {
+                Some(ms) => std::thread::sleep(Duration::from_millis(*ms)),
+                None => return Err(e),
+            },
+            done => return done,
         }
     }
 }
@@ -924,7 +1105,14 @@ mod tests {
         let stats = zip_folder(&src, &zip, &cancel, &mut |_, _| {}).unwrap();
         assert_eq!(stats, (3, 5 + 1_000_000 + 3));
         let out = base.join("out");
-        unzip(&zip, &out, false, &cancel, &mut |_, _| {}).unwrap();
+        unzip(
+            File::open(&zip).unwrap(),
+            &out,
+            false,
+            &cancel,
+            &mut |_, _| {},
+        )
+        .unwrap();
         assert_eq!(std::fs::read(out.join("a.txt")).unwrap(), b"hello");
         assert_eq!(
             std::fs::read(out.join("sub/deeper/b.bin")).unwrap().len(),
@@ -993,7 +1181,14 @@ mod tests {
         );
 
         let out = base.join("out");
-        unzip(&zip, &out, true, &cancel, &mut |_, _| {}).unwrap();
+        unzip(
+            File::open(&zip).unwrap(),
+            &out,
+            true,
+            &cancel,
+            &mut |_, _| {},
+        )
+        .unwrap();
         for (name, modified, created) in items {
             assert_eq!(dates(&out.join(name)), (modified, created), "{name}");
         }
@@ -1043,8 +1238,117 @@ mod tests {
         zip.write_all(b"x").unwrap();
         zip.finish().unwrap();
         let cancel = AtomicBool::new(false);
-        assert!(unzip(&zip_path, &base.join("out"), false, &cancel, &mut |_, _| {}).is_err());
+        assert!(
+            unzip(
+                File::open(&zip_path).unwrap(),
+                &base.join("out"),
+                false,
+                &cancel,
+                &mut |_, _| {}
+            )
+            .is_err()
+        );
         assert!(!base.join("evil.txt").exists());
+        std::fs::remove_dir_all(&base).ok();
+    }
+
+    /// An entry for the folder itself ("./" in a crafted zip) does not give
+    /// it the dates stored with it: those are the caller's, and on FAT and
+    /// exFAT its creation time tells it from other folders. "a/../b.txt" is
+    /// "b.txt", with no "a" made for it, and a file entry that names the
+    /// folder itself is rejected.
+    #[test]
+    fn entries_for_the_folder_itself_are_skipped() {
+        let base = scratch("dot");
+        let long_ago = filetime_now() - 40 * 365 * 24 * 60 * 60 * 10_000_000;
+        let entry = Entry {
+            path: base.clone(),
+            name: "./".into(),
+            is_dir: true,
+            size: 0,
+            times: ItemTimes {
+                modified: Some(long_ago),
+                accessed: None,
+                created: Some(long_ago),
+            },
+        };
+        let zip_path = base.join("dot.zip");
+        let mut zip = ZipWriter::new(File::create(&zip_path).unwrap());
+        let options = entry.options(SimpleFileOptions::default()).unwrap();
+        zip.add_directory("./", options).unwrap();
+        zip.start_file("a/../b.txt", SimpleFileOptions::default())
+            .unwrap();
+        zip.write_all(b"b").unwrap();
+        zip.finish().unwrap();
+        let out = base.join("out");
+        let cancel = AtomicBool::new(false);
+        unzip(
+            File::open(&zip_path).unwrap(),
+            &out,
+            false,
+            &cancel,
+            &mut |_, _| {},
+        )
+        .unwrap();
+        let created = std::fs::metadata(&out).unwrap().creation_time();
+        assert!(
+            filetime_now() - created < 10 * 60 * 10_000_000,
+            "its own date"
+        );
+        assert_eq!(std::fs::read(out.join("b.txt")).unwrap(), b"b");
+        assert!(!out.join("a").exists());
+
+        let zip_path = base.join("file.zip");
+        let mut zip = ZipWriter::new(File::create(&zip_path).unwrap());
+        zip.start_file("a/..", SimpleFileOptions::default())
+            .unwrap();
+        zip.write_all(b"x").unwrap();
+        zip.finish().unwrap();
+        let out = base.join("out2");
+        assert!(
+            unzip(
+                File::open(&zip_path).unwrap(),
+                &out,
+                false,
+                &cancel,
+                &mut |_, _| {}
+            )
+            .is_err()
+        );
+        std::fs::remove_dir_all(&base).ok();
+    }
+
+    /// Where the identity tells an item by its creation time (FAT and
+    /// exFAT), the sender's creation time waits until the transfer's record
+    /// is gone; elsewhere, and without an identity, nothing waits.
+    #[test]
+    fn a_creation_time_that_tells_waits() {
+        let base = scratch("split");
+        let path = base.join("a.txt");
+        std::fs::write(&path, b"a").unwrap();
+        let times = ItemTimes {
+            modified: Some(1),
+            accessed: Some(2),
+            created: Some(3),
+        };
+        let numbered = file_id(&path).unwrap();
+        assert_eq!(times.split(Some(&numbered)), (times, ItemTimes::default()));
+        assert_eq!(times.split(None), (times, ItemTimes::default()));
+        PRETEND_FAT.set(true);
+        let by_time = file_id(&path).unwrap();
+        PRETEND_FAT.set(false);
+        let (now, later) = times.split(Some(&by_time));
+        assert_eq!(
+            (now.modified, now.accessed, now.created),
+            (Some(1), Some(2), None)
+        );
+        assert_eq!(
+            later,
+            ItemTimes {
+                created: Some(3),
+                ..ItemTimes::default()
+            }
+        );
         std::fs::remove_dir_all(&base).ok();
     }
 
@@ -1076,7 +1380,12 @@ mod tests {
         std::fs::rename(&a, &b).unwrap();
         set_times(&b, None, Some(long_ago)).unwrap();
         assert!(!new.same_item(&file_id(&b).unwrap()));
-        keep_creation_time(&b, &new);
+        let renamed = OpenOptions::new()
+            .access_mode(FILE_WRITE_ATTRIBUTES)
+            .open(&b)
+            .unwrap();
+        keep_creation_time(&renamed, &new).unwrap();
+        drop(renamed);
         assert!(new.same_item(&file_id(&b).unwrap()));
         // As earlier versions noted it, the name tells.
         assert!(!old.without_creation_time().tells_apart());
@@ -1087,6 +1396,35 @@ mod tests {
         assert!(id.tells_apart());
         assert_eq!(id, id.without_creation_time(), "no time noted");
         assert_eq!(created_now(&b).unwrap(), id);
+        std::fs::remove_dir_all(&base).ok();
+    }
+
+    /// An item whose dates may not be changed (an access rule that denies
+    /// writing its attributes, as on some shared folders) is told by its
+    /// number all the same; on FAT and exFAT, where only its creation time
+    /// tells, that is an error.
+    #[test]
+    fn an_item_whose_dates_are_locked_is_told_by_its_number() {
+        let base = scratch("locked-dates");
+        let path = base.join("a.txt");
+        std::fs::write(&path, b"a").unwrap();
+        // Everyone (S-1-1-0) may not write the attributes.
+        let icacls = |args: &[&str]| {
+            let status = std::process::Command::new("icacls")
+                .arg(&path)
+                .args(args)
+                .stdout(std::process::Stdio::null())
+                .status()
+                .unwrap();
+            assert!(status.success(), "icacls {args:?}");
+        };
+        icacls(&["/deny", "*S-1-1-0:(WA)"]);
+        assert!(set_times(&path, None, Some(SystemTime::now())).is_err());
+        assert_eq!(created_now(&path).unwrap(), file_id(&path).unwrap());
+        PRETEND_FAT.set(true);
+        assert!(created_now(&path).is_err());
+        PRETEND_FAT.set(false);
+        icacls(&["/remove:d", "*S-1-1-0"]);
         std::fs::remove_dir_all(&base).ok();
     }
 
@@ -1147,9 +1485,7 @@ mod tests {
     /// instead of failing with "access denied".
     #[test]
     fn a_name_that_is_being_deleted_is_taken() {
-        use windows_sys::Win32::Storage::FileSystem::{
-            DELETE, FILE_DISPOSITION_INFO, FileDispositionInfo, SetFileInformationByHandle,
-        };
+        use windows_sys::Win32::Storage::FileSystem::{DELETE, FILE_SHARE_READ};
         let base = scratch("pending");
         let path = base.join("a.txt");
         std::fs::write(&path, b"x").unwrap();
@@ -1157,17 +1493,7 @@ mod tests {
         // Deleted the classic way, as on Windows before 10 and on file
         // systems without POSIX deletion: pending while `other` is open.
         let deleting = OpenOptions::new().access_mode(DELETE).open(&path).unwrap();
-        let info = FILE_DISPOSITION_INFO { DeleteFile: true };
-        // SAFETY: an open handle, and a local structure of the given size.
-        let ok = unsafe {
-            SetFileInformationByHandle(
-                deleting.as_raw_handle(),
-                FileDispositionInfo,
-                (&raw const info).cast(),
-                size_of::<FILE_DISPOSITION_INFO>() as u32,
-            )
-        };
-        assert_ne!(ok, 0, "{}", io::Error::last_os_error());
+        delete_on_close(&deleting).unwrap();
         drop(deleting);
         assert!(File::open(&path).is_err(), "cannot be opened now");
         assert!(listed(&path) && name_taken(&path));
@@ -1188,6 +1514,30 @@ mod tests {
             move_to_unique(&part, &base, "a.txt", false).unwrap(),
             base.join("a (3).txt")
         );
+        // The same for an open file, renamed through its handle; each name
+        // that is tried is noted first.
+        let open_part = base.join("c.part");
+        std::fs::write(&open_part, b"open").unwrap();
+        let open = OpenOptions::new()
+            .access_mode(DELETE)
+            .share_mode(FILE_SHARE_READ)
+            .open(&open_part)
+            .unwrap();
+        assert_eq!(
+            rename_open(&open, &path).unwrap_err().kind(),
+            io::ErrorKind::AlreadyExists
+        );
+        let mut tried = Vec::new();
+        let moved = move_open_to_unique_noted(&open, &base, "a.txt", &mut |to| {
+            tried.push(to.to_path_buf());
+            Ok(())
+        })
+        .unwrap();
+        assert_eq!(moved, base.join("a (4).txt"));
+        assert_eq!(tried, std::slice::from_ref(&moved));
+        drop(open);
+        assert_eq!(std::fs::read(&moved).unwrap(), b"open");
+        assert!(!open_part.exists());
         drop(other);
         assert!(!name_taken(&path), "free once it is closed");
         std::fs::remove_dir_all(&base).ok();
@@ -1209,10 +1559,16 @@ mod tests {
 
         let out = base.join("out");
         let mut calls = 0;
-        let stopped = unzip(&zip, &out, false, &cancel, &mut |_, _| {
-            calls += 1;
-            cancel.store(true, Ordering::Relaxed);
-        });
+        let stopped = unzip(
+            File::open(&zip).unwrap(),
+            &out,
+            false,
+            &cancel,
+            &mut |_, _| {
+                calls += 1;
+                cancel.store(true, Ordering::Relaxed);
+            },
+        );
         assert!(is_cancelled(&stopped.unwrap_err()));
         assert_eq!(calls, 1, "stopped after the first block");
         // Also when it comes wrapped in an I/O error.
@@ -1241,6 +1597,21 @@ mod tests {
         assert_eq!(std::fs::read(&moved).unwrap(), b"mine");
         assert_eq!(std::fs::read(base.join("a.txt")).unwrap(), b"theirs");
         assert!(!part.exists());
+        // Through a handle, the same: what moves is the file that is open.
+        let open_part = base.join("b.txt.part");
+        std::fs::write(&open_part, b"open").unwrap();
+        let open = OpenOptions::new()
+            .access_mode(windows_sys::Win32::Storage::FileSystem::DELETE)
+            .open(&open_part)
+            .unwrap();
+        let err = rename_open(&open, &base.join("a.txt")).unwrap_err();
+        assert_eq!(err.kind(), io::ErrorKind::AlreadyExists);
+        let moved = move_open_to_unique_noted(&open, &base, "a.txt", &mut |_| Ok(())).unwrap();
+        assert_eq!(moved, base.join("a (4).txt"));
+        drop(open);
+        assert_eq!(std::fs::read(&moved).unwrap(), b"open");
+        assert_eq!(std::fs::read(base.join("a.txt")).unwrap(), b"theirs");
+        assert!(!open_part.exists());
 
         // A folder whose ZIP name must be free too: "Photos (2).zip" is
         // taken, so the pair is "Photos (3)" and "Photos (3).zip".
