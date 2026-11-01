@@ -30,8 +30,8 @@ use super::{
     protocol::{self, CHUNK, Kind, Msg, Offer, Token},
     send::AbortOnDrop,
     session::{
-        self, Cancel, Control, Ending, Lost, Owned, PeerClose, ReceiveFiles, Role, Session, Side,
-        Streams, TransferRecord, lost, off_runtime, peer_close,
+        self, Control, Ending, Lost, Owned, PeerClose, ReceiveFiles, Role, Session, Side, Streams,
+        TransferRecord, lost, off_runtime, peer_close,
     },
     spawn_path_watch,
 };
@@ -51,6 +51,26 @@ const SYNC_EVERY: u64 = 64 * 1024 * 1024;
 /// simulate a shutdown during the last step.
 #[cfg(test)]
 pub(super) static HOLD_FINALIZE: AtomicBool = AtomicBool::new(false);
+/// Tests put the names of items here whose receive is to stop once all of
+/// their data has arrived, before it is checked, to simulate a shutdown
+/// while the sender waits for the verdict. `VERIFY_HELD` lists those that
+/// have stopped there.
+#[cfg(test)]
+pub(super) static HOLD_VERIFY: std::sync::Mutex<Vec<String>> = std::sync::Mutex::new(Vec::new());
+#[cfg(test)]
+pub(super) static VERIFY_HELD: std::sync::Mutex<Vec<String>> = std::sync::Mutex::new(Vec::new());
+
+/// Whether the receive of `name` is to wait before it checks its data (see
+/// `HOLD_VERIFY`); notes that it does.
+#[cfg(test)]
+fn held_before_verifying(name: &str) -> bool {
+    let hold = HOLD_VERIFY.lock().unwrap().iter().any(|n| n == name);
+    let mut held = VERIFY_HELD.lock().unwrap();
+    if hold && !held.iter().any(|n| n == name) {
+        held.push(name.to_string());
+    }
+    hold
+}
 /// How long to wait for a replacement connection after losing one before
 /// telling the user (the router replaces connections in one go).
 const REPLACEMENT_GRACE: Duration = Duration::from_secs(1);
@@ -207,6 +227,11 @@ pub(super) async fn resume(
         Ok(restored) => restored,
         Err(outcome) => return outcome,
     };
+    if placed.is_some() {
+        // The item is in place already: a cancel, also one that is waiting
+        // already, comes too late and must not delete it.
+        receiver.session.hand_over();
+    }
     tokio::select! {
         biased;
         ending = cancelled(shared, id, &ctl, None) => {
@@ -238,34 +263,16 @@ fn check_restored(
     Ok((record, peer, placed))
 }
 
-/// Finishes once the user has cancelled and the transfer has ended for it:
-/// the sender is told if connected (on the offer's connection `conn` until
-/// the transfer has one of its own), otherwise a tombstone waits for its next
-/// `Continue`; the result deletes the partial data. Never finishes while the
-/// last step runs: a cancel during unpacking is left to that step, which
-/// stops and ends the transfer as cancelled, and one that comes when the
-/// item is already being put in place is too late, so the transfer ends by
-/// itself, completed (see `Session::cancel`). Raced against a transfer only
-/// once its session is registered, so that it always finds the session.
+/// Finishes once the user has cancelled and the transfer has ended for it
+/// (see `net::cancelled`): the sender is told if connected (on the offer's
+/// connection `conn` until the transfer has one of its own), otherwise a
+/// tombstone waits for its next `Continue`; the result deletes the partial
+/// data. Never finishes while the last step runs: a cancel during unpacking
+/// is left to that step, which stops and ends the transfer as cancelled,
+/// and one that comes when the item is already being put in place is too
+/// late, so the transfer ends by itself, completed (see `Session::cancel`).
 async fn cancelled(shared: &Shared, id: u64, ctl: &Control, conn: Option<&Connection>) -> Ending {
-    ctl.cancel.cancelled().await;
-    let ending = match shared.session_by_id(id) {
-        Some(session) => match session.cancel() {
-            Cancel::Ended(ending) => ending,
-            Cancel::LeftToStep => {
-                // A later start deletes the files instead of finishing them.
-                let _ = session
-                    .update(&shared.data_dir, |s, d| s.save_record(d))
-                    .await;
-                std::future::pending().await
-            }
-            Cancel::TooLate => {
-                ctl.cancel_waits.store(true, Ordering::Relaxed);
-                std::future::pending().await
-            }
-        },
-        None => Ending::nothing(),
-    };
+    let ending = super::cancelled(shared, id, ctl).await;
     // Also when the transfer had not got to its own connection yet.
     if let Some(conn) = conn {
         conn.close(CLOSE_CANCELLED.into(), b"cancelled");
@@ -303,10 +310,12 @@ struct Receiver<'a> {
     peer_suspended: bool,
 }
 
-/// Decides once who has the part and the record of a new receive: the
-/// thread that makes them, which hands them to the transfer, or a cancel
-/// that comes meanwhile, which ends the receive at once, without waiting for
-/// the thread, which then deletes them again. Whichever comes first.
+/// Decides once who has the part of a new receive: the thread that makes
+/// it, which then makes the record and hands both to the transfer, or a
+/// cancel that comes meanwhile, which ends the receive at once, without
+/// waiting for the thread, which then deletes the part again and makes no
+/// record (one that a later start would take for an unfinished receive).
+/// Whichever comes first.
 #[derive(Clone, Default)]
 struct First(Arc<AtomicBool>);
 
@@ -349,15 +358,9 @@ async fn accept(
             first.clone(),
         );
         tokio::task::spawn_blocking(move || {
-            let record = new_receive(
-                &dir, &temp_dir, &data_dir, &name, offer, from, folder, &paused,
-            )?;
-            if !first.take() {
-                // Cancelled meanwhile: nothing of it may stay.
-                record.discard(&data_dir);
-                bail!(Cancelled);
-            }
-            Ok(record)
+            new_receive(
+                &dir, &temp_dir, &data_dir, &name, offer, from, folder, &paused, &first,
+            )
         })
     };
     let made = tokio::select! {
@@ -431,8 +434,9 @@ async fn accept(
 }
 
 /// Makes the part file of a new receive and its record, and saves the
-/// record. `paused` tells whether the user has paused the receive by now.
-/// Blocking.
+/// record, unless a cancel came first (see [`First`]): then it deletes the
+/// part again and fails with [`Cancelled`]. `paused` tells whether the user
+/// has paused the receive by now. Blocking.
 #[allow(clippy::too_many_arguments)]
 fn new_receive(
     dest_dir: &Path,
@@ -443,8 +447,14 @@ fn new_receive(
     from: EndpointId,
     folder: ReceivedFolder,
     paused: &watch::Receiver<bool>,
+    first: &First,
 ) -> anyhow::Result<TransferRecord> {
     let (part, part_id) = prepare_part(dest_dir, temp_dir, name, offer.kind, folder, &offer.token)?;
+    if !first.take() {
+        // Cancelled meanwhile: nothing of it may stay.
+        let _ = std::fs::remove_file(&part);
+        bail!(Cancelled);
+    }
     let record = TransferRecord {
         token: offer.token,
         peer: from.to_string(),
@@ -461,6 +471,7 @@ fn new_receive(
         offer,
         done_hash: None,
         done_sent: false,
+        cancelled: false,
         ended: false,
     };
     if let Err(e) = record.save(data_dir) {
@@ -968,6 +979,10 @@ impl<'a> Receiver<'a> {
         self.save_synced().await;
         drop(syncing);
         let hash = received?;
+        #[cfg(test)]
+        while held_before_verifying(&self.name) {
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
 
         if hash != *self.hasher.as_ref().unwrap().finalize().as_bytes() {
             let _ = msgs.send(Msg::Result {
@@ -1382,6 +1397,7 @@ mod tests {
             },
             done_hash: None,
             done_sent: false,
+            cancelled: false,
             ended: false,
         };
         record.save(&data_dir).unwrap();
@@ -1421,6 +1437,55 @@ mod tests {
             .collect();
         names.sort();
         names
+    }
+
+    /// A cancel that comes while the part of a new receive is being made
+    /// wins: the part goes again, and no record is made, which a later start
+    /// would take for an unfinished receive.
+    #[test]
+    fn a_cancel_while_the_part_is_made_leaves_nothing() {
+        let base = scratch("first");
+        let (dest, temp, data_dir) = (base.join("dest"), base.join("temp"), base.join("data"));
+        let offer = Offer {
+            kind: Kind::File,
+            name: "a.txt".into(),
+            size: 5,
+            file_count: 1,
+            content_size: 5,
+            sender_name: "Ana".into(),
+            token: [8; 16],
+            modified: None,
+            created: None,
+        };
+        let from = iroh::SecretKey::generate().public();
+        let (_paused_tx, paused) = watch::channel(false);
+        let make = |first: &First| {
+            new_receive(
+                &dest,
+                &temp,
+                &data_dir,
+                "a.txt",
+                offer.clone(),
+                from,
+                ReceivedFolder::Extract,
+                &paused,
+                first,
+            )
+        };
+
+        let cancel_first = First::default();
+        assert!(cancel_first.take(), "the cancel comes first");
+        assert!(archive::is_cancelled(&make(&cancel_first).unwrap_err()));
+        assert!(names_in(&dest).is_empty());
+        assert!(session::load_all(&data_dir).is_empty());
+
+        // Made first: the transfer has the part and the record.
+        let first = First::default();
+        let record = make(&first).unwrap();
+        assert!(!first.take(), "a cancel now ends the transfer instead");
+        assert_eq!(names_in(&dest), ["a.txt.part"]);
+        assert_eq!(session::load_all(&data_dir), [record]);
+        std::fs::remove_dir_all(&base).ok();
     }
 
     #[test]

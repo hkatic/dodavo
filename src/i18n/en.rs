@@ -112,6 +112,7 @@ pub const EN: Strings = Strings {
     phase_receiving: "Receiving…",
     phase_unpacking: "Unpacking the folder…",
     phase_peer_unpacking: "{name} is unpacking the folder…",
+    phase_handed_over: "All of it has arrived, so the transfer can no longer be cancelled. Waiting for {name} to confirm that it is saved…",
     row_transferred: "Transferred:",
     row_processed: "Processed:",
     row_speed: "Speed:",
@@ -159,8 +160,11 @@ pub const EN: Strings = Strings {
     continuing_balloon_title: "Transfer continues",
     continuing_balloon: "“{item}”: the transfer continues.",
     peer_unpacking_balloon: "“{item}”: all of it has arrived. {name} is unpacking the folder, so the transfer can no longer be cancelled.",
+    handed_over_title: "All of it has arrived",
+    handed_over_balloon: "“{item}”: all of it has arrived, so the transfer can no longer be cancelled.",
     restored_balloon_title: "Unfinished transfer",
     restored_balloon: "“{item}”: the transfer was interrupted last time and continues as soon as you are both online.",
+    restored_cancelling_balloon: "“{item}”: the transfer is still being cancelled. As soon as you are both online, Dodavo finds out whether it was too late.",
 
     close_running_instruction: "This transfer is still running.",
     close_running_text: "You can cancel it, or let it continue in the background. \

@@ -115,6 +115,7 @@ pub const SR_LATN: Strings = Strings {
     phase_receiving: "Primanje…",
     phase_unpacking: "Raspakivanje fascikle…",
     phase_peer_unpacking: "Primalac ({name}) raspakuje fasciklu…",
+    phase_handed_over: "Sve je stiglo pa prenos više ne može da se otkaže. Čeka se da primalac ({name}) potvrdi čuvanje…",
     row_transferred: "Preneto:",
     row_processed: "Obrađeno:",
     row_speed: "Brzina:",
@@ -162,8 +163,11 @@ pub const SR_LATN: Strings = Strings {
     continuing_balloon_title: "Prenos se nastavlja",
     continuing_balloon: "„{item}“: prenos se nastavlja.",
     peer_unpacking_balloon: "„{item}“: sve je stiglo. Primalac ({name}) raspakuje fasciklu pa prenos više ne može da se otkaže.",
+    handed_over_title: "Sve je stiglo",
+    handed_over_balloon: "„{item}“: sve je stiglo pa prenos više ne može da se otkaže.",
     restored_balloon_title: "Nezavršeni prenos",
     restored_balloon: "„{item}“: prenos je prošli put prekinut i nastavlja se čim oboje budete na mreži.",
+    restored_cancelling_balloon: "„{item}“: prenos se još otkazuje. Čim oboje budete na mreži, Dodavo će saznati da li je bilo prekasno.",
 
     close_running_instruction: "Ovaj prenos je još u toku.",
     close_running_text: "Možete da ga otkažete ili da ga ostavite da se nastavi u pozadini. \

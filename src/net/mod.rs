@@ -276,6 +276,37 @@ impl Shared {
     }
 }
 
+/// Finishes once the user has cancelled the transfer `id` and the transfer
+/// has ended for it; the result deletes what is no longer needed. Never
+/// finishes when the cancel is left to the transfer's task, which acts on it
+/// at its next step, or comes too late, so that the transfer ends by itself
+/// (see `Session::cancel`). Raced against a transfer only once its session
+/// is registered, so that it always finds the session.
+pub(crate) async fn cancelled(shared: &Shared, id: u64, ctl: &Control) -> session::Ending {
+    ctl.cancel.cancelled().await;
+    let Some(session) = shared.session_by_id(id) else {
+        return session::Ending::nothing();
+    };
+    match session.cancel() {
+        session::Cancel::Ended(ending) => return ending,
+        session::Cancel::LeftToStep => {
+            // A later start does not lose the cancel: it deletes the files of
+            // a receive instead of finishing them, and cancels a send again.
+            let _ = session
+                .update(&shared.data_dir, |s, d| s.save_record(d))
+                .await;
+            // The last step of a receive stops and ends the transfer soon;
+            // a send waits for the receiver, which shutdown does not wait
+            // for once the cancel is on disk.
+            if session.role == Role::Send {
+                ctl.cancel_waits.store(true, Ordering::Relaxed);
+            }
+        }
+        session::Cancel::TooLate => ctl.cancel_waits.store(true, Ordering::Relaxed),
+    }
+    std::future::pending().await
+}
+
 /// Limits progress events to a few per second.
 pub(crate) struct Throttle(Option<Instant>);
 
@@ -456,7 +487,10 @@ impl Found {
         if record.follow_moved_part() {
             let _ = record.save(data_dir);
         }
-        let (have, present) = (record.have(), record.files_present());
+        // A send whose data the receiver may have goes on without the data
+        // until the receiver says whether it needs it (see `Sender::reconnect`).
+        let present = record.files_present() || record.receiver_may_have_item();
+        let have = record.have();
         Found {
             record,
             have,
@@ -524,6 +558,11 @@ async fn restore(shared: &Arc<Shared>, endpoint: &Endpoint) {
             continue;
         }
         let ctl = shared.register(id, record.paused);
+        if record.cancel_pending() {
+            // The user cancelled a send in the last run, and the cancel was
+            // still waiting for the receiver's verdict: it waits on.
+            ctl.cancel.cancel();
+        }
         let shared = shared.clone();
         let endpoint = endpoint.clone();
         let token = record.token;
@@ -643,7 +682,8 @@ async fn run(secret: SecretKey, shared: Arc<Shared>, mut rx: mpsc::UnboundedRece
                 shared.shutting_down.store(true, Ordering::SeqCst);
                 // Transfers that were just cancelled need a moment to tell
                 // their peer and to clean up; the rest is suspended, also
-                // those whose cancel came too late.
+                // those whose cancel came too late or waits for the
+                // receiver's verdict (once it is in their record).
                 let deadline = Instant::now() + Duration::from_secs(1);
                 while Instant::now() < deadline {
                     let cancelling = shared
@@ -1314,6 +1354,7 @@ mod tests {
             },
             done_hash: Some([0; 32]),
             done_sent: false,
+            cancelled: false,
             ended: true,
         };
         record.save(&dir).unwrap();
@@ -1324,5 +1365,337 @@ mod tests {
         assert!(!dir.join("Photos (2).zip").exists());
         assert!(session::load_all(&dir).is_empty());
         std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// A record of a file transfer with `peer` (a Contact ID) and `side`.
+    fn file_record(token: u8, peer: &str, size: u64, side: session::Side) -> TransferRecord {
+        TransferRecord {
+            token: [token; 16],
+            peer: peer.into(),
+            offer: Offer {
+                kind: Kind::File,
+                name: "a.bin".into(),
+                size,
+                file_count: 1,
+                content_size: size,
+                sender_name: "Ana".into(),
+                token: [token; 16],
+                modified: None,
+                created: None,
+            },
+            peer_name: "Ana".into(),
+            paused: false,
+            created: SystemTime::now(),
+            side,
+            done_hash: None,
+            done_sent: false,
+            cancelled: false,
+            ended: false,
+        }
+    }
+
+    fn test_shared(dir: &std::path::Path) -> Arc<Shared> {
+        Arc::new(Shared {
+            sink: Box::new(|_| {}),
+            data_dir: dir.to_path_buf(),
+            temp_dir: dir.join("temp"),
+            pending: Mutex::new(HashMap::new()),
+            controls: Mutex::new(HashMap::new()),
+            sessions: Mutex::new(Vec::new()),
+            restoring: Mutex::new(HashSet::new()),
+            shutting_down: AtomicBool::new(false),
+        })
+    }
+
+    /// A cancel of a send that waits for the receiver's verdict is on disk
+    /// before shutdown stops waiting for it, so that the next start cancels
+    /// the transfer again; a cancel left to the last step of a receive,
+    /// which ends the transfer soon, is waited for.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn shutdown_waits_for_a_cancel_until_it_is_on_disk() {
+        let dir = scratch("cancel-waits");
+        let shared = test_shared(&dir);
+        let peer = SecretKey::generate().public();
+        let zip = dir.join("send.zip");
+        std::fs::write(&zip, b"zip").unwrap();
+        let mut record = file_record(
+            1,
+            &peer.to_string(),
+            3,
+            session::Side::Send {
+                source: dir.join("Photos"),
+                source_len: 3,
+                source_mtime: None,
+                data_path: zip,
+            },
+        );
+        record.done_sent = true;
+        record.save(&dir).unwrap();
+        let (send, _rx) = Session::new(1, record.token, peer, Role::Send);
+        send.set_record(record);
+        send.defer_cancel();
+        shared.add_session(send.clone());
+        let ctl = shared.register(1, false);
+        ctl.cancel.cancel();
+        assert!(ctl.cancelling(), "shutdown waits");
+        let waited =
+            tokio::time::timeout(Duration::from_secs(1), cancelled(&shared, 1, &ctl)).await;
+        assert!(waited.is_err(), "the transfer goes on");
+        assert!(!ctl.cancelling(), "shutdown no longer waits");
+        assert!(session::load_all(&dir)[0].cancel_pending());
+
+        let part = dir.join("b.bin.part");
+        std::fs::write(&part, b"abc").unwrap();
+        let record = file_record(
+            2,
+            &peer.to_string(),
+            3,
+            session::Side::Receive {
+                dest_dir: dir.clone(),
+                files: session::ReceiveFiles::new(part),
+                part_id: None,
+                synced: Some(3),
+                folder: ReceivedFolder::Extract,
+            },
+        );
+        let (receive, _rx) = Session::new(2, record.token, peer, Role::Receive);
+        receive.set_record(record);
+        let _finishing = receive.finishing().unwrap();
+        shared.add_session(receive.clone());
+        let ctl = shared.register(2, false);
+        ctl.cancel.cancel();
+        let waited =
+            tokio::time::timeout(Duration::from_secs(1), cancelled(&shared, 2, &ctl)).await;
+        assert!(waited.is_err(), "left to the last step");
+        assert!(ctl.cancelling(), "which ends the transfer soon");
+        let stored = session::load_all(&dir);
+        assert!(stored.iter().find(|r| r.token == [2; 16]).unwrap().ended);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// A send whose data the receiver may have goes on after a restart
+    /// even when its data is gone: the receiver may not need it any more.
+    #[test]
+    fn a_send_the_receiver_may_have_goes_on_without_its_data() {
+        let dir = scratch("gone-data");
+        let peer = SecretKey::generate().public().to_string();
+        let side = session::Side::Send {
+            source: dir.join("gone.bin"),
+            source_len: 3,
+            source_mtime: None,
+            data_path: dir.join("gone.bin"),
+        };
+        let mut record = file_record(3, &peer, 3, side);
+        assert!(!Found::look(record.clone(), &dir).present);
+        record.done_sent = true;
+        assert!(Found::look(record.clone(), &dir).present);
+        record.done_sent = false;
+        record.done_hash = Some([1; 32]);
+        assert!(Found::look(record, &dir).present);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// A receive whose item was in place already when the program ended
+    /// (only the end of the transfer was interrupted) completes at the next
+    /// start, also when it is cancelled right away: the cancel comes too
+    /// late and must not delete the item.
+    #[test]
+    fn a_placed_item_survives_a_cancel_after_a_restart() {
+        let base = scratch("placed-cancel");
+        let (data_dir, recv_dir) = (base.join("data"), base.join("received"));
+        std::fs::create_dir_all(&recv_dir).unwrap();
+        let item = recv_dir.join("a.bin");
+        std::fs::write(&item, b"0123456789").unwrap();
+        let id = crate::archive::file_id(&item).unwrap();
+        let mut record = file_record(
+            4,
+            &SecretKey::generate().public().to_string(),
+            10,
+            session::Side::Receive {
+                dest_dir: recv_dir.clone(),
+                files: session::ReceiveFiles {
+                    moving: Some(session::Owned {
+                        path: item.clone(),
+                        id,
+                    }),
+                    ..session::ReceiveFiles::new(item.clone())
+                },
+                part_id: Some(id),
+                synced: Some(10),
+                folder: ReceivedFolder::Extract,
+            },
+        );
+        record.done_hash = Some([1; 32]);
+        record.save(&data_dir).unwrap();
+
+        let (tx, rx) = mpsc::channel();
+        let net = start(
+            SecretKey::generate(),
+            data_dir.clone(),
+            base.join("temp"),
+            sink(tx),
+        );
+        let Event::Restored { id, .. } = wait_for(&rx, |e| matches!(e, Event::Restored { .. }))
+        else {
+            unreachable!()
+        };
+        net.send(Command::Cancel { id });
+        let outcome = wait_finished(&rx, id);
+        assert!(
+            matches!(outcome, Outcome::Completed(Some(_))),
+            "{outcome:?}"
+        );
+        assert_eq!(std::fs::read(&item).unwrap(), b"0123456789");
+        assert!(session::load_all(&data_dir).is_empty());
+        assert_eq!(session::tombstone(&data_dir, &[4; 16]), Some(true));
+        net.shutdown(Duration::from_secs(5));
+        std::fs::remove_dir_all(&base).ok();
+    }
+
+    /// Two endpoints, A sending to B, as `send_until_verdict` leaves them.
+    struct Stopped {
+        key_a: SecretKey,
+        key_b: SecretKey,
+        dir_a: PathBuf,
+        dir_b: PathBuf,
+        recv_dir: PathBuf,
+        file: PathBuf,
+        data: Vec<u8>,
+    }
+
+    /// Sends the file `name` from A to B until all of its data and `Done`
+    /// have arrived, holds B before it checks them, cancels the transfer on
+    /// A if `cancel`, and then shuts both down: the sender waits for the
+    /// receiver's verdict, which it gets only after a restart.
+    fn send_until_verdict(base: &std::path::Path, name: &str, cancel: bool) -> Stopped {
+        let (key_a, key_b) = (SecretKey::generate(), SecretKey::generate());
+        let (dir_a, dir_b) = (base.join("a"), base.join("b"));
+        let recv_dir = base.join("received");
+        let file = base.join(name);
+        let data = pattern(3_000_000);
+        std::fs::write(&file, &data).unwrap();
+        receive::HOLD_VERIFY.lock().unwrap().push(name.into());
+        let (tx_a, _rx_a) = mpsc::channel();
+        let (tx_b, rx_b) = mpsc::channel();
+        let a = start(key_a.clone(), dir_a.clone(), base.join("temp"), sink(tx_a));
+        let b = start(key_b.clone(), dir_b.clone(), base.join("temp"), sink(tx_b));
+        let id = next_transfer_id();
+        a.send(Command::Send {
+            id,
+            to: key_b.public(),
+            path: file.clone(),
+            kind: Kind::File,
+            my_name: "A".into(),
+            peer_name: "B".into(),
+        });
+        let Event::Offer { id: id_in, .. } = wait_for(&rx_b, |e| matches!(e, Event::Offer { .. }))
+        else {
+            unreachable!()
+        };
+        b.send(Command::Respond {
+            id: id_in,
+            accept: Some(Accept {
+                dir: recv_dir.clone(),
+                folder: ReceivedFolder::Extract,
+            }),
+        });
+        let deadline = Instant::now() + Duration::from_secs(120);
+        let held = || receive::VERIFY_HELD.lock().unwrap().contains(&name.into());
+        while !held() {
+            assert!(Instant::now() < deadline, "timed out");
+            std::thread::sleep(Duration::from_millis(50));
+        }
+        if cancel {
+            a.send(Command::Cancel { id });
+        }
+        // Shutdown waits until the cancel is in the record.
+        a.shutdown(Duration::from_secs(5));
+        b.shutdown(Duration::from_secs(5));
+        receive::HOLD_VERIFY.lock().unwrap().retain(|n| n != name);
+        let records = session::load_all(&dir_a);
+        assert_eq!(records.len(), 1);
+        assert!(records[0].done_sent, "{:?}", records[0]);
+        assert_eq!(records[0].cancel_pending(), cancel, "{:?}", records[0]);
+        Stopped {
+            key_a,
+            key_b,
+            dir_a,
+            dir_b,
+            recv_dir,
+            file,
+            data,
+        }
+    }
+
+    /// A running endpoint with its events and the id of its restored transfer.
+    type Restarted = (NetHandle, mpsc::Receiver<Event>, u64);
+
+    /// Starts B and then A again; returns A and B.
+    fn restart(base: &std::path::Path, s: &Stopped) -> (Restarted, Restarted) {
+        let restored = |key: &SecretKey, dir: &PathBuf| {
+            let (tx, rx) = mpsc::channel();
+            let net = start(key.clone(), dir.clone(), base.join("temp"), sink(tx));
+            let Event::Restored { id, .. } = wait_for(&rx, |e| matches!(e, Event::Restored { .. }))
+            else {
+                unreachable!()
+            };
+            (net, rx, id)
+        };
+        let b = restored(&s.key_b, &s.dir_b);
+        let a = restored(&s.key_a, &s.dir_a);
+        (a, b)
+    }
+
+    /// The sender cancels while it waits for the receiver's verdict, and
+    /// both exit before the verdict comes. The cancel is not lost: after
+    /// the restart it waits on, also while the transfer is paused, and ends
+    /// the transfer once the receiver turns out not to have the item.
+    #[test]
+    fn a_cancel_waits_for_the_verdict_across_a_restart() {
+        let base = scratch("cancel-restart");
+        let stopped = send_until_verdict(&base, "cancel-me.bin", true);
+        // Paused too (while it waited for the connection, say): it is not
+        // paused for the verdict, since the window offers no Resume any more.
+        let mut record = session::load_all(&stopped.dir_a).remove(0);
+        record.paused = true;
+        record.save(&stopped.dir_a).unwrap();
+
+        let ((a, rx_a, id_a), (b, rx_b, id_b)) = restart(&base, &stopped);
+        let outcome = wait_finished(&rx_a, id_a);
+        assert!(matches!(outcome, Outcome::Cancelled), "{outcome:?}");
+        let outcome = wait_finished(&rx_b, id_b);
+        assert!(matches!(outcome, Outcome::CancelledByPeer), "{outcome:?}");
+        assert!(session::load_all(&stopped.dir_a).is_empty());
+        assert!(session::load_all(&stopped.dir_b).is_empty());
+        assert!(leftovers(&stopped.recv_dir).is_empty());
+        assert_eq!(std::fs::read(&stopped.file).unwrap(), stopped.data);
+        a.shutdown(Duration::from_secs(5));
+        b.shutdown(Duration::from_secs(5));
+        std::fs::remove_dir_all(&base).ok();
+    }
+
+    /// The receiver turns out not to have the item after a restart: the
+    /// sender needs its data again, and fails because it is gone (it went
+    /// on without it until then).
+    #[test]
+    fn a_send_needs_its_data_again_when_the_receiver_lacks_it() {
+        let base = scratch("data-again");
+        let stopped = send_until_verdict(&base, "delete-me.bin", false);
+        std::fs::remove_file(&stopped.file).unwrap();
+
+        let ((a, rx_a, id_a), (b, rx_b, id_b)) = restart(&base, &stopped);
+        let outcome = wait_finished(&rx_a, id_a);
+        assert!(
+            matches!(&outcome, Outcome::Failed(e) if e.as_str() == crate::i18n::tr!(error_source_changed)),
+            "{outcome:?}"
+        );
+        let outcome = wait_finished(&rx_b, id_b);
+        assert!(matches!(outcome, Outcome::Failed(_)), "{outcome:?}");
+        assert!(session::load_all(&stopped.dir_a).is_empty());
+        assert!(session::load_all(&stopped.dir_b).is_empty());
+        assert!(leftovers(&stopped.recv_dir).is_empty());
+        a.shutdown(Duration::from_secs(5));
+        b.shutdown(Duration::from_secs(5));
+        std::fs::remove_dir_all(&base).ok();
     }
 }

@@ -20,8 +20,8 @@ use super::{
     CLOSE_FAILED, CLOSE_OK, CLOSE_SUSPENDED, Event, Outcome, Phase, Shared, Throttle,
     protocol::{self, CHUNK, Kind, Msg, Offer, Token},
     session::{
-        self, Cancel, Control, Ending, Lost, PeerClose, Role, Session, Side, Snapshots, Streams,
-        TransferRecord, lost, off_runtime, peer_close,
+        self, Control, Lost, PeerClose, Role, Session, Side, Snapshots, Streams, TransferRecord,
+        lost, off_runtime, peer_close,
     },
     spawn_path_watch,
 };
@@ -76,7 +76,7 @@ pub(super) async fn run(
 ) -> Outcome {
     tokio::select! {
         outcome = start(shared, endpoint, id, to, path, kind, my_name, peer_name, &ctl) => outcome,
-        ending = cancelled(shared, id, &ctl) => {
+        ending = super::cancelled(shared, id, &ctl) => {
             ending.forget(&shared.data_dir).await;
             Outcome::Cancelled
         }
@@ -91,36 +91,22 @@ pub(super) async fn resume(
     record: TransferRecord,
     ctl: Arc<Control>,
 ) -> Outcome {
-    // The record first: it registers the session before it waits for
-    // anything, so that a cancel always finds it.
+    // The record first: it registers the session (and sets the stage a
+    // cancel finds) before it waits for anything, so that a cancel always
+    // finds it, also one from the last run (see `TransferRecord::cancelled`).
+    //
+    // A cancel ends the transfer when it comes (the receiver is told if
+    // connected, otherwise a tombstone waits for its next `Query`), unless
+    // it waits for the receiver's verdict on all of the data, which the
+    // transfer's task then acts on (`Session::defer_cancel`), or comes once
+    // the receiver has confirmed all of the item: then it is too late, and
+    // the transfer ends by itself (`Session::hand_over`).
     tokio::select! {
         biased;
         outcome = continue_record(shared, endpoint, id, record, &ctl) => outcome,
-        ending = cancelled(shared, id, &ctl) => {
+        ending = super::cancelled(shared, id, &ctl) => {
             ending.forget(&shared.data_dir).await;
             Outcome::Cancelled
-        }
-    }
-}
-
-/// Finishes once the user has cancelled and the transfer has ended for it:
-/// the receiver is told if connected, otherwise a tombstone waits for its
-/// next `Query`; the result deletes what is no longer needed. Never
-/// finishes when the cancel waits for the receiver's verdict on all of the
-/// data, which the transfer's task then acts on (`Session::defer_cancel`),
-/// or once the receiver has confirmed all of the item: then the cancel comes
-/// too late, and the transfer ends by itself (`Session::hand_over`).
-async fn cancelled(shared: &Arc<Shared>, id: u64, ctl: &Control) -> Ending {
-    ctl.cancel.cancelled().await;
-    let Some(session) = shared.session_by_id(id) else {
-        return Ending::nothing();
-    };
-    match session.cancel() {
-        Cancel::Ended(ending) => ending,
-        Cancel::LeftToStep => std::future::pending().await,
-        Cancel::TooLate => {
-            ctl.cancel_waits.store(true, Ordering::Relaxed);
-            std::future::pending().await
         }
     }
 }
@@ -266,6 +252,7 @@ async fn start(
         },
         done_hash: None,
         done_sent: false,
+        cancelled: false,
         ended: false,
     };
     // The session's from now on, and a cancel waits until it is on disk: one
@@ -490,24 +477,23 @@ impl Sender<'_> {
                 // receiver was told so by the suspended connection.
                 std::future::pending::<()>().await;
             }
-            if *self.paused_rx.borrow() {
-                // Paused: nothing to do until the user resumes.
-                let _ = self.paused_rx.changed().await;
-                self.pause_changed(false).await;
+            // Once cancelled, it is not paused any more (the window offers no
+            // Resume then): a cancel that waits for the receiver's verdict
+            // needs the connection.
+            if *self.paused_rx.borrow() && !self.ctl.cancelled() {
+                // Paused: nothing to do until the user resumes, or cancels.
+                tokio::select! {
+                    _ = self.paused_rx.changed() => {
+                        self.pause_changed(false).await;
+                    }
+                    () = self.ctl.cancel.cancelled() => {}
+                }
                 continue;
             }
             // Once the receiver may have all of it, the source no longer
-            // matters (and failing would not end the transfer there).
-            let record = self
-                .session
-                .running()
-                .then(|| self.session.with_record(TransferRecord::clone))
-                .flatten();
-            let unchanged = match record {
-                Some(record) => off_runtime(move || record.source_unchanged()).await,
-                None => true,
-            };
-            if !unchanged {
+            // matters (and failing would not end the transfer there); it is
+            // checked if the receiver turns out not to have it.
+            if self.session.running() && !self.source_unchanged().await {
                 self.end(None, false).await;
                 return Err(Outcome::Failed(tr!(error_source_changed).into()));
             }
@@ -525,6 +511,9 @@ impl Sender<'_> {
                     conn.close(CLOSE_SUSPENDED.into(), b"exiting");
                     continue;
                 }
+                // Whether the receiver may have all of the item: the cancel
+                // waits for what it answers now.
+                let deferred = self.session.deferring();
                 match self.handshake(conn).await {
                     Ok(streams) => {
                         // The receiver does not have the item: a cancel that
@@ -533,12 +522,29 @@ impl Sender<'_> {
                             ending.forget(&self.shared.data_dir).await;
                             return Err(Outcome::Cancelled);
                         }
+                        if deferred {
+                            // `Done` goes out again after the rest of the
+                            // data; until then a cancel ends the transfer,
+                            // also after a restart. The data is needed again,
+                            // as it was.
+                            self.session
+                                .update(&self.shared.data_dir, |s, d| s.save_done_sent(d, false))
+                                .await;
+                            if !self.source_unchanged().await {
+                                self.end(Some(CLOSE_FAILED), false).await;
+                                return Err(Outcome::Failed(tr!(error_source_changed).into()));
+                            }
+                        }
                         return Ok(streams);
                     }
                     Err(Some(completed)) => {
                         self.end(None, completed).await;
                         return Err(if completed {
                             Outcome::Completed(None)
+                        } else if self.ctl.cancelled() {
+                            // Ended there too, without the item, as the user
+                            // wanted here.
+                            Outcome::Cancelled
                         } else {
                             Outcome::CancelledByPeer
                         });
@@ -553,6 +559,15 @@ impl Sender<'_> {
                 }
             }
             delay = (delay * 2).min(RETRY_MAX);
+        }
+    }
+
+    /// Whether the data to send still looks like it did at the start (see
+    /// `TransferRecord::source_unchanged`).
+    async fn source_unchanged(&self) -> bool {
+        match self.session.with_record(TransferRecord::clone) {
+            Some(record) => off_runtime(move || record.source_unchanged()).await,
+            None => true,
         }
     }
 
@@ -779,7 +794,7 @@ impl Sender<'_> {
         // can close the connection behind it.
         self.session.defer_cancel();
         self.session
-            .update(&self.shared.data_dir, |s, d| s.save_done_sent(d))
+            .update(&self.shared.data_dir, |s, d| s.save_done_sent(d, true))
             .await;
         protocol::write_msg(send, &Msg::Done { hash })
             .await
@@ -793,13 +808,15 @@ impl Sender<'_> {
                 Some(Msg::Verified { unpacking }) => {
                     // The item is the receiver's now (also after a restart).
                     self.session.hand_over();
+                    // The phase first: it says what is going on there, also
+                    // why the transfer can no longer be cancelled.
+                    if unpacking {
+                        self.emit(Phase::PeerUnpacking);
+                    }
                     self.shared.emit(Event::HandedOver { id: self.id });
                     self.session
                         .update(&self.shared.data_dir, move |s, d| s.save_done_hash(d, hash))
                         .await;
-                    if unpacking {
-                        self.emit(Phase::PeerUnpacking);
-                    }
                 }
                 Some(Msg::Result { ok: true, .. }) => return Ok(Outcome::Completed(None)),
                 Some(Msg::Result { ok: false, message }) => {

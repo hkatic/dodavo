@@ -620,6 +620,12 @@ fn handle_net_event(event: Event) -> Option<Event> {
             if let Some(folder) = record.received_folder() {
                 progress::set_received_folder(hwnd, folder);
             }
+            // Cancelled in the last run, and still waiting for the receiver's
+            // verdict: the network side cancels it again.
+            let cancelling = record.cancel_pending();
+            if cancelling {
+                progress::set_cancelling(hwnd);
+            }
             let mut transfer = Transfer::new(
                 hwnd,
                 &record.peer,
@@ -631,10 +637,15 @@ fn handle_net_event(event: Event) -> Option<Event> {
             transfer.done = have;
             with(|a| a.transfers.insert(id, transfer));
             refresh_transfer_views(id, true);
+            let text = if cancelling {
+                tr!(restored_cancelling_balloon, item = record.offer.name)
+            } else {
+                tr!(restored_balloon, item = record.offer.name)
+            };
             tray::balloon(
                 main_window(),
                 tr!(restored_balloon_title),
-                &tr!(restored_balloon, item = record.offer.name),
+                &text,
                 Some(BalloonAction::Transfer(id)),
             );
         }
@@ -661,10 +672,18 @@ fn handle_net_event(event: Event) -> Option<Event> {
             }
         }
         Event::HandedOver { id } => {
-            if let Some(h) = transfer_window(id)
-                && !progress::set_handed_over(h)
-            {
-                return Some(Event::HandedOver { id });
+            if let Some(h) = transfer_window(id) {
+                let Some(notice) = progress::set_handed_over(h) else {
+                    return Some(Event::HandedOver { id });
+                };
+                if let Some((title, text)) = notice {
+                    tray::balloon(
+                        main_window(),
+                        &title,
+                        &text,
+                        Some(BalloonAction::Transfer(id)),
+                    );
+                }
             }
         }
         Event::Progress { id, done, total } => {

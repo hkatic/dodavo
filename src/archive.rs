@@ -553,6 +553,20 @@ pub struct FileId {
     file: [u8; 16],
 }
 
+impl FileId {
+    /// Whether the identity tells the item apart from the other items of its
+    /// volume: not on FAT and exFAT.
+    pub fn tells_apart(&self) -> bool {
+        self.file != [0; 16]
+    }
+}
+
+#[cfg(test)]
+thread_local! {
+    /// Tests: this thread sees every volume as FAT or exFAT (see [`FileId`]).
+    pub static PRETEND_FAT: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
 /// The [`FileId`] of what is at `path` (a link itself, not what it points to).
 pub fn file_id(path: &Path) -> io::Result<FileId> {
     // Reading it needs no access rights; backup semantics open folders too.
@@ -603,6 +617,10 @@ pub fn file_id(path: &Path) -> io::Result<FileId> {
 /// Whether an open file or folder is on a FAT or exFAT volume (see
 /// [`FileId`]).
 fn on_fat(handle: HANDLE) -> bool {
+    #[cfg(test)]
+    if PRETEND_FAT.get() {
+        return true;
+    }
     let mut name = [0u16; MAX_PATH as usize + 1];
     // SAFETY: the handle is open; the call writes at most `name.len()`
     // characters to the local buffer, and the other outputs are not wanted.

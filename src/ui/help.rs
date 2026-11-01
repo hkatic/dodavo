@@ -253,6 +253,8 @@ mod tests {
                 s.cancelling,
                 s.tx_peer_unpacking,
                 s.notify_too_late_title,
+                s.handed_over_title,
+                s.restored_balloon_title,
                 s.menu_check_updates,
                 s.check_updates,
                 s.update_title,

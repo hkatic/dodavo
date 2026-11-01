@@ -115,6 +115,7 @@ pub const HR: Strings = Strings {
     phase_receiving: "Primanje…",
     phase_unpacking: "Raspakiravanje mape…",
     phase_peer_unpacking: "Primatelj ({name}) raspakirava mapu…",
+    phase_handed_over: "Sve je stiglo pa se prijenos više ne može otkazati. Čeka se da primatelj ({name}) potvrdi spremanje…",
     row_transferred: "Preneseno:",
     row_processed: "Obrađeno:",
     row_speed: "Brzina:",
@@ -162,8 +163,11 @@ pub const HR: Strings = Strings {
     continuing_balloon_title: "Prijenos se nastavlja",
     continuing_balloon: "„{item}”: prijenos se nastavlja.",
     peer_unpacking_balloon: "„{item}”: sve je stiglo. Primatelj ({name}) raspakirava mapu pa se prijenos više ne može otkazati.",
+    handed_over_title: "Sve je stiglo",
+    handed_over_balloon: "„{item}”: sve je stiglo pa se prijenos više ne može otkazati.",
     restored_balloon_title: "Nedovršeni prijenos",
     restored_balloon: "„{item}”: prijenos je prošli put prekinut i nastavlja se čim oboje budete na mreži.",
+    restored_cancelling_balloon: "„{item}”: prijenos se još otkazuje. Čim oboje budete na mreži, Dodavo će saznati je li bilo prekasno.",
 
     close_running_instruction: "Ovaj je prijenos još u tijeku.",
     close_running_text: "Možete ga otkazati ili ga ostaviti da se nastavi u pozadini. \

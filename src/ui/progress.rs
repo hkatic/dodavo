@@ -236,9 +236,17 @@ pub fn set_phase(hwnd: HWND, phase: Phase) -> Option<PhaseNotice> {
 }
 
 /// Sending side: the item is the receiver's now (see `Event::HandedOver`).
-/// Returns `false` if the window is busy.
-pub fn set_handed_over(hwnd: HWND) -> bool {
-    window::with_handler::<Progress, _>(hwnd, |p, _| p.hand_over()).is_some()
+/// Returns `None` if the window is busy, otherwise a notification (title
+/// and text) to show, if any.
+pub fn set_handed_over(hwnd: HWND) -> Option<Option<(String, String)>> {
+    window::with_handler::<Progress, _>(hwnd, |p, _| p.hand_over())
+}
+
+/// A send restored with a cancel that still waits for the receiver's
+/// verdict (see `TransferRecord::cancel_pending`): the window shows it as
+/// being cancelled, as after the user's own cancel.
+pub fn set_cancelling(hwnd: HWND) {
+    window::with_handler::<Progress, _>(hwnd, |p, _| p.show_cancelling());
 }
 
 pub fn set_progress(hwnd: HWND, done: u64, total: u64) -> bool {
@@ -318,19 +326,17 @@ impl Progress {
         self.rate_shown = None;
     }
 
-    fn set_phase(&mut self, w: &Window, phase: Phase) -> PhaseNotice {
-        let previous = self.phase.replace(phase);
-        if phase == Phase::Transferring {
-            self.had_data = true;
-        }
-        let unpacking_there = phase == Phase::PeerUnpacking && previous != Some(phase);
-        if phase == Phase::PeerUnpacking {
-            self.hand_over();
-        }
-        let text = match phase {
+    /// The status line in `phase`.
+    fn status_text(&self, phase: Phase) -> String {
+        match phase {
             // A cancel can wait for the other side (a send whose data it may
             // have all of), which still says how the transfer is doing.
             _ if self.cancel_requested && !self.handed_over => tr!(cancelling).to_string(),
+            // Sending side, waiting for the receiver to save the item: this
+            // also says why Cancel is unavailable.
+            Phase::Transferring | Phase::WaitingForConnection { .. } if self.handed_over => {
+                tr!(phase_handed_over, name = self.peer)
+            }
             Phase::Preparing => tr!(phase_preparing).to_string(),
             Phase::Connecting => tr!(phase_connecting, name = self.peer),
             Phase::WaitingForAccept => tr!(phase_waiting, name = self.peer),
@@ -344,8 +350,20 @@ impl Progress {
             Phase::Verifying => tr!(phase_verifying).to_string(),
             Phase::Unpacking => tr!(phase_unpacking).to_string(),
             Phase::PeerUnpacking => tr!(phase_peer_unpacking, name = self.peer),
-        };
-        set_text(self.status, &text);
+        }
+    }
+
+    fn set_phase(&mut self, w: &Window, phase: Phase) -> PhaseNotice {
+        let previous = self.phase.replace(phase);
+        if phase == Phase::Transferring {
+            self.had_data = true;
+        }
+        let unpacking_there = phase == Phase::PeerUnpacking && previous != Some(phase);
+        if phase == Phase::PeerUnpacking {
+            // The notification below says why Cancel goes away.
+            let _ = self.hand_over();
+        }
+        set_text(self.status, &self.status_text(phase));
         set_text(
             self.done_caption,
             match phase {
@@ -396,18 +414,24 @@ impl Progress {
             && !self.cancel_requested
             && app::cfg().connection_lost == ConnectionLostAction::Ask;
         let balloon = match phase {
+            // The status line changes, and Cancel goes away (perhaps with
+            // the focus on it): this says why, also to a user who cancelled
+            // (too late) and perhaps closed the window. The unpacking can
+            // take a while, unlike the receiver's renaming of a file.
+            Phase::PeerUnpacking if unpacking_there => Some((
+                if self.cancel_requested {
+                    tr!(notify_too_late_title)
+                } else {
+                    tr!(tx_peer_unpacking)
+                }
+                .to_string(),
+                tr!(peer_unpacking_balloon, item = self.item, name = self.peer),
+            )),
             // Being cancelled after the user closed the window: nothing to tell.
             _ if self.closing => None,
             Phase::PausedByPeer => Some((
                 tr!(paused_balloon_title).to_string(),
                 tr!(paused_by_peer_balloon, item = self.item, name = self.peer),
-            )),
-            // The status line changes, and Cancel goes away (perhaps with
-            // the focus on it): this says why. The unpacking can take a
-            // while, unlike the receiver's renaming of a file.
-            Phase::PeerUnpacking if unpacking_there => Some((
-                tr!(tx_peer_unpacking).to_string(),
-                tr!(peer_unpacking_balloon, item = self.item, name = self.peer),
             )),
             Phase::WaitingForConnection { .. } if lost && !will_ask => Some((
                 tr!(connection_lost_balloon_title).to_string(),
@@ -571,7 +595,8 @@ impl Progress {
             unsafe { PostMessageW(w.hwnd, WM_APP_FINISHED, 0, 0) };
         }
 
-        let title = if completed && self.closing {
+        // Completed although the user cancelled: the cancel came too late.
+        let title = if completed && self.cancel_requested {
             tr!(notify_too_late_title)
         } else if completed {
             tr!(notify_done_title)
@@ -604,24 +629,67 @@ impl Progress {
     /// Sending side: all of the item has arrived, and it is the receiver's
     /// now. A cancel would come too late (the network side no longer ends
     /// the transfer for it), so the button is unavailable from now on, and
-    /// the focus moves on from it.
-    fn hand_over(&mut self) {
+    /// the focus moves on from it; the status line says why. Returns a
+    /// notification (title and text) when the change needs one: when the
+    /// user has cancelled, which came too late, or when the focus was on the
+    /// button, since screen readers announce only where the focus went.
+    fn hand_over(&mut self) -> Option<(String, String)> {
         if self.handed_over || !self.active {
-            return;
+            return None;
         }
         self.handed_over = true;
-        if unsafe { GetFocus() } == self.cancel {
+        let had_focus = unsafe { GetFocus() } == self.cancel;
+        if had_focus {
             window::focus(self.background_button);
         }
         window::enable(self.cancel, false);
+        if let Some(phase) = self.phase {
+            set_text(self.status, &self.status_text(phase));
+        }
+        (self.cancel_requested || had_focus).then(|| {
+            let title = if self.cancel_requested {
+                tr!(notify_too_late_title)
+            } else {
+                tr!(handed_over_title)
+            };
+            (
+                title.to_string(),
+                tr!(handed_over_balloon, item = self.item),
+            )
+        })
     }
 
     fn cancel_transfer(&mut self) {
-        self.cancel_requested = true;
         app::net_send(Command::Cancel { id: self.id });
-        set_text(self.status, tr!(cancelling));
+        self.show_cancelling();
+    }
+
+    /// The transfer is being cancelled: it can be neither cancelled again nor
+    /// paused, and the status line says so (see `cancel_requested`).
+    fn show_cancelling(&mut self) {
+        if self.cancel_requested || !self.active {
+            return;
+        }
+        self.cancel_requested = true;
+        if !self.handed_over {
+            set_text(self.status, tr!(cancelling));
+        }
+        let focus = unsafe { GetFocus() };
+        if focus == self.cancel || focus == self.pause {
+            window::focus(self.background_button);
+        }
         window::enable(self.cancel, false);
         window::enable(self.pause, false);
+    }
+
+    /// Hides the window of a transfer that the user cancelled until it has
+    /// ended: a cancel that comes too late leaves the item saved, and the
+    /// user must learn that (see `closing`).
+    fn hide_while_cancelling(&mut self, w: &Window) {
+        self.closing = true;
+        self.background = true;
+        unsafe { KillTimer(w.hwnd, TIMER_LOST) };
+        window::show(w.hwnd, false);
     }
 
     fn toggle_pause(&mut self) {
@@ -647,8 +715,14 @@ impl Progress {
     /// Closing the window while the transfer runs: continue in the background
     /// or cancel, as chosen now or remembered from before. Once the item is
     /// the receiver's, there is nothing to choose: the transfer can only
-    /// continue.
+    /// continue. Once the user has cancelled, there is nothing to choose
+    /// either: the window is hidden until the transfer has ended, as when
+    /// closing it cancels.
     fn close_running(&mut self, w: &Window) {
+        if self.cancel_requested && !self.handed_over {
+            self.hide_while_cancelling(w);
+            return;
+        }
         let action = match app::cfg().close_running_transfer {
             _ if self.handed_over => CloseAction::Background,
             CloseAction::Ask => {
@@ -678,13 +752,7 @@ impl Progress {
         if action == CloseAction::Cancel {
             if confirm(w.hwnd, tr!(cancel_confirm)) {
                 self.cancel_transfer();
-                // Hidden, not closed, until the transfer has ended: a cancel
-                // that comes too late leaves the item saved, and the user
-                // must learn that (see `closing`).
-                self.closing = true;
-                self.background = true;
-                unsafe { KillTimer(w.hwnd, TIMER_LOST) };
-                window::show(w.hwnd, false);
+                self.hide_while_cancelling(w);
             }
         } else {
             self.go_background(w);

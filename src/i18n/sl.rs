@@ -115,6 +115,7 @@ pub const SL: Strings = Strings {
     phase_receiving: "Prejemanje…",
     phase_unpacking: "Razpakiranje mape…",
     phase_peer_unpacking: "Prejemnik ({name}) razpakira mapo…",
+    phase_handed_over: "Vse je prispelo, zato prenosa ni več mogoče preklicati. Čakanje, da prejemnik ({name}) potrdi shranjevanje…",
     row_transferred: "Preneseno:",
     row_processed: "Obdelano:",
     row_speed: "Hitrost:",
@@ -162,8 +163,11 @@ pub const SL: Strings = Strings {
     continuing_balloon_title: "Prenos se nadaljuje",
     continuing_balloon: "»{item}«: prenos se nadaljuje.",
     peer_unpacking_balloon: "»{item}«: vse je prispelo. Prejemnik ({name}) razpakira mapo, zato prenosa ni več mogoče preklicati.",
+    handed_over_title: "Vse je prispelo",
+    handed_over_balloon: "»{item}«: vse je prispelo, zato prenosa ni več mogoče preklicati.",
     restored_balloon_title: "Nedokončan prenos",
     restored_balloon: "»{item}«: prenos je bil zadnjič prekinjen in se nadaljuje, takoj ko sta oba povezana.",
+    restored_cancelling_balloon: "»{item}«: prenos se še preklicuje. Takoj ko sta oba povezana, bo Dodavo izvedel, ali je bilo prepozno.",
 
     close_running_instruction: "Ta prenos še poteka.",
     close_running_text: "Lahko ga prekličete ali pustite, da se nadaljuje v ozadju. \
