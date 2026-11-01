@@ -715,16 +715,23 @@ pub fn load_all(data_dir: &Path) -> Vec<TransferRecord> {
         read.iter()
             .filter_map(|(_, read)| read.as_ref().map(|(record, fate)| (record, *fate))),
     );
+    // Given up: its files go, where a rename right before the end put them,
+    // and so does the record, whether or not all of them could be deleted.
+    let give_up = |mut record: TransferRecord, path: &Path| {
+        record.follow_moved_part(&parts);
+        record.delete_files();
+        let _ = fs::remove_file(path);
+    };
     for (path, read) in read {
         match read {
             // Its item is in place: nothing of it may be deleted.
             Some((record, Fate::Completed)) => record.complete(data_dir),
-            Some((mut record, Fate::Expired)) => {
-                // Its files are where a rename right before the end put them.
-                record.follow_moved_part(&parts);
-                record.delete_files();
-                let _ = fs::remove_file(&path);
-            }
+            Some((record, Fate::Expired)) => give_up(record, &path),
+            // A transfer that ended leaves its record while its files cannot
+            // be deleted, so that a start tries again (see `net::restore`),
+            // but not forever: a file that cannot be deleted for `MAX_AGE`
+            // is given up like the files of an expired record.
+            Some((record, Fate::Ended)) if is_old(&path, MAX_AGE) => give_up(record, &path),
             Some((mut record, Fate::GoesOn | Fate::Ended)) => {
                 // The part file was renamed right before the program ended.
                 // Also when the transfer had ended: its files are where the
@@ -770,8 +777,9 @@ enum Fate {
     /// something temporary, is left to delete.
     Completed,
     /// Its transfer ended in the last run, and only its files are left to
-    /// delete, which the next start does whatever the record's age (see
-    /// `net::restore`).
+    /// delete, which the next start does (see `net::restore`), unless the
+    /// record is older than [`MAX_AGE`]: a file that could not be deleted
+    /// for that long is given up, with the record, like an expired one.
     Ended,
     /// Older than [`MAX_AGE`] and not finishing alone: it goes, with its files.
     Expired,
@@ -1074,6 +1082,12 @@ pub(crate) enum Cancel {
         /// from the last run, issued again at this start (see
         /// `TransferRecord::cancelled`): its record says so already.
         to_save: bool,
+        /// Sending side: all of the data has gone out, so the cancel waits
+        /// for the receiver's verdict (`TransferRecord::done_sent`, read
+        /// together with the stage) instead of ending the transfer in a
+        /// moment, as the cancel of a send whose record was being saved for
+        /// the first time does, and the last step of a receive.
+        waits: bool,
     },
     /// Too late: the transfer ends by itself, as it would have without the
     /// cancel (completed, once the item is the receiver's).
@@ -1289,10 +1303,10 @@ impl Session {
                 Stage::HandedOver | Stage::Ended => return Cancel::TooLate,
                 Stage::Finishing => {
                     state.cancel_left = true;
-                    let to_save = match (state.record.as_mut(), self.role) {
-                        (None, _) => false,
+                    let (to_save, waits) = match (state.record.as_mut(), self.role) {
+                        (None, _) => (false, false),
                         (Some(record), Role::Receive) => {
-                            !std::mem::replace(&mut record.ended, true)
+                            (!std::mem::replace(&mut record.ended, true), false)
                         }
                         (Some(record), Role::Send) => {
                             // A cancelled send is not paused any more (see
@@ -1301,10 +1315,13 @@ impl Session {
                             // task notes it (a record that said cancelled
                             // already is not paused, see `load_all`).
                             record.paused = false;
-                            !std::mem::replace(&mut record.cancelled, true)
+                            (
+                                !std::mem::replace(&mut record.cancelled, true),
+                                record.done_sent,
+                            )
                         }
                     };
-                    return Cancel::LeftToStep { to_save };
+                    return Cancel::LeftToStep { to_save, waits };
                 }
                 Stage::Running => {
                     state.stage = Stage::Ended;
@@ -1325,7 +1342,7 @@ impl Session {
                 ending.forget_blocking(data_dir);
                 true
             }
-            Cancel::LeftToStep { to_save } => {
+            Cancel::LeftToStep { to_save, .. } => {
                 if to_save {
                     let _ = self.save_record(data_dir);
                 }
@@ -1356,9 +1373,10 @@ impl Session {
     /// now on a cancel waits for the receiver's verdict
     /// ([`defer_cancel`](Self::defer_cancel)), and the record says so
     /// (`TransferRecord::done_sent`) in the same step, so that a cancel
-    /// which finds the one finds the other too (`net::cancelled` tells by
-    /// it whether the cancel waits). Whether the record changed; the caller
-    /// saves it then ([`save_record`](Self::save_record)).
+    /// which finds the one finds the other too ([`cancel`](Self::cancel)
+    /// tells by it whether the cancel waits, `Cancel::LeftToStep`). Whether
+    /// the record changed; the caller saves it then
+    /// ([`save_record`](Self::save_record)).
     pub fn done_sent(&self) -> bool {
         let mut state = self.state();
         Self::defer(&mut state);
@@ -2238,16 +2256,22 @@ mod tests {
     /// part is under that name until the start deletes it, so another
     /// transfer could only have taken the name after its own rename. The
     /// renamed part is followed before the expired one's goes, whichever
-    /// record is read first.
+    /// record is read first: the records are read in the order of their
+    /// names, which is the order of the tokens.
     #[test]
     fn an_expired_record_claims_its_part_name() {
-        let dir = scratch("claim-expired");
+        expired_record_claims_its_part_name("claim-expired", 29, 30);
+        expired_record_claims_its_part_name("claim-expired-first", 30, 29);
+    }
+
+    fn expired_record_claims_its_part_name(name: &str, mine: u8, stale: u8) {
+        let dir = scratch(name);
         archive::PRETEND_FAT.set(true);
         let part = dir.join("c.bin.part");
         let placed = dir.join("c.bin");
         fs::write(&part, b"0123456789").unwrap();
         fs::write(&placed, b"0123456789").unwrap();
-        let mut r = record(29, receive_side(&dir, &part, None));
+        let mut r = record(mine, receive_side(&dir, &part, None));
         r.done_hash = Some(*blake3::hash(b"0123456789").as_bytes());
         if let Side::Receive { part_id, files, .. } = &mut r.side {
             *part_id = Some(archive::file_id(&part).unwrap());
@@ -2259,7 +2283,7 @@ mod tests {
         r.save(&dir).unwrap();
         // Another receive of an identical item took the old name after the
         // rename, and has gone stale since.
-        let other = record(30, receive_side(&dir, &part, None));
+        let other = record(stale, receive_side(&dir, &part, None));
         other.save(&dir).unwrap();
         let long_ago = SystemTime::now() - MAX_AGE - Duration::from_secs(60);
         fs::File::options()
@@ -2503,9 +2527,9 @@ mod tests {
         );
         assert!(item.exists() && whole.exists());
 
-        // Unless it has ended: then what it renamed goes, whatever the age of
-        // the record, which the next start keeps until its files are deleted
-        // (as `net::restore` does with every ended record).
+        // Unless it has ended: then what it renamed goes, and the record is
+        // kept until the start has deleted its files (as `net::restore` does
+        // with every ended record).
         let mut ended = verified.clone();
         ended.ended = true;
         if let Some(files) = ended.receive_files_mut() {
@@ -2514,7 +2538,7 @@ mod tests {
                 id: archive::file_id(&whole).unwrap(),
             });
         }
-        make_old(&ended);
+        ended.save(&dir).unwrap();
         fs::rename(&whole, dir.join("b.bin")).unwrap();
         let loaded = load_all(&dir);
         assert_eq!(loaded.len(), 2);
@@ -2526,6 +2550,50 @@ mod tests {
         assert!(!dir.join("b.bin").exists());
         assert_eq!(load_all(&dir).len(), 1);
         assert!(item.exists());
+        fs::remove_dir_all(&dir).ok();
+    }
+
+    /// A record that has ended stays while its files cannot be deleted, so
+    /// that every start tries again, but not forever: once it is older than
+    /// `MAX_AGE`, it goes like an expired record, with what of its files
+    /// can be deleted, instead of being tried at every start for good.
+    #[test]
+    fn an_ended_record_is_given_up_after_a_while() {
+        let dir = scratch("ended-given-up");
+        let part = dir.join("stuck.part");
+        fs::write(&part, b"stuck").unwrap();
+        let mut r = record(31, receive_side(&dir, &part, None));
+        r.ended = true;
+        r.save(&dir).unwrap();
+        // Another program holds the part open: it cannot be deleted.
+        let held = {
+            use std::os::windows::fs::OpenOptionsExt;
+            fs::OpenOptions::new()
+                .read(true)
+                .share_mode(0)
+                .open(&part)
+                .unwrap()
+        };
+        let loaded = load_all(&dir);
+        assert_eq!(loaded.len(), 1);
+        assert!(loaded[0].ended);
+        loaded[0].discard(&dir);
+        assert!(part.exists(), "could not be deleted");
+        assert!(
+            record_path(&dir, &r.token).exists(),
+            "kept for the next start"
+        );
+        let long_ago = SystemTime::now() - MAX_AGE - Duration::from_secs(60);
+        fs::File::options()
+            .write(true)
+            .open(record_path(&dir, &r.token))
+            .unwrap()
+            .set_modified(long_ago)
+            .unwrap();
+        assert!(load_all(&dir).is_empty(), "given up");
+        assert!(!record_path(&dir, &r.token).exists());
+        assert!(part.exists(), "still cannot be deleted");
+        drop(held);
         fs::remove_dir_all(&dir).ok();
     }
 

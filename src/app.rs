@@ -663,14 +663,7 @@ fn handle_net_event(event: Event) -> Option<Event> {
                 let Some(notice) = progress::set_phase(h, phase) else {
                     return Some(Event::Phase { id, phase });
                 };
-                if let Some((title, text)) = notice.balloon {
-                    tray::balloon(
-                        main_window(),
-                        &title,
-                        &text,
-                        Some(BalloonAction::Transfer(id)),
-                    );
-                }
+                give_phase_notice(id, notice);
             }
         }
         Event::HandedOver { id } => {
@@ -685,14 +678,7 @@ fn handle_net_event(event: Event) -> Option<Event> {
                 let Some(notice) = progress::set_cancel_waits(h) else {
                     return Some(Event::CancelWaits { id });
                 };
-                if let Some((title, text)) = notice.balloon {
-                    tray::balloon(
-                        main_window(),
-                        &title,
-                        &text,
-                        Some(BalloonAction::Transfer(id)),
-                    );
-                }
+                give_phase_notice(id, notice);
             }
         }
         Event::Progress { id, done, total } => {
@@ -749,6 +735,19 @@ fn handle_net_event(event: Event) -> Option<Event> {
         }
     }
     None
+}
+
+/// Gives the notification that a change in the progress window of transfer
+/// `id` asks for (see `progress::PhaseNotice`).
+fn give_phase_notice(id: u64, notice: progress::PhaseNotice) {
+    if let Some((title, text)) = notice.balloon {
+        tray::balloon(
+            main_window(),
+            &title,
+            &text,
+            Some(BalloonAction::Transfer(id)),
+        );
+    }
 }
 
 pub fn transfer_window(id: u64) -> Option<HWND> {

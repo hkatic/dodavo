@@ -301,16 +301,14 @@ pub(crate) async fn cancelled(shared: &Shared, id: u64, ctl: &Control) -> sessio
     };
     match session.cancel() {
         session::Cancel::Ended(ending) => return ending,
-        session::Cancel::LeftToStep { to_save } => {
+        session::Cancel::LeftToStep { to_save, waits } => {
             // The last step of a receive stops and ends the transfer soon,
             // and so does a send whose record was being saved for the first
             // time (see `send::start`). A send whose data has all gone out
-            // waits for the receiver's verdict (`Session::done_sent`, in the
-            // record since the same step as the stage the cancel found). The
-            // UI learns that at once: what holds the transfer up meanwhile
-            // holds up the cancel, and a phase that arrives before the save
-            // is done must not pass for one the cancel ends in a moment.
-            let waits = session.with_record(|r| r.done_sent) == Some(true);
+            // waits for the receiver's verdict. The UI learns that at once:
+            // what holds the transfer up meanwhile holds up the cancel, and
+            // a phase that arrives before the save is done must not pass
+            // for one the cancel ends in a moment.
             if waits {
                 shared.emit(Event::CancelWaits { id });
             }

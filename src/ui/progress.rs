@@ -266,9 +266,12 @@ pub fn set_handed_over(hwnd: HWND) -> bool {
 /// it is issued again.
 pub fn set_cancelling(hwnd: HWND, waits: bool) {
     window::with_handler::<Progress, _>(hwnd, |p, _| {
-        p.show_cancelling();
         if waits {
-            p.cancel_waits = true;
+            // No phase has arrived yet, so there is no withheld notification
+            // to give.
+            p.set_cancel_waits();
+        } else {
+            p.show_cancelling();
         }
     });
 }
