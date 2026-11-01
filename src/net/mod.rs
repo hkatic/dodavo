@@ -1393,6 +1393,7 @@ mod tests {
                     ..session::ReceiveFiles::new(part.clone())
                 },
                 part_id: Some(crate::archive::file_id(&part).unwrap()),
+                part_created: None,
                 synced: Some(3),
                 folder: ReceivedFolder::Both,
             },
@@ -1438,6 +1439,7 @@ mod tests {
                 dest_dir: dir.clone(),
                 files: session::ReceiveFiles::new(part.clone()),
                 part_id: Some(crate::archive::file_id(&part).unwrap()),
+                part_created: None,
                 synced: Some(3),
                 folder: ReceivedFolder::Extract,
             };
@@ -1690,6 +1692,7 @@ mod tests {
                 dest_dir: dir.clone(),
                 files: session::ReceiveFiles::new(part),
                 part_id: None,
+                part_created: None,
                 synced: Some(3),
                 folder: ReceivedFolder::Extract,
             },
@@ -1902,6 +1905,7 @@ mod tests {
                     ..session::ReceiveFiles::new(item.clone())
                 },
                 part_id: Some(id),
+                part_created: None,
                 synced: Some(10),
                 folder: ReceivedFolder::Extract,
             },

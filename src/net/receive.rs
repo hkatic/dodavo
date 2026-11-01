@@ -10,7 +10,7 @@ use std::{
         Arc,
         atomic::{AtomicBool, Ordering},
     },
-    time::Duration,
+    time::{Duration, SystemTime},
 };
 
 use anyhow::bail;
@@ -449,7 +449,8 @@ fn new_receive(
     paused: &watch::Receiver<bool>,
     first: &First,
 ) -> anyhow::Result<TransferRecord> {
-    let (part, part_id) = prepare_part(dest_dir, temp_dir, name, offer.kind, folder, &offer.token)?;
+    let (part, part_id, part_created) =
+        prepare_part(dest_dir, temp_dir, name, offer.kind, folder, &offer.token)?;
     if !first.take() {
         // Cancelled meanwhile: nothing of it may stay.
         let _ = std::fs::remove_file(&part);
@@ -465,6 +466,7 @@ fn new_receive(
             dest_dir: dest_dir.to_path_buf(),
             files: ReceiveFiles::new(part.clone()),
             part_id: Some(part_id),
+            part_created,
             synced: Some(0),
             folder,
         },
@@ -483,7 +485,7 @@ fn new_receive(
 }
 
 /// Creates the part file of a new receive, without replacing anything, and
-/// returns it with its identity. Blocking.
+/// returns it with its identity and its creation time. Blocking.
 fn prepare_part(
     dest_dir: &Path,
     temp_dir: &Path,
@@ -491,7 +493,7 @@ fn prepare_part(
     kind: Kind,
     folder: ReceivedFolder,
     token: &Token,
-) -> anyhow::Result<(PathBuf, FileId)> {
+) -> anyhow::Result<(PathBuf, FileId, Option<SystemTime>)> {
     std::fs::create_dir_all(dest_dir)?;
     // A zip that is only unpacked arrives in the temp folder; files go
     // straight to the destination folder, and so do the zips of folders that
@@ -514,13 +516,31 @@ fn prepare_part(
         let _ = archive::mark_of_the_web(&part);
         part
     };
+    // Its own creation time, not that of a file of the same name deleted
+    // moments before, which Windows may give it: on FAT and exFAT the time
+    // tells the part from such a file (see `Side::Receive::part_created`).
+    let _ = archive::set_times(&part, None, Some(SystemTime::now()));
+    let created = std::fs::symlink_metadata(&part)
+        .and_then(|m| m.created())
+        .ok();
     match archive::file_id(&part) {
-        Ok(id) => Ok((part, id)),
+        Ok(id) => Ok((part, id, created)),
         Err(e) => {
             let _ = std::fs::remove_file(&part);
             Err(e.into())
         }
     }
+}
+
+/// Whether the part file of a running receive is still its own (see
+/// `TransferRecord::part_is_there`): it is opened by its name for each
+/// connection. Also when there is nothing to tell, the transfer having no
+/// record any more: then it is ending anyway.
+async fn part_still_there(session: &Session) -> bool {
+    let Some(record) = session.with_record(TransferRecord::clone) else {
+        return true;
+    };
+    off_runtime(move || record.part_is_there()).await
 }
 
 /// Asks the sender whether it still has the transfer. `Some(completed)` if it
@@ -958,6 +978,11 @@ impl<'a> Receiver<'a> {
         mut recv: RecvStream,
         msgs: mpsc::UnboundedSender<Msg>,
     ) -> anyhow::Result<PathBuf> {
+        // While the transfer waited, the part may have been deleted and its
+        // name taken by another transfer's part, which is not written to.
+        if !part_still_there(&self.session).await {
+            bail!(tr!(error_part_missing));
+        }
         self.rehash().await?;
         self.emit_pause_phase();
         self.shared.emit(Event::Progress {
@@ -1363,6 +1388,63 @@ mod tests {
         part
     }
 
+    /// A new part is given the time of its creation, not that of a file of
+    /// the same name deleted a moment before, which Windows would give it:
+    /// on FAT and exFAT the time tells the part from such a file.
+    #[test]
+    fn a_new_part_is_created_now() {
+        let base = scratch("created-now");
+        let old = base.join("a.txt.part");
+        std::fs::write(&old, b"old").unwrap();
+        let long_ago = SystemTime::now() - Duration::from_secs(400 * 24 * 60 * 60);
+        archive::set_times(&old, None, Some(long_ago)).unwrap();
+        std::fs::remove_file(&old).unwrap();
+        let temp = base.join("temp");
+        let (part, id, created) = prepare_part(
+            &base,
+            &temp,
+            "a.txt",
+            Kind::File,
+            ReceivedFolder::Extract,
+            &[1; 16],
+        )
+        .unwrap();
+        assert_eq!(part, old);
+        assert_eq!(id, archive::file_id(&part).unwrap());
+        let created = created.unwrap();
+        assert_eq!(
+            std::fs::metadata(&part).unwrap().created().unwrap(),
+            created
+        );
+        let age = SystemTime::now().duration_since(created).unwrap();
+        assert!(age < Duration::from_secs(10 * 60), "{age:?}");
+        std::fs::remove_dir_all(&base).ok();
+    }
+
+    /// The part is opened by its name for each connection, and written to
+    /// only while it is still the transfer's: not once the user has deleted
+    /// it and another file has taken its name.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn only_its_own_part_is_written_to() {
+        let base = scratch("still-there");
+        let part = base.join("dest").join("a.txt.part");
+        std::fs::create_dir_all(part.parent().unwrap()).unwrap();
+        std::fs::write(&part, b"abc").unwrap();
+        let transfer = receiving(&base, &part, Kind::File, ReceivedFolder::Extract);
+        assert!(part_still_there(&transfer.session).await);
+        std::fs::remove_file(&part).unwrap();
+        std::fs::write(&part, b"another").unwrap();
+        assert!(!part_still_there(&transfer.session).await);
+        transfer
+            .session
+            .end(None, false)
+            .forget(&transfer.data_dir)
+            .await;
+        assert_eq!(std::fs::read(&part).unwrap(), b"another");
+        assert!(part_still_there(&transfer.session).await, "nothing to tell");
+        std::fs::remove_dir_all(&base).ok();
+    }
+
     /// A receive of "Photos" (or of a file "a.txt") with its part at `part`,
     /// as a running transfer has it, with its record in `base\data`.
     fn receiving(base: &Path, part: &Path, kind: Kind, folder: ReceivedFolder) -> Transfer {
@@ -1393,6 +1475,7 @@ mod tests {
                 dest_dir: part.parent().unwrap().to_path_buf(),
                 files: ReceiveFiles::new(part.to_path_buf()),
                 part_id: archive::file_id(part).ok(),
+                part_created: None,
                 synced: None,
                 folder,
             },
