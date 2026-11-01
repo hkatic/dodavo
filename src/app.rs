@@ -672,18 +672,10 @@ fn handle_net_event(event: Event) -> Option<Event> {
             }
         }
         Event::HandedOver { id } => {
-            if let Some(h) = transfer_window(id) {
-                let Some(notice) = progress::set_handed_over(h) else {
-                    return Some(Event::HandedOver { id });
-                };
-                if let Some((title, text)) = notice {
-                    tray::balloon(
-                        main_window(),
-                        &title,
-                        &text,
-                        Some(BalloonAction::Transfer(id)),
-                    );
-                }
+            if let Some(h) = transfer_window(id)
+                && !progress::set_handed_over(h)
+            {
+                return Some(Event::HandedOver { id });
             }
         }
         Event::Progress { id, done, total } => {

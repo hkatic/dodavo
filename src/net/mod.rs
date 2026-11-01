@@ -292,13 +292,21 @@ pub(crate) async fn cancelled(shared: &Shared, id: u64, ctl: &Control) -> sessio
         session::Cancel::LeftToStep => {
             // A later start does not lose the cancel: it deletes the files of
             // a receive instead of finishing them, and cancels a send again.
-            let _ = session
+            // Until the record is on disk, the save is tried again and
+            // again (unless the transfer ends meanwhile), and shutdown waits
+            // its moment for it.
+            while let Some(Err(_)) = session
                 .update(&shared.data_dir, |s, d| s.save_record(d))
-                .await;
-            // The last step of a receive stops and ends the transfer soon;
-            // a send waits for the receiver, which shutdown does not wait
+                .await
+            {
+                tokio::time::sleep(SAVE_RETRY).await;
+            }
+            // The last step of a receive stops and ends the transfer soon,
+            // and so does a send whose record was being saved for the first
+            // time (see `send::start`). A send whose data has all gone out
+            // waits for the receiver's verdict, which shutdown does not wait
             // for once the cancel is on disk.
-            if session.role == Role::Send {
+            if session.with_record(|r| r.done_sent) == Some(true) {
                 ctl.cancel_waits.store(true, Ordering::Relaxed);
             }
         }
@@ -306,6 +314,10 @@ pub(crate) async fn cancelled(shared: &Shared, id: u64, ctl: &Control) -> sessio
     }
     std::future::pending().await
 }
+
+/// How long `cancelled` waits before it tries again to save a cancel that
+/// could not be saved.
+const SAVE_RETRY: Duration = Duration::from_millis(500);
 
 /// Limits progress events to a few per second.
 pub(crate) struct Throttle(Option<Instant>);
@@ -532,7 +544,7 @@ async fn restore(shared: &Arc<Shared>, endpoint: &Endpoint) {
         });
     };
     for Found {
-        record,
+        mut record,
         have,
         present,
     } in found
@@ -557,8 +569,14 @@ async fn restore(shared: &Arc<Shared>, endpoint: &Endpoint) {
             });
             continue;
         }
+        let cancelling = record.cancel_pending();
+        if cancelling {
+            // A cancelled send is not paused (see `Command::Cancel`), also
+            // when the last run ended before it could note that.
+            record.paused = false;
+        }
         let ctl = shared.register(id, record.paused);
-        if record.cancel_pending() {
+        if cancelling {
             // The user cancelled a send in the last run, and the cancel was
             // still waiting for the receiver's verdict: it waits on.
             ctl.cancel.cancel();
@@ -658,6 +676,13 @@ async fn run(secret: SecretKey, shared: Arc<Shared>, mut rx: mpsc::UnboundedRece
             }
             Command::Cancel { id } => {
                 if let Some(ctl) = shared.control(id) {
+                    // A cancelled transfer is not paused any more (the window
+                    // offers no Resume then), and the cancel of a send that
+                    // waits for the receiver's verdict needs the connection.
+                    // First, so that the transfer never finds itself paused
+                    // and cancelled at once.
+                    ctl.paused
+                        .send_if_modified(|paused| std::mem::replace(paused, false));
                     ctl.cancel.cancel();
                 }
             }
@@ -1470,6 +1495,88 @@ mod tests {
         assert!(ctl.cancelling(), "which ends the transfer soon");
         let stored = session::load_all(&dir);
         assert!(stored.iter().find(|r| r.token == [2; 16]).unwrap().ended);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// A cancel while a send's record is being saved for the first time
+    /// ends the transfer right after the save (see `send::start`), so
+    /// shutdown waits for it like for any other cancel.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn shutdown_waits_for_a_cancel_during_the_first_save() {
+        let dir = scratch("cancel-first-save");
+        let shared = test_shared(&dir);
+        let peer = SecretKey::generate().public();
+        let record = file_record(
+            1,
+            &peer.to_string(),
+            3,
+            session::Side::Send {
+                source: dir.join("a.bin"),
+                source_len: 3,
+                source_mtime: None,
+                data_path: dir.join("a.bin"),
+            },
+        );
+        let (send, _rx) = Session::new(1, record.token, peer, Role::Send);
+        send.set_record(record);
+        send.defer_cancel();
+        shared.add_session(send.clone());
+        let ctl = shared.register(1, false);
+        ctl.cancel.cancel();
+        let waited =
+            tokio::time::timeout(Duration::from_secs(1), cancelled(&shared, 1, &ctl)).await;
+        assert!(waited.is_err(), "left to the task");
+        assert!(ctl.cancelling(), "which ends the transfer soon");
+        let stored = session::load_all(&dir);
+        assert!(stored[0].cancelled && !stored[0].done_sent, "{stored:?}");
+        let ending = send.stop_deferring().expect("the cancel ends it");
+        ending.forget_blocking(&dir);
+        assert!(session::load_all(&dir).is_empty());
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// A cancel that cannot be saved is saved again until it is on disk:
+    /// shutdown waits meanwhile, and the next start does not lose it.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn a_cancel_is_saved_until_it_is_on_disk() {
+        let dir = scratch("cancel-save-again");
+        // Nothing can be saved while a file takes the records folder's name.
+        std::fs::write(session::records_dir(&dir), b"in the way").unwrap();
+        let shared = test_shared(&dir);
+        let peer = SecretKey::generate().public();
+        let mut record = file_record(
+            1,
+            &peer.to_string(),
+            3,
+            session::Side::Send {
+                source: dir.join("a.bin"),
+                source_len: 3,
+                source_mtime: None,
+                data_path: dir.join("a.bin"),
+            },
+        );
+        record.done_sent = true;
+        let (send, _rx) = Session::new(1, record.token, peer, Role::Send);
+        send.set_record(record);
+        send.defer_cancel();
+        shared.add_session(send.clone());
+        let ctl = shared.register(1, false);
+        ctl.cancel.cancel();
+        let shared2 = shared.clone();
+        let ctl2 = ctl.clone();
+        let waiting = tokio::spawn(async move { cancelled(&shared2, 1, &ctl2).await });
+        tokio::time::sleep(Duration::from_millis(300)).await;
+        assert!(ctl.cancelling(), "not on disk yet: shutdown waits");
+        assert!(session::load_all(&dir).is_empty());
+        std::fs::remove_file(session::records_dir(&dir)).unwrap();
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while ctl.cancelling() {
+            assert!(Instant::now() < deadline, "the save was not tried again");
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+        let stored = session::load_all(&dir);
+        assert!(stored[0].cancel_pending(), "{stored:?}");
+        waiting.abort();
         std::fs::remove_dir_all(&dir).ok();
     }
 

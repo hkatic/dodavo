@@ -42,6 +42,12 @@ const WM_APP_FINISHED: u32 = WM_APP + 10;
 /// short interruptions should not bother the user with a question.
 const TIMER_LOST: usize = 1;
 const LOST_PROMPT_DELAY_MS: u32 = 3000;
+/// Fires a moment after a sent item became the receiver's, if the transfer
+/// has not ended by then (see `Progress::show_handed_over`).
+const TIMER_HANDED_OVER: usize = 2;
+const HANDED_OVER_NOTICE_DELAY_MS: u32 = 3000;
+/// Height of the status line at the usual text size: two lines.
+const STATUS_HEIGHT: i32 = 36;
 /// Command links of the questions.
 const CHOICE_BACKGROUND: i32 = 100;
 const CHOICE_CANCEL: i32 = 101;
@@ -236,10 +242,9 @@ pub fn set_phase(hwnd: HWND, phase: Phase) -> Option<PhaseNotice> {
 }
 
 /// Sending side: the item is the receiver's now (see `Event::HandedOver`).
-/// Returns `None` if the window is busy, otherwise a notification (title
-/// and text) to show, if any.
-pub fn set_handed_over(hwnd: HWND) -> Option<Option<(String, String)>> {
-    window::with_handler::<Progress, _>(hwnd, |p, _| p.hand_over())
+/// Returns `false` if the window is busy.
+pub fn set_handed_over(hwnd: HWND) -> bool {
+    window::with_handler::<Progress, _>(hwnd, |p, w| p.show_handed_over(w)).is_some()
 }
 
 /// A send restored with a cancel that still waits for the receiver's
@@ -333,8 +338,13 @@ impl Progress {
             // have all of), which still says how the transfer is doing.
             _ if self.cancel_requested && !self.handed_over => tr!(cancelling).to_string(),
             // Sending side, waiting for the receiver to save the item: this
-            // also says why Cancel is unavailable.
+            // also says why Cancel is unavailable. A cancelled transfer is
+            // not paused (see `Command::Cancel`), and Pause is unavailable
+            // then, so the wait is what to show until the phase says so too.
             Phase::Transferring | Phase::WaitingForConnection { .. } if self.handed_over => {
+                tr!(phase_handed_over, name = self.peer)
+            }
+            Phase::Paused if self.handed_over && self.cancel_requested => {
                 tr!(phase_handed_over, name = self.peer)
             }
             Phase::Preparing => tr!(phase_preparing).to_string(),
@@ -361,7 +371,7 @@ impl Progress {
         let unpacking_there = phase == Phase::PeerUnpacking && previous != Some(phase);
         if phase == Phase::PeerUnpacking {
             // The notification below says why Cancel goes away.
-            let _ = self.hand_over();
+            self.hand_over();
         }
         set_text(self.status, &self.status_text(phase));
         set_text(
@@ -427,8 +437,10 @@ impl Progress {
                 .to_string(),
                 tr!(peer_unpacking_balloon, item = self.item, name = self.peer),
             )),
-            // Being cancelled after the user closed the window: nothing to tell.
-            _ if self.closing => None,
+            // Being cancelled (perhaps after the user closed the window):
+            // the status line says so whatever the phase, and what is left
+            // to tell is how the transfer ends.
+            _ if self.closing || self.cancel_requested => None,
             Phase::PausedByPeer => Some((
                 tr!(paused_balloon_title).to_string(),
                 tr!(paused_by_peer_balloon, item = self.item, name = self.peer),
@@ -510,7 +522,10 @@ impl Progress {
     fn finish(&mut self, w: &Window, outcome: &Outcome) -> Finished {
         self.active = false;
         self.marquee(false);
-        unsafe { KillTimer(w.hwnd, TIMER_LOST) };
+        unsafe {
+            KillTimer(w.hwnd, TIMER_LOST);
+            KillTimer(w.hwnd, TIMER_HANDED_OVER);
+        }
         let file = self.kind == Kind::File;
         let mut completed = false;
         let (status, detail) = match (outcome, self.dir) {
@@ -629,13 +644,13 @@ impl Progress {
     /// Sending side: all of the item has arrived, and it is the receiver's
     /// now. A cancel would come too late (the network side no longer ends
     /// the transfer for it), so the button is unavailable from now on, and
-    /// the focus moves on from it; the status line says why. Returns a
-    /// notification (title and text) when the change needs one: when the
-    /// user has cancelled, which came too late, or when the focus was on the
-    /// button, since screen readers announce only where the focus went.
-    fn hand_over(&mut self) -> Option<(String, String)> {
+    /// the focus moves on from it. Returns whether that is a change to tell
+    /// the user about: the user has cancelled, which came too late, or the
+    /// focus was on the button, since screen readers announce only where the
+    /// focus went. The caller sets the status line, which says why.
+    fn hand_over(&mut self) -> bool {
         if self.handed_over || !self.active {
-            return None;
+            return false;
         }
         self.handed_over = true;
         let had_focus = unsafe { GetFocus() } == self.cancel;
@@ -643,20 +658,40 @@ impl Progress {
             window::focus(self.background_button);
         }
         window::enable(self.cancel, false);
+        self.cancel_requested || had_focus
+    }
+
+    /// `Event::HandedOver`: the hand-over, with the status line that says
+    /// why Cancel went away. A notification says so too, but only a moment
+    /// later, if the transfer is still running then: the receiver renames a
+    /// file in an instant, and the result says it all (a folder that is
+    /// being unpacked there is announced with its phase instead).
+    fn show_handed_over(&mut self, w: &Window) {
+        if self.handed_over || !self.active {
+            return;
+        }
+        let tell = self.hand_over();
         if let Some(phase) = self.phase {
             set_text(self.status, &self.status_text(phase));
         }
-        (self.cancel_requested || had_focus).then(|| {
-            let title = if self.cancel_requested {
-                tr!(notify_too_late_title)
-            } else {
-                tr!(handed_over_title)
-            };
-            (
-                title.to_string(),
-                tr!(handed_over_balloon, item = self.item),
-            )
-        })
+        if tell {
+            unsafe { SetTimer(w.hwnd, TIMER_HANDED_OVER, HANDED_OVER_NOTICE_DELAY_MS, None) };
+        }
+    }
+
+    /// The notification of `show_handed_over`, a moment later.
+    fn handed_over_notice(&self) {
+        let title = if self.cancel_requested {
+            tr!(notify_too_late_title)
+        } else {
+            tr!(handed_over_title)
+        };
+        tray::balloon(
+            app::main_window(),
+            title,
+            &tr!(handed_over_balloon, item = self.item),
+            Some(tray::BalloonAction::Transfer(self.id)),
+        );
     }
 
     fn cancel_transfer(&mut self) {
@@ -888,10 +923,37 @@ impl Handler for Progress {
             .button_width(tr!(cancel), 92)
             .max(w.button_width(tr!(close), 92));
         let width = MIN_WIDTH.max(pause_w + background_w + cancel_w + 2 * 6 + 28);
-        if width > MIN_WIDTH {
-            w.set_client_size(width, HEIGHT);
-        }
         let cw = width - 28;
+        // The status line holds two lines at the usual text size. The
+        // longest texts (with the other side's name, which can be long) may
+        // need more, and so may a larger Windows text size, which the DPI
+        // scaling of the layout does not follow; everything below moves
+        // down by the difference.
+        let name = self.peer.as_str();
+        let longest = [
+            tr!(phase_handed_over, name = name),
+            tr!(phase_peer_unpacking, name = name),
+            tr!(phase_paused_by_peer, name = name),
+            tr!(phase_connecting, name = name),
+            tr!(phase_waiting, name = name),
+            tr!(done_sent_file, name = name),
+            tr!(done_sent_folder, name = name),
+            tr!(declined_by_peer, name = name),
+            tr!(cancelled_by_peer, name = name),
+            tr!(unreachable, name = name),
+            tr!(phase_waiting_connection).to_string(),
+            tr!(phase_paused).to_string(),
+        ];
+        let status_h = longest
+            .iter()
+            .map(|text| w.text_height(text, cw))
+            .max()
+            .unwrap_or(STATUS_HEIGHT)
+            .max(STATUS_HEIGHT);
+        let dy = status_h - STATUS_HEIGHT;
+        if width > MIN_WIDTH || dy > 0 {
+            w.set_client_size(width, HEIGHT + dy);
+        }
 
         let title = match self.dir {
             Direction::Send => tr!(to_peer, name = self.peer, item = self.item),
@@ -899,8 +961,8 @@ impl Handler for Progress {
         };
         self.title = w.label(&title, (14, 12, cw, 20));
         w.make_bold(self.title);
-        self.status = w.label(tr!(starting), (14, 38, cw, 36));
-        self.bar = w.add("msctls_progress32", "", 0, 0, (14, 78, cw, 16));
+        self.status = w.label(tr!(starting), (14, 38, cw, status_h));
+        self.bar = w.add("msctls_progress32", "", 0, 0, (14, 78 + dy, cw, 16));
         // Otherwise named after the status line, which screen readers would
         // then leave out when they read the window.
         w.set_accessible_name(self.bar, tr!(progress_bar));
@@ -917,26 +979,27 @@ impl Handler for Progress {
         let value_x = 14 + caption_w;
         let value_w = cw - caption_w;
         let row = |caption: &str, y: i32| {
-            let c = w.label(caption, (14, y, caption_w, 18));
-            (c, w.label("", (value_x, y, value_w, 18)))
+            let c = w.label(caption, (14, y + dy, caption_w, 18));
+            (c, w.label("", (value_x, y + dy, value_w, 18)))
         };
         (self.done_caption, self.done) = row(tr!(row_transferred), 104);
         self.speed = row(tr!(row_speed), 124).1;
         self.remaining = row(tr!(row_remaining), 144).1;
 
-        self.connection = w.label("", (14, 168, cw, 34));
+        self.connection = w.label("", (14, 168 + dy, cw, 34));
         // Right-aligned buttons: Pause, Minimize to background, Cancel.
         let cancel_x = width - 14 - cancel_w;
         let background_x = cancel_x - 6 - background_w;
         let pause_x = background_x - 6 - pause_w;
-        self.pause = w.button(tr!(pause), ID_PAUSE, (pause_x, 200, pause_w, 28));
+        let button_y = 200 + dy;
+        self.pause = w.button(tr!(pause), ID_PAUSE, (pause_x, button_y, pause_w, 28));
         window::enable(self.pause, false);
         self.background_button = w.button(
             tr!(minimize_background),
             ID_BACKGROUND,
-            (background_x, 200, background_w, 28),
+            (background_x, button_y, background_w, 28),
         );
-        self.cancel = w.button(tr!(cancel), ID_CANCEL, (cancel_x, 200, cancel_w, 28));
+        self.cancel = w.button(tr!(cancel), ID_CANCEL, (cancel_x, button_y, cancel_w, 28));
         w.default_id.set(ID_CANCEL);
         // Pause is enabled only once data flows, so the focus starts on the
         // first button that can be used.
@@ -983,6 +1046,13 @@ impl Handler for Progress {
             WM_TIMER if wp == TIMER_LOST => {
                 unsafe { KillTimer(w.hwnd, TIMER_LOST) };
                 self.connection_lost(w);
+                Some(0)
+            }
+            WM_TIMER if wp == TIMER_HANDED_OVER => {
+                unsafe { KillTimer(w.hwnd, TIMER_HANDED_OVER) };
+                if self.active {
+                    self.handed_over_notice();
+                }
                 Some(0)
             }
             _ => None,

@@ -477,17 +477,13 @@ impl Sender<'_> {
                 // receiver was told so by the suspended connection.
                 std::future::pending::<()>().await;
             }
-            // Once cancelled, it is not paused any more (the window offers no
-            // Resume then): a cancel that waits for the receiver's verdict
-            // needs the connection.
-            if *self.paused_rx.borrow() && !self.ctl.cancelled() {
-                // Paused: nothing to do until the user resumes, or cancels.
-                tokio::select! {
-                    _ = self.paused_rx.changed() => {
-                        self.pause_changed(false).await;
-                    }
-                    () = self.ctl.cancel.cancelled() => {}
+            if *self.paused_rx.borrow() {
+                // Paused: nothing to do until the user resumes (a cancel
+                // resumes the transfer too, see `Command::Cancel`).
+                if self.paused_rx.changed().await.is_err() {
+                    std::future::pending::<()>().await;
                 }
+                self.pause_changed(false).await;
                 continue;
             }
             // Once the receiver may have all of it, the source no longer
@@ -511,9 +507,11 @@ impl Sender<'_> {
                     conn.close(CLOSE_SUSPENDED.into(), b"exiting");
                     continue;
                 }
-                // Whether the receiver may have all of the item: the cancel
-                // waits for what it answers now.
+                // Whether the receiver may have all of the item (the cancel
+                // waits for what it answers now), or has confirmed that (a
+                // cancel came too late).
                 let deferred = self.session.deferring();
+                let handed_over = self.session.handed_over();
                 match self.handshake(conn).await {
                     Ok(streams) => {
                         // The receiver does not have the item: a cancel that
@@ -541,11 +539,14 @@ impl Sender<'_> {
                         self.end(None, completed).await;
                         return Err(if completed {
                             Outcome::Completed(None)
-                        } else if self.ctl.cancelled() {
+                        } else if self.ctl.cancelled() && !handed_over {
                             // Ended there too, without the item, as the user
                             // wanted here.
                             Outcome::Cancelled
                         } else {
+                            // Ended there, by the receiver: also when the
+                            // user's cancel here came too late, since the
+                            // item was the receiver's by then.
                             Outcome::CancelledByPeer
                         });
                     }

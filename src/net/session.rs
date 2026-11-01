@@ -267,7 +267,8 @@ pub struct TransferRecord {
     /// receiver's verdict (see [`Session::defer_cancel`]). It goes on
     /// waiting after a restart, and ends the transfer as cancelled unless
     /// the receiver has the item by then (see
-    /// [`cancel_pending`](Self::cancel_pending)).
+    /// [`cancel_pending`](Self::cancel_pending)). A cancelled send is never
+    /// `paused`.
     #[serde(default)]
     pub cancelled: bool,
     /// The transfer has ended without its item, and its files are being
@@ -558,7 +559,11 @@ impl TransferRecord {
     /// part that got the old name after a crash right after it. There the
     /// sizes decide: the part is renamed only in the last step, when it has
     /// all of the item, so it has moved if what has the new name is as large
-    /// as the item and what has the old name (if anything) is not.
+    /// as the item and what has the old name (if anything) is not. When
+    /// both are (another transfer of the same item got the old name and
+    /// completed there, say), the content decides: what has the new name is
+    /// the part if it hashes to what the sender sent (`done_hash`, known
+    /// since before the last step).
     pub fn follow_moved_part(&mut self) -> bool {
         let Some(files) = self.receive_files() else {
             return false;
@@ -566,16 +571,15 @@ impl TransferRecord {
         let Some(moving) = files.moving.clone().filter(|m| m.path != files.part) else {
             return false;
         };
-        let size = |path: &Path| {
+        let full = |path: &Path| {
             fs::symlink_metadata(path)
                 .ok()
                 .filter(fs::Metadata::is_file)
-                .map(|m| m.len())
+                .is_some_and(|m| m.len() == self.offer.size)
         };
         let moved = moving.is_there()
             && (moving.id.tells_apart()
-                || (size(&moving.path) == Some(self.offer.size)
-                    && size(&files.part) != Some(self.offer.size)));
+                || (full(&moving.path) && (!full(&files.part) || self.has_content(&moving.path))));
         if !moved {
             return false;
         }
@@ -583,6 +587,13 @@ impl TransferRecord {
             files.part = moving.path;
         }
         true
+    }
+
+    /// Whether the file at `path` holds exactly what the sender sent, as far
+    /// as the record knows (`done_hash`). Blocking: it reads the whole file.
+    fn has_content(&self, path: &Path) -> bool {
+        self.done_hash
+            .is_some_and(|hash| hash_file(path).is_ok_and(|got| got == hash))
     }
 
     /// After a restart: the received item, if it was in place already and
@@ -773,6 +784,21 @@ pub fn hash_range(
         progress(done, total);
     }
     Ok(())
+}
+
+/// The blake3 hash of the whole file at `path`. Blocking.
+fn hash_file(path: &Path) -> io::Result<[u8; 32]> {
+    let len = fs::metadata(path)?.len();
+    let mut hasher = blake3::Hasher::new();
+    hash_range(
+        path,
+        0,
+        len,
+        &mut hasher,
+        &AtomicBool::new(false),
+        &mut |_, _| {},
+    )?;
+    Ok(*hasher.finalize().as_bytes())
 }
 
 /// A connection with its stream, handed to the transfer that continues on it.
@@ -1143,7 +1169,14 @@ impl Session {
                     if let Some(record) = state.record.as_mut() {
                         match self.role {
                             Role::Receive => record.ended = true,
-                            Role::Send => record.cancelled = true,
+                            Role::Send => {
+                                record.cancelled = true;
+                                // A cancelled send is not paused any more
+                                // (see `Command::Cancel`); the record says so
+                                // at once, in case the run ends before the
+                                // transfer's task notes it.
+                                record.paused = false;
+                            }
                         }
                     }
                     return Cancel::LeftToStep;
@@ -1235,7 +1268,6 @@ impl Session {
     }
 
     /// Whether the item is the receiver's (see [`hand_over`](Self::hand_over)).
-    #[cfg(test)]
     pub fn handed_over(&self) -> bool {
         self.state().stage == Stage::HandedOver
     }
@@ -1688,7 +1720,8 @@ mod tests {
 
     /// On FAT and exFAT, where every item of a volume has the same identity,
     /// the sizes tell whether the part moved: in the last step it has all of
-    /// the item.
+    /// the item. When both names have something of its size, the content
+    /// tells.
     #[test]
     fn a_moved_part_is_followed_on_fat() {
         let dir = scratch("moved-fat");
@@ -1697,6 +1730,7 @@ mod tests {
         fs::write(&part, b"0123456789").unwrap();
         let placed = dir.join("a.bin");
         let mut r = record(18, receive_side(&dir, &part, None));
+        r.done_hash = Some(*blake3::hash(b"0123456789").as_bytes());
         if let Side::Receive { part_id, files, .. } = &mut r.side {
             *part_id = Some(archive::file_id(&part).unwrap());
             files.moving = Some(Owned {
@@ -1706,7 +1740,8 @@ mod tests {
         }
         assert!(r.part_is_there());
 
-        // Noted, but not renamed: what has the new name is the user's.
+        // Noted, but not renamed: what has the new name is the user's, also
+        // when it is as large as the item.
         fs::write(&placed, b"the user's file").unwrap();
         assert!(!r.clone().follow_moved_part());
         fs::write(&placed, b"exactly 10").unwrap();
@@ -1719,6 +1754,19 @@ mod tests {
         let mut moved = r.clone();
         assert!(moved.follow_moved_part());
         assert_eq!(moved.placed_item(), Some(placed.as_path()));
+        // Renamed, and the other transfer (of the same item) has all of it
+        // under the old name: the content tells the two apart.
+        fs::write(&part, b"0123456789").unwrap();
+        let mut moved = r.clone();
+        assert!(moved.follow_moved_part());
+        fs::write(&part, b"ten others").unwrap();
+        let mut moved = r.clone();
+        assert!(moved.follow_moved_part());
+        // Without the hash (a record of an earlier version), the old name
+        // keeps the part, as before.
+        let mut unknown = r.clone();
+        unknown.done_hash = None;
+        assert!(!unknown.follow_moved_part());
         // Renamed, with nothing under the old name.
         fs::remove_file(&part).unwrap();
         let mut moved = r.clone();
@@ -1859,16 +1907,19 @@ mod tests {
 
         // The receiver did not have it: the cancel ends the transfer.
         let (session, _rx) = Session::new(1, [20; 16], peer, Role::Send);
-        let (r, zip) = send_record(&dir, 20);
+        let (mut r, zip) = send_record(&dir, 20);
+        r.paused = true;
         session.set_record(r);
         session.save_done_sent(&dir, true);
         session.defer_cancel();
         assert!(session.deferring());
         assert!(!session.cancel_blocking(&dir), "it waits");
         assert!(zip.exists() && !session.running());
-        // A restart keeps the transfer, and the cancel, which waits on.
+        // A restart keeps the transfer, and the cancel, which waits on (not
+        // paused: the window offers no Resume once cancelled).
         let stored = &load_all(&dir)[0];
         assert!(!stored.ended && stored.cancelled && stored.cancel_pending());
+        assert!(!stored.paused);
         assert!(stored.receiver_may_have_item());
         let ending = session.stop_deferring().expect("the cancel ends it now");
         ending.forget_blocking(&dir);
