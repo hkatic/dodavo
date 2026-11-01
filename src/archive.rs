@@ -545,19 +545,172 @@ fn is_taken(error: &io::Error, path: &Path) -> bool {
 ///
 /// FAT and exFAT have no such numbers: the one they report can change when
 /// an item is renamed, and a new item can get the one of a deleted item.
-/// There every item of a volume has the same identity, so an item counts as
-/// the same one while it has its name, as if there were no identities.
+/// There the identity is the volume and the time the item was created,
+/// which tells it from an item made under its name later (see
+/// [`same_item`](Self::same_item)). Windows gives a new item, or one renamed
+/// to a name, the creation time of an item of that name that was deleted or
+/// renamed moments before ("tunnelling"), so new items of a transfer are
+/// given the time of their creation ([`created_now`]), and a renamed one
+/// its own time back ([`keep_creation_time`]). In identities noted by
+/// earlier versions, and where the file system keeps no creation time,
+/// every item of a volume has the same identity: an item counts as the same
+/// one while it has its name, as if there were no identities.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FileId {
     volume: u64,
     file: [u8; 16],
+    /// FAT and exFAT: when the item was created (a Windows file time).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    created: Option<u64>,
 }
 
 impl FileId {
+    /// The identity of an open file or folder.
+    pub fn of(item: &File) -> io::Result<FileId> {
+        let handle = item.as_raw_handle();
+        let fat = on_fat(handle);
+        let created = if fat {
+            // 0 where the file system keeps no creation time.
+            Some(item.metadata()?.creation_time()).filter(|&t| t != 0)
+        } else {
+            None
+        };
+        let mut info = FILE_ID_INFO::default();
+        // SAFETY: the handle stays open during the call, which only fills
+        // the local structure of the given size.
+        let ok = unsafe {
+            GetFileInformationByHandleEx(
+                handle,
+                FileIdInfo,
+                (&raw mut info).cast(),
+                size_of::<FILE_ID_INFO>() as u32,
+            )
+        } != 0;
+        if ok {
+            return Ok(FileId {
+                volume: info.VolumeSerialNumber,
+                file: if fat { [0; 16] } else { info.FileId.Identifier },
+                created,
+            });
+        }
+        // Windows 7 does not know the 128-bit IDs.
+        let mut info = BY_HANDLE_FILE_INFORMATION::default();
+        // SAFETY: as above.
+        if unsafe { GetFileInformationByHandle(handle, &mut info) } == 0 {
+            return Err(io::Error::last_os_error());
+        }
+        let mut file = [0; 16];
+        if !fat {
+            let index = (u64::from(info.nFileIndexHigh) << 32) | u64::from(info.nFileIndexLow);
+            file[..8].copy_from_slice(&index.to_le_bytes());
+        }
+        Ok(FileId {
+            volume: u64::from(info.dwVolumeSerialNumber),
+            file,
+            created,
+        })
+    }
+
     /// Whether the identity tells the item apart from the other items of its
-    /// volume: not on FAT and exFAT.
+    /// volume: by its number, or on FAT and exFAT by its creation time; not
+    /// where the name has to tell (see [`FileId`]).
     pub fn tells_apart(&self) -> bool {
+        self.numbered() || self.created.is_some()
+    }
+
+    /// Whether the identity has the item's number: not on FAT and exFAT.
+    fn numbered(&self) -> bool {
         self.file != [0; 16]
+    }
+
+    /// Whether `now`, the identity of what has the item's name now, is this
+    /// item: the same volume and number, and on FAT and exFAT the same
+    /// creation time (see [`same_creation`]). Where this identity has no
+    /// creation time, anything of the volume under the name is.
+    pub fn same_item(&self, now: &FileId) -> bool {
+        self.volume == now.volume
+            && self.file == now.file
+            && match (self.created, now.created) {
+                (Some(noted), Some(now)) => same_creation(noted, now),
+                (Some(_), None) => false,
+                (None, _) => true,
+            }
+    }
+
+    /// Tests: the identity as earlier versions noted it on FAT and exFAT,
+    /// without the creation time.
+    #[cfg(test)]
+    pub fn without_creation_time(self) -> FileId {
+        FileId {
+            created: None,
+            ..self
+        }
+    }
+}
+
+/// The precision of a creation time on FAT and exFAT, in Windows file time
+/// units (100 ns): 10 ms.
+const FAT_CREATION_STEP: u64 = 100_000;
+
+/// Whether `a` and `b` (Windows file times) are the same creation time of an
+/// item on FAT or exFAT, read at different moments. FAT keeps local time,
+/// which Windows reads with the time zone of the moment, so after a change to
+/// or from daylight saving time, or of the time zone, the same item seems to
+/// have been created whole quarter hours earlier or later, at most 26 hours
+/// (from 12 hours behind UTC to 14 ahead); an item made at another moment
+/// differs by hundredths of a second as well. Both are taken to the 10 ms
+/// that the file system keeps: a time read right after it was set may still
+/// be finer.
+fn same_creation(a: u64, b: u64) -> bool {
+    const QUARTER_HOUR: u64 = 15 * 60 * 10_000_000 / FAT_CREATION_STEP;
+    const MOST_APART: u64 = 26 * 60 * 60 * 10_000_000 / FAT_CREATION_STEP;
+    let apart = (a / FAT_CREATION_STEP).abs_diff(b / FAT_CREATION_STEP);
+    apart <= MOST_APART && apart.is_multiple_of(QUARTER_HOUR)
+}
+
+/// Gives the new file or folder at `path` the time of its creation, and
+/// returns its identity: Windows may give a new item the creation time of
+/// one of the same name that was deleted moments before, which on FAT and
+/// exFAT would make it look like that one (see [`FileId`]), so there a time
+/// that cannot be set is an error. The time is a whole multiple of the 10 ms
+/// that those file systems keep, so that it reads back the same however they
+/// round it.
+pub fn created_now(path: &Path) -> io::Result<FileId> {
+    let item = OpenOptions::new()
+        .access_mode(FILE_WRITE_ATTRIBUTES)
+        .custom_flags(FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT)
+        .open(path)?;
+    let set = match filetime_to_system(filetime_now() / FAT_CREATION_STEP * FAT_CREATION_STEP) {
+        Some(now) => item.set_times(FileTimes::new().set_created(now)),
+        None => Err(io::ErrorKind::InvalidData.into()),
+    };
+    let id = FileId::of(&item)?;
+    match set {
+        Err(e) if !id.numbered() => Err(e),
+        _ => Ok(id),
+    }
+}
+
+/// The current time as a Windows file time.
+fn filetime_now() -> u64 {
+    let since_epoch = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .unwrap_or_default();
+    FILETIME_UNIX_EPOCH
+        + since_epoch.as_secs() * 10_000_000
+        + u64::from(since_epoch.subsec_nanos() / 100)
+}
+
+/// Gives the item at `path`, which has just been renamed there, its creation
+/// time back where the identity `id` that it had before has one (on FAT and
+/// exFAT): a rename gives it the time of an item of its new name that was
+/// deleted moments before (see [`FileId`]). Best effort.
+pub fn keep_creation_time(path: &Path, id: &FileId) {
+    let Some(created) = id.created.and_then(filetime_to_system) else {
+        return;
+    };
+    if !id.numbered() && !file_id(path).is_ok_and(|now| id.same_item(&now)) {
+        let _ = set_times(path, None, Some(created));
     }
 }
 
@@ -574,44 +727,7 @@ pub fn file_id(path: &Path) -> io::Result<FileId> {
         .access_mode(0)
         .custom_flags(FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT)
         .open(path)?;
-    let handle = item.as_raw_handle();
-    let numbered = !on_fat(handle);
-    let mut info = FILE_ID_INFO::default();
-    // SAFETY: the handle stays open during the call, which only fills the
-    // local structure of the given size.
-    let ok = unsafe {
-        GetFileInformationByHandleEx(
-            handle,
-            FileIdInfo,
-            (&raw mut info).cast(),
-            size_of::<FILE_ID_INFO>() as u32,
-        )
-    } != 0;
-    if ok {
-        return Ok(FileId {
-            volume: info.VolumeSerialNumber,
-            file: if numbered {
-                info.FileId.Identifier
-            } else {
-                [0; 16]
-            },
-        });
-    }
-    // Windows 7 does not know the 128-bit IDs.
-    let mut info = BY_HANDLE_FILE_INFORMATION::default();
-    // SAFETY: as above.
-    if unsafe { GetFileInformationByHandle(handle, &mut info) } == 0 {
-        return Err(io::Error::last_os_error());
-    }
-    let mut file = [0; 16];
-    if numbered {
-        let index = (u64::from(info.nFileIndexHigh) << 32) | u64::from(info.nFileIndexLow);
-        file[..8].copy_from_slice(&index.to_le_bytes());
-    }
-    Ok(FileId {
-        volume: u64::from(info.dwVolumeSerialNumber),
-        file,
-    })
+    FileId::of(&item)
 }
 
 /// Whether an open file or folder is on a FAT or exFAT volume (see
@@ -930,6 +1046,64 @@ mod tests {
         assert!(unzip(&zip_path, &base.join("out"), false, &cancel, &mut |_, _| {}).is_err());
         assert!(!base.join("evil.txt").exists());
         std::fs::remove_dir_all(&base).ok();
+    }
+
+    /// On FAT and exFAT, an item is told by its creation time, which a new
+    /// item of the transfer takes from the clock, not from one of its name
+    /// that was deleted moments before, and which a renamed one gets back.
+    /// Elsewhere the number tells.
+    #[test]
+    fn creation_times_tell_items_apart_on_fat() {
+        let base = scratch("created");
+        PRETEND_FAT.set(true);
+        let a = base.join("a.txt");
+        std::fs::write(&a, b"a").unwrap();
+        let long_ago = SystemTime::now() - Duration::from_secs(400 * 24 * 60 * 60);
+        set_times(&a, None, Some(long_ago)).unwrap();
+        let old = file_id(&a).unwrap();
+        assert!(old.tells_apart());
+        std::fs::remove_file(&a).unwrap();
+        std::fs::write(&a, b"b").unwrap();
+        let new = created_now(&a).unwrap();
+        assert!(!old.same_item(&new));
+        assert!(new.same_item(&file_id(&a).unwrap()));
+        let created = std::fs::metadata(&a).unwrap().creation_time();
+        assert_eq!(created % FAT_CREATION_STEP, 0, "whole hundredths");
+        assert!(filetime_now() - created < 10 * 60 * 10_000_000);
+        // Renamed to the name of an item deleted moments before, it may get
+        // that one's time; it gets its own back.
+        let b = base.join("b.txt");
+        std::fs::rename(&a, &b).unwrap();
+        set_times(&b, None, Some(long_ago)).unwrap();
+        assert!(!new.same_item(&file_id(&b).unwrap()));
+        keep_creation_time(&b, &new);
+        assert!(new.same_item(&file_id(&b).unwrap()));
+        // As earlier versions noted it, the name tells.
+        assert!(!old.without_creation_time().tells_apart());
+        assert!(old.without_creation_time().same_item(&new));
+        assert!(!new.same_item(&new.without_creation_time()));
+        PRETEND_FAT.set(false);
+        let id = file_id(&b).unwrap();
+        assert!(id.tells_apart());
+        assert_eq!(id, id.without_creation_time(), "no time noted");
+        assert_eq!(created_now(&b).unwrap(), id);
+        std::fs::remove_dir_all(&base).ok();
+    }
+
+    /// A creation time on FAT, read with another time zone, is the same one
+    /// whole quarter hours apart, up to 26 hours; one read right after it
+    /// was set may be finer than the 10 ms that the file system keeps.
+    #[test]
+    fn creation_times_on_fat_compare_across_time_zones() {
+        let t = 133_000_000_000_000_000;
+        let minute = 60 * 10_000_000;
+        assert!(same_creation(t, t));
+        assert!(same_creation(t, t + 37) && same_creation(t + 37, t));
+        assert!(same_creation(t + 15 * minute, t) && same_creation(t, t + 15 * minute));
+        assert!(same_creation(t, t - 26 * 60 * minute));
+        assert!(!same_creation(t, t + 26 * 60 * minute + 15 * minute));
+        assert!(!same_creation(t, t + FAT_CREATION_STEP));
+        assert!(!same_creation(t, t + 14 * minute));
     }
 
     #[test]

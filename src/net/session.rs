@@ -7,6 +7,7 @@
 use std::{
     fs,
     io::{self, Read, Seek, SeekFrom},
+    os::windows::fs::OpenOptionsExt,
     path::{Path, PathBuf},
     sync::{Arc, Mutex, MutexGuard, PoisonError, atomic::AtomicBool, atomic::Ordering},
     time::{Duration, SystemTime},
@@ -18,6 +19,7 @@ use iroh::{
 };
 use serde::{Deserialize, Deserializer, Serialize};
 use tokio::sync::{mpsc, watch};
+use windows_sys::Win32::Foundation::ERROR_SHARING_VIOLATION;
 
 use super::{
     CLOSE_CANCELLED, CLOSE_FAILED, CLOSE_SUSPENDED, CancelToken, ReceivedFolder,
@@ -45,6 +47,8 @@ pub enum Role {
 /// The files of a transfer on this side.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+// A few hundred bytes, once per transfer: not worth a box.
+#[allow(clippy::large_enum_variant)]
 pub enum Side {
     Send {
         /// What the user chose to send.
@@ -63,21 +67,12 @@ pub enum Side {
         files: ReceiveFiles,
         /// The identity of the part file (see [`Owned`]): what has its name
         /// is the part only while it is that file, so that a later start
-        /// never cuts, deletes or completes something else of the same name.
+        /// never cuts, deletes or completes something else of the same name
+        /// (on FAT and exFAT, the part's creation time tells, which the part
+        /// keeps until the transfer is done with it: see `receive::finish_file`).
         /// `None` in records of earlier versions, which trust the name.
         #[serde(default)]
         part_id: Option<FileId>,
-        /// When the part file was created, as its file system keeps it. On
-        /// FAT and exFAT, where the identity tells no file from another,
-        /// that tells the part from a file made under its name later, such
-        /// as another transfer's part after the user deleted this one (see
-        /// [`TransferRecord::part_is_there`]). A new part is given the time
-        /// of its creation (see `receive::prepare_part`), since Windows may
-        /// give a file the creation time of one of the same name that was
-        /// deleted moments before. `None` in records of earlier versions,
-        /// and where the file system keeps no creation time: the name tells.
-        #[serde(default)]
-        part_created: Option<SystemTime>,
         /// How much of the part file is known to be on disk, so that a power
         /// cut cannot leave data that looks received but never got written.
         /// `None` in records of earlier versions: the file length is trusted.
@@ -188,9 +183,19 @@ impl Owned {
         })
     }
 
+    /// The new folder at `path`, which the transfer has just made: given the
+    /// time of its creation where that can be done (see
+    /// [`archive::created_now`]), otherwise as it is.
+    pub fn made_at(path: &Path) -> io::Result<Owned> {
+        Ok(Owned {
+            path: path.to_path_buf(),
+            id: archive::created_now(path).or_else(|_| archive::file_id(path))?,
+        })
+    }
+
     /// Whether the item at `path` is still this one.
     pub fn is_there(&self) -> bool {
-        archive::file_id(&self.path).is_ok_and(|id| id == self.id)
+        archive::file_id(&self.path).is_ok_and(|now| self.id.same_item(&now))
     }
 
     /// Deletes the folder with all it holds (links in it, not what they point
@@ -199,7 +204,7 @@ impl Owned {
     /// that cannot be told yet.
     pub fn remove_folder(&self) -> bool {
         match archive::file_id(&self.path) {
-            Ok(id) if id == self.id => match fs::remove_dir_all(&self.path) {
+            Ok(now) if self.id.same_item(&now) => match fs::remove_dir_all(&self.path) {
                 Ok(()) => true,
                 Err(e) => e.kind() == io::ErrorKind::NotFound,
             },
@@ -212,18 +217,33 @@ impl Owned {
     /// with [`remove_folder`](Self::remove_folder)).
     fn remove_file(&self) -> bool {
         match archive::file_id(&self.path) {
-            Ok(id) if id == self.id => remove_file(&self.path),
+            Ok(now) if self.id.same_item(&now) => remove_file(&self.path),
             Ok(_) => true,
             Err(e) => e.kind() == io::ErrorKind::NotFound,
         }
     }
 }
 
-/// Deletes a file; whether it is gone.
+/// Deletes a file; whether it is gone. One that is open for a moment where
+/// it cannot be deleted is tried again for about a second and a half: a
+/// part of a receive that was cancelled during a connection, whose last
+/// write may still be under way (the receiver lets nothing delete the part
+/// while it is open, see `receive::open_own_part`), or a file that a virus
+/// scanner reads. Blocking.
 fn remove_file(path: &Path) -> bool {
-    match fs::remove_file(path) {
-        Ok(()) => true,
-        Err(e) => e.kind() == io::ErrorKind::NotFound,
+    let mut pauses = [50, 100, 200, 400, 800].into_iter();
+    loop {
+        match fs::remove_file(path) {
+            Ok(()) => return true,
+            Err(e) if e.kind() == io::ErrorKind::NotFound => return true,
+            Err(e) if e.raw_os_error() == Some(ERROR_SHARING_VIOLATION as i32) => {
+                match pauses.next() {
+                    Some(ms) => std::thread::sleep(Duration::from_millis(ms)),
+                    None => return false,
+                }
+            }
+            Err(_) => return false,
+        }
     }
 }
 
@@ -329,13 +349,16 @@ impl TransferRecord {
     }
 
     /// The bytes this side already has (receiver: what is on disk of the part
-    /// file, at most what is known to be flushed; sender: all of them once
-    /// the receiver confirmed them, otherwise none known).
+    /// file, if it is still the part, at most what is known to be flushed;
+    /// sender: all of them once the receiver confirmed them, otherwise none
+    /// known).
     pub fn have(&self) -> u64 {
         match &self.side {
-            Side::Receive { files, .. } if files.part_gone => 0,
-            Side::Receive { files, synced, .. } => {
-                let len = fs::metadata(&files.part).map(|m| m.len()).unwrap_or(0);
+            Side::Receive { synced, .. } => {
+                let len = self
+                    .open_part(fs::OpenOptions::new().access_mode(0))
+                    .and_then(|part| part.metadata())
+                    .map_or(0, |m| m.len());
                 synced.map_or(len, |s| s.min(len))
             }
             Side::Send { .. } if self.done_hash.is_some() => self.offer.size,
@@ -345,29 +368,49 @@ impl TransferRecord {
 
     /// Cuts the part file back to what is known to be on disk: after a power
     /// cut the end of the file may never have been written. Fails if the
-    /// part is not there (see [`part_is_there`](Self::part_is_there)).
+    /// part is not there (see [`open_part`](Self::open_part)).
     pub fn truncate_to_synced(&self) -> io::Result<()> {
         if let Side::Receive {
-            files,
             synced: Some(synced),
             ..
         } = &self.side
         {
-            if !self.part_is_there() {
-                return Err(io::Error::new(
-                    io::ErrorKind::NotFound,
-                    crate::i18n::tr!(error_part_missing),
-                ));
-            }
-            let len = fs::metadata(&files.part)?.len();
+            let len = self
+                .open_part(fs::OpenOptions::new().access_mode(0))?
+                .metadata()?
+                .len();
             if len > *synced {
-                fs::OpenOptions::new()
-                    .write(true)
-                    .open(&files.part)?
+                self.open_part(fs::OpenOptions::new().write(true))?
                     .set_len(*synced)?;
             }
         }
         Ok(())
+    }
+
+    /// Opens the part file of a receive with `options` if it is still the
+    /// part (see [`part_is_there`](Self::part_is_there)), as told by the
+    /// handle that is opened: what is used is what was checked, not a file
+    /// that took the name in between. Fails with "the partly transferred
+    /// data is no longer there" otherwise.
+    pub fn open_part(&self, options: &fs::OpenOptions) -> io::Result<fs::File> {
+        let missing = || {
+            io::Error::new(
+                io::ErrorKind::NotFound,
+                crate::i18n::tr!(error_part_missing),
+            )
+        };
+        let files = self
+            .receive_files()
+            .filter(|files| !files.part_gone)
+            .ok_or_else(missing)?;
+        let part = options.open(&files.part).map_err(|e| match e.kind() {
+            io::ErrorKind::NotFound => missing(),
+            _ => e,
+        })?;
+        match self.part_identity() {
+            Some(id) if !FileId::of(&part).is_ok_and(|now| id.same_item(&now)) => Err(missing()),
+            _ => Ok(part),
+        }
     }
 
     /// Sending side: the user cancelled, and the cancel still waits for the
@@ -413,7 +456,7 @@ impl TransferRecord {
 
     /// The identity of a receive's part file, if known: noted when the part
     /// was created, or with the name it was being renamed to.
-    fn part_identity(&self) -> Option<FileId> {
+    pub fn part_identity(&self) -> Option<FileId> {
         match &self.side {
             Side::Receive { part_id, files, .. } => part_id.or(files.moving.as_ref().map(|m| m.id)),
             Side::Send { .. } => None,
@@ -430,13 +473,12 @@ impl TransferRecord {
     }
 
     /// Whether the part file of a receive is there: the same file as when it
-    /// was created, or (in records of earlier versions) anything of its name.
-    /// On FAT and exFAT, a part under the name it was created with must also
-    /// have been created when it was (see [`part_created_then`](Self::part_created_then)).
+    /// was created (see [`Owned`]), or (in records of earlier versions)
+    /// anything of its name.
     pub fn part_is_there(&self) -> bool {
         match (self.receive_files(), self.owned_part()) {
             (Some(files), _) if files.part_gone => false,
-            (Some(_), Some(part)) => part.is_there() && self.part_created_then(),
+            (Some(_), Some(part)) => part.is_there(),
             (Some(files), None) => files.part.exists(),
             (None, _) => false,
         }
@@ -447,35 +489,10 @@ impl TransferRecord {
     fn remove_part(&self) -> bool {
         match (self.receive_files(), self.owned_part()) {
             (Some(files), _) if files.part_gone => true,
-            // Something else has the name now, which is not this one's to
-            // delete.
-            (Some(_), Some(_)) if !self.part_created_then() => true,
             (Some(_), Some(part)) => part.remove_file(),
             (Some(files), None) => remove_file(&files.part),
             (None, _) => true,
         }
-    }
-
-    /// Whether what has the part's name was created when the part was (see
-    /// `Side::Receive::part_created`). Told only on FAT and exFAT, where
-    /// the identity does not tell, and only while the part has the name it
-    /// was created with: the last step renames it and gives it the sender's
-    /// dates. True where it is not told, or cannot be.
-    fn part_created_then(&self) -> bool {
-        let Side::Receive {
-            files,
-            part_created: Some(created),
-            ..
-        } = &self.side
-        else {
-            return true;
-        };
-        if files.part_in_place() || self.part_identity().is_some_and(|id| id.tells_apart()) {
-            return true;
-        }
-        fs::symlink_metadata(&files.part)
-            .and_then(|m| m.created())
-            .map_or(true, |now| same_creation(now, *created))
     }
 
     /// Whether the data of a send still looks like it did at the start: the
@@ -658,17 +675,16 @@ impl TransferRecord {
     /// ended, but the record not yet changed with it (see
     /// [`ReceiveFiles::moving`]), the record follows it. Whether it did.
     ///
-    /// The part has moved if its identity has the new name. On FAT and
-    /// exFAT, where every item of a volume has the same identity, anything
+    /// The part has moved if its identity has the new name (on FAT and
+    /// exFAT, its creation time: see [`FileId`]). Where the identity does
+    /// not tell (records of earlier versions on FAT and exFAT), anything
     /// under either name counts as the part, such as a file of the new name
     /// that appeared after a crash before the rename, or another transfer's
     /// part that got the old name after a crash right after it. There the
     /// sizes decide: the part is renamed only in the last step, when it has
     /// all of the item, so it has moved if what has the new name is as large
     /// as the item and what has the old name (if anything) is not. When
-    /// both are, what has the old name is not the part if it was created at
-    /// another time (see `Side::Receive::part_created`). Then the other
-    /// records tell: the part has moved if another
+    /// both are, the other records tell: the part has moved if another
     /// record of this profile whose part is under its name names the old
     /// name as its own part (`parts`: the token and the part of every such
     /// record read at this start, whether its transfer goes on or is about
@@ -717,7 +733,6 @@ impl TransferRecord {
             && (moving.id.tells_apart()
                 || (full(&moving.path)
                     && (!full(&files.part)
-                        || !self.part_created_then()
                         || claimed(&files.part)
                         || (!has_content(&files.part) && has_content(&moving.path)))));
         if !moved {
@@ -759,17 +774,6 @@ pub fn tombstone(data_dir: &Path, token: &Token) -> Option<bool> {
     fs::read_to_string(tombstone_path(data_dir, token))
         .ok()
         .map(|s| s.trim() == "completed")
-}
-
-/// Whether `a` and `b` are the same creation time of a file on FAT or exFAT,
-/// read at different moments. FAT keeps local time, which Windows reads
-/// with the time zone of the moment, so after a change to or from daylight
-/// saving time, or of the time zone, the same file seems to have been
-/// created whole quarter hours earlier or later; a file made at another
-/// moment differs by hundredths of a second as well.
-fn same_creation(a: SystemTime, b: SystemTime) -> bool {
-    let apart = a.duration_since(b).unwrap_or_else(|e| e.duration());
-    apart.subsec_nanos() == 0 && apart.as_secs().is_multiple_of(15 * 60)
 }
 
 fn modified(path: &Path) -> Option<SystemTime> {
@@ -1871,7 +1875,6 @@ mod tests {
             files: ReceiveFiles::new(part.to_path_buf()),
             synced,
             part_id: None,
-            part_created: None,
             folder: ReceivedFolder::Extract,
         }
     }
@@ -2140,8 +2143,8 @@ mod tests {
         fs::remove_dir_all(&dir).ok();
     }
 
-    /// On FAT and exFAT, where every item of a volume has the same identity,
-    /// the sizes tell whether the part moved: in the last step it has all of
+    /// On FAT and exFAT, in records of earlier versions, where every item of
+    /// a volume has the same identity, the sizes tell whether the part moved: in the last step it has all of
     /// the item. When both names have something of its size, the other
     /// records tell, and then the content: the old name keeps the part
     /// unless a newer transfer's record names it, or only what has the new
@@ -2156,10 +2159,10 @@ mod tests {
         let mut r = record(18, receive_side(&dir, &part, None));
         r.done_hash = Some(*blake3::hash(b"0123456789").as_bytes());
         if let Side::Receive { part_id, files, .. } = &mut r.side {
-            *part_id = Some(archive::file_id(&part).unwrap());
+            *part_id = Some(archive::file_id(&part).unwrap().without_creation_time());
             files.moving = Some(Owned {
                 path: placed.clone(),
-                id: archive::file_id(&part).unwrap(),
+                id: archive::file_id(&part).unwrap().without_creation_time(),
             });
         }
         assert!(r.part_is_there());
@@ -2467,10 +2470,10 @@ mod tests {
         let mut r = record(27, receive_side(&dir, &part, None));
         r.done_hash = Some(*blake3::hash(b"0123456789").as_bytes());
         if let Side::Receive { part_id, files, .. } = &mut r.side {
-            *part_id = Some(archive::file_id(&part).unwrap());
+            *part_id = Some(archive::file_id(&part).unwrap().without_creation_time());
             files.moving = Some(Owned {
                 path: placed.clone(),
-                id: archive::file_id(&part).unwrap(),
+                id: archive::file_id(&part).unwrap().without_creation_time(),
             });
         }
         r.save(&dir).unwrap();
@@ -2498,47 +2501,51 @@ mod tests {
         fs::remove_dir_all(&dir).ok();
     }
 
-    /// On FAT and exFAT the identity tells no file from another, so a part
-    /// under the name it was created with is the part only if it was created
-    /// when the part was: a file made under that name later, such as another
-    /// transfer's part after the user deleted this one, is neither continued,
-    /// cut, deleted nor taken for the part when a moved part is followed.
-    /// The part read with another time zone (FAT keeps local time) is still
-    /// the part.
+    /// On FAT and exFAT, where items have no numbers, an item of a transfer
+    /// is told by its creation time (see `FileId`): a file made under the
+    /// part's name later, such as another transfer's part after the user
+    /// deleted this one, is neither continued, cut, counted, deleted nor
+    /// taken for the part when a moved part is followed, and a folder made
+    /// under the name of one that a receive was unpacking into is not
+    /// deleted. The part read with another time zone (FAT keeps local time)
+    /// is still the part, as far as time zones lie apart.
     #[test]
-    fn a_part_is_told_by_its_creation_time_on_fat() {
+    fn items_are_told_by_their_creation_time_on_fat() {
         let dir = scratch("created-fat");
         archive::PRETEND_FAT.set(true);
         let made = |r: &mut TransferRecord, part: &Path| {
-            let created = fs::metadata(part).unwrap().created().unwrap();
-            if let Side::Receive {
-                part_id,
-                part_created,
-                ..
-            } = &mut r.side
-            {
-                *part_id = Some(archive::file_id(part).unwrap());
-                *part_created = Some(created);
+            if let Side::Receive { part_id, .. } = &mut r.side {
+                *part_id = Some(archive::created_now(part).unwrap());
             }
-            created
+            fs::metadata(part).unwrap().created().unwrap()
         };
         let part = dir.join("a.bin.part");
-        fs::write(&part, b"01234").unwrap();
+        fs::write(&part, b"0123456").unwrap();
         let mut r = record(36, receive_side(&dir, &part, Some(5)));
         let created = made(&mut r, &part);
         assert!(r.part_is_there() && r.can_go_on());
+        assert_eq!(r.have(), 5);
+        let at = |time: SystemTime| archive::set_times(&part, None, Some(time)).unwrap();
         let hour = Duration::from_secs(60 * 60);
-        archive::set_times(&part, None, Some(created - hour)).unwrap();
+        at(created - hour);
         assert!(r.part_is_there(), "read after a change of the time zone");
-        archive::set_times(&part, None, Some(created + Duration::from_millis(10))).unwrap();
+        at(created + 26 * hour);
+        assert!(r.part_is_there(), "from 12 hours behind UTC to 14 ahead");
+        at(created + 27 * hour);
+        assert!(!r.part_is_there(), "further apart than time zones");
+        at(created + Duration::from_millis(10));
         assert!(!r.part_is_there(), "created a moment later");
-        archive::set_times(&part, None, Some(created)).unwrap();
+        at(created);
+        r.truncate_to_synced().unwrap();
+        assert_eq!(fs::read(&part).unwrap(), b"01234");
         // The user deleted it, and another transfer's part has the name now.
         fs::remove_file(&part).unwrap();
         fs::write(&part, b"another").unwrap();
-        archive::set_times(&part, None, Some(created + Duration::from_millis(1230))).unwrap();
+        at(created + Duration::from_millis(1230));
         assert!(!r.part_is_there() && !r.can_go_on());
+        assert_eq!(r.have(), 0, "nothing of it is this transfer's");
         assert!(r.truncate_to_synced().is_err());
+        assert!(r.open_part(fs::OpenOptions::new().append(true)).is_err());
         r.save(&dir).unwrap();
         r.discard(&dir);
         assert_eq!(
@@ -2549,24 +2556,25 @@ mod tests {
         assert!(records(&dir).is_empty());
         // A record of an earlier version does not know the time: the name
         // tells, as before.
-        if let Side::Receive { part_created, .. } = &mut r.side {
-            *part_created = None;
+        if let Side::Receive { part_id, .. } = &mut r.side {
+            *part_id = part_id.map(FileId::without_creation_time);
         }
         assert!(r.part_is_there());
+        assert_eq!(r.have(), 5);
 
         // Renamed right before a crash, and under the old name now another
-        // profile's part of an identical item: it was created at another
-        // time, so the part has moved.
+        // profile's part of an identical item, made at another time: the
+        // part has moved.
         let part = dir.join("b.bin.part");
         let placed = dir.join("b.bin");
         fs::write(&part, b"0123456789").unwrap();
         let mut r = record(37, receive_side(&dir, &part, None));
         let created = made(&mut r, &part);
         r.done_hash = Some(*blake3::hash(b"0123456789").as_bytes());
-        if let Some(files) = r.receive_files_mut() {
+        if let Side::Receive { part_id, files, .. } = &mut r.side {
             files.moving = Some(Owned {
                 path: placed.clone(),
-                id: archive::file_id(&part).unwrap(),
+                id: part_id.unwrap(),
             });
         }
         let kept = r.clone();
@@ -2575,13 +2583,35 @@ mod tests {
         fs::write(&part, b"0123456789").unwrap();
         archive::set_times(&part, None, Some(created + Duration::from_secs(5))).unwrap();
         assert!(r.follow_moved_part(&[]));
-        assert_eq!(r.receive_files().unwrap().part, placed);
-        // Without the time, the content tells, and keeps the old name.
+        assert_eq!(r.placed_item(), Some(placed.as_path()));
+        // Without the times, the content tells, and keeps the old name.
         let mut earlier = kept;
-        if let Side::Receive { part_created, .. } = &mut earlier.side {
-            *part_created = None;
+        if let Side::Receive { part_id, files, .. } = &mut earlier.side {
+            *part_id = part_id.map(FileId::without_creation_time);
+            if let Some(moving) = &mut files.moving {
+                moving.id = moving.id.without_creation_time();
+            }
         }
         assert!(!earlier.follow_moved_part(&[]));
+
+        // A receive was unpacking into "Photos"; the user deleted it and made
+        // a folder of that name later, which is not the transfer's to delete.
+        let folder = dir.join("Photos");
+        fs::create_dir(&folder).unwrap();
+        let unpacking = Owned::made_at(&folder).unwrap();
+        let made_then = fs::metadata(&folder).unwrap().created().unwrap();
+        fs::remove_dir(&folder).unwrap();
+        fs::create_dir(&folder).unwrap();
+        fs::write(folder.join("mine.jpg"), b"x").unwrap();
+        archive::set_times(&folder, None, Some(made_then + Duration::from_secs(90))).unwrap();
+        assert!(!unpacking.is_there());
+        assert!(unpacking.remove_folder(), "gone, as far as it is concerned");
+        assert!(folder.join("mine.jpg").exists());
+        archive::set_times(&folder, None, Some(made_then)).unwrap();
+        assert!(
+            unpacking.remove_folder() && !folder.exists(),
+            "its own goes"
+        );
         archive::PRETEND_FAT.set(false);
         fs::remove_dir_all(&dir).ok();
     }
@@ -2608,10 +2638,10 @@ mod tests {
         let mut r = record(mine, receive_side(&dir, &part, None));
         r.done_hash = Some(*blake3::hash(b"0123456789").as_bytes());
         if let Side::Receive { part_id, files, .. } = &mut r.side {
-            *part_id = Some(archive::file_id(&part).unwrap());
+            *part_id = Some(archive::file_id(&part).unwrap().without_creation_time());
             files.moving = Some(Owned {
                 path: placed.clone(),
-                id: archive::file_id(&part).unwrap(),
+                id: archive::file_id(&part).unwrap().without_creation_time(),
             });
         }
         r.save(&dir).unwrap();
