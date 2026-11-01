@@ -481,40 +481,22 @@ async fn accept(shared: Arc<Shared>, endpoint: Endpoint, conn: Connection) {
     conn.close(CLOSE_OK.into(), b"done");
 }
 
-/// A record of an earlier run, as `restore` finds it.
-struct Found {
-    record: TransferRecord,
-    /// Bytes already transferred.
-    have: u64,
-    /// Whether the files it needs are there.
-    present: bool,
-}
-
-impl Found {
-    /// Looks at the files of a record of an earlier run (as `load_all`
-    /// returns it, with a moved part followed). Blocking.
-    fn look(record: TransferRecord) -> Found {
-        // A send whose data the receiver may have goes on without the data
-        // until the receiver says whether it needs it (see `Sender::reconnect`).
-        let present = record.files_present() || record.receiver_may_have_item();
-        let have = record.have();
-        Found {
-            record,
-            have,
-            present,
-        }
-    }
-}
-
 /// Picks up the transfers that were interrupted in an earlier run.
 async fn restore(shared: &Arc<Shared>, endpoint: &Endpoint) {
-    // Reading the records and looking at their files is file work.
+    // Reading the records and looking at their files is file work: each
+    // record with how many bytes it has and whether it can go on.
     let found = {
         let (data_dir, temp_dir) = (shared.data_dir.clone(), shared.temp_dir.clone());
         session::off_runtime(move || {
             let records = session::load_all(&data_dir);
             session::cleanup_temp(&temp_dir, &records);
-            records.into_iter().map(Found::look).collect::<Vec<_>>()
+            records
+                .into_iter()
+                .map(|record| {
+                    let (have, present) = (record.have(), record.can_go_on());
+                    (record, have, present)
+                })
+                .collect::<Vec<_>>()
         })
         .await
     };
@@ -524,7 +506,7 @@ async fn restore(shared: &Arc<Shared>, endpoint: &Endpoint) {
         .restoring
         .lock()
         .unwrap()
-        .extend(found.iter().map(|f| f.record.token));
+        .extend(found.iter().map(|(record, _, _)| record.token));
     // Ends a transfer from the last run without it, in the background:
     // deleting its files can take a while, and nothing waits for that.
     let end = |record: TransferRecord| {
@@ -535,12 +517,7 @@ async fn restore(shared: &Arc<Shared>, endpoint: &Endpoint) {
             record.discard(&data_dir);
         });
     };
-    for Found {
-        record,
-        have,
-        present,
-    } in found
-    {
+    for (mut record, have, present) in found {
         if record.ended {
             // It ended in the last run while its files were being deleted
             // (or one could not be deleted then): only that is left to do.
@@ -548,6 +525,14 @@ async fn restore(shared: &Arc<Shared>, endpoint: &Endpoint) {
             continue;
         }
         let id = next_transfer_id();
+        // The user cancelled a send in the last run, and the cancel was
+        // still waiting for the receiver's verdict: it waits on (below). A
+        // cancelled send is not paused (see `Control::cancel`), and the
+        // record says so before anyone sees it, whatever the last run left.
+        let cancelling = record.cancel_pending();
+        if cancelling {
+            record.paused = false;
+        }
         shared.emit(Event::Restored {
             id,
             record: Box::new(record.clone()),
@@ -562,10 +547,7 @@ async fn restore(shared: &Arc<Shared>, endpoint: &Endpoint) {
             continue;
         }
         let ctl = shared.register(id, record.paused);
-        if record.cancel_pending() {
-            // The user cancelled a send in the last run, and the cancel was
-            // still waiting for the receiver's verdict: it waits on (and the
-            // transfer is not paused, as after any cancel).
+        if cancelling {
             ctl.cancel();
         }
         let shared = shared.clone();
@@ -1367,7 +1349,7 @@ mod tests {
         std::fs::write(&part, b"another transfer").unwrap();
         let mut loaded = session::load_all(&dir);
         assert_eq!(loaded.len(), 1);
-        Found::look(loaded.remove(0)).record.discard(&dir);
+        loaded.remove(0).discard(&dir);
         assert_eq!(std::fs::read(&part).unwrap(), b"another transfer");
         assert!(!dir.join("Photos (2).zip").exists());
         assert!(session::load_all(&dir).is_empty());
@@ -1575,12 +1557,12 @@ mod tests {
             data_path: dir.join("gone.bin"),
         };
         let mut record = file_record(3, &peer, 3, side);
-        assert!(!Found::look(record.clone()).present);
+        assert!(!record.can_go_on());
         record.done_sent = true;
-        assert!(Found::look(record.clone()).present);
+        assert!(record.can_go_on());
         record.done_sent = false;
         record.done_hash = Some([1; 32]);
-        assert!(Found::look(record).present);
+        assert!(record.can_go_on());
         std::fs::remove_dir_all(&dir).ok();
     }
 

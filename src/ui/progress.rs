@@ -407,13 +407,12 @@ impl Progress {
         window::enable(self.pause, can_pause(phase) && !self.cancel_requested);
 
         // A connection lost while data was flowing asks (or acts) after a
-        // moment. A transfer restored at startup just waits, which the
-        // "unfinished transfer" notification already said, and so does one
-        // whose other side exited on purpose (`lost: false`), and one that
-        // the user has cancelled already (a window closed with the cancel
-        // stays without the timer, see `hide_while_cancelling`).
+        // moment (`connection_lost`, which leaves alone a transfer that the
+        // user has cancelled already). A transfer restored at startup just
+        // waits, which the "unfinished transfer" notification already said,
+        // and so does one whose other side exited on purpose (`lost: false`).
         let lost = matches!(phase, Phase::WaitingForConnection { lost: true }) && self.had_data;
-        if lost && !self.closing {
+        if lost {
             unsafe { SetTimer(w.hwnd, TIMER_LOST, LOST_PROMPT_DELAY_MS, None) };
         }
         let will_ask = lost
@@ -421,6 +420,12 @@ impl Progress {
             && !self.handed_over
             && !self.cancel_requested
             && app::cfg().connection_lost == ConnectionLostAction::Ask;
+        // A cancel that may wait for the other side: a send's, until the
+        // item is the receiver's (see `Session::defer_cancel`). A cancelled
+        // receive, or a send that was handed over, ends in a moment whatever
+        // the other side does.
+        let cancel_waits =
+            self.cancel_requested && self.dir == Direction::Send && !self.handed_over;
         let balloon = match phase {
             // The status line changes, and Cancel goes away (perhaps with
             // the focus on it): this says why, also to a user who cancelled
@@ -436,20 +441,23 @@ impl Progress {
                 tr!(peer_unpacking_balloon, item = self.item, name = self.peer),
             )),
             // What holds the transfer up on the other side holds up a cancel
-            // that waits for it (a send whose data the receiver may have all
-            // of) just the same, so these are told also to a user who has
-            // cancelled, perhaps minimized or closed the window, and would
-            // otherwise not learn why it does not end.
-            Phase::PausedByPeer => Some((
+            // that waits for it just the same, so these are told also to a
+            // user whose cancel waits, perhaps with the window minimized or
+            // closed, who would otherwise not learn why it does not end.
+            Phase::PausedByPeer if !self.cancel_requested || cancel_waits => Some((
                 tr!(paused_balloon_title).to_string(),
                 tr!(paused_by_peer_balloon, item = self.item, name = self.peer),
             )),
-            Phase::WaitingForConnection { .. } if lost && !will_ask => Some((
-                tr!(connection_lost_balloon_title).to_string(),
-                tr!(connection_lost_balloon, item = self.item),
-            )),
-            // Being cancelled: a transfer that goes on again ends for the
-            // cancel in a moment, and the result says so.
+            Phase::WaitingForConnection { .. }
+                if lost && !will_ask && (!self.cancel_requested || cancel_waits) =>
+            {
+                Some((
+                    tr!(connection_lost_balloon_title).to_string(),
+                    tr!(connection_lost_balloon, item = self.item),
+                ))
+            }
+            // Being cancelled otherwise: the transfer ends for the cancel in
+            // a moment, and the result says so.
             _ if self.closing || self.cancel_requested => None,
             Phase::Transferring
                 if matches!(

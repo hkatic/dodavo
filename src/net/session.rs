@@ -376,6 +376,14 @@ impl TransferRecord {
         }
     }
 
+    /// Whether the transfer can go on at a later start: the files it needs
+    /// are there, or it is a send whose data the receiver may have, which
+    /// goes on without the data until the receiver says whether it needs it
+    /// (see `Sender::reconnect`).
+    pub fn can_go_on(&self) -> bool {
+        self.files_present() || self.receiver_may_have_item()
+    }
+
     /// The identity of a receive's part file, if known: noted when the part
     /// was created, or with the name it was being renamed to.
     fn part_identity(&self) -> Option<FileId> {
@@ -560,11 +568,14 @@ impl TransferRecord {
     /// sizes decide: the part is renamed only in the last step, when it has
     /// all of the item, so it has moved if what has the new name is as large
     /// as the item and what has the old name (if anything) is not. When
-    /// both are, the other records tell first: the part has moved if another
+    /// both are, the other records tell first: the part has moved if a newer
     /// record of this profile names the old name as its own part (`parts`:
-    /// the token and the part of every record read at this start), since
-    /// another transfer could only take the name once this one's rename had
-    /// freed it. Otherwise the content tells, against what the sender sent
+    /// when each record read at this start was created, and its part),
+    /// since a later transfer could only take the name once this one's
+    /// rename had freed it. An older record that names it had the name
+    /// before this one (its transfer completed or ended, and only its record
+    /// stayed behind), which tells nothing about this one's rename.
+    /// Otherwise the content tells, against what the sender sent
     /// (`done_hash`, known since before the last step): what has the old
     /// name is the part if it hashes to that (also when what has the new
     /// name does too, an identical copy of the item received earlier, say:
@@ -573,8 +584,10 @@ impl TransferRecord {
     /// the new name is the part if it hashes to that (what has the old name
     /// is then something else's, such as the part of another profile that
     /// receives into the same folder). Reading the files is blocking, and
-    /// rare: only this twice-ambiguous case does it.
-    pub fn follow_moved_part(&mut self, parts: &[(Token, PathBuf)]) -> bool {
+    /// rare: only this twice-ambiguous case does it, at a start, before the
+    /// endpoint accepts connections (a peer that dials meanwhile sees a lost
+    /// connection and dials again).
+    pub fn follow_moved_part(&mut self, parts: &[(SystemTime, PathBuf)]) -> bool {
         let Some(files) = self.receive_files() else {
             return false;
         };
@@ -590,7 +603,7 @@ impl TransferRecord {
         let claimed = |path: &Path| {
             parts
                 .iter()
-                .any(|(token, part)| *token != self.token && part == path)
+                .any(|(created, part)| *created > self.created && part == path)
         };
         let has_content = |path: &Path| {
             self.done_hash
@@ -721,12 +734,14 @@ pub fn load_all(data_dir: &Path) -> Vec<TransferRecord> {
     records
 }
 
-/// The part file of every receive among `records`, with the record's token
-/// (see [`TransferRecord::follow_moved_part`]).
-fn parts_of<'a>(records: impl IntoIterator<Item = &'a TransferRecord>) -> Vec<(Token, PathBuf)> {
+/// The part file of every receive among `records`, with when the record was
+/// created (see [`TransferRecord::follow_moved_part`]).
+fn parts_of<'a>(
+    records: impl IntoIterator<Item = &'a TransferRecord>,
+) -> Vec<(SystemTime, PathBuf)> {
     records
         .into_iter()
-        .filter_map(|r| Some((r.token, r.receive_files()?.part.clone())))
+        .filter_map(|r| Some((r.created, r.receive_files()?.part.clone())))
         .collect()
 }
 
@@ -1801,7 +1816,7 @@ mod tests {
     /// the sizes tell whether the part moved: in the last step it has all of
     /// the item. When both names have something of its size, the other
     /// records tell, and then the content: the old name keeps the part
-    /// unless another transfer's record names it, or only what has the new
+    /// unless a newer transfer's record names it, or only what has the new
     /// name holds what the sender sent.
     #[test]
     fn a_moved_part_is_followed_on_fat() {
@@ -1821,13 +1836,20 @@ mod tests {
         }
         assert!(r.part_is_there());
         // The records of this start: this one, and one of another transfer
-        // whose part has the same name (it can only have taken it once this
-        // one's part was renamed).
+        // whose part has the same name: a newer one can only have taken it
+        // once this one's part was renamed; an older one had it before this
+        // one (it completed or ended, and its record stayed behind), which
+        // tells nothing.
         let mine = parts_of([&r]);
-        assert_eq!(mine, vec![(r.token, part.clone())]);
+        assert_eq!(mine, vec![(r.created, part.clone())]);
         let mut other = r.clone();
         other.token = [19; 16];
+        other.created = r.created + Duration::from_secs(1);
         let theirs = parts_of([&r, &other]);
+        let mut earlier = r.clone();
+        earlier.token = [20; 16];
+        earlier.created = r.created - Duration::from_secs(1);
+        let stale = parts_of([&r, &earlier]);
 
         // Noted, but not renamed: what has the new name is the user's, also
         // when it is as large as the item, even an identical copy of it
@@ -1848,20 +1870,24 @@ mod tests {
         assert!(moved.follow_moved_part(&mine));
         assert_eq!(moved.placed_item(), Some(placed.as_path()));
         // Renamed, and the other transfer (of the same item) has all of it
-        // under the old name: its record tells the two apart; without one
-        // (another profile's transfer, say), the content does, as far as
-        // it can: an identical copy under the old name is kept as the part.
+        // under the old name: its record tells the two apart if it is the
+        // newer one; without one (another profile's transfer, say), or with
+        // only an older one, the content does, as far as it can: an
+        // identical copy under the old name is kept as the part.
         fs::write(&part, b"0123456789").unwrap();
         assert!(!r.clone().follow_moved_part(&mine));
         assert!(r.clone().follow_moved_part(&theirs));
+        assert!(!r.clone().follow_moved_part(&stale));
         fs::write(&part, b"ten others").unwrap();
         assert!(r.clone().follow_moved_part(&mine));
         assert!(r.clone().follow_moved_part(&theirs));
+        assert!(r.clone().follow_moved_part(&stale));
         // Without the hash (a record of an earlier version), the old name
-        // keeps the part unless a record claims it.
+        // keeps the part unless a newer record claims it.
         let mut unknown = r.clone();
         unknown.done_hash = None;
         assert!(!unknown.clone().follow_moved_part(&mine));
+        assert!(!unknown.clone().follow_moved_part(&stale));
         assert!(unknown.follow_moved_part(&theirs));
         // Renamed, with nothing under the old name.
         fs::remove_file(&part).unwrap();
