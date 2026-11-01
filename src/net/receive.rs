@@ -52,10 +52,11 @@ const QUERY_TIMEOUT: Duration = Duration::from_secs(20);
 /// The part file is flushed to disk, and the amount noted in the record,
 /// after this much new data.
 const SYNC_EVERY: u64 = 64 * 1024 * 1024;
-/// The pauses between attempts to open the part file for a connection while
-/// another program keeps it out (see `open_own_part`): about a second and a
-/// half, after which the sender dials again.
-const OPEN_RETRY_MS: &[u64] = &[50, 100, 200, 400, 800];
+/// How long a connection waits for another program that keeps the part
+/// file out (see `Receiver::open_for_connection`), and how often it tries
+/// again meanwhile. Then the transfer fails with Windows' reason.
+const PART_BUSY_WAIT: Duration = Duration::from_secs(60);
+const PART_BUSY_PAUSE: Duration = Duration::from_secs(1);
 /// Tests set this to stop a folder transfer right before unpacking, to
 /// simulate a shutdown during the last step.
 #[cfg(test)]
@@ -544,28 +545,43 @@ fn prepare_part(
 /// program can write to it, delete it or rename it, so it stays the part
 /// until the connection is over; the user who wants it gone cancels the
 /// transfer, which deletes it through the handle (see `Session::keep_part`).
-/// Another program that has it open keeps it out for a moment at most:
-/// then the connection counts as lost (`Lost`), and the transfer goes on
-/// at the sender's next one. Without a record the transfer is ending, and
-/// nothing is written. Blocking.
+/// Fails at once while another program has it open in a way that keeps it
+/// out (see `archive::is_busy`), which the connection waits for a while
+/// (see `Receiver::open_for_connection`). Without a record the transfer is
+/// ending, and nothing is written. Blocking.
 fn open_own_part(session: &Arc<Session>) -> anyhow::Result<(std::fs::File, KeptPart)> {
-    let Some(record) = session.with_record(TransferRecord::clone) else {
-        bail!(Cancelled);
-    };
+    let (part, _) = open_checked(session, &connection_options(), &[])?;
+    let kept = session.keep_part(&part)?;
+    Ok((part, kept))
+}
+
+/// How a connection opens the part file (see `open_own_part`): to append to
+/// it, as `append` would, and to delete it through a second handle at a
+/// cancel (see `Session::keep_part`); other programs can only read it
+/// meanwhile.
+fn connection_options() -> std::fs::OpenOptions {
     let mut options = std::fs::OpenOptions::new();
-    // What `append` asks for, and delete for a cancel.
     options
         .access_mode((FILE_GENERIC_WRITE & !FILE_WRITE_DATA) | DELETE)
         .share_mode(FILE_SHARE_READ);
-    let part = archive::while_busy(OPEN_RETRY_MS, || record.open_part(&options)).map_err(|e| {
-        if archive::is_busy(&e) {
-            lost(e)
-        } else {
-            e.into()
-        }
-    })?;
-    let kept = session.keep_part(&part)?;
-    Ok((part, kept))
+    options
+}
+
+/// Opens the part file of the receive with `options` if it is still the
+/// part (see `TransferRecord::open_part`), trying again while another
+/// program keeps it out, pausing as `pauses` says (see
+/// `archive::while_busy`). Returns it with the record it was checked
+/// against. Fails with `Cancelled` once the transfer has ended. Blocking.
+fn open_checked(
+    session: &Session,
+    options: &std::fs::OpenOptions,
+    pauses: &[u64],
+) -> io::Result<(std::fs::File, TransferRecord)> {
+    let record = session
+        .with_record(TransferRecord::clone)
+        .ok_or_else(|| io::Error::other(Cancelled))?;
+    let part = archive::while_busy(pauses, || record.open_part(options))?;
+    Ok((part, record))
 }
 
 /// Asks the sender whether it still has the transfer. `Some(completed)` if it
@@ -1011,17 +1027,7 @@ impl<'a> Receiver<'a> {
         // Opened before anything else: the part is checked on the handle
         // that is written to, and stays the part while it is hashed after a
         // restart (see `open_own_part`).
-        let session = self.session.clone();
-        let (out, kept) = match off_runtime(move || open_own_part(&session)).await {
-            Ok(opened) => opened,
-            Err(e) => {
-                // Held by another program for now: the sender dials again.
-                if e.is::<Lost>() {
-                    self.session.close_current(CLOSE_SUSPENDED, b"busy");
-                }
-                return Err(e);
-            }
-        };
+        let (out, kept) = self.open_for_connection().await?;
         let mut out = tokio::fs::File::from_std(out);
         self.rehash().await?;
         self.emit_pause_phase();
@@ -1071,6 +1077,29 @@ impl<'a> Receiver<'a> {
             message: String::new(),
         });
         Ok(placed)
+    }
+
+    /// Opens the part file for the connection (see `open_own_part`). While
+    /// another program keeps it out, such as a virus scanner or a sync
+    /// client that reads it, this tries again for a minute at most: the
+    /// sender meanwhile waits for the data it sent to be read, and nothing
+    /// else goes over the network. Then the transfer fails, with Windows'
+    /// reason.
+    async fn open_for_connection(&self) -> anyhow::Result<(std::fs::File, KeptPart)> {
+        let mut waited = Duration::ZERO;
+        loop {
+            let session = self.session.clone();
+            match off_runtime(move || open_own_part(&session)).await {
+                Err(e)
+                    if waited < PART_BUSY_WAIT
+                        && e.downcast_ref::<io::Error>().is_some_and(archive::is_busy) =>
+                {
+                    tokio::time::sleep(PART_BUSY_PAUSE).await;
+                    waited += PART_BUSY_PAUSE;
+                }
+                opened => return opened,
+            }
+        }
     }
 
     /// Notes in the record how much of the part file is on disk.
@@ -1208,21 +1237,20 @@ impl Transfer {
     /// connection and this step, so it may have been deleted and its name
     /// taken by another file, which is not this transfer's. Returns it with
     /// its identity: as the record knows it, or as it is now in a record of
-    /// an earlier version, which trusts the name. While it is open, other
-    /// programs can only read it, so what the step renames or unpacks is
-    /// what was checked.
-    fn open_part(&self) -> io::Result<(std::fs::File, FileId)> {
-        let record = self
-            .session
-            .with_record(TransferRecord::clone)
-            .ok_or_else(|| io::Error::other(Cancelled))?;
+    /// an earlier version, which trusts the name. What the step renames or
+    /// unpacks is what was checked, through this handle, whatever happens to
+    /// the name meanwhile. With `renames`, the handle can rename the part and
+    /// give it its creation time back (see `moved`), which keeps out another
+    /// program that has it open without letting it be deleted, as a rename
+    /// by name would, for a few seconds at most; otherwise it only reads.
+    fn open_part(&self, renames: bool) -> io::Result<(std::fs::File, FileId)> {
         let mut options = std::fs::OpenOptions::new();
-        // To unpack it, to give it its creation time back after a rename
-        // (see `moved`), and to rename it.
-        options
-            .access_mode(FILE_GENERIC_READ | FILE_WRITE_ATTRIBUTES | DELETE)
-            .share_mode(FILE_SHARE_READ);
-        let part = archive::while_busy(archive::RENAME_RETRY_MS, || record.open_part(&options))?;
+        options.access_mode(if renames {
+            FILE_GENERIC_READ | FILE_WRITE_ATTRIBUTES | DELETE
+        } else {
+            FILE_GENERIC_READ
+        });
+        let (part, record) = open_checked(&self.session, &options, archive::RENAME_RETRY_MS)?;
         let id = match record.part_identity() {
             Some(id) => id,
             None => FileId::of(&part)?,
@@ -1326,7 +1354,7 @@ fn finish_file(
     times: ItemTimes,
 ) -> anyhow::Result<PathBuf> {
     let mut files = transfer.files()?;
-    let (part, id) = transfer.open_part()?;
+    let (part, id) = transfer.open_part(true)?;
     let (now, later) = times.split(Some(&id));
     let path = transfer.place(&mut || {
         let path = transfer.move_part(&mut files, &part, id, dest, name)?;
@@ -1366,7 +1394,11 @@ fn finish_folder(
     progress: &mut dyn FnMut(u64, u64),
 ) -> anyhow::Result<PathBuf> {
     let mut files = transfer.files()?;
-    let (part, id) = transfer.open_part()?;
+    let both = folder == ReceivedFolder::Both;
+    // A zip that is kept is renamed; one that is only unpacked, or that has
+    // its name already (after a restart), is only read.
+    let renames = folder == ReceivedFolder::KeepZip || (both && !files.part_in_place());
+    let (part, id) = transfer.open_part(renames)?;
     if folder == ReceivedFolder::KeepZip {
         return transfer.place(&mut || {
             Ok(transfer.move_part(&mut files, &part, id, dest, &zip_name(name))?)
@@ -1381,7 +1413,6 @@ fn finish_folder(
     {
         files.leftovers.push(earlier);
     }
-    let both = folder == ReceivedFolder::Both;
     let target = if both && !files.part_in_place() {
         new_pair(transfer, &mut files, &part, id, dest, name)?
     } else {
@@ -1599,6 +1630,45 @@ mod tests {
         std::fs::remove_dir_all(&base).ok();
     }
 
+    /// The end of a running transfer tries again for a moment to delete a
+    /// part that another program holds open, such as a virus scanner that
+    /// reads it; a start leaves it for the next one instead of waiting (see
+    /// `session::remove_file`).
+    #[test]
+    fn the_end_of_a_transfer_waits_a_moment_for_a_held_part() {
+        let base = scratch("held-at-end");
+        let part = base.join("a.txt.part");
+        let held = |part: &Path| {
+            std::fs::OpenOptions::new()
+                .read(true)
+                .share_mode(FILE_SHARE_READ)
+                .open(part)
+                .unwrap()
+        };
+        std::fs::write(&part, b"abc").unwrap();
+        let transfer = receiving(&base, &part, Kind::File, ReceivedFolder::Extract);
+        let scanner = held(&part);
+        let reading = std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(200));
+            drop(scanner);
+        });
+        assert!(transfer.session.cancel_blocking(&transfer.data_dir));
+        reading.join().unwrap();
+        assert!(!part.exists());
+        assert!(session::records(&transfer.data_dir).is_empty());
+
+        std::fs::write(&part, b"abc").unwrap();
+        let transfer = receiving(&base, &part, Kind::File, ReceivedFolder::Extract);
+        let record = transfer.session.with_record(TransferRecord::clone).unwrap();
+        let scanner = held(&part);
+        record.discard(&transfer.data_dir);
+        drop(scanner);
+        assert!(part.exists());
+        let left = session::records(&transfer.data_dir);
+        assert!(left.len() == 1 && left[0].ended, "for the next start");
+        std::fs::remove_dir_all(&base).ok();
+    }
+
     /// A cancel that comes while a connection opens the part, before the
     /// connection keeps it (see `Session::keep_part`), deletes it too: the
     /// connection gives up as cancelled, and the part goes once it is closed.
@@ -1608,12 +1678,7 @@ mod tests {
         let part = base.join("a.txt.part");
         std::fs::write(&part, b"abc").unwrap();
         let transfer = receiving(&base, &part, Kind::File, ReceivedFolder::Extract);
-        let record = transfer.session.with_record(TransferRecord::clone).unwrap();
-        let mut options = std::fs::OpenOptions::new();
-        options
-            .access_mode((FILE_GENERIC_WRITE & !FILE_WRITE_DATA) | DELETE)
-            .share_mode(FILE_SHARE_READ);
-        let opened = record.open_part(&options).unwrap();
+        let (opened, _) = open_checked(&transfer.session, &connection_options(), &[]).unwrap();
         assert!(transfer.session.cancel_blocking(&transfer.data_dir));
         let e = transfer.session.keep_part(&opened).err().unwrap();
         assert!(archive::is_cancelled(&e.into()));
@@ -1623,25 +1688,47 @@ mod tests {
     }
 
     /// Another program that has the part open for writing keeps a
-    /// connection out for a moment, after which the connection counts as
-    /// lost, never as failed, which would throw the data away; one that lets
-    /// go of it in time keeps nothing out.
+    /// connection out, which then waits for it (see
+    /// `Receiver::open_for_connection`), and nothing else; once it lets go,
+    /// the part opens.
     #[test]
-    fn a_part_held_elsewhere_loses_the_connection() {
+    fn a_part_held_elsewhere_keeps_a_connection_out() {
         let base = scratch("busy-part");
         let part = base.join("a.txt.part");
         std::fs::write(&part, b"abc").unwrap();
         let transfer = receiving(&base, &part, Kind::File, ReceivedFolder::Extract);
         let other = std::fs::OpenOptions::new().write(true).open(&part).unwrap();
         let e = open_own_part(&transfer.session).err().unwrap();
-        assert!(e.is::<Lost>(), "{e:#}");
-        let letting_go = std::thread::spawn(move || {
-            std::thread::sleep(Duration::from_millis(300));
-            drop(other);
-        });
+        assert!(
+            e.downcast_ref::<io::Error>().is_some_and(archive::is_busy),
+            "{e:#}"
+        );
+        drop(other);
         drop(open_own_part(&transfer.session).unwrap());
-        letting_go.join().unwrap();
         assert_eq!(std::fs::read(&part).unwrap(), b"abc");
+        std::fs::remove_dir_all(&base).ok();
+    }
+
+    /// The last step of a folder that is only unpacked does not rename its
+    /// part, so it only reads it: another program that has it open for
+    /// writing, or without letting it be deleted, does not stop it. One
+    /// that renames needs more, as a rename by name did.
+    #[test]
+    fn a_part_that_is_only_unpacked_is_only_read() {
+        let base = scratch("only-read");
+        let part = received_zip(&base, "recv.zip");
+        let dest = part.parent().unwrap().to_path_buf();
+        let transfer = receiving(&base, &part, Kind::Folder, ReceivedFolder::Extract);
+        let other = std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .share_mode(FILE_SHARE_READ | windows_sys::Win32::Storage::FileSystem::FILE_SHARE_WRITE)
+            .open(&part)
+            .unwrap();
+        let (t, _) = times(1_500_000_000);
+        let folder = finish(&transfer, &dest, ReceivedFolder::Extract, t);
+        assert_eq!(std::fs::read(folder.join("a.txt")).unwrap(), b"alpha");
+        drop(other);
         std::fs::remove_dir_all(&base).ok();
     }
 

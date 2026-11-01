@@ -213,22 +213,39 @@ impl Owned {
     }
 
     /// Deletes the file if it is still this one; whether it is gone (as
-    /// with [`remove_folder`](Self::remove_folder)).
-    fn remove_file(&self) -> bool {
-        match archive::file_id(&self.path) {
-            Ok(now) if self.id.same_item(&now) => remove_file(&self.path),
-            Ok(_) => true,
-            Err(e) => e.kind() == io::ErrorKind::NotFound,
-        }
+    /// with [`remove_folder`](Self::remove_folder)). `patient` as with
+    /// [`remove_file`].
+    fn remove_file(&self, patient: bool) -> bool {
+        deleted(patient, || match archive::file_id(&self.path) {
+            Ok(now) if self.id.same_item(&now) => fs::remove_file(&self.path),
+            Ok(_) => Ok(()),
+            Err(e) => Err(e),
+        })
     }
 }
 
-/// Deletes a file; whether it is gone. One that another program holds open
-/// now stays for a later try (see [`TransferRecord::discard`]). The part of
-/// a receive that a connection writes to is deleted through the
-/// connection's handle instead (see [`Session::keep_part`]).
-fn remove_file(path: &Path) -> bool {
-    match fs::remove_file(path) {
+/// Deletes a file; whether it is gone. With `patient` (at the end of a
+/// running transfer, off the runtime's worker threads), one that another
+/// program holds open for a moment, such as a virus scanner, or that is
+/// being deleted already (a part whose connection was opening it when the
+/// transfer ended, see [`Session::keep_part`]), is tried again for about a
+/// second and a half. Otherwise, as at a start, it stays for a later try
+/// (see [`TransferRecord::discard`]). The part of a receive that a
+/// connection writes to is deleted through the connection's handle instead.
+fn remove_file(path: &Path, patient: bool) -> bool {
+    deleted(patient, || fs::remove_file(path))
+}
+
+/// Runs `delete`, with `patient` again while the file is held or being
+/// deleted (see [`remove_file`]); whether it is gone.
+fn deleted(patient: bool, delete: impl FnMut() -> io::Result<()>) -> bool {
+    let pauses: &[u64] = if patient {
+        &[50, 100, 200, 400, 800]
+    } else {
+        &[]
+    };
+    let held = |e: &io::Error| archive::is_busy(e) || e.kind() == io::ErrorKind::PermissionDenied;
+    match archive::retried(pauses, held, delete) {
         Ok(()) => true,
         Err(e) => e.kind() == io::ErrorKind::NotFound,
     }
@@ -371,9 +388,16 @@ impl TransferRecord {
             ..
         } = &self.side
         {
-            let part = self.open_part(fs::OpenOptions::new().write(true))?;
-            if part.metadata()?.len() > *synced {
-                part.set_len(*synced)?;
+            let len = self
+                .open_part(fs::OpenOptions::new().access_mode(0))?
+                .metadata()?
+                .len();
+            // Only then for writing: the part, or the item already in place,
+            // may be read-only, or open in a program that lets nothing else
+            // write to it.
+            if len > *synced {
+                self.open_part(fs::OpenOptions::new().write(true))?
+                    .set_len(*synced)?;
             }
         }
         Ok(())
@@ -473,12 +497,13 @@ impl TransferRecord {
     }
 
     /// Deletes the part file of a receive if it is still this transfer's
-    /// (see [`Owned::remove_file`]); whether it is gone.
-    fn remove_part(&self) -> bool {
+    /// (see [`Owned::remove_file`]); whether it is gone. `patient` as with
+    /// [`remove_file`].
+    fn remove_part(&self, patient: bool) -> bool {
         match (self.receive_files(), self.owned_part()) {
             (Some(files), _) if files.part_gone => true,
-            (Some(_), Some(part)) => part.remove_file(),
-            (Some(files), None) => remove_file(&files.part),
+            (Some(_), Some(part)) => part.remove_file(patient),
+            (Some(files), None) => remove_file(&files.part, patient),
             (None, _) => true,
         }
     }
@@ -543,11 +568,16 @@ impl TransferRecord {
     /// which is written first, says that the transfer completed (see
     /// [`load_all`]).
     pub fn complete(&self, data_dir: &Path) {
+        self.complete_with(data_dir, false);
+    }
+
+    /// [`complete`](Self::complete), with `patient` as with [`remove_file`].
+    fn complete_with(&self, data_dir: &Path, patient: bool) {
         match &self.side {
             Side::Receive { files, .. } => {
                 self.remove(data_dir);
                 if self.part_is_temporary() {
-                    let _ = fs::remove_file(&files.part);
+                    remove_file(&files.part, patient);
                 }
                 // Once: the record that would keep trying is gone.
                 for folder in &files.leftovers {
@@ -557,7 +587,7 @@ impl TransferRecord {
             // No need to mark the record as ended first (see `discard`): one
             // that is left completes at the next start.
             Side::Send { .. } => {
-                if self.delete_files().is_none() {
+                if self.delete_files(patient).is_none() {
                     self.remove(data_dir);
                 }
             }
@@ -585,13 +615,28 @@ impl TransferRecord {
     /// another transfer's, and on FAT and exFAT only the name would tell
     /// (see [`Owned`]).
     pub fn discard(&self, data_dir: &Path) {
+        self.discard_with(data_dir, None, false);
+    }
+
+    /// [`discard`](Self::discard) at the end of a running transfer: `open`
+    /// is a second handle to the part file of a receive whose connection
+    /// still writes to it (see [`Session::keep_part`]), which cannot be
+    /// deleted by its name then and goes through that handle once the
+    /// connection lets go of it. `patient` as with [`remove_file`].
+    fn discard_with(&self, data_dir: &Path, open: Option<&fs::File>, patient: bool) {
         let mut record = self.clone();
         if record.end_now() {
             let _ = record.save(data_dir);
         }
-        match record.delete_files() {
+        let noted = record.clone();
+        if let Some(part) = open
+            && archive::delete_on_close(part).is_ok()
+        {
+            record.mark_part_gone();
+        }
+        match record.delete_files(patient) {
             None => record.remove(data_dir),
-            Some(left) if left != record => {
+            Some(left) if left != noted => {
                 let _ = left.save(data_dir);
             }
             Some(_) => {}
@@ -603,21 +648,21 @@ impl TransferRecord {
     /// forgets the record however that went, so that no later start tries
     /// again.
     pub fn give_up(&self, data_dir: &Path) {
-        let _ = self.delete_files();
+        let _ = self.delete_files(false);
         self.remove(data_dir);
     }
 
     /// Deletes what a transfer that ends without its item leaves behind (see
     /// [`discard`](Self::discard)), and nothing else. `None` if all of it is
     /// gone, otherwise the record as it is left: naming only what could not
-    /// be deleted.
-    fn delete_files(&self) -> Option<TransferRecord> {
+    /// be deleted. `patient` as with [`remove_file`].
+    fn delete_files(&self, patient: bool) -> Option<TransferRecord> {
         match &self.side {
             Side::Send {
                 source, data_path, ..
-            } => (data_path != source && !remove_file(data_path)).then(|| self.clone()),
+            } => (data_path != source && !remove_file(data_path, patient)).then(|| self.clone()),
             Side::Receive { files, .. } => {
-                let part = self.remove_part();
+                let part = self.remove_part(patient);
                 // Every one is tried, whether or not the others go.
                 let kept = files
                     .unpacking
@@ -1294,8 +1339,8 @@ pub(crate) struct Ending {
     completed: bool,
     /// The session's lock for writing the record (see `Session::writing`).
     writing: Option<Arc<Mutex<()>>>,
-    /// The part file of a receive, if a connection was writing to it (see
-    /// [`Session::keep_part`]).
+    /// A second handle to the part file of a receive, if a connection was
+    /// writing to it (see [`Session::keep_part`]).
     part: Option<fs::File>,
 }
 
@@ -1310,21 +1355,21 @@ impl Ending {
         }
     }
 
+    /// Leaves a tombstone for the transfer and forgets its record, with what
+    /// [`TransferRecord::complete`] or [`TransferRecord::discard`] deletes,
+    /// trying again for a moment where a file is held (see `remove_file`).
     pub fn forget_blocking(self, data_dir: &Path) {
         // After a save that is still under way, which would otherwise bring
         // the record back once it is deleted.
         let _writing = self.writing.as_deref().map(lock);
-        let mut record = self.record.map(|r| *r);
-        // A part that a connection still writes to cannot be deleted by its
-        // name; it goes once that is over.
-        if let (Some(part), Some(record)) = (&self.part, &mut record)
-            && !self.completed
-            && archive::delete_on_close(part).is_ok()
-        {
-            record.mark_part_gone();
+        if let Some(record) = self.record {
+            write_tombstone(data_dir, &record.token, self.completed);
+            if self.completed {
+                record.complete_with(data_dir, true);
+            } else {
+                record.discard_with(data_dir, self.part.as_ref(), true);
+            }
         }
-        drop(self.part);
-        forget(data_dir, record, self.completed);
     }
 
     /// Like [`forget_blocking`](Self::forget_blocking), off the runtime's
@@ -1415,7 +1460,9 @@ impl Session {
     /// has ended while the part was opened, which only a cancel does then:
     /// the part goes once `part` is closed. Blocking.
     pub fn keep_part(self: &Arc<Self>, part: &fs::File) -> io::Result<KeptPart> {
-        let second = part.try_clone()?;
+        // Without it, the end deletes the part by its name, trying again for
+        // a moment (see `remove_file`).
+        let second = part.try_clone().ok();
         let mut kept = lock(&self.open_part);
         // Under that lock: the end takes the handle after the record (see
         // `ending`), so it gets this one, or the record is gone already.
@@ -1424,7 +1471,7 @@ impl Session {
             let _ = archive::delete_on_close(part);
             return Err(io::Error::other(Cancelled));
         }
-        *kept = Some(second);
+        *kept = second;
         Ok(KeptPart(self.clone()))
     }
 
@@ -1797,19 +1844,6 @@ impl Session {
     }
 }
 
-/// Leaves a tombstone for an ended transfer and forgets its record, with
-/// what `complete` or `discard` deletes.
-fn forget(data_dir: &Path, record: Option<TransferRecord>, completed: bool) {
-    if let Some(record) = record {
-        write_tombstone(data_dir, &record.token, completed);
-        if completed {
-            record.complete(data_dir);
-        } else {
-            record.discard(data_dir);
-        }
-    }
-}
-
 /// What the user can do to a running transfer.
 pub(crate) struct Control {
     pub cancel: CancelToken,
@@ -1955,6 +1989,29 @@ mod tests {
             part_id: None,
             folder: ReceivedFolder::Extract,
         }
+    }
+
+    /// A part with no more than what is known to be on disk is not opened
+    /// for writing: it may be open in a program that lets nothing else
+    /// write to it, such as an item already in place that the user opened.
+    /// One with more is cut.
+    #[test]
+    fn a_part_with_nothing_to_cut_is_left_alone() {
+        let dir = scratch("nothing-to-cut");
+        let part = dir.join("a.docx");
+        fs::write(&part, b"12345").unwrap();
+        let r = record(37, receive_side(&dir, &part, Some(5)));
+        let other = fs::OpenOptions::new()
+            .read(true)
+            .share_mode(windows_sys::Win32::Storage::FileSystem::FILE_SHARE_READ)
+            .open(&part)
+            .unwrap();
+        r.truncate_to_synced().unwrap();
+        drop(other);
+        fs::write(&part, b"1234567").unwrap();
+        r.truncate_to_synced().unwrap();
+        assert_eq!(fs::read(&part).unwrap(), b"12345");
+        fs::remove_dir_all(&dir).ok();
     }
 
     #[test]

@@ -23,10 +23,10 @@ use windows_sys::Win32::{
     },
     Storage::FileSystem::{
         BY_HANDLE_FILE_INFORMATION, FILE_DISPOSITION_INFO, FILE_FLAG_BACKUP_SEMANTICS,
-        FILE_FLAG_OPEN_REPARSE_POINT, FILE_ID_INFO, FILE_RENAME_INFO, FILE_WRITE_ATTRIBUTES,
-        FileDispositionInfo, FileIdInfo, FileRenameInfo, FindClose, FindFirstFileW,
-        GetFileInformationByHandle, GetFileInformationByHandleEx, GetVolumeInformationByHandleW,
-        MoveFileExW, SetFileInformationByHandle, WIN32_FIND_DATAW,
+        FILE_FLAG_OPEN_REPARSE_POINT, FILE_ID_INFO, FILE_INFO_BY_HANDLE_CLASS, FILE_RENAME_INFO,
+        FILE_WRITE_ATTRIBUTES, FileDispositionInfo, FileIdInfo, FileRenameInfo, FindClose,
+        FindFirstFileW, GetFileInformationByHandle, GetFileInformationByHandleEx,
+        GetVolumeInformationByHandleW, MoveFileExW, SetFileInformationByHandle, WIN32_FIND_DATAW,
     },
     System::Time::{FileTimeToSystemTime, SystemTimeToTzSpecificLocalTime},
 };
@@ -943,21 +943,7 @@ pub fn rename_open(file: &File, to: &Path) -> io::Result<()> {
         std::ptr::copy_nonoverlapping(name.as_ptr(), start.add(offset).cast(), name.len());
     }
     renamed(to, || {
-        // SAFETY: the handle is open, and the call reads `size` bytes of the
-        // buffer, which outlives it.
-        let ok = unsafe {
-            SetFileInformationByHandle(
-                file.as_raw_handle(),
-                FileRenameInfo,
-                info.as_ptr().cast(),
-                size as u32,
-            )
-        } != 0;
-        if ok {
-            Ok(())
-        } else {
-            Err(io::Error::last_os_error())
-        }
+        set_file_info(file, FileRenameInfo, info.as_slice(), size)
     })
 }
 
@@ -965,31 +951,48 @@ pub fn rename_open(file: &File, to: &Path) -> io::Result<()> {
 /// fails with `AlreadyExists` where the name is taken (see [`is_taken`]), and
 /// tries again for a few seconds while another program blocks it.
 fn renamed(to: &Path, rename: impl FnMut() -> io::Result<()>) -> io::Result<()> {
+    // Of the last error: whether the name is taken.
+    let mut taken = false;
     let blocked = |e: &io::Error| {
-        !is_taken(e, to) && (is_busy(e) || e.raw_os_error() == Some(ERROR_ACCESS_DENIED as i32))
+        taken = is_taken(e, to);
+        !taken && (is_busy(e) || e.raw_os_error() == Some(ERROR_ACCESS_DENIED as i32))
     };
-    retried(RENAME_RETRY_MS, blocked, rename).map_err(|e| {
-        if is_taken(&e, to) {
-            io::Error::new(io::ErrorKind::AlreadyExists, e)
-        } else {
-            e
-        }
-    })
+    match retried(RENAME_RETRY_MS, blocked, rename) {
+        Err(e) if taken => Err(io::Error::new(io::ErrorKind::AlreadyExists, e)),
+        done => done,
+    }
 }
 
 /// Deletes the open file `file` once the last handle to it is closed; until
 /// then it keeps its name (see [`name_taken`]), and nothing can open it. The
 /// handle needs delete access.
 pub fn delete_on_close(file: &File) -> io::Result<()> {
-    let info = FILE_DISPOSITION_INFO { DeleteFile: true };
-    // SAFETY: the handle is open, and the call reads the local structure of
-    // the given size.
+    let info = [FILE_DISPOSITION_INFO { DeleteFile: true }];
+    set_file_info(
+        file,
+        FileDispositionInfo,
+        &info,
+        size_of::<FILE_DISPOSITION_INFO>(),
+    )
+}
+
+/// Changes what `class` says of the open file `file`
+/// (`SetFileInformationByHandle`) to the first `size` bytes of `info`.
+fn set_file_info<T>(
+    file: &File,
+    class: FILE_INFO_BY_HANDLE_CLASS,
+    info: &[T],
+    size: usize,
+) -> io::Result<()> {
+    assert!(size <= size_of_val(info));
+    // SAFETY: the handle is open, and the call reads `size` bytes of `info`,
+    // which has them and outlives it.
     let ok = unsafe {
         SetFileInformationByHandle(
             file.as_raw_handle(),
-            FileDispositionInfo,
-            (&raw const info).cast(),
-            size_of::<FILE_DISPOSITION_INFO>() as u32,
+            class,
+            info.as_ptr().cast(),
+            size as u32,
         )
     } != 0;
     if ok {
@@ -1018,9 +1021,9 @@ pub fn while_busy<T>(pauses: &[u64], open: impl FnMut() -> io::Result<T>) -> io:
 /// Runs `op` until it works or fails other than as `busy` says, pausing
 /// between attempts as `pauses` says (in ms); the last error once they are
 /// over.
-fn retried<T>(
+pub fn retried<T>(
     pauses: &[u64],
-    busy: impl Fn(&io::Error) -> bool,
+    mut busy: impl FnMut(&io::Error) -> bool,
     mut op: impl FnMut() -> io::Result<T>,
 ) -> io::Result<T> {
     let mut pauses = pauses.iter();
