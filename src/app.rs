@@ -154,6 +154,7 @@ impl Transfer {
             Some(Phase::Paused) => tr!(tx_paused),
             Some(Phase::PausedByPeer) => tr!(tx_paused_by_peer),
             Some(Phase::WaitingForConnection { .. }) => tr!(tx_waiting_connection),
+            Some(Phase::PartInUse) => tr!(tx_part_in_use),
             Some(Phase::Verifying) => tr!(tx_verifying),
             Some(Phase::Unpacking) => tr!(tx_unpacking),
             Some(Phase::PeerUnpacking) => tr!(tx_peer_unpacking),
@@ -166,6 +167,7 @@ impl Transfer {
                         | Phase::Paused
                         | Phase::PausedByPeer
                         | Phase::WaitingForConnection { .. }
+                        | Phase::PartInUse
                 )
             );
         if with_percent {

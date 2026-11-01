@@ -321,6 +321,7 @@ fn keeps_progress(phase: Phase) -> bool {
             | Phase::Paused
             | Phase::PausedByPeer
             | Phase::WaitingForConnection { .. }
+            | Phase::PartInUse
     )
 }
 
@@ -382,6 +383,7 @@ impl Progress {
             Phase::Paused => tr!(phase_paused).to_string(),
             Phase::PausedByPeer => tr!(phase_paused_by_peer, name = self.peer),
             Phase::WaitingForConnection { .. } => tr!(phase_waiting_connection).to_string(),
+            Phase::PartInUse => tr!(phase_part_in_use).to_string(),
             Phase::Verifying => tr!(phase_verifying).to_string(),
             Phase::Unpacking => tr!(phase_unpacking).to_string(),
             Phase::PeerUnpacking => tr!(phase_peer_unpacking, name = self.peer),
@@ -490,10 +492,17 @@ impl Progress {
             // Being cancelled otherwise: the transfer ends for the cancel in
             // a moment, and the result says so.
             _ if self.closing || self.cancel_requested => None,
+            // The status line changes, which a screen reader does not say.
+            Phase::PartInUse if previous != Some(phase) => Some((
+                tr!(part_in_use_balloon_title).to_string(),
+                tr!(part_in_use_balloon, item = self.item),
+            )),
             Phase::Transferring
                 if matches!(
                     previous,
-                    Some(Phase::PausedByPeer | Phase::WaitingForConnection { .. })
+                    Some(
+                        Phase::PausedByPeer | Phase::WaitingForConnection { .. } | Phase::PartInUse
+                    )
                 ) =>
             {
                 Some((

@@ -92,6 +92,9 @@ pub enum Phase {
     WaitingForConnection {
         lost: bool,
     },
+    /// Receiving side: connected, but another program keeps the partly
+    /// received file out; the transfer continues as soon as it lets go.
+    PartInUse,
     /// Hashing data that was already transferred before continuing.
     Verifying,
     Unpacking,

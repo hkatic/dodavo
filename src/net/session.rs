@@ -216,7 +216,7 @@ impl Owned {
     /// with [`remove_folder`](Self::remove_folder)). `patient` as with
     /// [`remove_file`].
     fn remove_file(&self, patient: bool) -> bool {
-        deleted(patient, || match archive::file_id(&self.path) {
+        deleted(&self.path, patient, || match archive::file_id(&self.path) {
             Ok(now) if self.id.same_item(&now) => fs::remove_file(&self.path),
             Ok(_) => Ok(()),
             Err(e) => Err(e),
@@ -233,19 +233,19 @@ impl Owned {
 /// (see [`TransferRecord::discard`]). The part of a receive that a
 /// connection writes to is deleted through the connection's handle instead.
 fn remove_file(path: &Path, patient: bool) -> bool {
-    deleted(patient, || fs::remove_file(path))
+    deleted(path, patient, || fs::remove_file(path))
 }
 
-/// Runs `delete`, with `patient` again while the file is held or being
-/// deleted (see [`remove_file`]); whether it is gone.
-fn deleted(patient: bool, delete: impl FnMut() -> io::Result<()>) -> bool {
-    let pauses: &[u64] = if patient {
-        &[50, 100, 200, 400, 800]
+/// Runs `delete`, which deletes the file at `path`, with `patient` again
+/// while the file is held or being deleted (see [`remove_file`] and
+/// [`archive::delete_held`]); whether it is gone.
+fn deleted(path: &Path, patient: bool, delete: impl FnMut() -> io::Result<()>) -> bool {
+    let pauses = if patient {
+        archive::DELETE_RETRY_MS
     } else {
         &[]
     };
-    let held = |e: &io::Error| archive::is_busy(e) || e.kind() == io::ErrorKind::PermissionDenied;
-    match archive::retried(pauses, held, delete) {
+    match archive::retried(pauses, |e| archive::delete_held(e, path), delete) {
         Ok(()) => true,
         Err(e) => e.kind() == io::ErrorKind::NotFound,
     }
@@ -368,10 +368,7 @@ impl TransferRecord {
     pub fn have(&self) -> u64 {
         match &self.side {
             Side::Receive { synced, .. } => {
-                let len = self
-                    .open_part(fs::OpenOptions::new().access_mode(0))
-                    .and_then(|part| part.metadata())
-                    .map_or(0, |m| m.len());
+                let len = self.part_len().unwrap_or(0);
                 synced.map_or(len, |s| s.min(len))
             }
             Side::Send { .. } if self.done_hash.is_some() => self.offer.size,
@@ -388,19 +385,22 @@ impl TransferRecord {
             ..
         } = &self.side
         {
-            let len = self
-                .open_part(fs::OpenOptions::new().access_mode(0))?
-                .metadata()?
-                .len();
             // Only then for writing: the part, or the item already in place,
             // may be read-only, or open in a program that lets nothing else
             // write to it.
-            if len > *synced {
+            if self.part_len()? > *synced {
                 self.open_part(fs::OpenOptions::new().write(true))?
                     .set_len(*synced)?;
             }
         }
         Ok(())
+    }
+
+    /// The length of the part file of a receive, if it is still the part
+    /// (see [`open_part`](Self::open_part)).
+    fn part_len(&self) -> io::Result<u64> {
+        let part = self.open_part(fs::OpenOptions::new().access_mode(0))?;
+        Ok(part.metadata()?.len())
     }
 
     /// Opens the part file of a receive with `options` if it is still the

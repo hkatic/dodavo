@@ -1002,6 +1002,29 @@ fn set_file_info<T>(
     }
 }
 
+/// The pauses between attempts to delete a file that is held for a moment
+/// (see [`delete_held`]): about a second and a half in all.
+pub const DELETE_RETRY_MS: &[u64] = &[50, 100, 200, 400, 800];
+
+/// Whether deleting the file at `path` failed with `error` only for now:
+/// another program has it open (see [`is_busy`]), or it is being deleted
+/// already and goes once the last program lets go of it (see
+/// [`being_deleted`]). Not where it is read-only, or may not be deleted.
+pub fn delete_held(error: &io::Error, path: &Path) -> bool {
+    is_busy(error) || (error.kind() == io::ErrorKind::PermissionDenied && being_deleted(path))
+}
+
+/// Whether the file at `path` is being deleted: it was deleted while a
+/// program still has it open, so it keeps its name but cannot be opened
+/// (see [`name_taken`]).
+pub fn being_deleted(path: &Path) -> bool {
+    let opened = OpenOptions::new()
+        .access_mode(0)
+        .custom_flags(FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT)
+        .open(path);
+    opened.is_err_and(|e| e.kind() == io::ErrorKind::PermissionDenied) && listed(path)
+}
+
 /// Whether another program has the file open in a way that keeps this one
 /// out for now: a sharing or lock violation.
 pub fn is_busy(error: &io::Error) -> bool {
@@ -1500,6 +1523,15 @@ mod tests {
         drop(deleting);
         assert!(File::open(&path).is_err(), "cannot be opened now");
         assert!(listed(&path) && name_taken(&path));
+        assert!(being_deleted(&path));
+        let denied = io::Error::from_raw_os_error(ERROR_ACCESS_DENIED as i32);
+        assert!(delete_held(&denied, &path));
+        // A file that may not be deleted (by an access rule, say) is not:
+        // trying again never helps.
+        let kept = base.join("kept.txt");
+        std::fs::write(&kept, b"k").unwrap();
+        assert!(!being_deleted(&kept) && !delete_held(&denied, &kept));
+        assert!(!being_deleted(&base.join("none.txt")));
         assert!(!listed(&base.join("b.txt")) && !listed(&base.join("a*.txt")));
         // `<`, `>` and `"` are wildcards too: never used as a pattern.
         assert!(!listed(&base.join("a<")) && !listed(&base.join("a\"txt")));

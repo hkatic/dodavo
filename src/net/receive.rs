@@ -52,10 +52,8 @@ const QUERY_TIMEOUT: Duration = Duration::from_secs(20);
 /// The part file is flushed to disk, and the amount noted in the record,
 /// after this much new data.
 const SYNC_EVERY: u64 = 64 * 1024 * 1024;
-/// How long a connection waits for another program that keeps the part
-/// file out (see `Receiver::open_for_connection`), and how often it tries
-/// again meanwhile. Then the transfer fails with Windows' reason.
-const PART_BUSY_WAIT: Duration = Duration::from_secs(60);
+/// How often a connection tries again to open the part file while another
+/// program keeps it out (see `Receiver::open_for_connection`).
 const PART_BUSY_PAUSE: Duration = Duration::from_secs(1);
 /// Tests set this to stop a folder transfer right before unpacking, to
 /// simulate a shutdown during the last step.
@@ -152,14 +150,29 @@ impl Drop for Syncing {
     }
 }
 
-/// The status while connected.
-fn pause_phase(local: bool, peer: bool) -> Phase {
-    if local {
-        Phase::Paused
-    } else if peer {
-        Phase::PausedByPeer
-    } else {
-        Phase::Transferring
+/// What holds a connected receive up besides the user's pause, for the
+/// status (see [`phase`](Self::phase)).
+#[derive(Default)]
+struct HeldUp {
+    /// The sender paused the transfer.
+    peer_paused: AtomicBool,
+    /// Another program keeps the part file out (see
+    /// `Receiver::open_for_connection`).
+    part_in_use: AtomicBool,
+}
+
+impl HeldUp {
+    /// The status while connected, where `local` is the user's pause.
+    fn phase(&self, local: bool) -> Phase {
+        if local {
+            Phase::Paused
+        } else if self.part_in_use.load(Ordering::Relaxed) {
+            Phase::PartInUse
+        } else if self.peer_paused.load(Ordering::Relaxed) {
+            Phase::PausedByPeer
+        } else {
+            Phase::Transferring
+        }
     }
 }
 
@@ -314,7 +327,8 @@ struct Receiver<'a> {
     hasher: Option<blake3::Hasher>,
     /// The sender's hash of the whole item, once `Done` arrived.
     done_hash: Option<[u8; 32]>,
-    peer_paused: Arc<AtomicBool>,
+    /// What holds the connected transfer up, for the status.
+    held: Arc<HeldUp>,
     /// The last connection was closed by the sender on purpose (it is
     /// exiting): the wait for the next one is not a network problem.
     peer_suspended: bool,
@@ -425,7 +439,7 @@ async fn accept(
         have: 0,
         hasher: Some(blake3::Hasher::new()),
         done_hash: None,
-        peer_paused: Arc::new(AtomicBool::new(false)),
+        held: Arc::default(),
         peer_suspended: false,
     };
     let streams = Streams {
@@ -617,7 +631,7 @@ async fn control_writer(
     shared: Arc<Shared>,
     id: u64,
     session: Arc<Session>,
-    peer_paused: Arc<AtomicBool>,
+    held: Arc<HeldUp>,
 ) {
     if *paused_rx.borrow_and_update() && protocol::write_msg(&mut send, &Msg::Paused).await.is_err()
     {
@@ -633,7 +647,7 @@ async fn control_writer(
                 session.update(&shared.data_dir, move |s, d| s.save_paused(d, paused)).await;
                 shared.emit(Event::Phase {
                     id,
-                    phase: pause_phase(paused, peer_paused.load(Ordering::Relaxed)),
+                    phase: held.phase(paused),
                 });
                 let msg = if paused { Msg::Paused } else { Msg::Resumed };
                 if protocol::write_msg(&mut send, &msg).await.is_err() {
@@ -695,7 +709,7 @@ impl<'a> Receiver<'a> {
             have: record.have().min(record.offer.size),
             hasher: None,
             done_hash: record.done_hash,
-            peer_paused: Arc::new(AtomicBool::new(false)),
+            held: Arc::default(),
             peer_suspended: false,
         };
         let token = record.token;
@@ -783,10 +797,7 @@ impl<'a> Receiver<'a> {
     }
 
     fn emit_pause_phase(&self) {
-        self.emit(pause_phase(
-            self.ctl.is_paused(),
-            self.peer_paused.load(Ordering::Relaxed),
-        ));
+        self.emit(self.held.phase(self.ctl.is_paused()));
     }
 
     fn emit_waiting(&self) {
@@ -918,7 +929,7 @@ impl<'a> Receiver<'a> {
         let Streams { conn, send, recv } = s;
         self.session.set_current(Some(conn.clone()));
         let _watch = AbortOnDrop(spawn_path_watch(self.shared.clone(), self.id, conn.clone()));
-        self.peer_paused.store(false, Ordering::Relaxed);
+        self.held.peer_paused.store(false, Ordering::Relaxed);
         self.peer_suspended = false;
         let (msgs_tx, msgs_rx) = mpsc::unbounded_channel();
         let writer = tokio::spawn(control_writer(
@@ -928,10 +939,10 @@ impl<'a> Receiver<'a> {
             self.shared.clone(),
             self.id,
             self.session.clone(),
-            self.peer_paused.clone(),
+            self.held.clone(),
         ));
 
-        let result = self.pump(recv, msgs_tx).await;
+        let result = self.pump(&conn, recv, msgs_tx).await;
         match result {
             Ok(path) => {
                 // The item is in place and the transfer has ended (see
@@ -1021,13 +1032,14 @@ impl<'a> Receiver<'a> {
     /// telling the sender through `msgs` (see `control_writer`).
     async fn pump(
         &mut self,
+        conn: &Connection,
         mut recv: RecvStream,
         msgs: mpsc::UnboundedSender<Msg>,
     ) -> anyhow::Result<PathBuf> {
         // Opened before anything else: the part is checked on the handle
         // that is written to, and stays the part while it is hashed after a
         // restart (see `open_own_part`).
-        let (out, kept) = self.open_for_connection().await?;
+        let (out, kept) = self.open_for_connection(conn).await?;
         let mut out = tokio::fs::File::from_std(out);
         self.rehash().await?;
         self.emit_pause_phase();
@@ -1079,27 +1091,37 @@ impl<'a> Receiver<'a> {
         Ok(placed)
     }
 
-    /// Opens the part file for the connection (see `open_own_part`). While
-    /// another program keeps it out, such as a virus scanner or a sync
-    /// client that reads it, this tries again for a minute at most: the
-    /// sender meanwhile waits for the data it sent to be read, and nothing
-    /// else goes over the network. Then the transfer fails, with Windows'
-    /// reason.
-    async fn open_for_connection(&self) -> anyhow::Result<(std::fs::File, KeptPart)> {
-        let mut waited = Duration::ZERO;
-        loop {
+    /// Opens the part file for the connection `conn` (see `open_own_part`).
+    /// While another program keeps it out, such as a virus scanner, a sync
+    /// client or a program in which the user opened it, this tries again
+    /// every second for as long as that lasts, and the status says so
+    /// (`Phase::PartInUse`): nothing is lost, and the sender meanwhile waits
+    /// for the data it sent to be read, so nothing else goes over the
+    /// network. The wait ends with the connection, as lost (`Lost`, which
+    /// `stream` tells apart by how it ended: the sender cancelled or exited,
+    /// say).
+    async fn open_for_connection(
+        &self,
+        conn: &Connection,
+    ) -> anyhow::Result<(std::fs::File, KeptPart)> {
+        let opened = loop {
             let session = self.session.clone();
             match off_runtime(move || open_own_part(&session)).await {
-                Err(e)
-                    if waited < PART_BUSY_WAIT
-                        && e.downcast_ref::<io::Error>().is_some_and(archive::is_busy) =>
-                {
-                    tokio::time::sleep(PART_BUSY_PAUSE).await;
-                    waited += PART_BUSY_PAUSE;
+                Err(e) if e.downcast_ref::<io::Error>().is_some_and(archive::is_busy) => {
+                    if !self.held.part_in_use.swap(true, Ordering::Relaxed) {
+                        self.emit_pause_phase();
+                    }
+                    tokio::select! {
+                        () = tokio::time::sleep(PART_BUSY_PAUSE) => {}
+                        _ = conn.closed() => break Err(lost(e)),
+                    }
                 }
-                opened => return opened,
+                opened => break opened,
             }
-        }
+        };
+        // `pump` gives the status once the part is open.
+        self.held.part_in_use.store(false, Ordering::Relaxed);
+        opened
     }
 
     /// Notes in the record how much of the part file is on disk.
@@ -1146,11 +1168,11 @@ impl<'a> Receiver<'a> {
                     }
                 }
                 Msg::Paused => {
-                    self.peer_paused.store(true, Ordering::Relaxed);
+                    self.held.peer_paused.store(true, Ordering::Relaxed);
                     self.emit_pause_phase();
                 }
                 Msg::Resumed => {
-                    self.peer_paused.store(false, Ordering::Relaxed);
+                    self.held.peer_paused.store(false, Ordering::Relaxed);
                     self.emit_pause_phase();
                 }
                 Msg::Done { hash } => {
@@ -1237,19 +1259,24 @@ impl Transfer {
     /// connection and this step, so it may have been deleted and its name
     /// taken by another file, which is not this transfer's. Returns it with
     /// its identity: as the record knows it, or as it is now in a record of
-    /// an earlier version, which trusts the name. What the step renames or
-    /// unpacks is what was checked, through this handle, whatever happens to
-    /// the name meanwhile. With `renames`, the handle can rename the part and
-    /// give it its creation time back (see `moved`), which keeps out another
-    /// program that has it open without letting it be deleted, as a rename
-    /// by name would, for a few seconds at most; otherwise it only reads.
+    /// an earlier version, which trusts the name. While it is open, other
+    /// programs can only read it, so what the step renames or unpacks is
+    /// what was checked. With `renames`, the handle can also rename the part
+    /// and give it its creation time back (see `moved`), which another
+    /// program keeps out if it has the part open without letting it be
+    /// deleted, as with a rename by name; otherwise it only reads. A program
+    /// that has the part open for writing keeps the step out too, since what
+    /// was checked may be changing. Either for a few seconds at most, after
+    /// which the step fails.
     fn open_part(&self, renames: bool) -> io::Result<(std::fs::File, FileId)> {
         let mut options = std::fs::OpenOptions::new();
-        options.access_mode(if renames {
-            FILE_GENERIC_READ | FILE_WRITE_ATTRIBUTES | DELETE
-        } else {
-            FILE_GENERIC_READ
-        });
+        options
+            .access_mode(if renames {
+                FILE_GENERIC_READ | FILE_WRITE_ATTRIBUTES | DELETE
+            } else {
+                FILE_GENERIC_READ
+            })
+            .share_mode(FILE_SHARE_READ);
         let (part, record) = open_checked(&self.session, &options, archive::RENAME_RETRY_MS)?;
         let id = match record.part_identity() {
             Some(id) => id,
@@ -1688,9 +1715,10 @@ mod tests {
     }
 
     /// Another program that has the part open for writing keeps a
-    /// connection out, which then waits for it (see
+    /// connection out, which then waits for it as long as that lasts (see
     /// `Receiver::open_for_connection`), and nothing else; once it lets go,
-    /// the part opens.
+    /// the part opens. Meanwhile the status says so, unless the user paused
+    /// the transfer.
     #[test]
     fn a_part_held_elsewhere_keeps_a_connection_out() {
         let base = scratch("busy-part");
@@ -1706,13 +1734,19 @@ mod tests {
         drop(other);
         drop(open_own_part(&transfer.session).unwrap());
         assert_eq!(std::fs::read(&part).unwrap(), b"abc");
+        let held = HeldUp::default();
+        held.peer_paused.store(true, Ordering::Relaxed);
+        assert_eq!(held.phase(false), Phase::PausedByPeer);
+        held.part_in_use.store(true, Ordering::Relaxed);
+        assert_eq!(held.phase(false), Phase::PartInUse);
+        assert_eq!(held.phase(true), Phase::Paused);
         std::fs::remove_dir_all(&base).ok();
     }
 
     /// The last step of a folder that is only unpacked does not rename its
-    /// part, so it only reads it: another program that has it open for
-    /// writing, or without letting it be deleted, does not stop it. One
-    /// that renames needs more, as a rename by name did.
+    /// part, so it only reads it: another program that reads it without
+    /// letting it be deleted, such as a virus scanner, does not stop it.
+    /// One that renames needs to delete, as a rename by name did.
     #[test]
     fn a_part_that_is_only_unpacked_is_only_read() {
         let base = scratch("only-read");
@@ -1721,8 +1755,7 @@ mod tests {
         let transfer = receiving(&base, &part, Kind::Folder, ReceivedFolder::Extract);
         let other = std::fs::OpenOptions::new()
             .read(true)
-            .write(true)
-            .share_mode(FILE_SHARE_READ | windows_sys::Win32::Storage::FileSystem::FILE_SHARE_WRITE)
+            .share_mode(FILE_SHARE_READ)
             .open(&part)
             .unwrap();
         let (t, _) = times(1_500_000_000);
