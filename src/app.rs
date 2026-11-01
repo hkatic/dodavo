@@ -601,7 +601,12 @@ fn handle_net_event(event: Event) -> Option<Event> {
                 with(|a| a.offers.insert(id, hwnd));
             }
         }
-        Event::Restored { id, record, have } => {
+        Event::Restored {
+            id,
+            record,
+            have,
+            goes_on,
+        } => {
             let (name, _) = peer_name(&record.peer, &record.peer_name);
             let dir = match record.role() {
                 Role::Send => progress::Direction::Send,
@@ -639,17 +644,20 @@ fn handle_net_event(event: Event) -> Option<Event> {
             transfer.done = have;
             with(|a| a.transfers.insert(id, transfer));
             refresh_transfer_views(id, true);
-            let text = if cancelling {
-                tr!(restored_cancelling_balloon, item = record.offer.name)
-            } else {
-                tr!(restored_balloon, item = record.offer.name)
-            };
-            tray::balloon(
-                main_window(),
-                tr!(restored_balloon_title),
-                &text,
-                Some(BalloonAction::Transfer(id)),
-            );
+            // One that does not go on is reported as it ends, right after this.
+            if goes_on {
+                let text = if cancelling {
+                    tr!(restored_cancelling_balloon, item = record.offer.name)
+                } else {
+                    tr!(restored_balloon, item = record.offer.name)
+                };
+                tray::balloon(
+                    main_window(),
+                    tr!(restored_balloon_title),
+                    &text,
+                    Some(BalloonAction::Transfer(id)),
+                );
+            }
         }
         Event::Phase { id, phase } => {
             with(|a| {

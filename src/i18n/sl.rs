@@ -341,6 +341,8 @@ pub const SL: Strings = Strings {
     error_unsafe_path: "Prejeta mapa vsebuje nevarno pot: {path}",
     error_source_changed: "Datoteka je bila spremenjena po začetku prenosa",
     error_part_missing: "Delno prenesenih podatkov ni več",
+    error_expired: "Pri prenosu se več kot 30 dni ni zgodilo nič",
+    error_expired_receiver_may_have: "Pri prenosu se več kot 30 dni ni zgodilo nič. Prejemnik je element morda vseeno prejel",
     error_bad_resume: "Napaka protokola: prenosa ni mogoče nadaljevati",
     error_connection_lost: "Povezava je bila prekinjena",
 

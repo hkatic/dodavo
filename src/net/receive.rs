@@ -473,6 +473,7 @@ fn new_receive(
         done_sent: false,
         cancelled: false,
         ended: false,
+        ended_at: None,
     };
     if let Err(e) = record.save(data_dir) {
         let _ = std::fs::remove_file(&part);
@@ -1399,6 +1400,7 @@ mod tests {
             done_sent: false,
             cancelled: false,
             ended: false,
+            ended_at: None,
         };
         record.save(&data_dir).unwrap();
         let peer = iroh::SecretKey::generate().public();

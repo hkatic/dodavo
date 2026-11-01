@@ -473,6 +473,8 @@ strings! {
         error_unsafe_path,
         error_source_changed,
         error_part_missing,
+        error_expired,
+        error_expired_receiver_may_have,
         error_bad_resume,
         error_connection_lost,
     }

@@ -341,6 +341,8 @@ pub const SR_LATN: Strings = Strings {
     error_unsafe_path: "Primljena fascikla sadrži nebezbednu putanju: {path}",
     error_source_changed: "Datoteka je promenjena posle početka prenosa",
     error_part_missing: "Delimično preneti podaci više ne postoje",
+    error_expired: "U prenosu se više od 30 dana ništa nije desilo",
+    error_expired_receiver_may_have: "U prenosu se više od 30 dana ništa nije desilo. Primalac je možda ipak primio stavku",
     error_bad_resume: "Greška protokola: prenos ne može da se nastavi",
     error_connection_lost: "Veza je prekinuta",
 

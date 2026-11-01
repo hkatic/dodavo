@@ -254,6 +254,7 @@ async fn start(
         done_sent: false,
         cancelled: false,
         ended: false,
+        ended_at: None,
     };
     // The session's from now on, and a cancel waits until it is on disk: one
     // that came meanwhile then ends the transfer with it, so that no record

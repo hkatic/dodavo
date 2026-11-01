@@ -12,7 +12,7 @@ pub mod session;
 
 use std::{
     collections::{HashMap, HashSet},
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::{
         Arc, Mutex,
         atomic::{AtomicBool, AtomicU64, Ordering},
@@ -128,6 +128,9 @@ pub enum Event {
         record: Box<TransferRecord>,
         /// Bytes already transferred.
         have: u64,
+        /// Whether the transfer goes on. If not, `Finished` follows at once
+        /// with what ended it.
+        goes_on: bool,
     },
     Phase {
         id: u64,
@@ -506,96 +509,7 @@ async fn accept(shared: Arc<Shared>, endpoint: Endpoint, conn: Connection) {
 
 /// Picks up the transfers that were interrupted in an earlier run.
 async fn restore(shared: &Arc<Shared>, endpoint: &Endpoint) {
-    // Reading the records and looking at their files is file work: each
-    // record with its fate and, if its transfer goes on, how many bytes it
-    // has and whether it can go on (the files of one that does not are only
-    // deleted, so they are not looked at: zero and false there).
-    let found = {
-        let (data_dir, temp_dir) = (shared.data_dir.clone(), shared.temp_dir.clone());
-        session::off_runtime(move || {
-            let records = session::load_all(&data_dir);
-            session::cleanup_temp(&temp_dir, records.iter().map(|(record, _)| record));
-            records
-                .into_iter()
-                .map(|(record, fate)| {
-                    let (have, present) = if fate == Fate::GoesOn {
-                        (record.have(), record.can_go_on())
-                    } else {
-                        (0, false)
-                    };
-                    (record, fate, have, present)
-                })
-                .collect::<Vec<_>>()
-        })
-        .await
-    };
-    // Known before any task runs, so that an early `Continue` or `Query`
-    // from the other side waits instead of being answered with "gone".
-    shared
-        .restoring
-        .lock()
-        .unwrap()
-        .extend(found.iter().map(|(record, ..)| record.token));
-    // Deletes the files of a transfer that does not go on, in the
-    // background: that can take a while, and nothing waits for it. One that
-    // ends now, or ended in an earlier run while its files were being
-    // deleted (or one could not be deleted then), is discarded: its record
-    // is kept until they are gone, and its tombstone is written, in case the
-    // end did not get to it. One that `load_all` has given up has no record
-    // any more, so that what cannot be deleted now is not tried again, and
-    // gets no tombstone (see `session::Fate::GivenUp`).
-    let delete_files = |record: TransferRecord, given_up: bool| {
-        shared.restored(&record.token);
-        let data_dir = shared.data_dir.clone();
-        tokio::task::spawn_blocking(move || {
-            if given_up {
-                record.delete_files();
-            } else {
-                session::write_tombstone(&data_dir, &record.token, false);
-                record.discard(&data_dir);
-            }
-        });
-    };
-    for (record, fate, have, present) in found {
-        match fate {
-            Fate::GoesOn => {}
-            Fate::GivenUp | Fate::Expired => {
-                delete_files(record, true);
-                continue;
-            }
-            Fate::Ended => {
-                delete_files(record, false);
-                continue;
-            }
-            // `load_all` has completed it, and does not return it: its item
-            // is in place, so nothing of it may be deleted here.
-            Fate::Completed => {
-                shared.restored(&record.token);
-                continue;
-            }
-        }
-        let id = next_transfer_id();
-        // The user cancelled a send in the last run, and the cancel was
-        // still waiting for the receiver's verdict: it waits on (below). Such
-        // a record is not paused (see `TransferRecord::cancelled`).
-        let cancelling = record.cancel_pending();
-        shared.emit(Event::Restored {
-            id,
-            record: Box::new(record.clone()),
-            have,
-        });
-        if !present {
-            delete_files(record, false);
-            shared.emit(Event::Finished {
-                id,
-                outcome: Outcome::Failed(crate::i18n::tr!(error_part_missing).into()),
-            });
-            continue;
-        }
-        let ctl = shared.register(id, record.paused);
-        if cancelling {
-            ctl.cancel();
-        }
+    for (id, record, ctl) in restore_records(shared).await {
         let shared = shared.clone();
         let endpoint = endpoint.clone();
         let token = record.token;
@@ -610,6 +524,103 @@ async fn restore(shared: &Arc<Shared>, endpoint: &Endpoint) {
             shared.finish(id, outcome);
         });
     }
+}
+
+/// What [`restore`] does before the transfers that go on can run: reads
+/// the records of the last run, deletes in the background the files of the
+/// transfers that are over, reports those that expired or cannot go on,
+/// and returns the transfers that go on, each with its id and its
+/// registered `Control`.
+async fn restore_records(shared: &Arc<Shared>) -> Vec<(u64, TransferRecord, Arc<Control>)> {
+    // Reading the records and looking at their files is file work: each
+    // transfer that goes on with how many bytes it has and whether it can
+    // go on.
+    let (going_on, over) = {
+        let (data_dir, temp_dir) = (shared.data_dir.clone(), shared.temp_dir.clone());
+        session::off_runtime(move || {
+            let found = session::load_all(&data_dir);
+            let all = found
+                .going_on
+                .iter()
+                .chain(found.over.iter().map(|(r, _)| r));
+            session::cleanup_temp(&temp_dir, all);
+            let going_on = found
+                .going_on
+                .into_iter()
+                .map(|record| (record.have(), record.can_go_on(), record))
+                .collect::<Vec<_>>();
+            (going_on, found.over)
+        })
+        .await
+    };
+    // Known before any task runs, so that an early `Continue` or `Query`
+    // from the other side waits instead of being answered with "gone".
+    shared
+        .restoring
+        .lock()
+        .unwrap()
+        .extend(going_on.iter().map(|(.., record)| record.token));
+    // Deleting the files of a transfer that is over can take a while, and
+    // nothing waits for it.
+    fn in_background(shared: &Shared, work: impl FnOnce(&Path) + Send + 'static) {
+        let data_dir = shared.data_dir.clone();
+        tokio::task::spawn_blocking(move || work(&data_dir));
+    }
+    // A transfer of the last run that does not go on is reported like one
+    // that does, and fails at once.
+    let report_failed = |record: &TransferRecord, have: u64, error: &str| {
+        let id = next_transfer_id();
+        shared.emit(Event::Restored {
+            id,
+            record: Box::new(record.clone()),
+            have,
+            goes_on: false,
+        });
+        shared.emit(Event::Finished {
+            id,
+            outcome: Outcome::Failed(error.into()),
+        });
+    };
+    for (record, fate) in over {
+        match fate {
+            Fate::Ended => in_background(shared, move |dir| record.discard(dir)),
+            Fate::GivenUp => in_background(shared, move |dir| record.give_up(dir)),
+            // `load_all` has ended it, with its files.
+            Fate::Expired => {
+                let error = if record.receiver_may_have_item() {
+                    crate::i18n::tr!(error_expired_receiver_may_have)
+                } else {
+                    crate::i18n::tr!(error_expired)
+                };
+                report_failed(&record, 0, error);
+            }
+        }
+    }
+    let mut resumed = Vec::new();
+    for (have, present, record) in going_on {
+        if !present {
+            report_failed(&record, have, crate::i18n::tr!(error_part_missing));
+            shared.restored(&record.token);
+            in_background(shared, move |dir| record.discard(dir));
+            continue;
+        }
+        let id = next_transfer_id();
+        shared.emit(Event::Restored {
+            id,
+            record: Box::new(record.clone()),
+            have,
+            goes_on: true,
+        });
+        let ctl = shared.register(id, record.paused);
+        // The user cancelled a send in the last run, and the cancel was
+        // still waiting for the receiver's verdict: it waits on. Such a
+        // record is not paused (see `TransferRecord::cancelled`).
+        if record.cancel_pending() {
+            ctl.cancel();
+        }
+        resumed.push((id, record, ctl));
+    }
+    resumed
 }
 
 async fn run(secret: SecretKey, shared: Arc<Shared>, mut rx: mpsc::UnboundedReceiver<Command>) {
@@ -1389,6 +1400,7 @@ mod tests {
             done_sent: false,
             cancelled: false,
             ended: true,
+            ended_at: None,
         };
         record.save(&dir).unwrap();
         std::fs::rename(&part, dir.join("Photos (2).zip")).unwrap();
@@ -1399,6 +1411,179 @@ mod tests {
         assert_eq!(std::fs::read(&part).unwrap(), b"another transfer");
         assert!(!dir.join("Photos (2).zip").exists());
         assert!(session::records(&dir).is_empty());
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// What a start does with the records of the last run before the
+    /// transfers that go on run (`restore_records`): one that goes on is
+    /// registered and returned; one whose files are gone and one that
+    /// expired are reported, and fail at once (the expired one is ended
+    /// with its files before anything goes on); the files of one that
+    /// ended are deleted in the background, and its record stays while one
+    /// of them cannot be; those of one that ended long ago are tried once
+    /// more, and its record goes however that went. The UI hears nothing of
+    /// the ended ones.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn a_start_sorts_out_the_records_of_the_last_run() {
+        let dir = scratch("restore-records");
+        let (shared, events) = recording_shared(&dir);
+        let peer = SecretKey::generate().public().to_string();
+        let record_file = |token: u8| {
+            session::records_dir(&dir).join(format!("{}.json", protocol::token_hex(&[token; 16])))
+        };
+        let receive = |token: u8, name: &str| {
+            let part = dir.join(name);
+            std::fs::write(&part, b"abc").unwrap();
+            let side = session::Side::Receive {
+                dest_dir: dir.clone(),
+                files: session::ReceiveFiles::new(part.clone()),
+                part_id: Some(crate::archive::file_id(&part).unwrap()),
+                synced: Some(3),
+                folder: ReceivedFolder::Extract,
+            };
+            (file_record(token, &peer, 3, side), part)
+        };
+        let hold = |path: &std::path::Path| {
+            use std::os::windows::fs::OpenOptionsExt;
+            std::fs::OpenOptions::new()
+                .read(true)
+                .share_mode(0)
+                .open(path)
+                .unwrap()
+        };
+        let month_ago = SystemTime::now() - Duration::from_secs(31 * 24 * 60 * 60);
+        let make_old = |token: u8| {
+            std::fs::File::options()
+                .write(true)
+                .open(record_file(token))
+                .unwrap()
+                .set_modified(month_ago)
+                .unwrap();
+        };
+
+        let (on, on_part) = receive(1, "on.part");
+        on.save(&dir).unwrap();
+        let (missing, missing_part) = receive(2, "missing.part");
+        missing.save(&dir).unwrap();
+        std::fs::remove_file(&missing_part).unwrap();
+        let (expired, expired_part) = receive(3, "expired.part");
+        expired.save(&dir).unwrap();
+        make_old(3);
+        // It was being unpacked; its part cannot be deleted now.
+        let (mut ended, ended_part) = receive(4, "ended.part");
+        let ended_folder = dir.join("ended");
+        std::fs::create_dir_all(&ended_folder).unwrap();
+        std::fs::write(ended_folder.join("one.txt"), b"1").unwrap();
+        ended.ended = true;
+        ended.ended_at = Some(SystemTime::now());
+        if let session::Side::Receive { files, .. } = &mut ended.side {
+            files.unpacking = Some(session::Owned::at(&ended_folder).unwrap());
+        }
+        ended.save(&dir).unwrap();
+        let held_ended = hold(&ended_part);
+        let (mut given_up, given_up_part) = receive(5, "given-up.part");
+        given_up.ended = true;
+        given_up.ended_at = Some(month_ago);
+        given_up.save(&dir).unwrap();
+        let held = hold(&given_up_part);
+        // A send whose data had all gone out: the receiver may have it.
+        let source = dir.join("sent.bin");
+        std::fs::write(&source, b"abc").unwrap();
+        let mut sent = file_record(
+            6,
+            &peer,
+            3,
+            session::Side::Send {
+                source: source.clone(),
+                source_len: 3,
+                source_mtime: None,
+                data_path: source.clone(),
+            },
+        );
+        sent.done_sent = true;
+        sent.save(&dir).unwrap();
+        make_old(6);
+        session::started_before(&dir);
+
+        let resumed = restore_records(&shared).await;
+        assert_eq!(resumed.len(), 1);
+        let (id, record, _) = &resumed[0];
+        assert_eq!(record.token, on.token);
+        assert!(shared.control(*id).is_some(), "registered");
+        assert!(on_part.exists() && record_file(1).exists());
+        assert!(
+            !expired_part.exists() && !record_file(3).exists(),
+            "ended before anything goes on"
+        );
+        assert!(source.exists(), "what the user chose to send stays");
+        assert!(!record_file(6).exists());
+
+        let events = std::mem::take(&mut *events.lock().unwrap());
+        let restored = events
+            .iter()
+            .filter_map(|event| match event {
+                Event::Restored {
+                    id,
+                    record,
+                    goes_on,
+                    ..
+                } => Some((record.token[0], (*id, *goes_on))),
+                _ => None,
+            })
+            .collect::<HashMap<_, _>>();
+        let mut tokens = restored.keys().copied().collect::<Vec<_>>();
+        tokens.sort();
+        assert_eq!(tokens, [1, 2, 3, 6], "nothing of the ended ones");
+        assert_eq!(restored[&1], (*id, true));
+        let failed = |token: u8| {
+            let (id, goes_on) = restored[&token];
+            assert!(!goes_on);
+            events
+                .iter()
+                .find_map(|event| match event {
+                    Event::Finished {
+                        id: finished,
+                        outcome: Outcome::Failed(error),
+                    } if *finished == id => Some(error.clone()),
+                    _ => None,
+                })
+                .unwrap()
+        };
+        assert_eq!(failed(2), crate::i18n::tr!(error_part_missing));
+        assert_eq!(failed(3), crate::i18n::tr!(error_expired));
+        assert_eq!(failed(6), crate::i18n::tr!(error_expired_receiver_may_have));
+        assert_eq!(
+            events
+                .iter()
+                .filter(|event| matches!(event, Event::Finished { .. }))
+                .count(),
+            3
+        );
+
+        // In the background.
+        let deadline = Instant::now() + Duration::from_secs(10);
+        // The ended one names only its part then, which the next start tries.
+        let ended_left = || {
+            std::fs::read_to_string(record_file(4))
+                .ok()
+                .and_then(|text| serde_json::from_str::<TransferRecord>(&text).ok())
+                .filter(|left| left.receive_files().unwrap().unpacking.is_none())
+        };
+        let left = loop {
+            if let Some(left) = ended_left()
+                && ![2, 5].iter().any(|&token| record_file(token).exists())
+            {
+                break left;
+            }
+            assert!(Instant::now() < deadline, "the background work never ended");
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        };
+        assert!(left.ended && !ended_folder.exists());
+        assert!(ended_part.exists() && left.part_is_there());
+        assert!(given_up_part.exists(), "still held, and given up");
+        drop(held);
+        drop(held_ended);
+        assert!(on_part.exists() && record_file(1).exists());
         std::fs::remove_dir_all(&dir).ok();
     }
 
@@ -1426,6 +1611,7 @@ mod tests {
             done_sent: false,
             cancelled: false,
             ended: false,
+            ended_at: None,
         }
     }
 
@@ -1551,13 +1737,14 @@ mod tests {
             .map(|entry| entry.unwrap().path())
             .find(|path| path.extension().is_some_and(|e| e == "json"))
             .unwrap();
-        let written = SystemTime::now() - Duration::from_secs(600);
         std::fs::File::options()
             .write(true)
             .open(&path)
             .unwrap()
-            .set_modified(written)
+            .set_modified(SystemTime::now() - Duration::from_secs(600))
             .unwrap();
+        // As the file system keeps it: FAT and exFAT round it.
+        let written = std::fs::metadata(&path).unwrap().modified().unwrap();
         let record = session::records(&dir).remove(0);
         assert!(record.cancel_pending());
         let (send, _rx) = Session::new(1, record.token, peer, Role::Send);

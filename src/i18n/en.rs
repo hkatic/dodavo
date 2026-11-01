@@ -338,6 +338,8 @@ pub const EN: Strings = Strings {
     error_unsafe_path: "The received folder contains an unsafe path: {path}",
     error_source_changed: "The file was changed after the transfer started",
     error_part_missing: "The partly transferred data is no longer there",
+    error_expired: "Nothing happened in the transfer for more than 30 days",
+    error_expired_receiver_may_have: "Nothing happened in the transfer for more than 30 days. The recipient may have received the item all the same",
     error_bad_resume: "Protocol error: the transfer cannot be continued",
     error_connection_lost: "The connection was lost",
 

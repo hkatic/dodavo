@@ -341,6 +341,8 @@ pub const HR: Strings = Strings {
     error_unsafe_path: "Primljena mapa sadrži nesiguran put: {path}",
     error_source_changed: "Datoteka je promijenjena nakon početka prijenosa",
     error_part_missing: "Djelomično preneseni podaci više ne postoje",
+    error_expired: "U prijenosu se više od 30 dana ništa nije dogodilo",
+    error_expired_receiver_may_have: "U prijenosu se više od 30 dana ništa nije dogodilo. Primatelj je možda ipak primio stavku",
     error_bad_resume: "Pogreška protokola: prijenos se ne može nastaviti",
     error_connection_lost: "Veza je prekinuta",
 
