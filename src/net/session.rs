@@ -268,7 +268,8 @@ pub struct TransferRecord {
     /// waiting after a restart, and ends the transfer as cancelled unless
     /// the receiver has the item by then (see
     /// [`cancel_pending`](Self::cancel_pending)). A cancelled send is never
-    /// `paused`.
+    /// `paused` (a record of an earlier version that says so is put right
+    /// when it is read, see [`load_all`]).
     #[serde(default)]
     pub cancelled: bool,
     /// The transfer has ended without its item, and its files are being
@@ -568,13 +569,16 @@ impl TransferRecord {
     /// sizes decide: the part is renamed only in the last step, when it has
     /// all of the item, so it has moved if what has the new name is as large
     /// as the item and what has the old name (if anything) is not. When
-    /// both are, the other records tell first: the part has moved if a newer
-    /// record of this profile names the old name as its own part (`parts`:
-    /// when each record read at this start was created, and its part),
-    /// since a later transfer could only take the name once this one's
-    /// rename had freed it. An older record that names it had the name
-    /// before this one (its transfer completed or ended, and only its record
-    /// stayed behind), which tells nothing about this one's rename.
+    /// both are, the other records tell first: the part has moved if another
+    /// record of this profile whose transfer goes on names the old name as
+    /// its own part (`parts`: the token and the part of every such record
+    /// read at this start, see [`load_all`]), since a running transfer's
+    /// part is under its name, and another one could only take the name
+    /// once this one's rename had freed it. A record whose transfer is done
+    /// with (its item completed or it ended, and only the record stayed
+    /// behind) is not among them: it had the name before this one, which
+    /// tells nothing about this one's rename, and a newer such record is
+    /// as good as impossible, since every start follows a moved part.
     /// Otherwise the content tells, against what the sender sent
     /// (`done_hash`, known since before the last step): what has the old
     /// name is the part if it hashes to that (also when what has the new
@@ -587,7 +591,7 @@ impl TransferRecord {
     /// rare: only this twice-ambiguous case does it, at a start, before the
     /// endpoint accepts connections (a peer that dials meanwhile sees a lost
     /// connection and dials again).
-    pub fn follow_moved_part(&mut self, parts: &[(SystemTime, PathBuf)]) -> bool {
+    pub fn follow_moved_part(&mut self, parts: &[(Token, PathBuf)]) -> bool {
         let Some(files) = self.receive_files() else {
             return false;
         };
@@ -603,7 +607,7 @@ impl TransferRecord {
         let claimed = |path: &Path| {
             parts
                 .iter()
-                .any(|(created, part)| *created > self.created && part == path)
+                .any(|(token, part)| *token != self.token && part == path)
         };
         let has_content = |path: &Path| {
             self.done_hash
@@ -687,40 +691,60 @@ pub fn load_all(data_dir: &Path) -> Vec<TransferRecord> {
             let record = fs::read_to_string(&path)
                 .ok()
                 .and_then(|text| serde_json::from_str::<TransferRecord>(&text).ok());
-            (path, record)
+            let fate = record.as_ref().map(|record| {
+                if tombstone(data_dir, &record.token) == Some(true) {
+                    Fate::Completed
+                } else if is_old(&path, MAX_AGE) && !record.finishes_alone() {
+                    Fate::Expired
+                } else {
+                    Fate::GoesOn
+                }
+            });
+            (path, record, fate)
         })
         .collect::<Vec<_>>();
-    // Whose part is under which name, for `follow_moved_part`: all the
-    // records read, before any of them is followed or deleted.
-    let parts = parts_of(read.iter().filter_map(|(_, record)| record.as_ref()));
-    for (path, record) in read {
-        match record {
+    // Whose part is under which name, for `follow_moved_part`: the records
+    // of the transfers that go on, before any of them is followed. A record
+    // that is done with gave up its name.
+    let parts = parts_of(read.iter().filter_map(|(_, record, fate)| match fate {
+        Some(Fate::GoesOn) => record.as_ref(),
+        _ => None,
+    }));
+    for (path, record, fate) in read {
+        match (record, fate) {
             // Its item is in place: nothing of it may be deleted.
-            Some(record) if tombstone(data_dir, &record.token) == Some(true) => {
-                record.complete(data_dir);
-            }
-            Some(mut record) if is_old(&path, MAX_AGE) && !record.finishes_alone() => {
+            (Some(record), Some(Fate::Completed)) => record.complete(data_dir),
+            (Some(mut record), Some(Fate::Expired)) => {
                 // Its files are where a rename right before the end put them.
                 record.follow_moved_part(&parts);
                 record.delete_files();
                 let _ = fs::remove_file(&path);
             }
-            Some(mut record) => {
+            (Some(mut record), _) => {
                 // The part file was renamed right before the program ended.
                 // Also when the transfer had ended: its files are where the
                 // part went, and its old name may belong to another transfer
                 // by now.
-                if record.follow_moved_part(&parts) {
+                let mut changed = record.follow_moved_part(&parts);
+                // A cancelled send is never paused (see
+                // `TransferRecord::cancelled`); a record of an earlier
+                // version may say otherwise, and is put right here, before
+                // anything reads it.
+                if record.cancel_pending() && record.paused {
+                    record.paused = false;
+                    changed = true;
+                }
+                if changed {
                     let _ = record.save(data_dir);
                 }
                 records.push(record);
             }
-            None if is_old(&path, MAX_AGE) => {
+            (None, _) if is_old(&path, MAX_AGE) => {
                 let _ = fs::remove_file(&path);
             }
             // A damaged record is kept aside instead of being read again at
             // every start.
-            None => {
+            (None, _) => {
                 let _ = fs::rename(&path, path.with_extension("json.bad"));
             }
         }
@@ -734,14 +758,25 @@ pub fn load_all(data_dir: &Path) -> Vec<TransferRecord> {
     records
 }
 
-/// The part file of every receive among `records`, with when the record was
-/// created (see [`TransferRecord::follow_moved_part`]).
-fn parts_of<'a>(
-    records: impl IntoIterator<Item = &'a TransferRecord>,
-) -> Vec<(SystemTime, PathBuf)> {
+/// What a start does with a record it read (see [`load_all`]).
+enum Fate {
+    /// Its item is in place (the tombstone says so): only the record, or
+    /// something temporary, is left to delete.
+    Completed,
+    /// Older than [`MAX_AGE`] and not finishing alone: it goes, with its files.
+    Expired,
+    /// Its transfer goes on, or has ended and only its files are left to
+    /// delete.
+    GoesOn,
+}
+
+/// The part file of every receive among `records` whose transfer has not
+/// ended, with the record's token (see [`TransferRecord::follow_moved_part`]).
+fn parts_of<'a>(records: impl IntoIterator<Item = &'a TransferRecord>) -> Vec<(Token, PathBuf)> {
     records
         .into_iter()
-        .filter_map(|r| Some((r.created, r.receive_files()?.part.clone())))
+        .filter(|r| !r.ended)
+        .filter_map(|r| Some((r.token, r.receive_files()?.part.clone())))
         .collect()
 }
 
@@ -1836,20 +1871,20 @@ mod tests {
         }
         assert!(r.part_is_there());
         // The records of this start: this one, and one of another transfer
-        // whose part has the same name: a newer one can only have taken it
-        // once this one's part was renamed; an older one had it before this
-        // one (it completed or ended, and its record stayed behind), which
-        // tells nothing.
+        // whose part has the same name: one that goes on can only have taken
+        // it once this one's part was renamed; one that ended had it before
+        // this one (and only its record stayed behind), which tells nothing,
+        // so it is not among the parts.
         let mine = parts_of([&r]);
-        assert_eq!(mine, vec![(r.created, part.clone())]);
+        assert_eq!(mine, vec![(r.token, part.clone())]);
         let mut other = r.clone();
         other.token = [19; 16];
-        other.created = r.created + Duration::from_secs(1);
         let theirs = parts_of([&r, &other]);
         let mut earlier = r.clone();
         earlier.token = [20; 16];
-        earlier.created = r.created - Duration::from_secs(1);
+        earlier.ended = true;
         let stale = parts_of([&r, &earlier]);
+        assert_eq!(stale, mine);
 
         // Noted, but not renamed: what has the new name is the user's, also
         // when it is as large as the item, even an identical copy of it
@@ -1870,9 +1905,9 @@ mod tests {
         assert!(moved.follow_moved_part(&mine));
         assert_eq!(moved.placed_item(), Some(placed.as_path()));
         // Renamed, and the other transfer (of the same item) has all of it
-        // under the old name: its record tells the two apart if it is the
-        // newer one; without one (another profile's transfer, say), or with
-        // only an older one, the content does, as far as it can: an
+        // under the old name: its record tells the two apart if its transfer
+        // goes on; without one (another profile's transfer, say), or with
+        // only one that ended, the content does, as far as it can: an
         // identical copy under the old name is kept as the part.
         fs::write(&part, b"0123456789").unwrap();
         assert!(!r.clone().follow_moved_part(&mine));
@@ -1883,7 +1918,8 @@ mod tests {
         assert!(r.clone().follow_moved_part(&theirs));
         assert!(r.clone().follow_moved_part(&stale));
         // Without the hash (a record of an earlier version), the old name
-        // keeps the part unless a newer record claims it.
+        // keeps the part unless the record of a transfer that goes on
+        // claims it.
         let mut unknown = r.clone();
         unknown.done_hash = None;
         assert!(!unknown.clone().follow_moved_part(&mine));
@@ -2089,6 +2125,76 @@ mod tests {
         let stored = stored.iter().find(|r| r.token == [22; 16]).unwrap();
         assert!(!stored.done_sent && !stored.receiver_may_have_item());
         assert!(session.cancel_blocking(&dir));
+        fs::remove_dir_all(&dir).ok();
+    }
+
+    /// A record that says a send is both cancelled and paused (one of an
+    /// earlier version) is put right when it is read, on disk too: the
+    /// cancel waits on, and the transfer dials for the receiver's verdict.
+    #[test]
+    fn a_cancelled_send_is_not_paused_when_read() {
+        let dir = scratch("cancelled-paused");
+        let (mut r, _zip) = send_record(&dir, 26);
+        r.paused = true;
+        r.cancelled = true;
+        r.done_sent = true;
+        r.save(&dir).unwrap();
+        let loaded = load_all(&dir);
+        assert_eq!(loaded.len(), 1);
+        assert!(loaded[0].cancel_pending() && !loaded[0].paused);
+        let text = fs::read_to_string(record_path(&dir, &r.token)).unwrap();
+        let stored: TransferRecord = serde_json::from_str(&text).unwrap();
+        assert!(stored.cancelled && !stored.paused, "on disk too");
+        // A pause that is not contradicted stays.
+        r.cancelled = false;
+        r.save(&dir).unwrap();
+        assert!(load_all(&dir)[0].paused);
+        fs::remove_dir_all(&dir).ok();
+    }
+
+    /// Only the record of a transfer that goes on claims a part's old name
+    /// for `follow_moved_part`; one whose item completed (its tombstone says
+    /// so, only the record stayed behind) had the name before and is left
+    /// out, so the content decides then.
+    #[test]
+    fn a_completed_record_claims_no_part_name() {
+        let dir = scratch("claim-completed");
+        archive::PRETEND_FAT.set(true);
+        let part = dir.join("b.bin.part");
+        let placed = dir.join("b.bin");
+        fs::write(&part, b"0123456789").unwrap();
+        fs::write(&placed, b"0123456789").unwrap();
+        let mut r = record(27, receive_side(&dir, &part, None));
+        r.done_hash = Some(*blake3::hash(b"0123456789").as_bytes());
+        if let Side::Receive { part_id, files, .. } = &mut r.side {
+            *part_id = Some(archive::file_id(&part).unwrap());
+            files.moving = Some(Owned {
+                path: placed.clone(),
+                id: archive::file_id(&part).unwrap(),
+            });
+        }
+        r.save(&dir).unwrap();
+        // Another record names the old name as its part, but its transfer
+        // completed: the identical copy under the old name stays this one's.
+        let mut other = r.clone();
+        other.token = [28; 16];
+        if let Some(files) = other.receive_files_mut() {
+            files.moving = None;
+        }
+        other.save(&dir).unwrap();
+        write_tombstone(&dir, &other.token, true);
+        let loaded = load_all(&dir);
+        assert_eq!(loaded.len(), 1);
+        assert_eq!(loaded[0].receive_files().unwrap().part, part);
+        assert!(part.exists() && placed.exists());
+        // A transfer that goes on with that name took it after the rename.
+        other.save(&dir).unwrap();
+        let _ = fs::remove_file(tombstone_path(&dir, &other.token));
+        let loaded = load_all(&dir);
+        assert_eq!(loaded.len(), 2);
+        let mine = loaded.iter().find(|l| l.token == r.token).unwrap();
+        assert_eq!(mine.receive_files().unwrap().part, placed);
+        archive::PRETEND_FAT.set(false);
         fs::remove_dir_all(&dir).ok();
     }
 

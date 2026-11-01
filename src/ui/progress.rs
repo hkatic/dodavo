@@ -87,6 +87,10 @@ struct Progress {
     /// The window then neither offers a pause nor asks about a lost
     /// connection, and its status says that the transfer is being cancelled.
     cancel_requested: bool,
+    /// Sending side: the cancel waits for the receiver's verdict, and the
+    /// transfer goes on until that comes (`Event::CancelWaits`). What holds
+    /// the transfer up meanwhile is then told, as it holds up the cancel.
+    cancel_waits: bool,
     /// Data has flowed while this window was open. Only then is a lost
     /// connection something to ask about; a transfer picked up after a
     /// restart simply waits for the other side.
@@ -177,6 +181,7 @@ pub fn open(
         background: false,
         closing: false,
         cancel_requested: false,
+        cancel_waits: false,
         had_data: false,
         handed_over: false,
         samples: VecDeque::new(),
@@ -252,6 +257,16 @@ pub fn set_handed_over(hwnd: HWND) -> bool {
 /// being cancelled, as after the user's own cancel.
 pub fn set_cancelling(hwnd: HWND) {
     window::with_handler::<Progress, _>(hwnd, |p, _| p.show_cancelling());
+}
+
+/// Sending side: the cancel waits for the receiver's verdict (see
+/// `Event::CancelWaits`). Returns `false` if the window is busy.
+pub fn set_cancel_waits(hwnd: HWND) -> bool {
+    window::with_handler::<Progress, _>(hwnd, |p, _| {
+        p.show_cancelling();
+        p.cancel_waits = true;
+    })
+    .is_some()
 }
 
 pub fn set_progress(hwnd: HWND, done: u64, total: u64) -> bool {
@@ -420,12 +435,12 @@ impl Progress {
             && !self.handed_over
             && !self.cancel_requested
             && app::cfg().connection_lost == ConnectionLostAction::Ask;
-        // A cancel that may wait for the other side: a send's, until the
-        // item is the receiver's (see `Session::defer_cancel`). A cancelled
-        // receive, or a send that was handed over, ends in a moment whatever
-        // the other side does.
-        let cancel_waits =
-            self.cancel_requested && self.dir == Direction::Send && !self.handed_over;
+        // A cancelled transfer ends for the cancel in a moment, whatever the
+        // other side does, unless the cancel waits for the receiver's verdict
+        // (`cancel_waits`) or came too late, with the item the receiver's
+        // (`handed_over`): then the transfer goes on until the receiver has
+        // answered, which a lost connection can hold up for long.
+        let ends_for_cancel = self.cancel_requested && !self.cancel_waits && !self.handed_over;
         let balloon = match phase {
             // The status line changes, and Cancel goes away (perhaps with
             // the focus on it): this says why, also to a user who cancelled
@@ -441,21 +456,18 @@ impl Progress {
                 tr!(peer_unpacking_balloon, item = self.item, name = self.peer),
             )),
             // What holds the transfer up on the other side holds up a cancel
-            // that waits for it just the same, so these are told also to a
-            // user whose cancel waits, perhaps with the window minimized or
-            // closed, who would otherwise not learn why it does not end.
-            Phase::PausedByPeer if !self.cancel_requested || cancel_waits => Some((
+            // that waits for it, or the end of a transfer whose cancel came
+            // too late, just the same, so these are told also to a user who
+            // has cancelled, perhaps with the window minimized or closed, who
+            // would otherwise not learn why it does not end.
+            Phase::PausedByPeer if !ends_for_cancel => Some((
                 tr!(paused_balloon_title).to_string(),
                 tr!(paused_by_peer_balloon, item = self.item, name = self.peer),
             )),
-            Phase::WaitingForConnection { .. }
-                if lost && !will_ask && (!self.cancel_requested || cancel_waits) =>
-            {
-                Some((
-                    tr!(connection_lost_balloon_title).to_string(),
-                    tr!(connection_lost_balloon, item = self.item),
-                ))
-            }
+            Phase::WaitingForConnection { .. } if lost && !will_ask && !ends_for_cancel => Some((
+                tr!(connection_lost_balloon_title).to_string(),
+                tr!(connection_lost_balloon, item = self.item),
+            )),
             // Being cancelled otherwise: the transfer ends for the cancel in
             // a moment, and the result says so.
             _ if self.closing || self.cancel_requested => None,

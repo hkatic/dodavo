@@ -678,6 +678,13 @@ fn handle_net_event(event: Event) -> Option<Event> {
                 return Some(Event::HandedOver { id });
             }
         }
+        Event::CancelWaits { id } => {
+            if let Some(h) = transfer_window(id)
+                && !progress::set_cancel_waits(h)
+            {
+                return Some(Event::CancelWaits { id });
+            }
+        }
         Event::Progress { id, done, total } => {
             // The first report tells the size; show it right away (a paused
             // transfer may not report again for a long time).

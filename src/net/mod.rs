@@ -139,6 +139,15 @@ pub enum Event {
     HandedOver {
         id: u64,
     },
+    /// Sending side: the user's cancel waits for the receiver's verdict on
+    /// the data, which it may have all of (see `Session::defer_cancel`), and
+    /// the transfer goes on until that comes: it ends as cancelled if the
+    /// receiver asks for more data, and is handed over (`HandedOver`) if it
+    /// has the item. Not sent when the cancel ends the transfer in a moment,
+    /// nor when it came too late (`HandedOver` precedes such a cancel).
+    CancelWaits {
+        id: u64,
+    },
     Progress {
         id: u64,
         done: u64,
@@ -305,9 +314,10 @@ pub(crate) async fn cancelled(shared: &Shared, id: u64, ctl: &Control) -> sessio
             // and so does a send whose record was being saved for the first
             // time (see `send::start`). A send whose data has all gone out
             // waits for the receiver's verdict, which shutdown does not wait
-            // for once the cancel is on disk.
+            // for once the cancel is on disk; the UI learns that it waits.
             if session.with_record(|r| r.done_sent) == Some(true) {
                 ctl.cancel_waits.store(true, Ordering::Relaxed);
+                shared.emit(Event::CancelWaits { id });
             }
         }
         session::Cancel::TooLate => ctl.cancel_waits.store(true, Ordering::Relaxed),
@@ -517,7 +527,7 @@ async fn restore(shared: &Arc<Shared>, endpoint: &Endpoint) {
             record.discard(&data_dir);
         });
     };
-    for (mut record, have, present) in found {
+    for (record, have, present) in found {
         if record.ended {
             // It ended in the last run while its files were being deleted
             // (or one could not be deleted then): only that is left to do.
@@ -526,13 +536,9 @@ async fn restore(shared: &Arc<Shared>, endpoint: &Endpoint) {
         }
         let id = next_transfer_id();
         // The user cancelled a send in the last run, and the cancel was
-        // still waiting for the receiver's verdict: it waits on (below). A
-        // cancelled send is not paused (see `Control::cancel`), and the
-        // record says so before anyone sees it, whatever the last run left.
+        // still waiting for the receiver's verdict: it waits on (below). Such
+        // a record is not paused (see `TransferRecord::cancelled`).
         let cancelling = record.cancel_pending();
-        if cancelling {
-            record.paused = false;
-        }
         shared.emit(Event::Restored {
             id,
             record: Box::new(record.clone()),
