@@ -144,8 +144,8 @@ pub enum Event {
     /// the transfer goes on until that comes: it ends as cancelled if the
     /// receiver asks for more data, and is handed over (`HandedOver`) if it
     /// has the item. Sent as soon as the cancel is known to wait, before it
-    /// is on disk (also for a cancel from the last run, whose record says
-    /// so already, see `Restored`). Not sent when the cancel ends the
+    /// is on disk. Not sent for a cancel from the last run, whose record
+    /// says so already (see `Restored`), nor when the cancel ends the
     /// transfer in a moment, nor when it came too late (`HandedOver`
     /// precedes such a cancel).
     CancelWaits {
@@ -308,8 +308,10 @@ pub(crate) async fn cancelled(shared: &Shared, id: u64, ctl: &Control) -> sessio
             // waits for the receiver's verdict. The UI learns that at once:
             // what holds the transfer up meanwhile holds up the cancel, and
             // a phase that arrives before the save is done must not pass
-            // for one the cancel ends in a moment.
-            if waits {
+            // for one the cancel ends in a moment. Not a cancel from the
+            // last run, which the record told the UI already
+            // (`Event::Restored`).
+            if waits && to_save {
                 shared.emit(Event::CancelWaits { id });
             }
             // A later start does not lose the cancel: it deletes the files of
@@ -540,8 +542,10 @@ async fn restore(shared: &Arc<Shared>, endpoint: &Endpoint) {
     };
     for (record, have, present) in found {
         if record.ended {
-            // It ended in the last run while its files were being deleted
+            // It ended in an earlier run while its files were being deleted
             // (or one could not be deleted then): only that is left to do.
+            // Also one that `load_all` has given up: its record is gone
+            // already, so what cannot be deleted now is not tried again.
             end(record);
             continue;
         }
@@ -1496,8 +1500,8 @@ mod tests {
     }
 
     /// A send's cancel from the last run, issued again at this start, is in
-    /// the record already: it is not saved again, and the UI is told that
-    /// it waits (as the record told it already).
+    /// the record already: it is not saved again, and the UI is not told
+    /// again that it waits (the record told it, see `Event::Restored`).
     #[tokio::test(flavor = "multi_thread")]
     async fn a_cancel_from_the_last_run_is_not_saved_again() {
         let dir = scratch("cancel-restored");
@@ -1541,7 +1545,8 @@ mod tests {
             tokio::time::timeout(Duration::from_secs(1), cancelled(&shared, 1, &ctl)).await;
         assert!(waited.is_err(), "the transfer goes on");
         assert!(!ctl.cancelling(), "shutdown does not wait");
-        assert!(cancel_waits_told(&events, 1));
+        assert!(!cancel_waits_told(&events, 1), "the record told the UI");
+        assert!(ctl.cancel_waits.load(Ordering::Relaxed));
         assert_eq!(
             std::fs::metadata(&path).unwrap().modified().unwrap(),
             written,
