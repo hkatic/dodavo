@@ -53,6 +53,7 @@ pub const SL: Strings = Strings {
     tx_paused_by_peer: "Začasno ustavljeno na drugi strani",
     tx_waiting_connection: "Čakanje na povezavo",
     tx_part_in_use: "Čakanje na drug program",
+    tx_peer_part_in_use: "Čakanje na program na drugi strani",
     tx_verifying: "Preverjanje",
     tx_unpacking: "Razpakiranje",
     tx_peer_unpacking: "Razpakiranje na drugi strani",
@@ -154,6 +155,7 @@ pub const SL: Strings = Strings {
     phase_waiting_connection: "Povezava je bila prekinjena. Prenos se nadaljuje, takoj ko sta oba spet povezana, tudi po vnovičnem zagonu.",
     phase_verifying: "Preverjanje že prenesenih podatkov…",
     phase_part_in_use: "Delno prejeto datoteko uporablja drug program. Prenos se nadaljuje, takoj ko jo ta program zapre.",
+    phase_peer_part_in_use: "Na drugi strani ({name}) delno prejeto datoteko uporablja drug program. Prenos se nadaljuje, takoj ko jo ta program zapre.",
     connection_lost_instruction: "Povezava je bila prekinjena.",
     connection_lost_text: "Dodavo lahko počaka in nadaljuje prenos tam, kjer se je ustavil, takoj ko je povezava spet vzpostavljena, \
         tudi po vnovičnem zagonu. Prenos lahko tudi prekličete.",
@@ -166,6 +168,7 @@ pub const SL: Strings = Strings {
     continuing_balloon: "»{item}«: prenos se nadaljuje.",
     part_in_use_balloon_title: "Prenos čaka",
     part_in_use_balloon: "»{item}«: delno prejeto datoteko uporablja drug program. Prenos se nadaljuje, takoj ko jo ta program zapre.",
+    peer_part_in_use_balloon: "»{item}«: na drugi strani ({name}) delno prejeto datoteko uporablja drug program. Prenos se nadaljuje, takoj ko jo ta program zapre.",
     peer_unpacking_balloon: "»{item}«: vse je prispelo. Prejemnik ({name}) razpakira mapo, zato prenosa ni več mogoče preklicati.",
     handed_over_title: "Vse je prispelo",
     handed_over_balloon: "»{item}«: vse je prispelo, zato prenosa ni več mogoče preklicati.",

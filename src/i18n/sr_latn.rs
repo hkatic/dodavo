@@ -53,6 +53,7 @@ pub const SR_LATN: Strings = Strings {
     tx_paused_by_peer: "Pauzirano na drugoj strani",
     tx_waiting_connection: "Čeka se veza",
     tx_part_in_use: "Čeka se drugi program",
+    tx_peer_part_in_use: "Čeka se program na drugoj strani",
     tx_verifying: "Provera",
     tx_unpacking: "Raspakivanje",
     tx_peer_unpacking: "Raspakivanje na drugoj strani",
@@ -154,6 +155,7 @@ pub const SR_LATN: Strings = Strings {
     phase_waiting_connection: "Veza je prekinuta. Prenos se nastavlja čim oboje ponovo budete na mreži, čak i posle ponovnog pokretanja.",
     phase_verifying: "Provera već prenetih podataka…",
     phase_part_in_use: "Delimično primljenu datoteku koristi drugi program. Prenos se nastavlja čim je taj program zatvori.",
+    phase_peer_part_in_use: "Na drugoj strani ({name}) delimično primljenu datoteku koristi drugi program. Prenos se nastavlja čim je taj program zatvori.",
     connection_lost_instruction: "Veza je prekinuta.",
     connection_lost_text: "Dodavo može da sačeka i nastavi prenos tamo gde je stao čim se veza ponovo uspostavi, \
         čak i posle ponovnog pokretanja. Prenos možete i da otkažete.",
@@ -166,6 +168,7 @@ pub const SR_LATN: Strings = Strings {
     continuing_balloon: "„{item}“: prenos se nastavlja.",
     part_in_use_balloon_title: "Prenos čeka",
     part_in_use_balloon: "„{item}“: delimično primljenu datoteku koristi drugi program. Prenos se nastavlja čim je taj program zatvori.",
+    peer_part_in_use_balloon: "„{item}“: na drugoj strani ({name}) delimično primljenu datoteku koristi drugi program. Prenos se nastavlja čim je taj program zatvori.",
     peer_unpacking_balloon: "„{item}“: sve je stiglo. Primalac ({name}) raspakuje fasciklu pa prenos više ne može da se otkaže.",
     handed_over_title: "Sve je stiglo",
     handed_over_balloon: "„{item}“: sve je stiglo pa prenos više ne može da se otkaže.",

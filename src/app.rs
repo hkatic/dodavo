@@ -154,7 +154,10 @@ impl Transfer {
             Some(Phase::Paused) => tr!(tx_paused),
             Some(Phase::PausedByPeer) => tr!(tx_paused_by_peer),
             Some(Phase::WaitingForConnection { .. }) => tr!(tx_waiting_connection),
-            Some(Phase::PartInUse) => tr!(tx_part_in_use),
+            Some(Phase::PartInUse { .. }) => match self.dir {
+                progress::Direction::Send => tr!(tx_peer_part_in_use),
+                progress::Direction::Receive => tr!(tx_part_in_use),
+            },
             Some(Phase::Verifying) => tr!(tx_verifying),
             Some(Phase::Unpacking) => tr!(tx_unpacking),
             Some(Phase::PeerUnpacking) => tr!(tx_peer_unpacking),
@@ -167,7 +170,7 @@ impl Transfer {
                         | Phase::Paused
                         | Phase::PausedByPeer
                         | Phase::WaitingForConnection { .. }
-                        | Phase::PartInUse
+                        | Phase::PartInUse { .. }
                 )
             );
         if with_percent {
@@ -883,6 +886,8 @@ mod tests {
             (Some(Phase::Paused), false),
             (Some(Phase::PausedByPeer), false),
             (Some(Phase::WaitingForConnection { lost: true }), false),
+            (Some(Phase::PartInUse { finishing: false }), false),
+            (Some(Phase::PartInUse { finishing: true }), false),
         ] {
             let mut t = transfer(phase, 1, 2);
             assert_eq!(t.moving_data(), busy, "{phase:?}");

@@ -96,6 +96,17 @@ struct Progress {
     /// transfer in a moment (see `set_phase`); it is given after all if the
     /// cancel turns out to wait (`set_cancel_waits`).
     balloon_withheld: bool,
+    /// The last phase other than `Verifying` held the transfer up (a pause
+    /// on the other side, a lost connection, another program that keeps the
+    /// partly received file out): the next one in which the transfer moves
+    /// on gives the notification that it continues. Checking the data after
+    /// a restart comes in between, but holds nothing up.
+    held_up: bool,
+    /// The notification that another program keeps the partly received
+    /// file out was given (see `Phase::PartInUse`), and the transfer has not
+    /// moved on or been held up otherwise since: it is not given again when
+    /// the status comes back to it after a pause.
+    part_in_use_told: bool,
     /// Data has flowed while this window was open. Only then is a lost
     /// connection something to ask about; a transfer picked up after a
     /// restart simply waits for the other side.
@@ -174,38 +185,7 @@ pub fn open(
         (Direction::Receive, Kind::File) => tr!(title_receive_file, name = peer),
         (Direction::Receive, Kind::Folder) => tr!(title_receive_folder, name = peer),
     };
-    let handler = Progress {
-        id,
-        dir,
-        peer: peer.to_string(),
-        item: item.to_string(),
-        kind,
-        received_folder: None,
-        phase: None,
-        active: true,
-        background: false,
-        closing: false,
-        cancel_requested: false,
-        cancel_waits: false,
-        balloon_withheld: false,
-        had_data: false,
-        handed_over: false,
-        samples: VecDeque::new(),
-        rate_shown: None,
-        result_path: None,
-        after: AfterFinish::Stay,
-        title: std::ptr::null_mut(),
-        status: std::ptr::null_mut(),
-        bar: std::ptr::null_mut(),
-        done_caption: std::ptr::null_mut(),
-        done: std::ptr::null_mut(),
-        speed: std::ptr::null_mut(),
-        remaining: std::ptr::null_mut(),
-        connection: std::ptr::null_mut(),
-        pause: std::ptr::null_mut(),
-        background_button: std::ptr::null_mut(),
-        cancel: std::ptr::null_mut(),
-    };
+    let handler = Progress::new(id, dir, peer, item, kind);
     let hwnd = window::create(
         CreateOptions {
             title: &window_title,
@@ -321,16 +301,55 @@ fn keeps_progress(phase: Phase) -> bool {
             | Phase::Paused
             | Phase::PausedByPeer
             | Phase::WaitingForConnection { .. }
-            | Phase::PartInUse
+            | Phase::PartInUse { .. }
     )
 }
 
 /// Phases in which the user can pause or resume.
 fn can_pause(phase: Phase) -> bool {
-    keeps_progress(phase)
+    keeps_progress(phase) && phase != Phase::PartInUse { finishing: true }
 }
 
 impl Progress {
+    /// The state of a new window, whose controls are made when it is
+    /// created.
+    fn new(id: u64, dir: Direction, peer: &str, item: &str, kind: Kind) -> Self {
+        Progress {
+            id,
+            dir,
+            peer: peer.to_string(),
+            item: item.to_string(),
+            kind,
+            received_folder: None,
+            phase: None,
+            active: true,
+            background: false,
+            closing: false,
+            cancel_requested: false,
+            cancel_waits: false,
+            balloon_withheld: false,
+            held_up: false,
+            part_in_use_told: false,
+            had_data: false,
+            handed_over: false,
+            samples: VecDeque::new(),
+            rate_shown: None,
+            result_path: None,
+            after: AfterFinish::Stay,
+            title: std::ptr::null_mut(),
+            status: std::ptr::null_mut(),
+            bar: std::ptr::null_mut(),
+            done_caption: std::ptr::null_mut(),
+            done: std::ptr::null_mut(),
+            speed: std::ptr::null_mut(),
+            remaining: std::ptr::null_mut(),
+            connection: std::ptr::null_mut(),
+            pause: std::ptr::null_mut(),
+            background_button: std::ptr::null_mut(),
+            cancel: std::ptr::null_mut(),
+        }
+    }
+
     /// Whether what was received is a single file: a file, or a folder that
     /// was kept only as its zip.
     fn received_file(&self) -> bool {
@@ -383,7 +402,10 @@ impl Progress {
             Phase::Paused => tr!(phase_paused).to_string(),
             Phase::PausedByPeer => tr!(phase_paused_by_peer, name = self.peer),
             Phase::WaitingForConnection { .. } => tr!(phase_waiting_connection).to_string(),
-            Phase::PartInUse => tr!(phase_part_in_use).to_string(),
+            Phase::PartInUse { .. } => match self.dir {
+                Direction::Send => tr!(phase_peer_part_in_use, name = self.peer),
+                Direction::Receive => tr!(phase_part_in_use).to_string(),
+            },
             Phase::Verifying => tr!(phase_verifying).to_string(),
             Phase::Unpacking => tr!(phase_unpacking).to_string(),
             Phase::PeerUnpacking => tr!(phase_peer_unpacking, name = self.peer),
@@ -395,9 +417,8 @@ impl Progress {
         if phase == Phase::Transferring {
             self.had_data = true;
         }
-        let unpacking_there = phase == Phase::PeerUnpacking && previous != Some(phase);
         if phase == Phase::PeerUnpacking {
-            // The notification below says why Cancel goes away.
+            // The notification says why Cancel goes away.
             self.hand_over();
         }
         set_text(self.status, &self.status_text(phase));
@@ -450,6 +471,41 @@ impl Progress {
             && !self.handed_over
             && !self.cancel_requested
             && app::cfg().connection_lost == ConnectionLostAction::Ask;
+        PhaseNotice {
+            balloon: self.phase_balloon(previous, will_ask),
+        }
+    }
+
+    /// The notification for the phase that has just come after `previous`,
+    /// if it gives one; none for a lost connection that the window asks
+    /// about (`will_ask`).
+    fn phase_balloon(
+        &mut self,
+        previous: Option<Phase>,
+        will_ask: bool,
+    ) -> Option<(String, String)> {
+        let phase = self.phase?;
+        let was_held_up = self.held_up;
+        self.held_up = match phase {
+            Phase::PausedByPeer | Phase::WaitingForConnection { .. } | Phase::PartInUse { .. } => {
+                true
+            }
+            Phase::Verifying => was_held_up,
+            _ => false,
+        };
+        if !matches!(
+            phase,
+            Phase::Paused | Phase::Verifying | Phase::PartInUse { .. }
+        ) {
+            self.part_in_use_told = false;
+        }
+        // Not again once the receiver's last step has waited for another
+        // program there, which is told as a continuation instead.
+        let unpacking_there = phase == Phase::PeerUnpacking
+            && !matches!(
+                previous,
+                Some(Phase::PeerUnpacking | Phase::PartInUse { finishing: true })
+            );
         // A cancelled transfer ends for the cancel in a moment, whatever the
         // other side does, unless the cancel waits for the receiver's verdict
         // (`cancel_waits`) or came too late, with the item the receiver's
@@ -484,7 +540,7 @@ impl Progress {
                 .to_string(),
                 tr!(peer_unpacking_balloon, item = self.item, name = self.peer),
             )),
-            Phase::PausedByPeer | Phase::WaitingForConnection { .. }
+            Phase::PausedByPeer | Phase::WaitingForConnection { .. } | Phase::PartInUse { .. }
                 if held_up.is_some() && !ends_for_cancel =>
             {
                 held_up
@@ -493,30 +549,19 @@ impl Progress {
             // a moment, and the result says so.
             _ if self.closing || self.cancel_requested => None,
             // The status line changes, which a screen reader does not say.
-            Phase::PartInUse if previous != Some(phase) => Some((
-                tr!(part_in_use_balloon_title).to_string(),
-                tr!(part_in_use_balloon, item = self.item),
+            Phase::Transferring | Phase::Unpacking | Phase::PeerUnpacking if was_held_up => Some((
+                tr!(continuing_balloon_title).to_string(),
+                tr!(continuing_balloon, item = self.item),
             )),
-            Phase::Transferring
-                if matches!(
-                    previous,
-                    Some(
-                        Phase::PausedByPeer | Phase::WaitingForConnection { .. } | Phase::PartInUse
-                    )
-                ) =>
-            {
-                Some((
-                    tr!(continuing_balloon_title).to_string(),
-                    tr!(continuing_balloon, item = self.item),
-                ))
-            }
             _ => None,
         };
-        PhaseNotice { balloon }
+        self.note_part_in_use_told(&balloon);
+        balloon
     }
 
-    /// What holds the transfer up on the other side, if `phase` says so (the
-    /// peer paused it, or the connection was lost while data flowed): the
+    /// What holds the transfer up, if `phase` says so (the peer paused it,
+    /// the connection was lost while data flowed, or another program keeps
+    /// the partly received file out, here or there, the first time): the
     /// notification that tells it.
     fn held_up_balloon(&self, phase: Phase) -> Option<(String, String)> {
         match phase {
@@ -528,7 +573,24 @@ impl Progress {
                 tr!(connection_lost_balloon_title).to_string(),
                 tr!(connection_lost_balloon, item = self.item),
             )),
+            Phase::PartInUse { .. } if !self.part_in_use_told => Some((
+                tr!(part_in_use_balloon_title).to_string(),
+                match self.dir {
+                    Direction::Send => {
+                        tr!(peer_part_in_use_balloon, item = self.item, name = self.peer)
+                    }
+                    Direction::Receive => tr!(part_in_use_balloon, item = self.item),
+                },
+            )),
             _ => None,
+        }
+    }
+
+    /// Notes that the notification `balloon`, given in the current phase,
+    /// told that another program keeps the partly received file out.
+    fn note_part_in_use_told(&mut self, balloon: &Option<(String, String)>) {
+        if balloon.is_some() && matches!(self.phase, Some(Phase::PartInUse { .. })) {
+            self.part_in_use_told = true;
         }
     }
 
@@ -548,6 +610,7 @@ impl Progress {
         } else {
             None
         };
+        self.note_part_in_use_told(&balloon);
         PhaseNotice { balloon }
     }
 
@@ -1155,5 +1218,98 @@ impl Handler for Progress {
 
     fn on_destroy(&mut self, _w: &Window) {
         app::transfer_window_closed(self.id);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Goes to `phase` as `set_phase` does; the title of the notification
+    /// that it gives, if any.
+    fn step(p: &mut Progress, phase: Phase) -> Option<String> {
+        let previous = p.phase.replace(phase);
+        if phase == Phase::Transferring {
+            p.had_data = true;
+        }
+        p.phase_balloon(previous, false).map(|(title, _)| title)
+    }
+
+    const IN_USE: Phase = Phase::PartInUse { finishing: false };
+    const IN_USE_FINISHING: Phase = Phase::PartInUse { finishing: true };
+
+    /// Another program that keeps the partly received file out is told
+    /// once, also when the status comes back to it after a pause; that the
+    /// transfer goes on is told also after the data is checked again, as
+    /// after a restart; and a new hold-up is told again.
+    #[test]
+    fn a_part_in_use_is_told_once_and_so_is_its_end() {
+        let waiting = Some(tr!(part_in_use_balloon_title).to_string());
+        let continues = Some(tr!(continuing_balloon_title).to_string());
+        let mut p = Progress::new(1, Direction::Receive, "Ana", "a.txt", Kind::File);
+        assert_eq!(
+            step(&mut p, Phase::WaitingForConnection { lost: false }),
+            None
+        );
+        assert_eq!(step(&mut p, IN_USE), waiting);
+        assert_eq!(step(&mut p, Phase::Paused), None);
+        assert_eq!(step(&mut p, IN_USE), None, "not again after a pause");
+        assert_eq!(step(&mut p, Phase::Verifying), None);
+        assert_eq!(step(&mut p, Phase::Transferring), continues);
+        assert_eq!(step(&mut p, IN_USE), waiting, "held up again");
+        assert_eq!(
+            step(&mut p, Phase::WaitingForConnection { lost: true }),
+            Some(tr!(connection_lost_balloon_title).to_string())
+        );
+        assert_eq!(step(&mut p, IN_USE), waiting, "after something else");
+        // The user resumed after the program let go: nothing to tell.
+        assert_eq!(step(&mut p, Phase::Paused), None);
+        assert_eq!(step(&mut p, Phase::Transferring), None);
+
+        // The last step waits, and then unpacks; Pause is not offered then.
+        let mut p = Progress::new(1, Direction::Receive, "Ana", "Photos", Kind::Folder);
+        assert_eq!(step(&mut p, Phase::Transferring), None);
+        assert_eq!(step(&mut p, Phase::Unpacking), None);
+        assert_eq!(step(&mut p, IN_USE_FINISHING), waiting);
+        assert_eq!(step(&mut p, Phase::Unpacking), continues);
+        assert!(can_pause(IN_USE) && !can_pause(IN_USE_FINISHING));
+
+        // A receive that is being cancelled ends in a moment: nothing told.
+        let mut p = Progress::new(1, Direction::Receive, "Ana", "a.txt", Kind::File);
+        p.cancel_requested = true;
+        assert_eq!(step(&mut p, IN_USE_FINISHING), None);
+    }
+
+    /// The sending side is told when a program on the receiving side keeps
+    /// the part out, with the receiver's name, also while it unpacks there;
+    /// the unpacking is not told again once that program lets go.
+    #[test]
+    fn the_sender_is_told_about_a_part_in_use_there() {
+        let mut p = Progress::new(1, Direction::Send, "Ana", "Photos", Kind::Folder);
+        p.handed_over = true;
+        assert_eq!(step(&mut p, Phase::Transferring), None);
+        assert_eq!(
+            step(&mut p, Phase::PeerUnpacking),
+            Some(tr!(tx_peer_unpacking).to_string())
+        );
+        let previous = p.phase.replace(IN_USE_FINISHING);
+        let (title, text) = p.phase_balloon(previous, false).unwrap();
+        assert_eq!(title, tr!(part_in_use_balloon_title));
+        assert!(text.contains("Ana") && text.contains("Photos"), "{text}");
+        assert!(p.status_text(IN_USE_FINISHING).contains("Ana"));
+        assert_eq!(
+            step(&mut p, Phase::PeerUnpacking),
+            Some(tr!(continuing_balloon_title).to_string())
+        );
+
+        // Also to a user whose cancel waits for the receiver's verdict,
+        // which the program there holds up.
+        let mut p = Progress::new(1, Direction::Send, "Ana", "a.txt", Kind::File);
+        p.cancel_requested = true;
+        p.cancel_waits = true;
+        assert_eq!(
+            step(&mut p, IN_USE_FINISHING),
+            Some(tr!(part_in_use_balloon_title).to_string())
+        );
     }
 }

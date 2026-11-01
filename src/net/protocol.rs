@@ -9,6 +9,7 @@
 //!   Data{len} + len raw bytes ────▶   (repeated; Paused / Resumed may be
 //!   Paused | Resumed ─────────────▶    sent by either side at any time)
 //!                    ◀─────────────  Paused | Resumed
+//!                    ◀─────────────  PartInUse{in_use}     (at any time)
 //!   Done{hash}       ─────────────▶
 //!                    ◀─────────────  Verified{unpacking}   (if the hash matches)
 //!                    ◀─────────────  Result{ok, message}   (once the item is saved)
@@ -107,6 +108,10 @@ pub enum Msg {
     Verified { unpacking: bool },
     /// The last message: whether the item was saved, or why it was not.
     Result { ok: bool, message: String },
+    /// Another program keeps the partly received file out (`in_use`), so
+    /// the receiver waits for it, or it has let go and the transfer goes
+    /// on. While the connection opens the file, and in the last step.
+    PartInUse { in_use: bool },
     // Either direction.
     /// Answer to `Continue` or `Query`: this side no longer has the transfer,
     /// because it was cancelled, failed or (for `completed`) finished.

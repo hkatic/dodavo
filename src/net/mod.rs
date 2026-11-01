@@ -92,9 +92,14 @@ pub enum Phase {
     WaitingForConnection {
         lost: bool,
     },
-    /// Receiving side: connected, but another program keeps the partly
-    /// received file out; the transfer continues as soon as it lets go.
-    PartInUse,
+    /// Another program keeps the partly received file out, on this side
+    /// when receiving, on the other side when sending; the transfer
+    /// continues as soon as it lets go. `finishing` once all of the data
+    /// has been sent (a pause has no say any more), and on the receiving
+    /// side when the last step waits for it.
+    PartInUse {
+        finishing: bool,
+    },
     /// Hashing data that was already transferred before continuing.
     Verifying,
     Unpacking,
@@ -1619,7 +1624,7 @@ mod tests {
     }
 
     /// A `Shared` that keeps the events it emits for the test to look at.
-    fn recording_shared(dir: &std::path::Path) -> (Arc<Shared>, Arc<Mutex<Vec<Event>>>) {
+    pub(super) fn recording_shared(dir: &std::path::Path) -> (Arc<Shared>, Arc<Mutex<Vec<Event>>>) {
         let events = Arc::new(Mutex::new(Vec::new()));
         let sink = events.clone();
         let shared = Arc::new(Shared {

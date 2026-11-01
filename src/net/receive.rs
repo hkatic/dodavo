@@ -8,7 +8,7 @@ use std::{
     os::windows::fs::OpenOptionsExt,
     path::{Path, PathBuf},
     sync::{
-        Arc,
+        Arc, Mutex,
         atomic::{AtomicBool, Ordering},
     },
     time::Duration,
@@ -52,8 +52,11 @@ const QUERY_TIMEOUT: Duration = Duration::from_secs(20);
 /// The part file is flushed to disk, and the amount noted in the record,
 /// after this much new data.
 const SYNC_EVERY: u64 = 64 * 1024 * 1024;
-/// How often a connection tries again to open the part file while another
-/// program keeps it out (see `Receiver::open_for_connection`).
+/// How often a connection, or the last step, tries again to open the part
+/// file while another program keeps it out (see `open_for_connection` and
+/// `Transfer::open_part`), once it has tried for a moment without saying so
+/// (`archive::HELD_RETRY_MS`): a virus scanner that reads the part after a
+/// connection closed it lets go well before that.
 const PART_BUSY_PAUSE: Duration = Duration::from_secs(1);
 /// Tests set this to stop a folder transfer right before unpacking, to
 /// simulate a shutdown during the last step.
@@ -150,29 +153,127 @@ impl Drop for Syncing {
     }
 }
 
-/// What holds a connected receive up besides the user's pause, for the
-/// status (see [`phase`](Self::phase)).
+/// What holds a connected receive up besides the user's pause.
 #[derive(Default)]
 struct HeldUp {
     /// The sender paused the transfer.
-    peer_paused: AtomicBool,
-    /// Another program keeps the part file out (see
-    /// `Receiver::open_for_connection`).
-    part_in_use: AtomicBool,
+    peer_paused: bool,
+    /// Another program keeps the part file out (see `open_for_connection`).
+    part_in_use: bool,
 }
 
 impl HeldUp {
-    /// The status while connected, where `local` is the user's pause.
-    fn phase(&self, local: bool) -> Phase {
-        if local {
+    /// The status while connected, where `paused` is the user's pause.
+    fn phase(&self, paused: bool) -> Phase {
+        if paused {
             Phase::Paused
-        } else if self.part_in_use.load(Ordering::Relaxed) {
-            Phase::PartInUse
-        } else if self.peer_paused.load(Ordering::Relaxed) {
+        } else if self.part_in_use {
+            Phase::PartInUse { finishing: false }
+        } else if self.peer_paused {
             Phase::PausedByPeer
         } else {
             Phase::Transferring
         }
+    }
+}
+
+/// The status of a receive, which two tasks give while it is connected:
+/// the transfer's own, and the one that tells the sender about the user's
+/// pauses (`control_writer`). Each change of what the status depends on is
+/// followed by working it out and giving it under one lock, so that the
+/// status given last is the one that holds, whichever task changed what
+/// last.
+struct Status {
+    shared: Arc<Shared>,
+    id: u64,
+    /// The user's pause.
+    paused: watch::Receiver<bool>,
+    state: Mutex<StatusState>,
+}
+
+#[derive(Default)]
+struct StatusState {
+    held: HeldUp,
+    /// Receiving on a connection: the user's pause and `held` give the
+    /// status. Otherwise the transfer's task gives it as it goes (waiting
+    /// for a connection, checking the data, the last step), and a pause
+    /// changes nothing in it.
+    pauses_decide: bool,
+}
+
+impl Status {
+    fn new(shared: &Arc<Shared>, id: u64, paused: watch::Receiver<bool>) -> Arc<Self> {
+        Arc::new(Status {
+            shared: shared.clone(),
+            id,
+            paused,
+            state: Mutex::default(),
+        })
+    }
+
+    fn state(&self) -> std::sync::MutexGuard<'_, StatusState> {
+        self.state.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    fn emit(&self, phase: Phase) {
+        self.shared.emit(Event::Phase { id: self.id, phase });
+    }
+
+    /// Gives the status that the pauses decide, under the lock `state`.
+    fn emit_connected(&self, state: &StatusState) {
+        self.emit(state.held.phase(*self.paused.borrow()));
+    }
+
+    /// Changes what holds the transfer up with `change`, and gives the
+    /// status if the pauses decide it; with a `change` that changes nothing
+    /// after a pause or a resume by the user.
+    fn change(&self, change: impl FnOnce(&mut HeldUp)) {
+        let mut state = self.state();
+        change(&mut state.held);
+        if state.pauses_decide {
+            self.emit_connected(&state);
+        }
+    }
+
+    /// From now on the pauses decide the status; gives it.
+    fn connected(&self) {
+        let mut state = self.state();
+        state.pauses_decide = true;
+        self.emit_connected(&state);
+    }
+
+    /// A new connection: the sender has not paused on it, and the transfer's
+    /// task gives the status until the part file is open (see `connected`).
+    fn new_connection(&self) {
+        let mut state = self.state();
+        state.held = HeldUp::default();
+        state.pauses_decide = false;
+    }
+
+    /// Another program keeps the part file out while a connection opens it
+    /// (`in_use`), and the status says so, or follows the user's pause; or
+    /// the part is open now, and the transfer's task gives the status (see
+    /// `connected`).
+    fn part_in_use(&self, in_use: bool) {
+        let mut state = self.state();
+        state.held.part_in_use = in_use;
+        state.pauses_decide = in_use;
+        if in_use {
+            self.emit_connected(&state);
+        }
+    }
+
+    /// Gives `phase`, which the pauses do not decide (until `connected`).
+    fn set(&self, phase: Phase) {
+        let mut state = self.state();
+        state.pauses_decide = false;
+        self.emit(phase);
+    }
+
+    /// The pauses no longer decide the status, which stays as it is: all of
+    /// the data has arrived.
+    fn hold(&self) {
+        self.state().pauses_decide = false;
     }
 }
 
@@ -327,8 +428,7 @@ struct Receiver<'a> {
     hasher: Option<blake3::Hasher>,
     /// The sender's hash of the whole item, once `Done` arrived.
     done_hash: Option<[u8; 32]>,
-    /// What holds the connected transfer up, for the status.
-    held: Arc<HeldUp>,
+    status: Arc<Status>,
     /// The last connection was closed by the sender on purpose (it is
     /// exiting): the wait for the next one is not a network problem.
     peer_suspended: bool,
@@ -439,7 +539,7 @@ async fn accept(
         have: 0,
         hasher: Some(blake3::Hasher::new()),
         done_hash: None,
-        held: Arc::default(),
+        status: Status::new(shared, id, ctl.paused.subscribe()),
         peer_suspended: false,
     };
     let streams = Streams {
@@ -559,12 +659,15 @@ fn prepare_part(
 /// program can write to it, delete it or rename it, so it stays the part
 /// until the connection is over; the user who wants it gone cancels the
 /// transfer, which deletes it through the handle (see `Session::keep_part`).
-/// Fails at once while another program has it open in a way that keeps it
-/// out (see `archive::is_busy`), which the connection waits for a while
-/// (see `Receiver::open_for_connection`). Without a record the transfer is
-/// ending, and nothing is written. Blocking.
-fn open_own_part(session: &Arc<Session>) -> anyhow::Result<(std::fs::File, KeptPart)> {
-    let (part, _) = open_checked(session, &connection_options(), &[])?;
+/// While another program has it open in a way that keeps it out (see
+/// `archive::is_busy`), this tries again as `pauses` says, and then fails,
+/// which the connection waits for (see `open_for_connection`). Without a
+/// record the transfer is ending, and nothing is written. Blocking.
+fn open_own_part(
+    session: &Arc<Session>,
+    pauses: &[u64],
+) -> anyhow::Result<(std::fs::File, KeptPart)> {
+    let (part, _) = open_checked(session, &connection_options(), pauses)?;
     let kept = session.keep_part(&part)?;
     Ok((part, kept))
 }
@@ -623,15 +726,15 @@ async fn query_gone(endpoint: Endpoint, peer: EndpointId, token: Token) -> Optio
 
 /// Owns the sending half of the stream while receiving: tells the sender
 /// about pauses and resumes by the user, and sends what the receive has to
-/// say (`Verified`, then the `Result`, which is the last message).
+/// say (that another program keeps the part out, `Verified`, then the
+/// `Result`, which is the last message).
 async fn control_writer(
     mut send: SendStream,
     mut paused_rx: watch::Receiver<bool>,
     mut msgs: mpsc::UnboundedReceiver<Msg>,
     shared: Arc<Shared>,
-    id: u64,
     session: Arc<Session>,
-    held: Arc<HeldUp>,
+    status: Arc<Status>,
 ) {
     if *paused_rx.borrow_and_update() && protocol::write_msg(&mut send, &Msg::Paused).await.is_err()
     {
@@ -645,10 +748,7 @@ async fn control_writer(
                 }
                 let paused = *paused_rx.borrow_and_update();
                 session.update(&shared.data_dir, move |s, d| s.save_paused(d, paused)).await;
-                shared.emit(Event::Phase {
-                    id,
-                    phase: held.phase(paused),
-                });
+                status.change(|_| {});
                 let msg = if paused { Msg::Paused } else { Msg::Resumed };
                 if protocol::write_msg(&mut send, &msg).await.is_err() {
                     return;
@@ -709,7 +809,7 @@ impl<'a> Receiver<'a> {
             have: record.have().min(record.offer.size),
             hasher: None,
             done_hash: record.done_hash,
-            held: Arc::default(),
+            status: Status::new(shared, id, ctl.paused.subscribe()),
             peer_suspended: false,
         };
         let token = record.token;
@@ -765,10 +865,6 @@ impl<'a> Receiver<'a> {
         self.drive(Some(streams)).await
     }
 
-    fn emit(&self, phase: Phase) {
-        self.shared.emit(Event::Phase { id: self.id, phase });
-    }
-
     /// Ends the transfer on this side (see `Session::end`) and deletes what
     /// goes, off the runtime's worker threads.
     async fn end(&self, code: Option<u32>, completed: bool) {
@@ -796,12 +892,8 @@ impl<'a> Receiver<'a> {
         }))
     }
 
-    fn emit_pause_phase(&self) {
-        self.emit(self.held.phase(self.ctl.is_paused()));
-    }
-
     fn emit_waiting(&self) {
-        self.emit(if self.ctl.is_paused() {
+        self.status.set(if self.ctl.is_paused() {
             Phase::Paused
         } else {
             Phase::WaitingForConnection {
@@ -915,7 +1007,7 @@ impl<'a> Receiver<'a> {
             self.end(None, false).await;
             return Outcome::Failed(tr!(error_damaged).into());
         }
-        match self.finalize().await {
+        match self.finalize(None).await {
             Ok(path) => Outcome::Completed(Some(path)),
             Err(e) => {
                 self.end(None, false).await;
@@ -929,7 +1021,7 @@ impl<'a> Receiver<'a> {
         let Streams { conn, send, recv } = s;
         self.session.set_current(Some(conn.clone()));
         let _watch = AbortOnDrop(spawn_path_watch(self.shared.clone(), self.id, conn.clone()));
-        self.held.peer_paused.store(false, Ordering::Relaxed);
+        self.status.new_connection();
         self.peer_suspended = false;
         let (msgs_tx, msgs_rx) = mpsc::unbounded_channel();
         let writer = tokio::spawn(control_writer(
@@ -937,9 +1029,8 @@ impl<'a> Receiver<'a> {
             self.ctl.paused.subscribe(),
             msgs_rx,
             self.shared.clone(),
-            self.id,
             self.session.clone(),
-            self.held.clone(),
+            self.status.clone(),
         ));
 
         let result = self.pump(&conn, recv, msgs_tx).await;
@@ -1000,7 +1091,7 @@ impl<'a> Receiver<'a> {
         if self.hasher.is_some() {
             return Ok(());
         }
-        self.emit(Phase::Verifying);
+        self.status.set(Phase::Verifying);
         let path = self.part_path.clone();
         let have = self.have;
         let cancel = self.ctl.cancel.clone();
@@ -1039,10 +1130,11 @@ impl<'a> Receiver<'a> {
         // Opened before anything else: the part is checked on the handle
         // that is written to, and stays the part while it is hashed after a
         // restart (see `open_own_part`).
-        let (out, kept) = self.open_for_connection(conn).await?;
+        let (out, kept) =
+            open_for_connection(&self.session, &self.status, &msgs, conn.closed()).await?;
         let mut out = tokio::fs::File::from_std(out);
         self.rehash().await?;
-        self.emit_pause_phase();
+        self.status.connected();
         self.shared.emit(Event::Progress {
             id: self.id,
             done: self.have,
@@ -1083,45 +1175,12 @@ impl<'a> Receiver<'a> {
             unpacking: self.unpacks(),
         });
         let _turn_away = self.turn_away_new_connections();
-        let placed = self.finalize().await?;
+        let placed = self.finalize(Some(&msgs)).await?;
         let _ = msgs.send(Msg::Result {
             ok: true,
             message: String::new(),
         });
         Ok(placed)
-    }
-
-    /// Opens the part file for the connection `conn` (see `open_own_part`).
-    /// While another program keeps it out, such as a virus scanner, a sync
-    /// client or a program in which the user opened it, this tries again
-    /// every second for as long as that lasts, and the status says so
-    /// (`Phase::PartInUse`): nothing is lost, and the sender meanwhile waits
-    /// for the data it sent to be read, so nothing else goes over the
-    /// network. The wait ends with the connection, as lost (`Lost`, which
-    /// `stream` tells apart by how it ended: the sender cancelled or exited,
-    /// say).
-    async fn open_for_connection(
-        &self,
-        conn: &Connection,
-    ) -> anyhow::Result<(std::fs::File, KeptPart)> {
-        let opened = loop {
-            let session = self.session.clone();
-            match off_runtime(move || open_own_part(&session)).await {
-                Err(e) if e.downcast_ref::<io::Error>().is_some_and(archive::is_busy) => {
-                    if !self.held.part_in_use.swap(true, Ordering::Relaxed) {
-                        self.emit_pause_phase();
-                    }
-                    tokio::select! {
-                        () = tokio::time::sleep(PART_BUSY_PAUSE) => {}
-                        _ = conn.closed() => break Err(lost(e)),
-                    }
-                }
-                opened => break opened,
-            }
-        };
-        // `pump` gives the status once the part is open.
-        self.held.part_in_use.store(false, Ordering::Relaxed);
-        opened
     }
 
     /// Notes in the record how much of the part file is on disk.
@@ -1167,16 +1226,11 @@ impl<'a> Receiver<'a> {
                         });
                     }
                 }
-                Msg::Paused => {
-                    self.held.peer_paused.store(true, Ordering::Relaxed);
-                    self.emit_pause_phase();
-                }
-                Msg::Resumed => {
-                    self.held.peer_paused.store(false, Ordering::Relaxed);
-                    self.emit_pause_phase();
-                }
+                Msg::Paused => self.status.change(|held| held.peer_paused = true),
+                Msg::Resumed => self.status.change(|held| held.peer_paused = false),
                 Msg::Done { hash } => {
                     anyhow::ensure!(self.have == self.size, tr!(error_protocol_end));
+                    self.status.hold();
                     return Ok(hash);
                 }
                 other => bail!(tr!(error_unexpected_answer, answer = format!("{other:?}"))),
@@ -1185,23 +1239,51 @@ impl<'a> Receiver<'a> {
     }
 
     /// Moves the file into place, or unpacks the folder and keeps its zip
-    /// as chosen. Once it succeeds, the transfer has ended as completed.
-    async fn finalize(&mut self) -> anyhow::Result<PathBuf> {
-        if self.unpacks() {
-            self.emit(Phase::Unpacking);
+    /// as chosen, telling the sender through `msgs` while connected (see
+    /// `control_writer`). Once it succeeds, the transfer has ended as
+    /// completed.
+    async fn finalize(
+        &mut self,
+        msgs: Option<&mpsc::UnboundedSender<Msg>>,
+    ) -> anyhow::Result<PathBuf> {
+        // The status of the step, also once it no longer waits for another
+        // program that keeps the part out (see `Transfer::open_part`).
+        let step = if self.unpacks() {
+            self.status.set(Phase::Unpacking);
             #[cfg(test)]
             while HOLD_FINALIZE.load(Ordering::SeqCst) {
                 tokio::time::sleep(Duration::from_millis(50)).await;
             }
-        }
+            Phase::Unpacking
+        } else {
+            self.status.hold();
+            Phase::Transferring
+        };
         let shared = self.shared.clone();
         let id = self.id;
         let cancel = self.ctl.cancel.clone();
         let (kind, folder, times) = (self.kind, self.folder, self.times);
         let (dest, name) = (self.dest_dir.clone(), self.name.clone());
+        let (status, size, msgs) = (self.status.clone(), self.size, msgs.cloned());
         let transfer = Transfer {
             session: self.session.clone(),
             data_dir: shared.data_dir.clone(),
+            waits: Box::new(move |in_use| {
+                if in_use {
+                    status.set(Phase::PartInUse { finishing: true });
+                    // All of it has arrived.
+                    status.shared.emit(Event::Progress {
+                        id,
+                        done: size,
+                        total: size,
+                    });
+                } else {
+                    status.set(step);
+                }
+                if let Some(msgs) = &msgs {
+                    let _ = msgs.send(Msg::PartInUse { in_use });
+                }
+            }),
         };
         tokio::task::spawn_blocking(move || {
             // Until this is over, a cancel is left to it.
@@ -1231,16 +1313,71 @@ impl<'a> Receiver<'a> {
     }
 }
 
-/// A running receive as its last step sees it: the session, and the data
-/// folder for its record.
+/// Opens the part file for a connection (see `open_own_part`). While another
+/// program keeps it out, such as a virus scanner, a sync client or a
+/// program in which the user opened it, this tries again for as long as
+/// that lasts, and after a moment the status says so (`Phase::PartInUse`,
+/// or the user's pause, see `Status::part_in_use`) and the sender is told
+/// through `msgs` (see `control_writer`): nothing is lost, and the sender
+/// meanwhile waits for the data it sent to be read, so nothing else goes
+/// over the network. The wait ends once the connection is `closed`, as lost
+/// (`Lost`, which `stream` tells apart by how it ended: the sender
+/// cancelled or exited, say).
+async fn open_for_connection(
+    session: &Arc<Session>,
+    status: &Status,
+    msgs: &mpsc::UnboundedSender<Msg>,
+    closed: impl Future,
+) -> anyhow::Result<(std::fs::File, KeptPart)> {
+    tokio::pin!(closed);
+    let mut pauses = archive::HELD_RETRY_MS;
+    let mut waiting = false;
+    let opened = loop {
+        let session = session.clone();
+        match off_runtime(move || open_own_part(&session, pauses)).await {
+            Err(e) if e.downcast_ref::<io::Error>().is_some_and(archive::is_busy) => {
+                if !std::mem::replace(&mut waiting, true) {
+                    status.part_in_use(true);
+                    let _ = msgs.send(Msg::PartInUse { in_use: true });
+                }
+                pauses = &[];
+                tokio::select! {
+                    () = tokio::time::sleep(PART_BUSY_PAUSE) => {}
+                    _ = &mut closed => break Err(lost(e)),
+                }
+            }
+            opened => break opened,
+        }
+    };
+    if waiting {
+        // The caller gives the status once the part is open.
+        status.part_in_use(false);
+        if opened.is_ok() {
+            let _ = msgs.send(Msg::PartInUse { in_use: false });
+        }
+    }
+    opened
+}
+
+/// A running receive as its last step sees it: the session, the data folder
+/// for its record, and what to do when the step waits for another program
+/// that keeps the part out (`true`), and when it goes on (see
+/// [`open_part`](Self::open_part)).
 struct Transfer {
     session: Arc<Session>,
     data_dir: PathBuf,
+    waits: Box<dyn Fn(bool) + Send>,
 }
 
 impl Transfer {
     fn files(&self) -> anyhow::Result<ReceiveFiles> {
         self.session.receive_files().ok_or_else(|| Cancelled.into())
+    }
+
+    /// Whether the transfer has ended or is to end: the user cancelled
+    /// (see `Session::cancel`).
+    fn to_end(&self) -> bool {
+        self.session.with_record(|r| r.ended).unwrap_or(true)
     }
 
     /// Notes `files` in the record (see `Session::save_receive_files`).
@@ -1262,12 +1399,17 @@ impl Transfer {
     /// an earlier version, which trusts the name. While it is open, other
     /// programs can only read it, so what the step renames or unpacks is
     /// what was checked. With `renames`, the handle can also rename the part
-    /// and give it its creation time back (see `moved`), which another
-    /// program keeps out if it has the part open without letting it be
-    /// deleted, as with a rename by name; otherwise it only reads. A program
-    /// that has the part open for writing keeps the step out too, since what
-    /// was checked may be changing. Either for a few seconds at most, after
-    /// which the step fails.
+    /// and give it its creation time back (see `moved`); otherwise it only
+    /// reads.
+    ///
+    /// Another program keeps the step out while it has the part open for
+    /// writing, since what was checked may be changing, and with `renames`
+    /// also while it has it open without letting it be deleted, as with a
+    /// rename by name. All of the item has arrived, so the step waits for
+    /// it as long as that lasts, as a connection does (see
+    /// `open_for_connection`): after a moment it says so (`waits`), and once
+    /// the part is open, that it goes on. A cancel ends the wait (with
+    /// `Cancelled`).
     fn open_part(&self, renames: bool) -> io::Result<(std::fs::File, FileId)> {
         let mut options = std::fs::OpenOptions::new();
         options
@@ -1277,7 +1419,27 @@ impl Transfer {
                 FILE_GENERIC_READ
             })
             .share_mode(FILE_SHARE_READ);
-        let (part, record) = open_checked(&self.session, &options, archive::RENAME_RETRY_MS)?;
+        let mut pauses = archive::HELD_RETRY_MS;
+        let mut waiting = false;
+        let opened = loop {
+            match open_checked(&self.session, &options, pauses) {
+                Err(e) if archive::is_busy(&e) => {
+                    if self.to_end() {
+                        break Err(io::Error::other(Cancelled));
+                    }
+                    if !std::mem::replace(&mut waiting, true) {
+                        (self.waits)(true);
+                    }
+                    pauses = &[];
+                    std::thread::sleep(PART_BUSY_PAUSE);
+                }
+                opened => break opened,
+            }
+        };
+        if waiting && opened.is_ok() {
+            (self.waits)(false);
+        }
+        let (part, record) = opened?;
         let id = match record.part_identity() {
             Some(id) => id,
             None => FileId::of(&part)?,
@@ -1601,7 +1763,7 @@ mod tests {
         std::fs::create_dir_all(part.parent().unwrap()).unwrap();
         std::fs::write(&part, b"abc").unwrap();
         let transfer = receiving(&base, &part, Kind::File, ReceivedFolder::Extract);
-        let open = open_own_part(&transfer.session).unwrap();
+        let open = open_own_part(&transfer.session, &[]).unwrap();
         assert!(std::fs::remove_file(&part).is_err());
         assert!(std::fs::rename(&part, base.join("elsewhere")).is_err());
         assert!(std::fs::OpenOptions::new().write(true).open(&part).is_err());
@@ -1609,7 +1771,7 @@ mod tests {
         drop(open);
         std::fs::remove_file(&part).unwrap();
         std::fs::write(&part, b"another").unwrap();
-        let missing = open_own_part(&transfer.session).err().unwrap();
+        let missing = open_own_part(&transfer.session, &[]).err().unwrap();
         assert_eq!(missing.to_string(), tr!(error_part_missing));
         assert_eq!(std::fs::read(&part).unwrap(), b"another");
         transfer
@@ -1617,7 +1779,7 @@ mod tests {
             .end(None, false)
             .forget_blocking(&transfer.data_dir);
         assert!(archive::is_cancelled(
-            &open_own_part(&transfer.session).err().unwrap()
+            &open_own_part(&transfer.session, &[]).err().unwrap()
         ));
         assert_eq!(std::fs::read(&part).unwrap(), b"another");
 
@@ -1626,12 +1788,12 @@ mod tests {
         std::fs::remove_file(&part).unwrap();
         std::fs::write(&part, b"abc").unwrap();
         let transfer = receiving(&base, &part, Kind::File, ReceivedFolder::Extract);
-        drop(open_own_part(&transfer.session).unwrap());
+        drop(open_own_part(&transfer.session, &[]).unwrap());
         let created = std::fs::metadata(&part).unwrap().created().unwrap();
         std::fs::remove_file(&part).unwrap();
         std::fs::write(&part, b"another").unwrap();
         archive::set_times(&part, None, Some(created + Duration::from_secs(2))).unwrap();
-        assert!(open_own_part(&transfer.session).is_err());
+        assert!(open_own_part(&transfer.session, &[]).is_err());
         archive::PRETEND_FAT.set(false);
         std::fs::remove_dir_all(&base).ok();
     }
@@ -1646,7 +1808,7 @@ mod tests {
         let part = base.join("a.txt.part");
         std::fs::write(&part, b"abc").unwrap();
         let transfer = receiving(&base, &part, Kind::File, ReceivedFolder::Extract);
-        let (writing, kept) = open_own_part(&transfer.session).unwrap();
+        let (writing, kept) = open_own_part(&transfer.session, &[]).unwrap();
         assert!(transfer.session.cancel_blocking(&transfer.data_dir));
         assert!(session::records(&transfer.data_dir).is_empty());
         // The connection is gone, and its last write still holds the part.
@@ -1716,9 +1878,9 @@ mod tests {
 
     /// Another program that has the part open for writing keeps a
     /// connection out, which then waits for it as long as that lasts (see
-    /// `Receiver::open_for_connection`), and nothing else; once it lets go,
-    /// the part opens. Meanwhile the status says so, unless the user paused
-    /// the transfer.
+    /// `open_for_connection`), and nothing else; once it lets go, the part
+    /// opens. Meanwhile the status says so, unless the user paused the
+    /// transfer.
     #[test]
     fn a_part_held_elsewhere_keeps_a_connection_out() {
         let base = scratch("busy-part");
@@ -1726,33 +1888,157 @@ mod tests {
         std::fs::write(&part, b"abc").unwrap();
         let transfer = receiving(&base, &part, Kind::File, ReceivedFolder::Extract);
         let other = std::fs::OpenOptions::new().write(true).open(&part).unwrap();
-        let e = open_own_part(&transfer.session).err().unwrap();
+        let e = open_own_part(&transfer.session, &[]).err().unwrap();
         assert!(
             e.downcast_ref::<io::Error>().is_some_and(archive::is_busy),
             "{e:#}"
         );
         drop(other);
-        drop(open_own_part(&transfer.session).unwrap());
+        drop(open_own_part(&transfer.session, &[]).unwrap());
         assert_eq!(std::fs::read(&part).unwrap(), b"abc");
-        let held = HeldUp::default();
-        held.peer_paused.store(true, Ordering::Relaxed);
+        let mut held = HeldUp {
+            peer_paused: true,
+            ..HeldUp::default()
+        };
         assert_eq!(held.phase(false), Phase::PausedByPeer);
-        held.part_in_use.store(true, Ordering::Relaxed);
-        assert_eq!(held.phase(false), Phase::PartInUse);
+        held.part_in_use = true;
+        assert_eq!(held.phase(false), Phase::PartInUse { finishing: false });
         assert_eq!(held.phase(true), Phase::Paused);
         std::fs::remove_dir_all(&base).ok();
+    }
+
+    /// The phases emitted so far.
+    fn phases(events: &std::sync::Mutex<Vec<Event>>) -> Vec<Phase> {
+        events
+            .lock()
+            .unwrap()
+            .iter()
+            .filter_map(|event| match event {
+                Event::Phase { phase, .. } => Some(*phase),
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// While another program keeps the part out, a connection waits for it
+    /// (see `open_for_connection`): after a moment the status says so, and
+    /// follows the user's pause, and the sender is told. A connection that
+    /// is closed meanwhile ends the wait as lost, and a pause then changes
+    /// the status no more. Once the program lets go, the part opens and
+    /// the sender is told that the transfer goes on; the status is then for
+    /// the caller to give. A program that lets go in a moment, as a virus
+    /// scanner does, is not told about.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn a_connection_waits_for_a_part_held_elsewhere() {
+        let base = scratch("held-wait");
+        let part = base.join("a.txt.part");
+        std::fs::write(&part, b"abc").unwrap();
+        let transfer = receiving(&base, &part, Kind::File, ReceivedFolder::Extract);
+        let session = transfer.session.clone();
+        let (shared, events) = super::super::tests::recording_shared(&base);
+        let (paused, paused_rx) = watch::channel(false);
+        let status = Status::new(&shared, 1, paused_rx);
+        let (msgs, mut told) = mpsc::unbounded_channel();
+        let wait_for_status = async || {
+            while phases(&events).is_empty() {
+                tokio::time::sleep(Duration::from_millis(20)).await;
+            }
+        };
+
+        let other = std::fs::OpenOptions::new().write(true).open(&part).unwrap();
+        let (close, closed) = oneshot::channel::<()>();
+        let waiting = tokio::spawn({
+            let (session, status, msgs) = (session.clone(), status.clone(), msgs.clone());
+            async move {
+                open_for_connection(&session, &status, &msgs, closed)
+                    .await
+                    .map(drop)
+            }
+        });
+        wait_for_status().await;
+        assert_eq!(told.recv().await, Some(Msg::PartInUse { in_use: true }));
+        paused.send_replace(true);
+        status.change(|_| {});
+        paused.send_replace(false);
+        status.change(|_| {});
+        let in_use = Phase::PartInUse { finishing: false };
+        assert_eq!(phases(&events), [in_use, Phase::Paused, in_use]);
+        close.send(()).unwrap();
+        let e = waiting.await.unwrap().unwrap_err();
+        assert!(e.is::<Lost>(), "{e:#}");
+        status.change(|_| {});
+        assert_eq!(phases(&events).len(), 3, "the pauses decide nothing now");
+        assert!(told.try_recv().is_err());
+
+        events.lock().unwrap().clear();
+        let waiting = tokio::spawn({
+            let (session, status, msgs) = (session.clone(), status.clone(), msgs.clone());
+            async move {
+                open_for_connection(&session, &status, &msgs, std::future::pending::<()>())
+                    .await
+                    .map(drop)
+            }
+        });
+        wait_for_status().await;
+        drop(other);
+        waiting.await.unwrap().unwrap();
+        assert_eq!(told.recv().await, Some(Msg::PartInUse { in_use: true }));
+        assert_eq!(told.recv().await, Some(Msg::PartInUse { in_use: false }));
+        status.change(|_| {});
+        assert_eq!(phases(&events), [in_use], "the caller gives the status");
+
+        events.lock().unwrap().clear();
+        let scanner = std::fs::OpenOptions::new().write(true).open(&part).unwrap();
+        let letting_go = std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(100));
+            drop(scanner);
+        });
+        open_for_connection(&session, &status, &msgs, std::future::pending::<()>())
+            .await
+            .unwrap();
+        letting_go.join().unwrap();
+        assert!(phases(&events).is_empty() && told.try_recv().is_err());
+        std::fs::remove_dir_all(&base).ok();
+    }
+
+    /// `transfer` with its last step's word that it waits for another
+    /// program, or goes on, noted in the result (see `Transfer::open_part`).
+    fn noting_waits(transfer: &mut Transfer) -> Arc<std::sync::Mutex<Vec<bool>>> {
+        let noted = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let notes = noted.clone();
+        transfer.waits = Box::new(move |in_use| notes.lock().unwrap().push(in_use));
+        noted
+    }
+
+    /// Lets go of `other` once `noted` says that the last step waits for it.
+    fn let_go_when_waited_for(
+        noted: &Arc<std::sync::Mutex<Vec<bool>>>,
+        other: std::fs::File,
+    ) -> std::thread::JoinHandle<()> {
+        let noted = noted.clone();
+        std::thread::spawn(move || {
+            while noted.lock().unwrap().is_empty() {
+                std::thread::sleep(Duration::from_millis(20));
+            }
+            drop(other);
+        })
     }
 
     /// The last step of a folder that is only unpacked does not rename its
     /// part, so it only reads it: another program that reads it without
     /// letting it be deleted, such as a virus scanner, does not stop it.
-    /// One that renames needs to delete, as a rename by name did.
+    /// One that renames needs to delete, as a rename by name did. A program
+    /// that has the part open for writing keeps either out, since what was
+    /// checked may be changing: the step waits for it as long as that lasts,
+    /// saying so after a moment and once it goes on, and nothing of what
+    /// arrived is lost.
     #[test]
     fn a_part_that_is_only_unpacked_is_only_read() {
         let base = scratch("only-read");
         let part = received_zip(&base, "recv.zip");
         let dest = part.parent().unwrap().to_path_buf();
-        let transfer = receiving(&base, &part, Kind::Folder, ReceivedFolder::Extract);
+        let mut transfer = receiving(&base, &part, Kind::Folder, ReceivedFolder::Extract);
+        let noted = noting_waits(&mut transfer);
         let other = std::fs::OpenOptions::new()
             .read(true)
             .share_mode(FILE_SHARE_READ)
@@ -1761,6 +2047,53 @@ mod tests {
         let (t, _) = times(1_500_000_000);
         let folder = finish(&transfer, &dest, ReceivedFolder::Extract, t);
         assert_eq!(std::fs::read(folder.join("a.txt")).unwrap(), b"alpha");
+        assert!(noted.lock().unwrap().is_empty());
+        drop(other);
+        std::fs::remove_dir_all(&base).ok();
+
+        let base = scratch("only-read-writer");
+        let part = received_zip(&base, "recv.zip");
+        let dest = part.parent().unwrap().to_path_buf();
+        let mut transfer = receiving(&base, &part, Kind::Folder, ReceivedFolder::Extract);
+        let noted = noting_waits(&mut transfer);
+        let writer = std::fs::OpenOptions::new().write(true).open(&part).unwrap();
+        let letting_go = let_go_when_waited_for(&noted, writer);
+        let folder = finish(&transfer, &dest, ReceivedFolder::Extract, t);
+        letting_go.join().unwrap();
+        assert_eq!(std::fs::read(folder.join("a.txt")).unwrap(), b"alpha");
+        assert_eq!(*noted.lock().unwrap(), [true, false]);
+        std::fs::remove_dir_all(&base).ok();
+    }
+
+    /// A cancel while the last step waits for another program that keeps
+    /// the part out ends the wait, and the step as cancelled.
+    #[test]
+    fn a_cancel_ends_the_wait_of_the_last_step() {
+        let base = scratch("wait-cancel");
+        let part = base.join("a.txt.part");
+        std::fs::write(&part, b"abcde").unwrap();
+        let mut transfer = receiving(&base, &part, Kind::File, ReceivedFolder::Extract);
+        let noted = noting_waits(&mut transfer);
+        let other = std::fs::OpenOptions::new().write(true).open(&part).unwrap();
+        let cancelling = std::thread::spawn({
+            let (noted, session) = (noted.clone(), transfer.session.clone());
+            let data_dir = transfer.data_dir.clone();
+            move || {
+                while noted.lock().unwrap().is_empty() {
+                    std::thread::sleep(Duration::from_millis(20));
+                }
+                assert!(!session.cancel_blocking(&data_dir), "left to the step");
+            }
+        });
+        let (t, _) = times(1_500_000_000);
+        let e = {
+            let _finishing = transfer.session.finishing().unwrap();
+            finish_file(&transfer, &base, "a.txt", t).unwrap_err()
+        };
+        cancelling.join().unwrap();
+        assert!(archive::is_cancelled(&e), "{e:#}");
+        assert_eq!(*noted.lock().unwrap(), [true], "it never went on");
+        assert_eq!(std::fs::read(&part).unwrap(), b"abcde");
         drop(other);
         std::fs::remove_dir_all(&base).ok();
     }
@@ -1859,7 +2192,11 @@ mod tests {
         let peer = iroh::SecretKey::generate().public();
         let (session, _) = Session::new(1, token, peer, Role::Receive);
         session.set_record(record);
-        Transfer { session, data_dir }
+        Transfer {
+            session,
+            data_dir,
+            waits: Box::new(|_| {}),
+        }
     }
 
     /// Runs the last step of a received folder, as `finalize` does.

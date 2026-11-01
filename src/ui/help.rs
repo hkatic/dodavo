@@ -198,6 +198,7 @@ mod tests {
                 s.phase_unpacking,
                 s.phase_part_in_use,
                 s.tx_part_in_use,
+                s.tx_peer_part_in_use,
                 s.row_transferred,
                 s.row_processed,
                 s.row_speed,

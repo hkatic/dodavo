@@ -22,7 +22,7 @@ use windows_sys::Win32::{
         INVALID_HANDLE_VALUE, MAX_PATH, SYSTEMTIME,
     },
     Storage::FileSystem::{
-        BY_HANDLE_FILE_INFORMATION, FILE_DISPOSITION_INFO, FILE_FLAG_BACKUP_SEMANTICS,
+        BY_HANDLE_FILE_INFORMATION, DELETE, FILE_DISPOSITION_INFO, FILE_FLAG_BACKUP_SEMANTICS,
         FILE_FLAG_OPEN_REPARSE_POINT, FILE_ID_INFO, FILE_INFO_BY_HANDLE_CLASS, FILE_RENAME_INFO,
         FILE_WRITE_ATTRIBUTES, FileDispositionInfo, FileIdInfo, FileRenameInfo, FindClose,
         FindFirstFileW, GetFileInformationByHandle, GetFileInformationByHandleEx,
@@ -1002,16 +1002,36 @@ fn set_file_info<T>(
     }
 }
 
-/// The pauses between attempts to delete a file that is held for a moment
-/// (see [`delete_held`]): about a second and a half in all.
-pub const DELETE_RETRY_MS: &[u64] = &[50, 100, 200, 400, 800];
+/// The pauses between attempts on a file that another program holds for a
+/// moment, such as a virus scanner that reads it: to delete it (see
+/// [`delete_held`]), or to open the part file of a receive before the
+/// transfer says that it waits for that program. About a second and a half
+/// in all.
+pub const HELD_RETRY_MS: &[u64] = &[50, 100, 200, 400, 800];
 
 /// Whether deleting the file at `path` failed with `error` only for now:
-/// another program has it open (see [`is_busy`]), or it is being deleted
+/// another program has it open (see [`is_busy`]), it is being deleted
 /// already and goes once the last program lets go of it (see
-/// [`being_deleted`]). Not where it is read-only, or may not be deleted.
+/// [`being_deleted`]), or it may be deleted but a program has it mapped
+/// into memory, as a virus scanner or the search indexer may, which Windows
+/// also reports as "access denied" (see [`deletable`]). Not where it is
+/// read-only, or may not be deleted, which trying again never changes.
 pub fn delete_held(error: &io::Error, path: &Path) -> bool {
-    is_busy(error) || (error.kind() == io::ErrorKind::PermissionDenied && being_deleted(path))
+    is_busy(error)
+        || (error.kind() == io::ErrorKind::PermissionDenied
+            && (being_deleted(path) || deletable(path)))
+}
+
+/// Whether the file at `path` may be deleted and is not read-only, so that
+/// a deletion that was denied all the same was denied only for now (see
+/// [`delete_held`]).
+fn deletable(path: &Path) -> bool {
+    OpenOptions::new()
+        .access_mode(DELETE)
+        .custom_flags(FILE_FLAG_OPEN_REPARSE_POINT)
+        .open(path)
+        .and_then(|file| file.metadata())
+        .is_ok_and(|m| m.is_file() && !m.permissions().readonly())
 }
 
 /// Whether the file at `path` is being deleted: it was deleted while a
@@ -1506,12 +1526,75 @@ mod tests {
         std::fs::remove_dir_all(&base).ok();
     }
 
+    /// Windows refuses to delete a file that a program has mapped into
+    /// memory, as a virus scanner or the search indexer may, with "access
+    /// denied", as for a file that may not be deleted at all: before
+    /// Windows 10, and on file systems without POSIX deletion. Such a file
+    /// goes once the program lets go, so the end of a transfer tries again
+    /// (see `delete_held`); not for a read-only file, where that never
+    /// helps.
+    #[test]
+    fn a_mapped_file_is_tried_again() {
+        use windows_sys::Win32::{
+            Foundation::CloseHandle,
+            System::Memory::{
+                CreateFileMappingW, FILE_MAP_READ, MapViewOfFile, PAGE_READONLY, UnmapViewOfFile,
+            },
+        };
+        let base = scratch("mapped");
+        let path = base.join("a.txt");
+        std::fs::write(&path, b"mapped").unwrap();
+        let file = File::open(&path).unwrap();
+        // SAFETY: the handle is open; the mapping and its view are let go
+        // below.
+        let mapping = unsafe {
+            CreateFileMappingW(
+                file.as_raw_handle(),
+                std::ptr::null(),
+                PAGE_READONLY,
+                0,
+                0,
+                std::ptr::null(),
+            )
+        };
+        assert!(!mapping.is_null());
+        // SAFETY: as above.
+        let view = unsafe { MapViewOfFile(mapping, FILE_MAP_READ, 0, 0, 0) };
+        assert!(!view.Value.is_null());
+        drop(file);
+        // Deleted the classic way, as there.
+        let deleting = OpenOptions::new().access_mode(DELETE).open(&path).unwrap();
+        let e = delete_on_close(&deleting).unwrap_err();
+        drop(deleting);
+        assert_eq!(e.kind(), io::ErrorKind::PermissionDenied, "{e}");
+        assert!(delete_held(&e, &path));
+        // SAFETY: the view and the mapping made above, not used after this.
+        unsafe {
+            UnmapViewOfFile(view);
+            CloseHandle(mapping);
+        }
+        std::fs::remove_file(&path).unwrap();
+
+        let kept = base.join("kept.txt");
+        std::fs::write(&kept, b"k").unwrap();
+        let mut permissions = std::fs::metadata(&kept).unwrap().permissions();
+        permissions.set_readonly(true);
+        std::fs::set_permissions(&kept, permissions.clone()).unwrap();
+        let denied = io::Error::from_raw_os_error(ERROR_ACCESS_DENIED as i32);
+        assert!(!delete_held(&denied, &kept));
+        #[allow(clippy::permissions_set_readonly_false)]
+        permissions.set_readonly(false);
+        std::fs::set_permissions(&kept, permissions).unwrap();
+        assert!(delete_held(&denied, &kept), "may be deleted now");
+        std::fs::remove_dir_all(&base).ok();
+    }
+
     /// A file that was deleted while another program still has it open
     /// keeps its name until it is closed: the next free name is used then,
     /// instead of failing with "access denied".
     #[test]
     fn a_name_that_is_being_deleted_is_taken() {
-        use windows_sys::Win32::Storage::FileSystem::{DELETE, FILE_SHARE_READ};
+        use windows_sys::Win32::Storage::FileSystem::FILE_SHARE_READ;
         let base = scratch("pending");
         let path = base.join("a.txt");
         std::fs::write(&path, b"x").unwrap();
@@ -1526,12 +1609,8 @@ mod tests {
         assert!(being_deleted(&path));
         let denied = io::Error::from_raw_os_error(ERROR_ACCESS_DENIED as i32);
         assert!(delete_held(&denied, &path));
-        // A file that may not be deleted (by an access rule, say) is not:
-        // trying again never helps.
-        let kept = base.join("kept.txt");
-        std::fs::write(&kept, b"k").unwrap();
-        assert!(!being_deleted(&kept) && !delete_held(&denied, &kept));
         assert!(!being_deleted(&base.join("none.txt")));
+        assert!(!delete_held(&denied, &base.join("none.txt")));
         assert!(!listed(&base.join("b.txt")) && !listed(&base.join("a*.txt")));
         // `<`, `>` and `"` are wildcards too: never used as a pattern.
         assert!(!listed(&base.join("a<")) && !listed(&base.join("a\"txt")));

@@ -240,11 +240,7 @@ fn remove_file(path: &Path, patient: bool) -> bool {
 /// while the file is held or being deleted (see [`remove_file`] and
 /// [`archive::delete_held`]); whether it is gone.
 fn deleted(path: &Path, patient: bool, delete: impl FnMut() -> io::Result<()>) -> bool {
-    let pauses = if patient {
-        archive::DELETE_RETRY_MS
-    } else {
-        &[]
-    };
+    let pauses = if patient { archive::HELD_RETRY_MS } else { &[] };
     match archive::retried(pauses, |e| archive::delete_held(e, path), delete) {
         Ok(()) => true,
         Err(e) => e.kind() == io::ErrorKind::NotFound,

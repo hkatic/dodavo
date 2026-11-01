@@ -53,6 +53,7 @@ pub const HR: Strings = Strings {
     tx_paused_by_peer: "Pauzirano na drugoj strani",
     tx_waiting_connection: "Čeka se veza",
     tx_part_in_use: "Čeka se drugi program",
+    tx_peer_part_in_use: "Čeka se program na drugoj strani",
     tx_verifying: "Provjera",
     tx_unpacking: "Raspakiravanje",
     tx_peer_unpacking: "Raspakiravanje na drugoj strani",
@@ -154,6 +155,7 @@ pub const HR: Strings = Strings {
     phase_waiting_connection: "Veza je prekinuta. Prijenos se nastavlja čim oboje ponovno budete na mreži, čak i nakon ponovnog pokretanja.",
     phase_verifying: "Provjera već prenesenih podataka…",
     phase_part_in_use: "Djelomično primljenu datoteku koristi drugi program. Prijenos se nastavlja čim je taj program zatvori.",
+    phase_peer_part_in_use: "Na drugoj strani ({name}) djelomično primljenu datoteku koristi drugi program. Prijenos se nastavlja čim je taj program zatvori.",
     connection_lost_instruction: "Veza je prekinuta.",
     connection_lost_text: "Dodavo može pričekati i nastaviti prijenos ondje gdje je stao čim se veza ponovno uspostavi, \
         čak i nakon ponovnog pokretanja. Prijenos možete i otkazati.",
@@ -166,6 +168,7 @@ pub const HR: Strings = Strings {
     continuing_balloon: "„{item}”: prijenos se nastavlja.",
     part_in_use_balloon_title: "Prijenos čeka",
     part_in_use_balloon: "„{item}”: djelomično primljenu datoteku koristi drugi program. Prijenos se nastavlja čim je taj program zatvori.",
+    peer_part_in_use_balloon: "„{item}”: na drugoj strani ({name}) djelomično primljenu datoteku koristi drugi program. Prijenos se nastavlja čim je taj program zatvori.",
     peer_unpacking_balloon: "„{item}”: sve je stiglo. Primatelj ({name}) raspakirava mapu pa se prijenos više ne može otkazati.",
     handed_over_title: "Sve je stiglo",
     handed_over_balloon: "„{item}”: sve je stiglo pa se prijenos više ne može otkazati.",

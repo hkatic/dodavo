@@ -132,6 +132,9 @@ struct Sender<'a> {
     snapshots: Snapshots,
     paused_rx: watch::Receiver<bool>,
     peer_paused: bool,
+    /// Another program on the receiving side keeps the partly received file
+    /// out, so the receiver does not read what is sent (`Msg::PartInUse`).
+    peer_part_in_use: bool,
     /// The last connection was closed by the receiver on purpose (it is
     /// exiting): the wait for the next one is not a network problem.
     peer_suspended: bool,
@@ -297,6 +300,7 @@ async fn start(
         snapshots: Snapshots::new(),
         paused_rx: ctl.paused.subscribe(),
         peer_paused: false,
+        peer_part_in_use: false,
         peer_suspended: false,
     };
     sender.drive(Some(streams), 0).await
@@ -333,6 +337,7 @@ async fn continue_record(
         snapshots: Snapshots::new(),
         paused_rx: ctl.paused.subscribe(),
         peer_paused: false,
+        peer_part_in_use: false,
         peer_suspended: false,
     };
     let handed_over = record.done_hash.is_some();
@@ -402,12 +407,15 @@ impl Sender<'_> {
         self.shared.emit(Event::Phase { id: self.id, phase });
     }
 
-    /// The status while connected: paused here, paused there, or running.
+    /// The status while connected: paused here, paused there, held up by a
+    /// program there, or running.
     fn emit_pause_phase(&self) {
         self.emit(if self.ctl.is_paused() {
             Phase::Paused
         } else if self.peer_paused {
             Phase::PausedByPeer
+        } else if self.peer_part_in_use {
+            Phase::PartInUse { finishing: false }
         } else {
             Phase::Transferring
         });
@@ -623,6 +631,7 @@ impl Sender<'_> {
             }
         }));
         self.peer_paused = false;
+        self.peer_part_in_use = false;
         self.peer_suspended = false;
 
         let result = self.pump(&mut send, &mut ctl_rx, have).await;
@@ -768,6 +777,10 @@ impl Sender<'_> {
                         self.peer_paused = false;
                         self.emit_pause_phase();
                     }
+                    Some(Msg::PartInUse { in_use }) => {
+                        self.peer_part_in_use = in_use;
+                        self.emit_pause_phase();
+                    }
                     Some(Msg::Result { ok: false, message }) => {
                         bail!(tr!(error_peer_reported, message = message))
                     }
@@ -806,10 +819,13 @@ impl Sender<'_> {
         send.finish().map_err(lost)?;
 
         // Wait for the receiver's verdict: first that all of it arrived
-        // intact, then, once it is saved there, the result.
+        // intact, then, once it is saved there, the result. `Some(unpacking)`
+        // once it did.
+        let mut verified = None;
         loop {
             match ctl_rx.recv().await {
                 Some(Msg::Verified { unpacking }) => {
+                    verified = Some(unpacking);
                     // The item is the receiver's now (also after a restart).
                     self.session.hand_over();
                     // The phase first: it says what is going on there, also
@@ -826,6 +842,14 @@ impl Sender<'_> {
                 Some(Msg::Result { ok: false, message }) => {
                     bail!(tr!(error_peer_reported, message = message))
                 }
+                // A program there keeps the part out, and the receiver waits
+                // for it: as it began to read (all of the data may have been
+                // sent before it could), or in its last step.
+                Some(Msg::PartInUse { in_use }) => self.emit(match (in_use, verified) {
+                    (true, _) => Phase::PartInUse { finishing: true },
+                    (false, Some(true)) => Phase::PeerUnpacking,
+                    (false, _) => Phase::Transferring,
+                }),
                 Some(Msg::Paused | Msg::Resumed) => {}
                 Some(other) => bail!(tr!(error_unexpected_answer, answer = format!("{other:?}"))),
                 None => return Err(lost(tr!(error_connection_lost))),
