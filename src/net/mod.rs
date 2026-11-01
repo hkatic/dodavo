@@ -24,6 +24,7 @@ use iroh::{Endpoint, EndpointId, SecretKey, Watcher, endpoint::Connection, endpo
 use iroh_mdns_address_lookup::MdnsAddressLookup;
 use tokio::sync::{mpsc, oneshot, watch};
 
+pub use crate::config::ReceivedFolder;
 pub use protocol::{Kind, Offer};
 use session::{Control, Session, Streams};
 pub use session::{Role, TransferRecord};
@@ -38,10 +39,10 @@ pub enum Command {
         /// The recipient's name as shown in the window, kept for a restart.
         peer_name: String,
     },
-    /// Answer to an incoming offer: `Some(folder)` accepts and saves into that folder.
+    /// Answer to an incoming offer: `Some` accepts it, `None` declines.
     Respond {
         id: u64,
-        accept: Option<PathBuf>,
+        accept: Option<Accept>,
     },
     Cancel {
         id: u64,
@@ -62,6 +63,22 @@ pub enum Command {
     Shutdown {
         done: std::sync::mpsc::Sender<()>,
     },
+}
+
+/// How an accepted offer is saved.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Accept {
+    /// The folder the item is saved into.
+    pub dir: PathBuf,
+    /// For folders: what is kept of the archive. It is stored with the
+    /// transfer, so a later change of the setting does not affect it.
+    pub folder: ReceivedFolder,
+}
+
+impl Accept {
+    pub fn new(dir: PathBuf, folder: ReceivedFolder) -> Self {
+        Accept { dir, folder }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -176,7 +193,7 @@ pub(crate) struct Shared {
     /// This profile's folder for temporary archives (see
     /// `archive::temp_dir_for`); created on use.
     pub(crate) temp_dir: PathBuf,
-    pub(crate) pending: Mutex<HashMap<u64, oneshot::Sender<Option<PathBuf>>>>,
+    pub(crate) pending: Mutex<HashMap<u64, oneshot::Sender<Option<Accept>>>>,
     controls: Mutex<HashMap<u64, Arc<Control>>>,
     sessions: Mutex<Vec<Arc<Session>>>,
     /// Transfers from an earlier run whose tasks have not registered their
@@ -620,7 +637,7 @@ pub(crate) const CLOSE_SUSPENDED: u32 = 3;
 
 #[cfg(test)]
 mod tests {
-    use std::sync::mpsc;
+    use std::{sync::mpsc, time::SystemTime};
 
     use super::*;
 
@@ -692,8 +709,9 @@ mod tests {
         );
         let b = Arc::new(start(key_b, base.join("b"), base.join("temp"), sink(tx_b)));
 
-        // Receiver: accept everything except offers named "decline.txt", and
-        // pause the first transfer once for a moment.
+        // Receiver: accept everything except offers named "decline.txt" (the
+        // folder "Kept" also keeps its zip), and pause the first transfer
+        // once for a moment.
         let recv_dir = base.join("received");
         let b_thread = {
             let recv_dir = recv_dir.clone();
@@ -702,13 +720,19 @@ mod tests {
                 let mut done = Vec::new();
                 let mut phases = Vec::new();
                 let mut paused_once = false;
-                while done.len() < 3 {
+                while done.len() < 4 {
                     match rx_b
                         .recv_timeout(Duration::from_secs(120))
                         .expect("receiver timed out")
                     {
                         Event::Offer { id, offer, .. } => {
-                            let accept = (offer.name != "decline.txt").then(|| recv_dir.clone());
+                            let folder = if offer.name == "Kept" {
+                                ReceivedFolder::Both
+                            } else {
+                                ReceivedFolder::Extract
+                            };
+                            let accept = (offer.name != "decline.txt")
+                                .then(|| Accept::new(recv_dir.clone(), folder));
                             b.send(Command::Respond { id, accept });
                         }
                         Event::Progress { id, done, .. } if done > 0 && !paused_once => {
@@ -726,10 +750,14 @@ mod tests {
             })
         };
 
-        // A file, paused first by the receiver and then by the sender.
+        // A file, paused first by the receiver and then by the sender. Its
+        // dates are kept.
         let file = base.join("hello.bin");
         let data = pattern(30_000_000);
         std::fs::write(&file, &data).unwrap();
+        let file_modified = SystemTime::UNIX_EPOCH + Duration::from_secs(1_500_000_000);
+        let file_created = SystemTime::UNIX_EPOCH + Duration::from_secs(1_400_000_000);
+        crate::archive::set_times(&file, Some(file_modified), Some(file_created)).unwrap();
         let id = next_transfer_id();
         a.send(Command::Send {
             id,
@@ -772,16 +800,34 @@ mod tests {
         assert!(matches!(wait_finished(&rx_a, id), Outcome::Completed(_)));
         assert_eq!(std::fs::read(recv_dir.join("hello.bin")).unwrap(), data);
 
-        // A folder.
+        // A folder, unpacked, with the dates of its files and of itself.
         let folder = base.join("My Folder");
         std::fs::create_dir_all(folder.join("sub")).unwrap();
         std::fs::write(folder.join("a.txt"), b"alpha").unwrap();
         std::fs::write(folder.join("sub").join("b.txt"), b"beta").unwrap();
+        let inner_modified = SystemTime::UNIX_EPOCH + Duration::from_secs(1_300_000_000);
+        crate::archive::set_times(&folder.join("a.txt"), Some(inner_modified), None).unwrap();
+        crate::archive::set_times(&folder, Some(inner_modified), None).unwrap();
         let id = next_transfer_id();
         a.send(Command::Send {
             id,
             to: id_b,
             path: folder,
+            kind: Kind::Folder,
+            my_name: "A".into(),
+            peer_name: "B".into(),
+        });
+        assert!(matches!(wait_finished(&rx_a, id), Outcome::Completed(_)));
+
+        // A folder that is unpacked and kept as a zip too.
+        let kept = base.join("Kept");
+        std::fs::create_dir_all(&kept).unwrap();
+        std::fs::write(kept.join("c.txt"), b"gamma").unwrap();
+        let id = next_transfer_id();
+        a.send(Command::Send {
+            id,
+            to: id_b,
+            path: kept,
             kind: Kind::Folder,
             my_name: "A".into(),
             peer_name: "B".into(),
@@ -808,7 +854,7 @@ mod tests {
                 .iter()
                 .filter(|o| matches!(o, Outcome::Completed(_)))
                 .count(),
-            2
+            3
         );
         assert!(phases.contains(&Phase::PausedByPeer), "{phases:?}");
         assert!(phases.contains(&Phase::Paused), "{phases:?}");
@@ -820,9 +866,27 @@ mod tests {
             std::fs::read(recv_dir.join("My Folder").join("a.txt")).unwrap(),
             b"alpha"
         );
+        // The dates arrived, and received files carry the mark of the web.
+        let meta = std::fs::metadata(recv_dir.join("hello.bin")).unwrap();
+        assert_eq!(meta.modified().unwrap(), file_modified);
+        assert_eq!(meta.created().unwrap(), file_created);
+        let mark = std::fs::read_to_string(recv_dir.join("hello.bin:Zone.Identifier")).unwrap();
+        assert!(mark.contains("ZoneId=3"), "{mark}");
+        let modified = |p: PathBuf| std::fs::metadata(p).unwrap().modified().unwrap();
+        let folder = recv_dir.join("My Folder");
+        assert_eq!(modified(folder.join("a.txt")), inner_modified);
+        assert_eq!(modified(folder.clone()), inner_modified);
+        assert!(folder.join("a.txt:Zone.Identifier").exists());
+        // "Kept" is there twice: unpacked, and as its zip.
+        assert_eq!(
+            std::fs::read(recv_dir.join("Kept").join("c.txt")).unwrap(),
+            b"gamma"
+        );
+        assert!(recv_dir.join("Kept.zip").is_file());
+        assert!(recv_dir.join("Kept.zip:Zone.Identifier").exists());
         assert!(!recv_dir.join("decline.txt").exists());
         let left = leftovers(&recv_dir);
-        assert_eq!(left.len(), 2, "unexpected files: {left:?}");
+        assert_eq!(left.len(), 4, "unexpected files: {left:?}");
         assert!(session::load_all(&base.join("a")).is_empty());
         assert!(session::load_all(&base.join("b")).is_empty());
         std::fs::remove_dir_all(&base).ok();
@@ -857,7 +921,7 @@ mod tests {
                     {
                         Event::Offer { id, .. } => b.send(Command::Respond {
                             id,
-                            accept: Some(recv_dir.clone()),
+                            accept: Some(Accept::new(recv_dir.clone(), ReceivedFolder::Extract)),
                         }),
                         Event::Phase { phase, .. } => phases.push(phase),
                         Event::Finished { outcome, .. } => return (outcome, phases),
@@ -956,7 +1020,7 @@ mod tests {
         };
         b.send(Command::Respond {
             id: id_in,
-            accept: Some(recv_dir.clone()),
+            accept: Some(Accept::new(recv_dir.clone(), ReceivedFolder::Extract)),
         });
         wait_for(
             &rx_b,
@@ -1060,7 +1124,7 @@ mod tests {
         };
         b.send(Command::Respond {
             id: id_in,
-            accept: Some(recv_dir.clone()),
+            accept: Some(Accept::new(recv_dir.clone(), ReceivedFolder::Extract)),
         });
         // The sender is done as soon as the receiver has confirmed the data…
         assert!(matches!(wait_finished(&rx_a, id), Outcome::Completed(_)));

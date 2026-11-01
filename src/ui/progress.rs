@@ -27,7 +27,7 @@ use super::{
 };
 use crate::{
     app,
-    config::{CloseAction, ConnectionLostAction},
+    config::{CloseAction, ConnectionLostAction, ReceivedFolder},
     i18n::tr,
     net::{Command, Kind, Outcome, Phase},
 };
@@ -65,6 +65,8 @@ struct Progress {
     peer: String,
     item: String,
     kind: Kind,
+    /// For a received folder: what is kept of it.
+    received_folder: Option<ReceivedFolder>,
     phase: Option<Phase>,
     active: bool,
     /// The window was hidden and the transfer continues without it.
@@ -132,6 +134,7 @@ pub fn open(
         peer: peer.to_string(),
         item: item.to_string(),
         kind,
+        received_folder: None,
         phase: None,
         active: true,
         background: false,
@@ -174,6 +177,11 @@ pub fn open(
         }
     }
     hwnd
+}
+
+/// Tells a receive's window what is kept of a received folder.
+pub fn set_received_folder(hwnd: HWND, folder: ReceivedFolder) {
+    window::with_handler::<Progress, _>(hwnd, |p, _| p.received_folder = Some(folder));
 }
 
 /// Brings a transfer's window back, also from the background: the user asked
@@ -236,6 +244,12 @@ fn can_pause(phase: Phase) -> bool {
 }
 
 impl Progress {
+    /// Whether what was received is a single file: a file, or a folder that
+    /// was kept only as its zip.
+    fn received_file(&self) -> bool {
+        self.kind == Kind::File || self.received_folder == Some(ReceivedFolder::KeepZip)
+    }
+
     fn marquee(&self, on: bool) {
         unsafe {
             let style = GetWindowLongW(self.bar, GWL_STYLE) as u32;
@@ -420,12 +434,7 @@ impl Progress {
                     .as_ref()
                     .map(|p| p.display().to_string())
                     .unwrap_or_default();
-                let text = if file {
-                    tr!(done_saved_file)
-                } else {
-                    tr!(done_saved_folder)
-                };
-                (text.to_string(), location)
+                (self.saved_text().to_string(), location)
             }
             (Outcome::Declined, Direction::Send) => {
                 (tr!(declined_by_peer, name = self.peer), String::new())
@@ -462,8 +471,14 @@ impl Progress {
         window::enable(self.cancel, true);
 
         let received = completed && self.dir == Direction::Receive;
-        let will_ask = received && app::cfg().ask_after_receive;
-        if self.background || received {
+        let sent = completed && self.dir == Direction::Send;
+        // A hidden or minimized window asks nothing (see `WM_APP_FINISHED`).
+        let hidden = self.background || unsafe { IsIconic(w.hwnd) } != 0;
+        let will_ask = !hidden && received && app::cfg().ask_after_receive;
+        let will_tell = !hidden && sent && app::cfg().show_after_send;
+        // A completed transfer's window closes by itself, after the question
+        // or the message, if any; a failed one stays to show what happened.
+        if self.background || received || sent {
             unsafe { PostMessageW(w.hwnd, WM_APP_FINISHED, 0, 0) };
         } else {
             unsafe { FlashWindow(w.hwnd, 1) };
@@ -480,13 +495,14 @@ impl Progress {
         } else {
             tr!(notify_status, item = self.item, status = status)
         };
-        // The question asked after a receive is announced by itself; every
-        // other outcome is reported with a notification too.
+        // The question asked after a receive and the message after a send
+        // are announced by themselves; every other outcome is reported with
+        // a notification too.
         Finished {
             title,
             text,
             path: self.result_path.clone(),
-            notify: self.background || !will_ask,
+            notify: !(will_ask || will_tell),
         }
     }
 
@@ -600,6 +616,40 @@ impl Progress {
         }
     }
 
+    /// The status of a completed receive.
+    fn saved_text(&self) -> &'static str {
+        match (self.kind, self.received_folder) {
+            (Kind::File, _) => tr!(done_saved_file),
+            (Kind::Folder, Some(ReceivedFolder::KeepZip)) => tr!(done_saved_folder_zip),
+            (Kind::Folder, _) => tr!(done_saved_folder),
+        }
+    }
+
+    /// After a completed send: tell the user unless they chose not to be
+    /// told, then close.
+    fn after_sent(&mut self, w: &Window) {
+        if app::cfg().show_after_send {
+            let instruction = if self.kind == Kind::File {
+                tr!(done_sent_file, name = self.peer)
+            } else {
+                tr!(done_sent_folder, name = self.peer)
+            };
+            let item = tr!(sent_item, item = self.item);
+            let (_, dont_show) = ask(
+                w.hwnd,
+                &instruction,
+                &item,
+                &[],
+                true,
+                Some(tr!(dont_show_again)),
+            );
+            if dont_show {
+                app::update_cfg(|c| c.show_after_send = false);
+            }
+        }
+        w.close();
+    }
+
     /// After a completed receive: offer to open what arrived, then close.
     fn after_received(&mut self, w: &Window) {
         if let Some(path) = self.result_path.clone()
@@ -611,7 +661,7 @@ impl Progress {
     }
 
     fn ask_open(&self, w: &Window, path: &Path) {
-        let file = self.kind == Kind::File;
+        let file = self.received_file();
         let name = path
             .file_name()
             .map(|n| n.to_string_lossy().into_owned())
@@ -630,11 +680,7 @@ impl Progress {
         };
         let (choice, dont_ask) = ask(
             w.hwnd,
-            if file {
-                tr!(done_saved_file)
-            } else {
-                tr!(done_saved_folder)
-            },
+            self.saved_text(),
             &tr!(finished_question, item = name, folder = folder),
             choices,
             true,
@@ -744,10 +790,15 @@ impl Handler for Progress {
     fn on_message(&mut self, w: &Window, msg: u32, wp: WPARAM, _lp: LPARAM) -> Option<LRESULT> {
         match msg {
             WM_APP_FINISHED => {
-                if self.background {
+                // A question needs a visible window; otherwise the
+                // notification has reported the outcome.
+                let minimized = unsafe { IsIconic(w.hwnd) } != 0;
+                if self.background || minimized {
                     w.close();
-                } else {
+                } else if self.dir == Direction::Receive {
                     self.after_received(w);
+                } else {
+                    self.after_sent(w);
                 }
                 Some(0)
             }

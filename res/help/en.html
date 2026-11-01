@@ -56,7 +56,7 @@
 <li>The file goes directly from your computer to theirs, end-to-end encrypted.</li>
 </ol>
 <p>Dodavo has to be running on both computers. When you close its window, Dodavo keeps running in the notification area so that it can receive files (you can change this in <a href="#settings">Settings</a>).</p>
-<p>Folders are packed automatically, sent as one item and unpacked again on the other computer. You don't have to create a ZIP file yourself.</p>
+<p>Folders are packed automatically, sent as one item and unpacked again on the other computer; the other person can also keep them as a ZIP file (see <a href="#after-receiving">When the transfer is complete</a>). You don't have to create a ZIP file yourself. Files and folders keep their dates (see <a href="#faq-dates">Are the dates of files and folders kept?</a>).</p>
 </section>
 
 <section aria-labelledby="installing">
@@ -107,7 +107,7 @@
 <li>Share your Contact ID: choose <span class="ui">Copy My Contact ID</span> from the <span class="ui">File</span> menu, activate the <span class="ui">Copy My Contact ID</span> button, or press <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>C</kbd>. Dodavo copies the ID to the clipboard and shows it in a message. Paste it into an e-mail or chat message to the people who should be able to send you files.</li>
 <li>Add the people you want to send files to, as described in <a href="#add-recipient">Adding a recipient</a>.</li>
 </ol>
-<p class="note"><strong>Note:</strong> Your Contact ID is not secret. Anyone who has it can offer you files, but nothing is ever saved on your computer without your consent unless you turn on <span class="ui">Start transfers automatically, without asking</span>, and even then only for people in your recipient list.</p>
+<p class="note"><strong>Note:</strong> Your Contact ID is not secret. Anyone who has it can offer you files, but only the people in your recipient list can start a transfer without asking you, because <span class="ui">Start transfers automatically, without asking</span> is on (you can turn it off in Settings). An offer from anyone else always opens the Incoming Transfer window first, and nothing is saved until you accept it.</p>
 </section>
 
 <section aria-labelledby="main-window">
@@ -182,11 +182,15 @@
 <li>Press <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>O</kbd>, or activate the <span class="ui">Send Folder…</span> button.</li>
 <li>Choose the folder and activate <span class="ui">Select Folder</span>.</li>
 </ol>
-<p>Dodavo first packs the folder, with all its subfolders, and then sends it. The other computer unpacks it again, so the person receives an ordinary folder.</p>
+<p>Dodavo first packs the folder, with all its subfolders, and then sends it. The other computer unpacks it again, so the person receives an ordinary folder, unless they chose in their settings to keep it as a ZIP file.</p>
 
 <h3 id="drag-and-drop">Dragging items onto a person</h3>
 <p>You can drag files and folders from File Explorer and drop them onto a person in the recipient list. If you drop several items at once, Dodavo asks you to confirm; each item is then sent as a separate transfer with its own progress window.</p>
 <p>You can start as many transfers as you like at the same time, to the same person or to different people.</p>
+
+<h3 id="after-sending">When a sent item has arrived</h3>
+<p>When the other person has received everything and the checksum has been confirmed, Dodavo shows a message, for example <span class="ui">Done! Ana has received the file.</span>, followed by the name of the item. Screen readers read it. Press <kbd>Enter</kbd> or <kbd>Esc</kbd>, or choose <span class="ui">Close</span>; the progress window closes too.</p>
+<p>If you select <span class="ui">Don't show this again</span>, the progress window closes by itself next time, and a notification tells you that the transfer is complete. You can turn the message back on in Settings with <span class="ui">After sending, show a message once the item has arrived</span>. If the progress window is hidden or minimized when the transfer ends, there is only the notification. A transfer that fails, is declined or is cancelled keeps its progress window open, so that you can read what happened.</p>
 </section>
 
 <section aria-labelledby="receiving">
@@ -201,7 +205,7 @@
 <dt><span class="ui">Save to:</span> (<kbd>Alt</kbd>+<kbd>S</kbd>)</dt>
 <dd>The folder the item will be saved in. It is the folder from <span class="ui">Always save received files to this folder</span> if you set one in Settings, otherwise the folder you used last time, or your Downloads folder. You can type a different folder, or use <span class="ui">Browse…</span> (<kbd>Alt</kbd>+<kbd>B</kbd>) to choose one.</dd>
 <dt>Free disk space</dt>
-<dd>A sentence below the folder says whether there is enough free space on that drive, how much is needed and how much is available. Folders need room both for the download and for unpacking. The sentence is updated when you choose a folder with Browse or leave the folder field.</dd>
+<dd>A sentence below the folder says whether there is enough free space on that drive, how much is needed and how much is available. A folder that is unpacked needs room both for the download and for unpacking; a folder that you keep only as a ZIP file needs room for the ZIP file (see <span class="ui">After receiving a folder</span> in <a href="#settings-receiving">Settings</a>). The sentence is updated when you choose a folder with Browse or leave the folder field.</dd>
 <dt><span class="ui">Accept</span> (<kbd>Alt</kbd>+<kbd>A</kbd>) and <span class="ui">Decline</span> (<kbd>Alt</kbd>+<kbd>D</kbd>)</dt>
 <dd>When the window opens, the focus is on <span class="ui">Accept</span>, so pressing <kbd>Enter</kbd> accepts; screen readers usually read the text of the window first, from the bold line to the free disk space sentence. Pressing <kbd>Esc</kbd> or closing the window declines.</dd>
 </dl>
@@ -209,16 +213,18 @@
 <p>After you accept, a progress window shows the transfer. If an item with the same name already exists in the folder, the new one is saved with a number added, for example <code>Report (2).pdf</code>; nothing is overwritten.</p>
 
 <h3 id="after-receiving">When the transfer is complete</h3>
-<p>Dodavo asks what you want to do with what you received:</p>
+<p>A received file gets its real name and the dates it had on the sender's computer. A received folder is unpacked into the chosen folder, unless you chose otherwise in Settings under <span class="ui">After receiving a folder</span>: with <span class="ui">Keep only the ZIP file (don't unpack)</span>, Dodavo saves it as a ZIP file, for example <code>Photos.zip</code>, and with <span class="ui">Keep both the unpacked folder and the ZIP file</span>, it saves the folder and the ZIP file next to each other, for example <code>Photos</code> and <code>Photos.zip</code>.</p>
+<p>Then Dodavo asks what you want to do with what you received:</p>
 <ul>
 <li>For a file: <span class="ui">Open the file</span> opens it in its default program, and <span class="ui">Open the folder</span> opens File Explorer with the file selected.</li>
 <li>For a folder: <span class="ui">Open the folder</span> opens it in File Explorer.</li>
+<li>For a folder kept only as a ZIP file, the message says <span class="ui">Done! The folder has been saved as a ZIP file.</span>, and you have the same choices as for a file.</li>
 <li><span class="ui">Close</span> does neither.</li>
 </ul>
 <p>If you select <span class="ui">Don't ask me again</span>, Dodavo shows a notification instead next time. Selecting the notification shows the item in File Explorer. You can turn the question back on in Settings with <span class="ui">After receiving, ask whether to open the file or folder</span>.</p>
 
 <h3 id="auto-accept">Receiving without being asked</h3>
-<p>If you turn on <span class="ui">Start transfers automatically, without asking</span> in Settings, transfers from people in your recipient list start immediately, without the Incoming Transfer window. Dodavo shows a notification, <span class="ui">Receiving</span>, and saves the item in the folder from <span class="ui">Always save received files to this folder</span>, or in Downloads if that option is off. Transfers from unknown senders, and transfers that would not fit on the disk, are still asked about.</p>
+<p>Transfers from people in your recipient list start immediately, without the Incoming Transfer window, because <span class="ui">Start transfers automatically, without asking</span> is on in Settings. Dodavo shows a notification, <span class="ui">Receiving</span>, and saves the item in the folder from <span class="ui">Always save received files to this folder</span>, or in Downloads if that option is off. Transfers from unknown senders, and transfers that would not fit on the disk, are still asked about. Only the people you added yourself can start a transfer this way: their Contact ID cannot be forged. If you prefer to decide about every transfer, clear the check box.</p>
 </section>
 
 <section aria-labelledby="progress">
@@ -234,7 +240,7 @@
 <li>Three buttons: <span class="ui">Pause</span> (<kbd>Alt</kbd>+<kbd>P</kbd>), which becomes <span class="ui">Resume</span> (<kbd>Alt</kbd>+<kbd>R</kbd>) while the transfer is paused; <span class="ui">Minimize to background</span> (<kbd>Alt</kbd>+<kbd>B</kbd>), which hides the window and lets the transfer continue (see <a href="#finding-transfers">Finding a transfer that runs in the background</a>); and <span class="ui">Cancel</span>, which asks for confirmation before it cancels the transfer.</li>
 </ul>
 <p>When the window opens, the focus is on <span class="ui">Minimize to background</span>; <span class="ui">Pause</span> becomes available once the data is flowing. <kbd>Tab</kbd> moves between the buttons, and <kbd>Enter</kbd> activates the focused one. The other lines cannot receive the focus, but screen readers usually read them all when the window comes to the front, for example when you switch to it with <kbd>Alt</kbd>+<kbd>Tab</kbd>. To hear the progress again later, use your screen reader's command for reading the whole window: <kbd>NVDA</kbd>+<kbd>B</kbd> in NVDA, <kbd>Insert</kbd>+<kbd>B</kbd> in JAWS, or <kbd>Narrator</kbd>+<kbd>W</kbd> in Narrator.</p>
-<p>When the transfer ends, the step line says how it ended, for example <span class="ui">Done! Ana has received the file.</span> or <span class="ui">The transfer was cancelled.</span> If something went wrong, the line below gives the reason. The <span class="ui">Cancel</span> button becomes <span class="ui">Close</span>. When you have received an item, the progress window closes by itself once the item is saved (see <a href="#after-receiving">When the transfer is complete</a>).</p>
+<p>When the transfer ends, the step line says how it ended, for example <span class="ui">Done! Ana has received the file.</span> or <span class="ui">The transfer was cancelled.</span> If something went wrong, the line below gives the reason. The <span class="ui">Cancel</span> button becomes <span class="ui">Close</span>. When you have received an item, the progress window closes by itself once the item is saved (see <a href="#after-receiving">When the transfer is complete</a>); when you have sent one, Dodavo tells you with a message and then closes the window (see <a href="#after-sending">When a sent item has arrived</a>).</p>
 
 <h3 id="pausing">Pausing and resuming</h3>
 <p>Activate <span class="ui">Pause</span> (<kbd>Alt</kbd>+<kbd>P</kbd>) to stop the transfer for a while; the step line says <span class="ui">Paused. Select Resume to continue.</span> and the button becomes <span class="ui">Resume</span> (<kbd>Alt</kbd>+<kbd>R</kbd>). Either side can pause, whether sending or receiving. The other person sees that the transfer was paused on your side, and a notification tells them. When you resume, the transfer goes on exactly where it stopped: nothing is sent twice and nothing is lost, and the checksum at the end covers the whole item.</p>
@@ -284,17 +290,24 @@
 
 <section aria-labelledby="settings">
 <h2 id="settings">Settings</h2>
-<p>Choose <span class="ui">Settings…</span> from the <span class="ui">File</span> menu. Press <kbd>Enter</kbd> or activate <span class="ui">OK</span> to save your changes, or press <kbd>Esc</kbd> or activate <span class="ui">Cancel</span> to discard them. The settings, in Tab order:</p>
+<p>Choose <span class="ui">Settings…</span> from the <span class="ui">File</span> menu. Press <kbd>Enter</kbd> or activate <span class="ui">OK</span> to save your changes, or press <kbd>Esc</kbd> or activate <span class="ui">Cancel</span> to discard them. The window has two columns: on the left your name and the settings for sending and receiving, on the right the general settings. <kbd>Tab</kbd> goes down the left column, then down the right one, and then to <span class="ui">OK</span> and <span class="ui">Cancel</span>. The settings, in Tab order:</p>
 <dl>
 <dt><span class="ui">Your name (shown to the people you send files to)</span></dt>
 <dd>The name the other person sees when you send them something. If they have you in their recipient list, they see the name they gave you instead. This field must not be empty.</dd>
+</dl>
+<h3 id="settings-sending">Sending files</h3>
+<dl>
+<dt><span class="ui">After sending, show a message once the item has arrived</span></dt>
+<dd>Shows a message when the other person has received an item you sent. When cleared, the progress window closes by itself and a notification reports the result. See <a href="#after-sending">When a sent item has arrived</a>.</dd>
 </dl>
 <h3 id="settings-receiving">Receiving files</h3>
 <dl>
 <dt><span class="ui">Always save received files to this folder</span></dt>
 <dd>When selected, the folder in the <span class="ui">Folder</span> field below (which you can choose with <span class="ui">Browse…</span>) is always suggested for received items and used for automatic transfers. When cleared, Dodavo suggests the folder you used last, or Downloads.</dd>
 <dt><span class="ui">Start transfers automatically, without asking</span></dt>
-<dd>Accepts transfers from people in your recipient list without asking. See <a href="#auto-accept">Receiving without being asked</a>.</dd>
+<dd>Accepts transfers from people in your recipient list without asking. It is on unless you clear it. See <a href="#auto-accept">Receiving without being asked</a>.</dd>
+<dt><span class="ui">After receiving a folder</span></dt>
+<dd>A list with <span class="ui">Keep only the unpacked folder</span>, <span class="ui">Keep only the ZIP file (don't unpack)</span> and <span class="ui">Keep both the unpacked folder and the ZIP file</span>. A received folder arrives as a ZIP file; this decides whether Dodavo unpacks it and whether it keeps the ZIP file. Keeping the ZIP file is useful if you want to store or pass on the folder exactly as it arrived. The choice applies to transfers you accept after changing it. See <a href="#after-receiving">When the transfer is complete</a> and <a href="#faq-dates">Are the dates of files and folders kept?</a></dd>
 <dt><span class="ui">After receiving, ask whether to open the file or folder</span></dt>
 <dd>Asks what to do after an item has been received. See <a href="#after-receiving">When the transfer is complete</a>.</dd>
 </dl>
@@ -420,6 +433,8 @@
 <dd>All transfers are end-to-end encrypted. Every transfer is also checked with a checksum, so a damaged file is never saved as if it were complete. A file being received is first written with the extension <code>.part</code> and gets its real name only when it is complete; if the connection is lost, the <code>.part</code> file is kept until the transfer continues; if the transfer fails or is cancelled, the incomplete data is removed.</dd>
 <dt>Folders</dt>
 <dd>Dodavo refuses to unpack a received folder that contains unsafe paths, such as paths that would write outside the destination folder.</dd>
+<dt>Received files are marked as coming from another computer</dt>
+<dd>Like a web browser with downloads, Dodavo marks every file it receives (also the files in a received folder, and a kept ZIP file) as coming from the Internet. Windows SmartScreen therefore checks a received program before it runs, and Microsoft Office opens received documents in Protected View. The mark is stored with the file on NTFS drives; drives formatted with FAT32 or exFAT, such as many USB sticks, cannot keep it. See <a href="#troubleshooting">Troubleshooting</a> if Windows warns about a file you trust.</dd>
 </dl>
 <h3 id="your-data">Your settings and identity</h3>
 <p>Dodavo stores its settings, your recipient list and your secret key in the folder <code>%APPDATA%\Dodavo</code>. The secret key is what makes your Contact ID yours. Don't share the contents of this folder. If you move to another computer and want to keep your Contact ID, copy this folder to the same place on the new computer while Dodavo is not running there. If the folder is deleted, Dodavo creates a new Contact ID, and everyone has to add you again.</p>
@@ -436,7 +451,11 @@
 <p>You select a person in your recipient list and choose a file or a folder. Dodavo looks up the other computer by its Contact ID and connects to it, directly if possible or through a relay server otherwise. The other person sees the name and size of the item and chooses <span class="ui">Accept</span> and a folder to save it in, or <span class="ui">Decline</span>. The data then streams, encrypted, from your computer to theirs, and both sides show a progress window. At the end, the received data is checked against a checksum; only then does the file get its real name. See <a href="#how-it-works">How Dodavo works</a> and <a href="#progress">Following a transfer</a>.</p>
 
 <h3 id="faq-folders">How are folders sent and received?</h3>
-<p>A folder is sent as one item. Dodavo first packs it, with all its subfolders, into a temporary ZIP archive in your Windows temporary folder (<code>%TEMP%\Dodavo</code>); the progress window says <span class="ui">Packing the folder…</span>. The archive is sent, and the other computer saves it in its own temporary folder and then unpacks it into the chosen folder (<span class="ui">Unpacking the folder…</span>). The person receives an ordinary folder with the same name; if a folder with that name already exists, a number is added. The temporary archives are deleted afterwards. The receiving computer therefore needs free space for both the archive and the unpacked folder. A received archive that contains unsafe paths, such as paths pointing outside the destination folder, is refused. See <a href="#send-folder">Sending a folder</a>.</p>
+<p>A folder is sent as one item. Dodavo first packs it, with all its subfolders, into a temporary ZIP archive in your Windows temporary folder (<code>%TEMP%\Dodavo</code>); the progress window says <span class="ui">Packing the folder…</span>. The archive is sent, and the other computer saves it in its own temporary folder and then unpacks it into the chosen folder (<span class="ui">Unpacking the folder…</span>). The person receives an ordinary folder with the same name; if a folder with that name already exists, a number is added. The temporary archives are deleted afterwards. The receiving computer therefore needs free space for both the archive and the unpacked folder. If the person keeps the ZIP file (<span class="ui">After receiving a folder</span> in Settings), the archive arrives directly in the chosen folder, first as <code><var>name</var>.zip.part</code> and at the end as <code><var>name</var>.zip</code>; with <span class="ui">Keep both the unpacked folder and the ZIP file</span>, Dodavo also unpacks it next to the ZIP file. A received archive that contains unsafe paths, such as paths pointing outside the destination folder, is refused. See <a href="#send-folder">Sending a folder</a>.</p>
+
+<h3 id="faq-dates">Are the dates of files and folders kept?</h3>
+<p>Yes. A received file, and every file and folder in a received folder, gets the <span class="ui">Date modified</span> and the <span class="ui">Date created</span> it had on the sender's computer. Only the date it was last opened (<span class="ui">Date accessed</span>) is new.</p>
+<p>A ZIP file normally stores just one date per item, in the local time of the computer that made it and only to two seconds; a different time zone or a change to daylight saving time can shift it by an hour or more. That is why Dodavo also stores the exact dates in its ZIP files, in the same extra field that 7-Zip writes, and uses them when it unpacks a folder. If you keep the ZIP file and unpack it later with another program, that program decides which dates it restores. File Explorer, for example, may give the unpacked files a new <span class="ui">Date modified</span> when the ZIP file is marked as coming from another computer, as received files are (see <a href="#connections">Connections and security</a>); a program such as 7-Zip keeps the dates.</p>
 
 <h3 id="faq-offline">What happens to a transfer if something interrupts it?</h3>
 <p>Once a transfer has been accepted, Dodavo remembers it on both computers and continues it where it stopped, as soon as both are running and can reach each other again. Nothing is sent twice, and the checksum at the end still covers the whole item. What happens in each case:</p>
@@ -462,7 +481,7 @@
 <p>To start a transfer, yes: Dodavo must be running on both computers, otherwise you see <span class="ui">Could not connect to …</span>. Once a transfer has been accepted, either side may go offline, go to sleep or exit Dodavo; the transfer continues when both are back, as described in the previous answer.</p>
 
 <h3 id="faq-size">Is there a size limit?</h3>
-<p>No. Dodavo has no limit on the size of a file or folder; the only limit is the free space on the receiving drive. For a folder, the receiving computer needs room for the archive and for the unpacked folder, so roughly twice the folder's size while unpacking. The Incoming Transfer window says whether there is enough space before you accept.</p>
+<p>No. Dodavo has no limit on the size of a file or folder; the only limit is the free space on the receiving drive. For a folder, the receiving computer needs room for the archive and for the unpacked folder, so roughly twice the folder's size while unpacking (unless it keeps only the ZIP file). The Incoming Transfer window says whether there is enough space before you accept.</p>
 
 <h3 id="faq-several">Can I send several items at once, or to several people?</h3>
 <p>Yes. You can start as many transfers as you like, to the same person or to different people, and each has its own progress window. To send several files or folders in one go, drag them from File Explorer onto the person in your recipient list; after you confirm, each item is sent as a separate transfer. See <a href="#drag-and-drop">Dragging items onto a person</a>. The <span class="ui">Transfer</span> column of the recipient list and the <span class="ui">Transfers</span> menu keep track of all of them.</p>
@@ -477,7 +496,7 @@
 <p>No. Every transfer is end-to-end encrypted between the two computers. When the data has to go through a relay server, the relay only passes on encrypted data that it cannot read. The Contact ID is the recipient's public key, so the connection can only be established with the computer that holds the matching secret key. See <a href="#connections">Connections and security</a>.</p>
 
 <h3 id="faq-id-secret">Is my Contact ID secret? Can anyone send me files?</h3>
-<p>The Contact ID is not secret; it works like a phone number. Anyone who has it can offer you a file, but nothing is saved on your computer until you choose <span class="ui">Accept</span>, and offers from people who are not in your recipient list are marked with an unknown sender warning. Even with <span class="ui">Start transfers automatically, without asking</span> turned on, only transfers from people in your recipient list start by themselves. See <a href="#auto-accept">Receiving without being asked</a>.</p>
+<p>The Contact ID is not secret; it works like a phone number. Anyone who has it can offer you a file. Only transfers from people in your recipient list start by themselves (<span class="ui">Start transfers automatically, without asking</span>, which you can turn off in Settings). From anyone else, nothing is saved on your computer until you choose <span class="ui">Accept</span>, and their offers are marked with an unknown sender warning. See <a href="#auto-accept">Receiving without being asked</a>.</p>
 
 <h3 id="faq-servers">What does Dodavo send to servers on the Internet?</h3>
 <p>Only what is needed for other computers to find yours. Dodavo publishes the addresses at which your computer can currently be reached under your Contact ID, to the lookup service of the iroh network, and keeps a connection to a relay server so that a transfer can be set up even when a direct connection is not possible. The names and contents of your files travel only inside the encrypted connection to the other computer. Once a day, when <span class="ui">Check for updates automatically (once a day)</span> is on, Dodavo also fetches from the Dodavo page on GitHub (github.com) a small file that describes the latest version, and it downloads the setup program from there when you choose to install an update; see <a href="#update">Updating Dodavo</a>. Dodavo has no accounts and sends no usage statistics.</p>
@@ -524,6 +543,8 @@
 <dd>Check that Dodavo is running on their computer; it may be in the notification area. Their Incoming Transfer window may be behind other windows; they can reach it with <kbd>Alt</kbd>+<kbd>Tab</kbd>.</dd>
 <dt>“Not enough free disk space”</dt>
 <dd>Choose a folder on another drive with <span class="ui">Browse…</span>, or free up space and try again. Remember that folders need room for the download and for unpacking.</dd>
+<dt>Windows or Microsoft Office warns when I open a received file</dt>
+<dd>Dodavo marks received files as coming from another computer, as browsers do with downloads (see <a href="#connections">Connections and security</a>). If you trust the sender, choose <span class="ui">Enable Editing</span> in Office, or open the file's properties in File Explorer (<kbd>Alt</kbd>+<kbd>Enter</kbd>) and select <span class="ui">Unblock</span> on the <span class="ui">General</span> tab.</dd>
 <dt>“The received data is damaged (checksum mismatch)”</dt>
 <dd>The data was changed on the way, and the item was not saved. Ask the sender to send it again.</dd>
 <dt>“The clipboard is in use by another program.”</dt>

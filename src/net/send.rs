@@ -151,6 +151,10 @@ async fn start(
         .file_name()
         .map(|n| n.to_string_lossy().into_owned())
         .unwrap_or_else(|| tr!(untitled).into());
+    // The item's own dates, for the receiver to give to what it saves.
+    let times = std::fs::metadata(&path)
+        .map(|m| archive::ItemTimes::of(&m))
+        .unwrap_or_default();
 
     // 1. Prepare the data (zip folders). `size` is what gets streamed.
     let mut temp = TempFile(None);
@@ -187,6 +191,8 @@ async fn start(
         content_size,
         sender_name: my_name,
         token,
+        modified: times.modified,
+        created: times.created,
     };
     let answer: anyhow::Result<Option<Streams>> = async {
         let (mut send, mut recv) = conn.open_bi().await?;

@@ -15,7 +15,7 @@ use crate::{
     app,
     config::Contact,
     i18n::{tr, trn},
-    net::{Command, Kind, Offer},
+    net::{Command, Kind, Offer, ReceivedFolder},
 };
 
 const ID_BROWSE: u16 = 10;
@@ -47,13 +47,17 @@ pub struct Space {
 }
 
 /// Bytes needed on the destination drive and on the drive of the temporary
-/// folder. A folder arrives as a zip in the temporary folder and is then
-/// unpacked into the destination, so both need room at the same time.
-fn space_needed(offer: &Offer, same_volume: bool) -> (u64, u64) {
-    match offer.kind {
-        Kind::File => (offer.size, 0),
-        Kind::Folder if same_volume => (offer.size.saturating_add(offer.content_size), 0),
-        Kind::Folder => (offer.content_size, offer.size),
+/// folder. A folder that is only unpacked arrives as a zip in the temporary
+/// folder and is then unpacked into the destination, so both need room at
+/// the same time. A zip that is kept arrives in the destination.
+fn space_needed(offer: &Offer, folder: ReceivedFolder, same_volume: bool) -> (u64, u64) {
+    match (offer.kind, folder) {
+        (Kind::File, _) | (Kind::Folder, ReceivedFolder::KeepZip) => (offer.size, 0),
+        (Kind::Folder, ReceivedFolder::Both) => (offer.size.saturating_add(offer.content_size), 0),
+        (Kind::Folder, ReceivedFolder::Extract) if same_volume => {
+            (offer.size.saturating_add(offer.content_size), 0)
+        }
+        (Kind::Folder, ReceivedFolder::Extract) => (offer.content_size, offer.size),
     }
 }
 
@@ -66,7 +70,9 @@ fn drive_name(root: &Path) -> String {
     }
 }
 
-pub fn check_space(offer: &Offer, dir: &Path) -> Space {
+/// Whether `offer` fits into `dir`, with `folder` deciding what is kept of a
+/// folder.
+pub fn check_space(offer: &Offer, dir: &Path, folder: ReceivedFolder) -> Space {
     let unknown = || Space {
         enough: None,
         text: tr!(space_unknown).to_string(),
@@ -75,7 +81,8 @@ pub fn check_space(offer: &Offer, dir: &Path) -> Space {
         return unknown();
     };
     let mut volumes = vec![(dest_root.clone(), dest_free)];
-    if offer.kind == Kind::Folder {
+    let uses_temp = offer.kind == Kind::Folder && folder == ReceivedFolder::Extract;
+    if uses_temp {
         let Some(temp) = shell::disk_free(&std::env::temp_dir()) else {
             return unknown();
         };
@@ -84,7 +91,7 @@ pub fn check_space(offer: &Offer, dir: &Path) -> Space {
     let same_volume = volumes
         .get(1)
         .is_none_or(|(root, _)| root.as_os_str().eq_ignore_ascii_case(dest_root.as_os_str()));
-    let (dest_need, temp_need) = space_needed(offer, same_volume);
+    let (dest_need, temp_need) = space_needed(offer, folder, same_volume);
     let mut checks = vec![(&volumes[0], dest_need)];
     if !same_volume {
         checks.push((&volumes[1], temp_need));
@@ -101,7 +108,7 @@ pub fn check_space(offer: &Offer, dir: &Path) -> Space {
     } else {
         tr!(space_ok, needed = args.0, free = args.1, drive = args.2)
     };
-    if offer.kind == Kind::Folder {
+    if offer.kind == Kind::Folder && folder != ReceivedFolder::KeepZip {
         text = format!("{text} {}", tr!(space_folder_note));
     }
     Space {
@@ -167,7 +174,11 @@ pub fn close_by_peer(hwnd: HWND) -> bool {
 
 impl Incoming {
     fn update_space(&self) -> Space {
-        let space = check_space(&self.offer, Path::new(get_text(self.dir).trim()));
+        let space = check_space(
+            &self.offer,
+            Path::new(get_text(self.dir).trim()),
+            app::cfg().received_folder,
+        );
         set_text(self.space, &space.text);
         space
     }
@@ -339,16 +350,26 @@ mod tests {
             content_size: 150,
             sender_name: String::new(),
             token: [0; 16],
+            modified: None,
+            created: None,
         }
     }
 
     #[test]
     fn needed_space() {
-        assert_eq!(space_needed(&offer(Kind::File), true), (100, 0));
-        assert_eq!(space_needed(&offer(Kind::File), false), (100, 0));
-        // The zip and the unpacked folder exist at the same time.
-        assert_eq!(space_needed(&offer(Kind::Folder), true), (250, 0));
-        assert_eq!(space_needed(&offer(Kind::Folder), false), (150, 100));
+        use ReceivedFolder::*;
+        let (file, folder) = (offer(Kind::File), offer(Kind::Folder));
+        for mode in ReceivedFolder::ALL {
+            assert_eq!(space_needed(&file, mode, true), (100, 0));
+            assert_eq!(space_needed(&file, mode, false), (100, 0));
+        }
+        // The zip and the unpacked folder exist at the same time; the zip
+        // that is only unpacked is in the temporary folder.
+        assert_eq!(space_needed(&folder, Extract, true), (250, 0));
+        assert_eq!(space_needed(&folder, Extract, false), (150, 100));
+        // A zip that is kept arrives in the destination.
+        assert_eq!(space_needed(&folder, KeepZip, false), (100, 0));
+        assert_eq!(space_needed(&folder, Both, false), (250, 0));
     }
 
     #[test]

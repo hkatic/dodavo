@@ -395,6 +395,7 @@ pub fn start_send(contact: &Contact, path: PathBuf, kind: Kind) {
 /// Accepts an incoming offer: remembers the folder and opens a progress
 /// window, which gets the focus when the user accepted (`activate`).
 /// `peer_id` is the sender's Contact ID and `sender` the name shown for them.
+/// What is kept of a folder is decided now, from the settings.
 pub fn accept_offer(
     id: u64,
     peer_id: &str,
@@ -404,6 +405,7 @@ pub fn accept_offer(
     activate: bool,
 ) {
     update_cfg(|c| c.last_save_dir = Some(dir.clone()));
+    let folder = cfg().received_folder;
     let hwnd = progress::open(
         id,
         progress::Direction::Receive,
@@ -413,6 +415,7 @@ pub fn accept_offer(
         Some(offer.size),
         activate,
     );
+    progress::set_received_folder(hwnd, folder);
     let transfer = Transfer::new(
         hwnd,
         peer_id,
@@ -425,7 +428,7 @@ pub fn accept_offer(
     refresh_transfer_views(id, true);
     net_send(Command::Respond {
         id,
-        accept: Some(dir),
+        accept: Some(net::Accept::new(dir, folder)),
     });
 }
 
@@ -582,7 +585,7 @@ fn handle_net_event(event: Event) -> Option<Event> {
                 cfg.auto_accept
                     && known
                     && std::fs::create_dir_all(d).is_ok()
-                    && incoming::check_space(&offer, d).enough != Some(false)
+                    && incoming::check_space(&offer, d, cfg.received_folder).enough != Some(false)
             });
             if let Some(dir) = auto_dir {
                 accept_offer(id, &from, &name, &offer, dir, false);
@@ -613,6 +616,9 @@ fn handle_net_event(event: Event) -> Option<Event> {
                 false,
             );
             progress::set_progress(hwnd, have, record.offer.size);
+            if let Some(folder) = record.received_folder() {
+                progress::set_received_folder(hwnd, folder);
+            }
             let mut transfer = Transfer::new(
                 hwnd,
                 &record.peer,

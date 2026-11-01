@@ -24,8 +24,8 @@ use tokio::{
 };
 
 use super::{
-    CLOSE_CANCELLED, CLOSE_FAILED, CLOSE_OK, CLOSE_SUSPENDED, Event, Outcome, Phase, Shared,
-    Throttle,
+    Accept, CLOSE_CANCELLED, CLOSE_FAILED, CLOSE_OK, CLOSE_SUSPENDED, Event, Outcome, Phase,
+    ReceivedFolder, Shared, Throttle,
     protocol::{self, CHUNK, Kind, Msg, Offer, Token},
     send::AbortOnDrop,
     session::{
@@ -34,7 +34,10 @@ use super::{
     },
     spawn_path_watch,
 };
-use crate::{archive, i18n::tr};
+use crate::{
+    archive::{self, ItemTimes},
+    i18n::tr,
+};
 
 /// How often a waiting receiver asks the sender whether the transfer still exists.
 const QUERY_INTERVAL: Duration = Duration::from_secs(30);
@@ -129,6 +132,15 @@ fn pause_phase(local: bool, peer: bool) -> Phase {
     }
 }
 
+/// The dates the sender gave the item.
+fn offer_times(offer: &Offer) -> ItemTimes {
+    ItemTimes {
+        modified: offer.modified,
+        accessed: None,
+        created: offer.created,
+    }
+}
+
 /// A new offer on a fresh connection: asks the user, then receives.
 pub(super) async fn handle(
     shared: Arc<Shared>,
@@ -158,7 +170,11 @@ pub(super) async fn handle(
         }
         _ = ctl.cancel.cancelled() => None,
     };
-    let Some(dest_dir) = decision else {
+    let Some(Accept {
+        dir: dest_dir,
+        folder,
+    }) = decision
+    else {
         let _ = protocol::write_msg(&mut send, &Msg::Decline).await;
         let _ = send.finish();
         let _ = tokio::time::timeout(Duration::from_secs(5), conn.closed()).await;
@@ -168,7 +184,7 @@ pub(super) async fn handle(
 
     let cancel = ctl.cancel.clone();
     let outcome = tokio::select! {
-        o = accept(&shared, &endpoint, id, &ctl, conn.clone(), send, recv, offer, from, dest_dir) => o,
+        o = accept(&shared, &endpoint, id, &ctl, conn.clone(), send, recv, offer, from, dest_dir, folder) => o,
         _ = cancel.cancelled() => cancelled(&shared, id, Some(&conn)),
     };
     shared.finish(id, outcome);
@@ -215,6 +231,10 @@ struct Receiver<'a> {
     name: String,
     dest_dir: PathBuf,
     part_path: PathBuf,
+    /// For folders: what is kept of the archive.
+    folder: ReceivedFolder,
+    /// The dates the sender gave the item.
+    times: ItemTimes,
     size: u64,
     /// Bytes written to the part file.
     have: u64,
@@ -241,21 +261,37 @@ async fn accept(
     offer: Offer,
     from: EndpointId,
     dest_dir: PathBuf,
+    folder: ReceivedFolder,
 ) -> Outcome {
     let name = archive::sanitize_file_name(&offer.name);
     let prepared: anyhow::Result<PathBuf> = async {
         tokio::fs::create_dir_all(&dest_dir).await?;
-        // Folders arrive as a zip in the temp folder; files go straight to the destination folder.
-        let part_path = match offer.kind {
-            Kind::File => archive::unique_path(&dest_dir, &format!("{name}.part"), false),
-            Kind::Folder => {
+        // Files go straight to the destination folder, and so do the zips of
+        // folders that are kept as such; a zip that is only unpacked arrives
+        // in the temp folder.
+        let (part_path, kept) = match (offer.kind, folder) {
+            (Kind::File, _) => (
+                archive::unique_path(&dest_dir, &format!("{name}.part"), false),
+                true,
+            ),
+            (Kind::Folder, ReceivedFolder::Extract) => {
                 tokio::fs::create_dir_all(&shared.temp_dir).await?;
-                shared
+                let zip = shared
                     .temp_dir
-                    .join(format!("recv-{}.zip", protocol::token_hex(&offer.token)))
+                    .join(format!("recv-{}.zip", protocol::token_hex(&offer.token)));
+                (zip, false)
             }
+            (Kind::Folder, ReceivedFolder::KeepZip | ReceivedFolder::Both) => (
+                archive::unique_path(&dest_dir, &format!("{name}.zip.part"), false),
+                true,
+            ),
         };
         tokio::fs::File::create(&part_path).await?;
+        // Marked from the start: the mark stays with the file when it is
+        // renamed into place, so it is never there unmarked.
+        if kept {
+            let _ = archive::mark_of_the_web(&part_path);
+        }
         Ok(part_path)
     }
     .await;
@@ -276,6 +312,7 @@ async fn accept(
             dest_dir: dest_dir.clone(),
             part_path: part_path.clone(),
             synced: Some(0),
+            folder,
         },
         offer,
         done_hash: None,
@@ -288,6 +325,7 @@ async fn accept(
     let (session, session_rx) = Session::new(id, record.token, from, Role::Receive);
     let size = record.offer.size;
     let kind = record.offer.kind;
+    let times = offer_times(&record.offer);
     *session.record.lock().unwrap() = Some(record);
     shared.add_session(session.clone());
     let mut receiver = Receiver {
@@ -302,6 +340,8 @@ async fn accept(
         name,
         dest_dir,
         part_path,
+        folder,
+        times,
         size,
         have: 0,
         hasher: Some(blake3::Hasher::new()),
@@ -331,6 +371,7 @@ async fn continue_record(
     let Side::Receive {
         dest_dir,
         part_path,
+        folder,
         ..
     } = &record.side
     else {
@@ -354,6 +395,8 @@ async fn continue_record(
         name: archive::sanitize_file_name(&record.offer.name),
         dest_dir: dest_dir.clone(),
         part_path: part_path.clone(),
+        folder: *folder,
+        times: offer_times(&record.offer),
         size: record.offer.size,
         have: record.have().min(record.offer.size),
         hasher: None,
@@ -796,40 +839,201 @@ impl Receiver<'_> {
         }
     }
 
-    /// Moves the file into place, or unpacks the folder.
+    /// Moves the file into place, or unpacks the folder and keeps its zip
+    /// as chosen.
     async fn finalize(&mut self) -> anyhow::Result<PathBuf> {
-        match self.kind {
-            Kind::File => {
-                let final_path = archive::unique_path(&self.dest_dir, &self.name, false);
-                tokio::fs::rename(&self.part_path, &final_path).await?;
-                Ok(final_path)
-            }
-            Kind::Folder => {
-                self.emit(Phase::Unpacking);
-                #[cfg(test)]
-                while HOLD_FINALIZE.load(Ordering::SeqCst) {
-                    tokio::time::sleep(Duration::from_millis(50)).await;
-                }
-                let final_path = archive::unique_path(&self.dest_dir, &self.name, true);
-                let shared = self.shared.clone();
-                let id = self.id;
-                let cancel = self.ctl.cancel.clone();
-                let target = final_path.clone();
-                let zip = self.part_path.clone();
-                tokio::task::spawn_blocking(move || {
-                    let mut partial = Cleanup(Some(target.clone()));
-                    let mut throttle = Throttle::new();
-                    archive::unzip(&zip, &target, cancel.flag(), &mut |done, total| {
-                        if throttle.ready() || done == total {
-                            shared.emit(Event::Progress { id, done, total });
-                        }
-                    })?;
-                    partial.0 = None;
-                    anyhow::Ok(())
-                })
-                .await??;
-                Ok(final_path)
+        if self.kind == Kind::Folder && self.folder != ReceivedFolder::KeepZip {
+            self.emit(Phase::Unpacking);
+            #[cfg(test)]
+            while HOLD_FINALIZE.load(Ordering::SeqCst) {
+                tokio::time::sleep(Duration::from_millis(50)).await;
             }
         }
+        let shared = self.shared.clone();
+        let id = self.id;
+        let cancel = self.ctl.cancel.clone();
+        let (kind, folder, times) = (self.kind, self.folder, self.times);
+        let (part, dest, name) = (
+            self.part_path.clone(),
+            self.dest_dir.clone(),
+            self.name.clone(),
+        );
+        tokio::task::spawn_blocking(move || match kind {
+            Kind::File => finish_file(&part, &dest, &name, times),
+            Kind::Folder => {
+                let mut throttle = Throttle::new();
+                let mut progress = |done, total| {
+                    if throttle.ready() || done == total {
+                        shared.emit(Event::Progress { id, done, total });
+                    }
+                };
+                finish_folder(
+                    &part,
+                    &dest,
+                    &name,
+                    folder,
+                    times,
+                    cancel.flag(),
+                    &mut progress,
+                )
+            }
+        })
+        .await?
+    }
+}
+
+/// Puts a received file in place under a free name, with the sender's
+/// dates. Returns where it went.
+fn finish_file(part: &Path, dest: &Path, name: &str, times: ItemTimes) -> anyhow::Result<PathBuf> {
+    let path = archive::unique_path(dest, name, false);
+    std::fs::rename(part, &path)?;
+    times.apply(&path);
+    Ok(path)
+}
+
+/// Unpacks a received folder from its zip `part`, keeps the zip as
+/// `<name>.zip`, or both, as `folder` says. The unpacked folder gets the
+/// sender's dates. Returns the folder, or the zip when only that is kept.
+fn finish_folder(
+    part: &Path,
+    dest: &Path,
+    name: &str,
+    folder: ReceivedFolder,
+    times: ItemTimes,
+    cancel: &AtomicBool,
+    progress: &mut dyn FnMut(u64, u64),
+) -> anyhow::Result<PathBuf> {
+    let zip_name = |stem: &str| format!("{stem}.zip");
+    // A name that is still free when the zip is renamed (unpacking may take
+    // a while, and renaming would replace a file that appeared meanwhile).
+    let keep_zip = |wanted: PathBuf| -> anyhow::Result<PathBuf> {
+        let zip = if wanted.exists() {
+            archive::unique_path(dest, &zip_name(name), false)
+        } else {
+            wanted
+        };
+        std::fs::rename(part, &zip)?;
+        Ok(zip)
+    };
+    let (target, zip) = match folder {
+        ReceivedFolder::KeepZip => {
+            return keep_zip(archive::unique_path(dest, &zip_name(name), false));
+        }
+        ReceivedFolder::Extract => (archive::unique_path(dest, name, true), None),
+        // The folder and its zip with the same number: "Photos (2)" and
+        // "Photos (2).zip".
+        ReceivedFolder::Both => {
+            let (target, zip) = std::iter::once(name.to_string())
+                .chain((2..).map(|i| format!("{name} ({i})")))
+                .map(|stem| (dest.join(&stem), dest.join(zip_name(&stem))))
+                .find(|(target, zip)| !target.exists() && !zip.exists())
+                .expect("infinite iterator");
+            (target, Some(zip))
+        }
+    };
+    let mut partial = Cleanup(Some(target.clone()));
+    archive::unzip(part, &target, true, cancel, progress)?;
+    times.apply(&target);
+    partial.0 = None;
+    // Last: until now, the part is what a restart finishes from.
+    if let Some(zip) = zip {
+        keep_zip(zip)?;
+    }
+    Ok(target)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::time::SystemTime;
+
+    use super::*;
+
+    fn scratch(name: &str) -> PathBuf {
+        let d = std::env::temp_dir().join(format!("dodavo-receive-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(&d).unwrap();
+        d
+    }
+
+    fn times(secs: u64) -> (ItemTimes, SystemTime) {
+        let at = SystemTime::UNIX_EPOCH + Duration::from_secs(secs);
+        let filetime = secs * 10_000_000 + 116_444_736_000_000_000;
+        let times = ItemTimes {
+            modified: Some(filetime),
+            accessed: None,
+            created: Some(filetime),
+        };
+        (times, at)
+    }
+
+    /// A zip of a folder with one file, as the sender makes it.
+    fn received_zip(base: &Path, part_name: &str) -> PathBuf {
+        let src = base.join("src");
+        std::fs::create_dir_all(&src).unwrap();
+        std::fs::write(src.join("a.txt"), b"alpha").unwrap();
+        let part = base.join("dest").join(part_name);
+        std::fs::create_dir_all(part.parent().unwrap()).unwrap();
+        let cancel = AtomicBool::new(false);
+        archive::zip_folder(&src, &part, &cancel, &mut |_, _| {}).unwrap();
+        part
+    }
+
+    fn finish(part: &Path, dest: &Path, folder: ReceivedFolder, t: ItemTimes) -> PathBuf {
+        let cancel = AtomicBool::new(false);
+        finish_folder(part, dest, "Photos", folder, t, &cancel, &mut |_, _| {}).unwrap()
+    }
+
+    #[test]
+    fn a_file_gets_a_free_name_and_its_dates() {
+        let base = scratch("file");
+        std::fs::write(base.join("a.txt"), b"old").unwrap();
+        let part = base.join("a.txt.part");
+        std::fs::write(&part, b"new").unwrap();
+        let (t, at) = times(1_500_000_000);
+        let path = finish_file(&part, &base, "a.txt", t).unwrap();
+        assert_eq!(path, base.join("a (2).txt"));
+        assert_eq!(std::fs::read(&path).unwrap(), b"new");
+        assert!(!part.exists());
+        let meta = std::fs::metadata(&path).unwrap();
+        assert_eq!(
+            (meta.modified().unwrap(), meta.created().unwrap()),
+            (at, at)
+        );
+        std::fs::remove_dir_all(&base).ok();
+    }
+
+    #[test]
+    fn a_folder_is_unpacked_kept_as_zip_or_both() {
+        let base = scratch("folder");
+        let dest = base.join("dest");
+        let (t, at) = times(1_400_000_000);
+
+        // Only unpacked: the zip stays where it is (a temp file that the
+        // end of the transfer deletes).
+        let part = received_zip(&base, "recv.zip");
+        let path = finish(&part, &dest, ReceivedFolder::Extract, t);
+        assert_eq!(path, dest.join("Photos"));
+        assert_eq!(std::fs::read(path.join("a.txt")).unwrap(), b"alpha");
+        assert_eq!(std::fs::metadata(&path).unwrap().modified().unwrap(), at);
+        assert!(path.join("a.txt:Zone.Identifier").exists());
+        assert!(part.exists());
+        std::fs::remove_file(&part).unwrap();
+
+        // Only the zip.
+        let part = received_zip(&base, "Photos.zip.part");
+        let path = finish(&part, &dest, ReceivedFolder::KeepZip, t);
+        assert_eq!(path, dest.join("Photos.zip"));
+        assert!(path.is_file());
+        assert!(!part.exists());
+        assert!(!dest.join("Photos (2)").exists());
+
+        // Both, with matching names: "Photos" and "Photos.zip" are taken.
+        let part = received_zip(&base, "Photos.zip.part");
+        let path = finish(&part, &dest, ReceivedFolder::Both, t);
+        assert_eq!(path, dest.join("Photos (2)"));
+        assert_eq!(std::fs::read(path.join("a.txt")).unwrap(), b"alpha");
+        assert!(dest.join("Photos (2).zip").is_file());
+        assert!(!part.exists());
+        std::fs::remove_dir_all(&base).ok();
     }
 }

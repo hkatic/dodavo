@@ -52,6 +52,29 @@ impl ConnectionLostAction {
     ];
 }
 
+/// What is kept of a received folder. It arrives as a zip archive; the
+/// choice is made when the transfer is accepted and stays with the transfer.
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ReceivedFolder {
+    /// Unpack the folder and delete the archive.
+    #[default]
+    Extract,
+    /// Keep the archive as `<name>.zip` and do not unpack it.
+    KeepZip,
+    /// Unpack the folder and keep the archive next to it.
+    Both,
+}
+
+impl ReceivedFolder {
+    /// In the order shown in the settings.
+    pub const ALL: [ReceivedFolder; 3] = [
+        ReceivedFolder::Extract,
+        ReceivedFolder::KeepZip,
+        ReceivedFolder::Both,
+    ];
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(default)]
 pub struct Config {
@@ -63,6 +86,7 @@ pub struct Config {
     pub always_save_dir: Option<PathBuf>,
     /// Start transfers from known recipients without confirmation, saving to
     /// `always_save_dir` when `always_save` is set and to Downloads otherwise.
+    /// Offers from anyone else are always shown first.
     pub auto_accept: bool,
     /// The last folder the user picked for saving received files.
     pub last_save_dir: Option<PathBuf>,
@@ -76,6 +100,10 @@ pub struct Config {
     pub connection_lost: ConnectionLostAction,
     /// Ask whether to open a received item when its transfer is complete.
     pub ask_after_receive: bool,
+    /// Show a message when the recipient has received a sent item.
+    pub show_after_send: bool,
+    /// What is kept of a received folder.
+    pub received_folder: ReceivedFolder,
     /// Whether the "still running in the notification area" hint was shown.
     pub tray_hint_shown: bool,
     /// User interface language code (see `i18n::Lang::code`); `None` follows Windows.
@@ -96,7 +124,7 @@ impl Default for Config {
             contacts: Vec::new(),
             always_save: false,
             always_save_dir: None,
-            auto_accept: false,
+            auto_accept: true,
             last_save_dir: None,
             start_with_windows: false,
             minimize_to_tray: true,
@@ -104,6 +132,8 @@ impl Default for Config {
             close_running_transfer: CloseAction::Ask,
             connection_lost: ConnectionLostAction::Ask,
             ask_after_receive: true,
+            show_after_send: true,
+            received_folder: ReceivedFolder::Extract,
             tray_hint_shown: false,
             language: None,
             check_updates: true,
@@ -223,6 +253,9 @@ mod tests {
         cfg.language = Some("hr".into());
         cfg.close_running_transfer = CloseAction::Background;
         cfg.connection_lost = ConnectionLostAction::Wait;
+        cfg.show_after_send = false;
+        cfg.received_folder = ReceivedFolder::Both;
+        cfg.auto_accept = false;
         cfg.check_updates = false;
         cfg.update_last_check = Some(1_700_000_000);
         cfg.update_remind_after = Some(1_700_086_400);
@@ -262,6 +295,9 @@ mod tests {
         assert!(cfg.minimize_to_tray);
         assert!(!cfg.start_minimized);
         assert!(cfg.ask_after_receive);
+        assert!(cfg.show_after_send);
+        assert!(cfg.auto_accept);
+        assert_eq!(cfg.received_folder, ReceivedFolder::Extract);
         assert_eq!(cfg.close_running_transfer, CloseAction::Ask);
         assert_eq!(cfg.connection_lost, ConnectionLostAction::Ask);
         assert_eq!(cfg.language, None);

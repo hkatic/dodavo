@@ -20,8 +20,8 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::{mpsc, watch};
 
 use super::{
-    CLOSE_CANCELLED, CLOSE_FAILED, CLOSE_SUSPENDED, CancelToken,
-    protocol::{Offer, Token, token_hex},
+    CLOSE_CANCELLED, CLOSE_FAILED, CLOSE_SUSPENDED, CancelToken, ReceivedFolder,
+    protocol::{Kind, Offer, Token, token_hex},
 };
 
 /// Records and tombstones older than this are forgotten at startup.
@@ -56,13 +56,19 @@ pub enum Side {
     },
     Receive {
         dest_dir: PathBuf,
-        /// The `.part` file, or the zip of a folder in the temporary folder.
+        /// The `.part` file. For a folder that is only unpacked, its zip in
+        /// the temporary folder; for a folder whose zip is kept,
+        /// `<name>.zip.part` in `dest_dir`.
         part_path: PathBuf,
         /// How much of the part file is known to be on disk, so that a power
         /// cut cannot leave data that looks received but never got written.
         /// `None` in records of earlier versions: the file length is trusted.
         #[serde(default)]
         synced: Option<u64>,
+        /// For folders: what is kept of the archive, as chosen when the
+        /// transfer was accepted. Records of earlier versions only unpack.
+        #[serde(default)]
+        folder: ReceivedFolder,
     },
 }
 
@@ -188,6 +194,33 @@ impl TransferRecord {
     /// Forgets the record (the data stays: the transfer is complete).
     pub fn remove(&self, data_dir: &Path) {
         let _ = fs::remove_file(record_path(data_dir, &self.token));
+    }
+
+    /// The folder setting of a receive (`None` for a send).
+    pub fn received_folder(&self) -> Option<ReceivedFolder> {
+        match &self.side {
+            Side::Receive { folder, .. } => Some(*folder),
+            Side::Send { .. } => None,
+        }
+    }
+
+    /// Ends a completed transfer: forgets the record and deletes what was
+    /// only temporary. The part file of a received item has already been
+    /// renamed into place, so its old name may by now belong to another
+    /// transfer of the same name and must not be deleted; only the temporary
+    /// zip of a folder that was unpacked is.
+    pub fn complete(&self, data_dir: &Path) {
+        match &self.side {
+            Side::Receive {
+                part_path, folder, ..
+            } => {
+                self.remove(data_dir);
+                if self.offer.kind == Kind::Folder && *folder == ReceivedFolder::Extract {
+                    let _ = fs::remove_file(part_path);
+                }
+            }
+            Side::Send { .. } => self.discard(data_dir),
+        }
     }
 
     /// Forgets the record and deletes the partial or temporary data.
@@ -458,7 +491,11 @@ impl Session {
         }
         if let Some(record) = self.record.lock().unwrap().take() {
             write_tombstone(data_dir, &record.token, completed);
-            record.discard(data_dir);
+            if completed {
+                record.complete(data_dir);
+            } else {
+                record.discard(data_dir);
+            }
         }
     }
 }
@@ -558,6 +595,8 @@ mod tests {
                 content_size: 10,
                 sender_name: "Ana".into(),
                 token: [token; 16],
+                modified: Some(130_000_000_000_000_000),
+                created: None,
             },
             peer_name: "Ana".into(),
             paused: false,
@@ -572,6 +611,7 @@ mod tests {
             dest_dir: dir.to_path_buf(),
             part_path: part.to_path_buf(),
             synced,
+            folder: ReceivedFolder::Extract,
         }
     }
 
@@ -611,23 +651,66 @@ mod tests {
         fs::remove_dir_all(&dir).ok();
     }
 
+    /// A completed receive must not delete its part file's old name: the
+    /// part has been renamed into place, and a new transfer of the same name
+    /// may be using that name by now. Only the temporary zip of a folder that
+    /// was unpacked goes.
+    #[test]
+    fn completing_keeps_a_reused_part_name() {
+        let dir = scratch("complete");
+        let part = dir.join("a.bin.part");
+        fs::write(&part, b"another transfer").unwrap();
+        let r = record(3, receive_side(&dir, &part, None));
+        r.save(&dir).unwrap();
+        r.complete(&dir);
+        assert!(part.exists(), "the name belongs to another transfer now");
+        assert!(load_all(&dir).is_empty());
+
+        let mut folder = record(4, receive_side(&dir, &dir.join("recv-4.zip"), None));
+        folder.offer.kind = Kind::Folder;
+        fs::write(dir.join("recv-4.zip"), b"zip").unwrap();
+        folder.complete(&dir);
+        assert!(!dir.join("recv-4.zip").exists(), "the temporary zip goes");
+
+        let kept_part = dir.join("Photos.zip.part");
+        fs::write(&kept_part, b"another transfer").unwrap();
+        let mut side = receive_side(&dir, &kept_part, None);
+        if let Side::Receive { folder, .. } = &mut side {
+            *folder = ReceivedFolder::Both;
+        }
+        let mut kept = record(5, side);
+        kept.offer.kind = Kind::Folder;
+        kept.complete(&dir);
+        assert!(kept_part.exists());
+        fs::remove_dir_all(&dir).ok();
+    }
+
     #[test]
     fn records_of_earlier_versions_still_load() {
         let dir = scratch("legacy");
         let part = dir.join("old.bin.part");
         fs::write(&part, b"12345").unwrap();
-        // A record as written before `synced` and `done_hash` existed.
-        let mut json = serde_json::to_value(record(7, receive_side(&dir, &part, None))).unwrap();
+        // A record as written before `synced`, `done_hash`, `folder` and the
+        // offer's times existed.
+        let mut side = receive_side(&dir, &part, None);
+        if let Side::Receive { folder, .. } = &mut side {
+            *folder = ReceivedFolder::Both;
+        }
+        let mut json = serde_json::to_value(record(7, side)).unwrap();
         json.as_object_mut().unwrap().remove("done_hash");
-        json["side"]["receive"]
-            .as_object_mut()
-            .unwrap()
-            .remove("synced");
+        let receive = json["side"]["receive"].as_object_mut().unwrap();
+        receive.remove("synced");
+        receive.remove("folder");
+        let offer = json["offer"].as_object_mut().unwrap();
+        offer.remove("modified");
+        offer.remove("created");
         fs::create_dir_all(records_dir(&dir)).unwrap();
         fs::write(record_path(&dir, &[7; 16]), json.to_string()).unwrap();
         let loaded = load_all(&dir);
         assert_eq!(loaded.len(), 1);
         assert_eq!(loaded[0].done_hash, None);
+        assert_eq!(loaded[0].received_folder(), Some(ReceivedFolder::Extract));
+        assert_eq!(loaded[0].offer.modified, None);
         assert_eq!(
             loaded[0].have(),
             5,

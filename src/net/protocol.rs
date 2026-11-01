@@ -67,6 +67,14 @@ pub struct Offer {
     /// The display name the sender chose for themselves.
     pub sender_name: String,
     pub token: Token,
+    /// When the file or folder was last modified and when it was created, as
+    /// Windows file times (100 ns since 1601, UTC). The receiver gives them to
+    /// what it saves; the times inside a folder travel in its zip archive.
+    /// (`default` keeps transfer records of earlier versions readable.)
+    #[serde(default)]
+    pub modified: Option<u64>,
+    #[serde(default)]
+    pub created: Option<u64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -137,6 +145,8 @@ mod tests {
                 content_size: 999,
                 sender_name: "Ana".into(),
                 token: [7; 16],
+                modified: Some(133_000_000_000_000_000),
+                created: None,
             }),
             Msg::Continue { token: [1; 16] },
             Msg::Data { len: 262_144 },

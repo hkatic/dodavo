@@ -263,6 +263,7 @@ strings! {
         done_sent_folder,
         done_saved_file,
         done_saved_folder,
+        done_saved_folder_zip,
         declined_by_peer,
         declined,
         cancelled,
@@ -301,10 +302,12 @@ strings! {
         continue_background,
         cancel_transfer,
         dont_ask_again,
+        dont_show_again,
         background_balloon_title,
         background_balloon,
         // Finished transfer.
         finished_question,
+        sent_item,
         open_file,
         open_containing_folder,
         open_received_folder,
@@ -344,11 +347,17 @@ strings! {
         // Settings dialog.
         settings_title,
         my_name_label,
+        sending_heading,
+        show_after_send,
         receiving_heading,
         always_save,
         always_save_folder_label,
         auto_accept,
         auto_accept_note,
+        received_folder_label,
+        received_extract,
+        received_keep_zip,
+        received_both,
         general_heading,
         start_with_windows,
         start_minimized,
@@ -664,7 +673,7 @@ mod tests {
         }
         for lang in Lang::ALL {
             let s = lang.strings();
-            let groups: [(&str, Vec<&str>); 20] = [
+            let groups: [(&str, Vec<&str>); 21] = [
                 ("menu bar", vec![s.menu_file, s.menu_transfers, s.menu_help]),
                 (
                     "File menu",
@@ -723,10 +732,12 @@ mod tests {
                     "settings",
                     vec![
                         s.my_name_label,
+                        s.show_after_send,
                         s.always_save,
                         s.always_save_folder_label,
                         s.browse,
                         s.auto_accept,
+                        s.received_folder_label,
                         s.ask_after_receive,
                         s.start_with_windows,
                         s.start_minimized,
@@ -762,6 +773,8 @@ mod tests {
                     "received folder",
                     vec![s.open_received_folder, s.dont_ask_again],
                 ),
+                // Its Close button is Windows' own (task dialog).
+                ("sent", vec![s.dont_show_again]),
                 (
                     "recipient",
                     vec![s.recipient_name_label, s.contact_id_label],
