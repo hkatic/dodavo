@@ -161,6 +161,7 @@ pub const SL: Strings = Strings {
     connection_lost_balloon: "»{item}«: čakanje, da se povezava znova vzpostavi.",
     continuing_balloon_title: "Prenos se nadaljuje",
     continuing_balloon: "»{item}«: prenos se nadaljuje.",
+    peer_unpacking_balloon: "»{item}«: vse je prispelo. Prejemnik ({name}) razpakira mapo, zato prenosa ni več mogoče preklicati.",
     restored_balloon_title: "Nedokončan prenos",
     restored_balloon: "»{item}«: prenos je bil zadnjič prekinjen in se nadaljuje, takoj ko sta oba povezana.",
 

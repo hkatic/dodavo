@@ -76,13 +76,19 @@ struct Progress {
     /// word if the transfer was cancelled, and reports how it ended if the
     /// cancel came too late (the item was being saved already).
     closing: bool,
+    /// The user cancelled the transfer, which has not ended yet: it may wait
+    /// for the other side (see `Session::defer_cancel`) or come too late.
+    /// The window then neither offers a pause nor asks about a lost
+    /// connection, and its status says that the transfer is being cancelled.
+    cancel_requested: bool,
     /// Data has flowed while this window was open. Only then is a lost
     /// connection something to ask about; a transfer picked up after a
     /// restart simply waits for the other side.
     had_data: bool,
     /// Sending side: all of the item has arrived and it is the receiver's
-    /// (`Phase::PeerUnpacking`). Cancelling is no longer possible, and a
-    /// lost connection asks nothing: the receiver finishes without it.
+    /// (`Event::HandedOver`). Cancelling is no longer possible, so neither
+    /// the Cancel button nor closing the window offers it, and a lost
+    /// connection asks nothing: the receiver finishes without it.
     handed_over: bool,
     samples: VecDeque<(Instant, u64)>,
     rate_shown: Option<Instant>,
@@ -164,6 +170,7 @@ pub fn open(
         active: true,
         background: false,
         closing: false,
+        cancel_requested: false,
         had_data: false,
         handed_over: false,
         samples: VecDeque::new(),
@@ -226,6 +233,12 @@ pub fn show(hwnd: HWND) {
 /// Shows the new phase. Returns `None` if the window is busy.
 pub fn set_phase(hwnd: HWND, phase: Phase) -> Option<PhaseNotice> {
     window::with_handler::<Progress, _>(hwnd, |p, w| p.set_phase(w, phase))
+}
+
+/// Sending side: the item is the receiver's now (see `Event::HandedOver`).
+/// Returns `false` if the window is busy.
+pub fn set_handed_over(hwnd: HWND) -> bool {
+    window::with_handler::<Progress, _>(hwnd, |p, _| p.hand_over()).is_some()
 }
 
 pub fn set_progress(hwnd: HWND, done: u64, total: u64) -> bool {
@@ -310,7 +323,14 @@ impl Progress {
         if phase == Phase::Transferring {
             self.had_data = true;
         }
+        let unpacking_there = phase == Phase::PeerUnpacking && previous != Some(phase);
+        if phase == Phase::PeerUnpacking {
+            self.hand_over();
+        }
         let text = match phase {
+            // A cancel can wait for the other side (a send whose data it may
+            // have all of), which still says how the transfer is doing.
+            _ if self.cancel_requested && !self.handed_over => tr!(cancelling).to_string(),
             Phase::Preparing => tr!(phase_preparing).to_string(),
             Phase::Connecting => tr!(phase_connecting, name = self.peer),
             Phase::WaitingForAccept => tr!(phase_waiting, name = self.peer),
@@ -341,8 +361,10 @@ impl Progress {
         self.marquee(waiting);
         // A pause or a lost connection interrupts the transfer; the amount
         // done so far stays (also what a restored transfer showed before its
-        // first phase). Other phases start their own count.
-        let continues = keeps_progress(phase) && previous.is_none_or(keeps_progress);
+        // first phase, and all of it once the receiver is unpacking). Other
+        // phases start their own count.
+        let continues = keeps_progress(phase)
+            && previous.is_none_or(|p| keeps_progress(p) || p == Phase::PeerUnpacking);
         if !waiting && !continues {
             send(self.bar, PBM_SETPOS, 0, 0);
             set_text(self.done, "");
@@ -357,23 +379,13 @@ impl Progress {
                 tr!(pause)
             },
         );
-        window::enable(self.pause, can_pause(phase));
-        // All of the folder has arrived, and it is the receiver's now: a
-        // cancel here would come too late (the network side no longer ends
-        // the transfer for it), so the button is unavailable from now on,
-        // and the focus moves on from it.
-        if phase == Phase::PeerUnpacking {
-            self.handed_over = true;
-            if unsafe { GetFocus() } == self.cancel {
-                window::focus(self.background_button);
-            }
-            window::enable(self.cancel, false);
-        }
+        window::enable(self.pause, can_pause(phase) && !self.cancel_requested);
 
         // A connection lost while data was flowing asks (or acts) after a
         // moment. A transfer restored at startup just waits, which the
         // "unfinished transfer" notification already said, and so does one
-        // whose other side exited on purpose (`lost: false`).
+        // whose other side exited on purpose (`lost: false`), and one that
+        // the user has cancelled already.
         let lost = matches!(phase, Phase::WaitingForConnection { lost: true }) && self.had_data;
         if lost {
             unsafe { SetTimer(w.hwnd, TIMER_LOST, LOST_PROMPT_DELAY_MS, None) };
@@ -381,6 +393,7 @@ impl Progress {
         let will_ask = lost
             && !self.background
             && !self.handed_over
+            && !self.cancel_requested
             && app::cfg().connection_lost == ConnectionLostAction::Ask;
         let balloon = match phase {
             // Being cancelled after the user closed the window: nothing to tell.
@@ -388,6 +401,13 @@ impl Progress {
             Phase::PausedByPeer => Some((
                 tr!(paused_balloon_title).to_string(),
                 tr!(paused_by_peer_balloon, item = self.item, name = self.peer),
+            )),
+            // The status line changes, and Cancel goes away (perhaps with
+            // the focus on it): this says why. The unpacking can take a
+            // while, unlike the receiver's renaming of a file.
+            Phase::PeerUnpacking if unpacking_there => Some((
+                tr!(tx_peer_unpacking).to_string(),
+                tr!(peer_unpacking_balloon, item = self.item, name = self.peer),
             )),
             Phase::WaitingForConnection { .. } if lost && !will_ask => Some((
                 tr!(connection_lost_balloon_title).to_string(),
@@ -581,7 +601,23 @@ impl Progress {
         }
     }
 
+    /// Sending side: all of the item has arrived, and it is the receiver's
+    /// now. A cancel would come too late (the network side no longer ends
+    /// the transfer for it), so the button is unavailable from now on, and
+    /// the focus moves on from it.
+    fn hand_over(&mut self) {
+        if self.handed_over || !self.active {
+            return;
+        }
+        self.handed_over = true;
+        if unsafe { GetFocus() } == self.cancel {
+            window::focus(self.background_button);
+        }
+        window::enable(self.cancel, false);
+    }
+
     fn cancel_transfer(&mut self) {
+        self.cancel_requested = true;
         app::net_send(Command::Cancel { id: self.id });
         set_text(self.status, tr!(cancelling));
         window::enable(self.cancel, false);
@@ -609,9 +645,12 @@ impl Progress {
     }
 
     /// Closing the window while the transfer runs: continue in the background
-    /// or cancel, as chosen now or remembered from before.
+    /// or cancel, as chosen now or remembered from before. Once the item is
+    /// the receiver's, there is nothing to choose: the transfer can only
+    /// continue.
     fn close_running(&mut self, w: &Window) {
         let action = match app::cfg().close_running_transfer {
+            _ if self.handed_over => CloseAction::Background,
             CloseAction::Ask => {
                 let (choice, dont_ask) = ask(
                     w.hwnd,
@@ -658,6 +697,7 @@ impl Progress {
     fn connection_lost(&mut self, w: &Window) {
         if !self.active
             || self.closing
+            || self.cancel_requested
             || self.handed_over
             || !self.had_data
             || !matches!(self.phase, Some(Phase::WaitingForConnection { .. }))

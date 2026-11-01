@@ -297,6 +297,7 @@ strings! {
         connection_lost_balloon,
         continuing_balloon_title,
         continuing_balloon,
+        peer_unpacking_balloon,
         restored_balloon_title,
         restored_balloon,
         // Closing a running transfer.

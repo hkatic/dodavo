@@ -25,8 +25,8 @@ use tokio::{
 };
 
 use super::{
-    Accept, CLOSE_CANCELLED, CLOSE_FAILED, CLOSE_OK, CLOSE_SUSPENDED, CancelToken, Event, Outcome,
-    Phase, ReceivedFolder, Shared, Throttle,
+    Accept, CLOSE_CANCELLED, CLOSE_FAILED, CLOSE_OK, CLOSE_SUSPENDED, Event, Outcome, Phase,
+    ReceivedFolder, Shared, Throttle,
     protocol::{self, CHUNK, Kind, Msg, Offer, Token},
     send::AbortOnDrop,
     session::{
@@ -200,29 +200,31 @@ pub(super) async fn resume(
 ) -> Outcome {
     let data_dir = shared.data_dir.clone();
     let checked = off_runtime(move || check_restored(record, &data_dir)).await;
-    let restored = checked
-        .and_then(|(record, peer)| Receiver::restore(shared, endpoint, id, record, peer, &ctl));
-    let mut receiver = match restored {
-        Ok(receiver) => receiver,
+    let restored = checked.and_then(|(record, peer, placed)| {
+        Receiver::restore(shared, endpoint, id, record, peer, &ctl).map(|r| (r, placed))
+    });
+    let (mut receiver, placed) = match restored {
+        Ok(restored) => restored,
         Err(outcome) => return outcome,
     };
     tokio::select! {
         biased;
-        ending = cancelled(shared, id, &ctl.cancel, None) => {
+        ending = cancelled(shared, id, &ctl, None) => {
             ending.forget(&shared.data_dir).await;
             Outcome::Cancelled
         }
-        o = receiver.continue_restored() => o,
+        o = receiver.continue_restored(placed) => o,
     }
 }
 
 /// Checks a receive from an earlier run before it goes on: the sender's
 /// Contact ID, and the part file, which is cut back to what is known to be
-/// on disk. What fails ends the transfer. Blocking.
+/// on disk. What fails ends the transfer. Also returns the received item if
+/// it is in place already (see `TransferRecord::placed_item`). Blocking.
 fn check_restored(
     record: TransferRecord,
     data_dir: &Path,
-) -> Result<(TransferRecord, EndpointId), Outcome> {
+) -> Result<(TransferRecord, EndpointId, Option<PathBuf>), Outcome> {
     let Some(peer) = record.peer_id() else {
         record.discard(data_dir);
         return Err(Outcome::Failed(tr!(error_bad_resume).into()));
@@ -232,7 +234,8 @@ fn check_restored(
         record.discard(data_dir);
         return Err(Outcome::Failed(format!("{e:#}")));
     }
-    Ok((record, peer))
+    let placed = record.placed_item().map(Path::to_path_buf);
+    Ok((record, peer, placed))
 }
 
 /// Finishes once the user has cancelled and the transfer has ended for it:
@@ -244,24 +247,22 @@ fn check_restored(
 /// item is already being put in place is too late, so the transfer ends by
 /// itself, completed (see `Session::cancel`). Raced against a transfer only
 /// once its session is registered, so that it always finds the session.
-async fn cancelled(
-    shared: &Shared,
-    id: u64,
-    cancel: &CancelToken,
-    conn: Option<&Connection>,
-) -> Ending {
-    cancel.cancelled().await;
+async fn cancelled(shared: &Shared, id: u64, ctl: &Control, conn: Option<&Connection>) -> Ending {
+    ctl.cancel.cancelled().await;
     let ending = match shared.session_by_id(id) {
         Some(session) => match session.cancel() {
             Cancel::Ended(ending) => ending,
             Cancel::LeftToStep => {
                 // A later start deletes the files instead of finishing them.
-                session
+                let _ = session
                     .update(&shared.data_dir, |s, d| s.save_record(d))
                     .await;
                 std::future::pending().await
             }
-            Cancel::TooLate => std::future::pending().await,
+            Cancel::TooLate => {
+                ctl.cancel_waits.store(true, Ordering::Relaxed);
+                std::future::pending().await
+            }
         },
         None => Ending::nothing(),
     };
@@ -302,6 +303,20 @@ struct Receiver<'a> {
     peer_suspended: bool,
 }
 
+/// Decides once who has the part and the record of a new receive: the
+/// thread that makes them, which hands them to the transfer, or a cancel
+/// that comes meanwhile, which ends the receive at once, without waiting for
+/// the thread, which then deletes them again. Whichever comes first.
+#[derive(Clone, Default)]
+struct First(Arc<AtomicBool>);
+
+impl First {
+    /// Whether this caller came first.
+    fn take(&self) -> bool {
+        !self.0.swap(true, Ordering::SeqCst)
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 async fn accept(
     shared: &Arc<Shared>,
@@ -317,15 +332,49 @@ async fn accept(
     folder: ReceivedFolder,
 ) -> Outcome {
     let name = archive::sanitize_file_name(&offer.name);
-    // Not raced against a cancel, which could not delete the part before the
-    // session below knows it; a cancel meanwhile takes effect right after.
-    let prepared = {
-        let (dir, temp_dir, name) = (dest_dir.clone(), shared.temp_dir.clone(), name.clone());
-        let (kind, token) = (offer.kind, offer.token);
-        off_runtime(move || prepare_part(&dir, &temp_dir, &name, kind, folder, &token)).await
+    // On a thread of its own, which a cancel does not wait for: the
+    // destination may not answer for a long time (a network folder that is
+    // gone, say).
+    let first = First::default();
+    let mut making = {
+        let (dir, temp_dir, data_dir) = (
+            dest_dir.clone(),
+            shared.temp_dir.clone(),
+            shared.data_dir.clone(),
+        );
+        let (name, offer, paused, first) = (
+            name.clone(),
+            offer.clone(),
+            ctl.paused.subscribe(),
+            first.clone(),
+        );
+        tokio::task::spawn_blocking(move || {
+            let record = new_receive(
+                &dir, &temp_dir, &data_dir, &name, offer, from, folder, &paused,
+            )?;
+            if !first.take() {
+                // Cancelled meanwhile: nothing of it may stay.
+                record.discard(&data_dir);
+                bail!(Cancelled);
+            }
+            Ok(record)
+        })
     };
-    let (part_path, part_id) = match prepared {
-        Ok(p) => p,
+    let made = tokio::select! {
+        biased;
+        made = session::joined(&mut making) => made,
+        () = ctl.cancel.cancelled() => {
+            if first.take() {
+                conn.close(CLOSE_CANCELLED.into(), b"cancelled");
+                return Outcome::Cancelled;
+            }
+            // Made already: the transfer takes them, and the cancel ends it
+            // right away (below).
+            session::joined(&mut making).await
+        }
+    };
+    let record = match made {
+        Ok(record) => record,
         Err(_) if ctl.cancel.flag().load(Ordering::Relaxed) => {
             conn.close(CLOSE_CANCELLED.into(), b"cancelled");
             return Outcome::Cancelled;
@@ -335,42 +384,11 @@ async fn accept(
             return Outcome::Failed(format!("{e:#}"));
         }
     };
-    let record = TransferRecord {
-        token: offer.token,
-        peer: from.to_string(),
-        peer_name: offer.sender_name.clone(),
-        paused: ctl.is_paused(),
-        created: std::time::SystemTime::now(),
-        side: Side::Receive {
-            dest_dir: dest_dir.clone(),
-            part_path: part_path.clone(),
-            part_id: Some(part_id),
-            synced: Some(0),
-            folder,
-            unpacking: None,
-            moving: None,
-            leftovers: Vec::new(),
-        },
-        offer,
-        done_hash: None,
-        ended: false,
-    };
-    let saved = {
-        let (record, data_dir, part) = (record.clone(), shared.data_dir.clone(), part_path.clone());
-        off_runtime(move || {
-            let saved = record.save(&data_dir);
-            if saved.is_err() {
-                let _ = std::fs::remove_file(&part);
-            }
-            saved
-        })
-        .await
-    };
-    if let Err(e) = saved {
-        conn.close(CLOSE_FAILED.into(), b"failed");
-        return Outcome::Failed(format!("{e:#}"));
-    }
     let (session, session_rx) = Session::new(id, record.token, from, Role::Receive);
+    let part_path = record
+        .receive_files()
+        .map(|files| files.part.clone())
+        .unwrap_or_default();
     let size = record.offer.size;
     let kind = record.offer.kind;
     let times = offer_times(&record.offer);
@@ -404,12 +422,52 @@ async fn accept(
     };
     tokio::select! {
         biased;
-        ending = cancelled(shared, id, &ctl.cancel, Some(&conn)) => {
+        ending = cancelled(shared, id, ctl, Some(&conn)) => {
             ending.forget(&shared.data_dir).await;
             Outcome::Cancelled
         }
         o = receiver.start(streams) => o,
     }
+}
+
+/// Makes the part file of a new receive and its record, and saves the
+/// record. `paused` tells whether the user has paused the receive by now.
+/// Blocking.
+#[allow(clippy::too_many_arguments)]
+fn new_receive(
+    dest_dir: &Path,
+    temp_dir: &Path,
+    data_dir: &Path,
+    name: &str,
+    offer: Offer,
+    from: EndpointId,
+    folder: ReceivedFolder,
+    paused: &watch::Receiver<bool>,
+) -> anyhow::Result<TransferRecord> {
+    let (part, part_id) = prepare_part(dest_dir, temp_dir, name, offer.kind, folder, &offer.token)?;
+    let record = TransferRecord {
+        token: offer.token,
+        peer: from.to_string(),
+        peer_name: offer.sender_name.clone(),
+        paused: *paused.borrow(),
+        created: std::time::SystemTime::now(),
+        side: Side::Receive {
+            dest_dir: dest_dir.to_path_buf(),
+            files: ReceiveFiles::new(part.clone()),
+            part_id: Some(part_id),
+            synced: Some(0),
+            folder,
+        },
+        offer,
+        done_hash: None,
+        done_sent: false,
+        ended: false,
+    };
+    if let Err(e) = record.save(data_dir) {
+        let _ = std::fs::remove_file(&part);
+        return Err(e.into());
+    }
+    Ok(record)
 }
 
 /// Creates the part file of a new receive, without replacing anything, and
@@ -538,7 +596,7 @@ impl<'a> Receiver<'a> {
     ) -> Result<Self, Outcome> {
         let Side::Receive {
             dest_dir,
-            part_path,
+            files,
             folder,
             ..
         } = &record.side
@@ -557,7 +615,7 @@ impl<'a> Receiver<'a> {
             kind: record.offer.kind,
             name: archive::sanitize_file_name(&record.offer.name),
             dest_dir: dest_dir.clone(),
-            part_path: part_path.clone(),
+            part_path: files.part.clone(),
             folder: *folder,
             times: offer_times(&record.offer),
             size: record.offer.size,
@@ -574,14 +632,10 @@ impl<'a> Receiver<'a> {
         Ok(receiver)
     }
 
-    /// Goes on with a receive from an earlier run.
-    async fn continue_restored(&mut self) -> Outcome {
-        // The item was in place already: only the end of the transfer was
-        // interrupted (see `TransferRecord::placed_item`).
-        let placed = self
-            .session
-            .with_record(|r| r.placed_item().map(Path::to_path_buf))
-            .flatten();
+    /// Goes on with a receive from an earlier run. `placed` is the item if it
+    /// was in place already: only the end of the transfer was interrupted
+    /// (see `check_restored`).
+    async fn continue_restored(&mut self, placed: Option<PathBuf>) -> Outcome {
         if let Some(path) = placed {
             let times = (self.kind == Kind::File).then_some(self.times);
             let ending = self.session.end(None, true);
@@ -1078,17 +1132,34 @@ impl Transfer {
     fn move_part(&self, files: &mut ReceiveFiles, dir: &Path, name: &str) -> io::Result<PathBuf> {
         let id = archive::file_id(&files.part)?;
         let part = files.part.clone();
-        let to = archive::move_to_unique_noted(&part, dir, name, false, &mut |to| {
+        let moved = archive::move_to_unique_noted(&part, dir, name, false, &mut |to| {
             files.moving = Some(Owned {
                 path: to.to_path_buf(),
                 id,
             });
             self.save(files)
-        })?;
-        files.part.clone_from(&to);
-        // Best effort: the note above finds the part after a crash.
-        let _ = self.save(files);
-        Ok(to)
+        });
+        match moved {
+            Ok(to) => {
+                files.part.clone_from(&to);
+                // Best effort: the note above finds the part after a crash.
+                let _ = self.save(files);
+                Ok(to)
+            }
+            Err(e) => {
+                self.unnote_move(files);
+                Err(e)
+            }
+        }
+    }
+
+    /// Forgets the note of a rename of the part that did not happen, so that
+    /// a later start never takes what has that name for the part (see
+    /// `TransferRecord::follow_moved_part`). Best effort.
+    fn unnote_move(&self, files: &mut ReceiveFiles) {
+        if files.moving.take().is_some() {
+            let _ = self.save(files);
+        }
     }
 
     /// Notes the new folder `folder` that is about to be unpacked into (and
@@ -1211,7 +1282,10 @@ fn new_pair(
         });
         // A failure from here on leaves the folder noted: the end of the
         // transfer deletes it.
-        transfer.note_folder(files, &target)?;
+        if let Err(e) = transfer.note_folder(files, &target) {
+            transfer.unnote_move(files);
+            return Err(e.into());
+        }
         match archive::rename_new(&files.part, &zip) {
             Ok(()) => {
                 files.part = zip;
@@ -1220,16 +1294,19 @@ fn new_pair(
                 return Ok(target);
             }
             // The zip's name was taken after all: the next pair. The empty
-            // folder goes now, or later as a leftover (the next note keeps
-            // that in the record).
+            // folder goes now, or later as a leftover.
             Err(e) if e.kind() == io::ErrorKind::AlreadyExists => {
                 if let Some(empty) = files.unpacking.take()
                     && std::fs::remove_dir(&empty.path).is_err()
                 {
                     files.leftovers.push(empty);
                 }
+                transfer.unnote_move(files);
             }
-            Err(e) => return Err(e.into()),
+            Err(e) => {
+                transfer.unnote_move(files);
+                return Err(e.into());
+            }
         }
     }
 }
@@ -1298,15 +1375,13 @@ mod tests {
             created: SystemTime::now(),
             side: Side::Receive {
                 dest_dir: part.parent().unwrap().to_path_buf(),
-                part_path: part.to_path_buf(),
+                files: ReceiveFiles::new(part.to_path_buf()),
                 part_id: archive::file_id(part).ok(),
                 synced: None,
                 folder,
-                unpacking: None,
-                moving: None,
-                leftovers: Vec::new(),
             },
             done_hash: None,
+            done_sent: false,
             ended: false,
         };
         record.save(&data_dir).unwrap();
@@ -1366,6 +1441,47 @@ mod tests {
             (at, at)
         );
         assert!(transfer.session.with_record(|_| ()).is_none());
+        std::fs::remove_dir_all(&base).ok();
+    }
+
+    /// A rename of the part that fails leaves no note of it behind, so that
+    /// a later start never takes what gets that name for the part.
+    #[test]
+    fn a_failed_rename_leaves_no_note() {
+        let base = scratch("unnoted");
+        let part = base.join("a.txt.part");
+        std::fs::write(&part, b"new").unwrap();
+        let (t, _) = times(1_500_000_000);
+        let transfer = receiving(&base, &part, Kind::File, ReceivedFolder::Extract);
+        assert!(finish_file(&transfer, &base.join("gone"), "a.txt", t).is_err());
+        assert_eq!(transfer.files().unwrap().moving, None);
+        let records = session::load_all(&transfer.data_dir);
+        assert_eq!(records[0].receive_files().unwrap().moving, None);
+        assert!(part.exists());
+        // The transfer still runs: it can end as failed or be cancelled.
+        assert!(transfer.session.cancel_blocking(&transfer.data_dir));
+        assert!(!part.exists());
+        std::fs::remove_dir_all(&base).ok();
+    }
+
+    /// An item that has all arrived intact is put in place even if its
+    /// record cannot be saved any more: failing would delete it.
+    #[test]
+    fn the_last_step_goes_on_when_the_record_cannot_be_saved() {
+        let base = scratch("unsaved");
+        let part = base.join("a.txt.part");
+        std::fs::write(&part, b"new").unwrap();
+        let (t, _) = times(1_500_000_000);
+        let transfer = receiving(&base, &part, Kind::File, ReceivedFolder::Extract);
+        // The record's temporary file cannot be made from now on.
+        let tmp = session::records_dir(&transfer.data_dir)
+            .join(format!("{}.json.tmp", protocol::token_hex(&[7; 16])));
+        std::fs::create_dir_all(&tmp).unwrap();
+        let path = finish_file(&transfer, &base, "a.txt", t).unwrap();
+        assert_eq!(path, base.join("a.txt"));
+        assert_eq!(std::fs::read(&path).unwrap(), b"new");
+        assert!(transfer.session.with_record(|_| ()).is_none(), "completed");
+        assert!(session::load_all(&transfer.data_dir).is_empty());
         std::fs::remove_dir_all(&base).ok();
     }
 

@@ -161,6 +161,7 @@ pub const SR_LATN: Strings = Strings {
     connection_lost_balloon: "„{item}“: čeka se ponovno uspostavljanje veze.",
     continuing_balloon_title: "Prenos se nastavlja",
     continuing_balloon: "„{item}“: prenos se nastavlja.",
+    peer_unpacking_balloon: "„{item}“: sve je stiglo. Primalac ({name}) raspakuje fasciklu pa prenos više ne može da se otkaže.",
     restored_balloon_title: "Nezavršeni prenos",
     restored_balloon: "„{item}“: prenos je prošli put prekinut i nastavlja se čim oboje budete na mreži.",
 

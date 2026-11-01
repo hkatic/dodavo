@@ -133,6 +133,12 @@ pub enum Event {
         id: u64,
         phase: Phase,
     },
+    /// Sending side: the receiver has confirmed that all of the item arrived
+    /// intact (also before a restart). The item is the receiver's now, and
+    /// the transfer can no longer be cancelled here.
+    HandedOver {
+        id: u64,
+    },
     Progress {
         id: u64,
         done: u64,
@@ -636,7 +642,8 @@ async fn run(secret: SecretKey, shared: Arc<Shared>, mut rx: mpsc::UnboundedRece
                 // No more dialing from now on (see `shutting_down`).
                 shared.shutting_down.store(true, Ordering::SeqCst);
                 // Transfers that were just cancelled need a moment to tell
-                // their peer and to clean up; the rest is suspended.
+                // their peer and to clean up; the rest is suspended, also
+                // those whose cancel came too late.
                 let deadline = Instant::now() + Duration::from_secs(1);
                 while Instant::now() < deadline {
                     let cancelling = shared
@@ -644,7 +651,7 @@ async fn run(secret: SecretKey, shared: Arc<Shared>, mut rx: mpsc::UnboundedRece
                         .lock()
                         .unwrap()
                         .values()
-                        .any(|c| c.cancel.flag().load(Ordering::Relaxed));
+                        .any(|c| c.cancelling());
                     if !cancelling {
                         break;
                     }
@@ -1231,8 +1238,8 @@ mod tests {
         std::fs::create_dir_all(&partial).unwrap();
         std::fs::write(partial.join("a.bin"), &data[..1000]).unwrap();
         let mut record = records[0].clone();
-        if let session::Side::Receive { unpacking, .. } = &mut record.side {
-            *unpacking = Some(session::Owned::at(&partial).unwrap());
+        if let session::Side::Receive { files, .. } = &mut record.side {
+            files.unpacking = Some(session::Owned::at(&partial).unwrap());
         }
         record.save(&dir_b).unwrap();
 
@@ -1294,18 +1301,19 @@ mod tests {
             created: SystemTime::now(),
             side: session::Side::Receive {
                 dest_dir: dir.clone(),
-                part_path: part.clone(),
+                files: session::ReceiveFiles {
+                    moving: Some(session::Owned {
+                        path: dir.join("Photos (2).zip"),
+                        id: crate::archive::file_id(&part).unwrap(),
+                    }),
+                    ..session::ReceiveFiles::new(part.clone())
+                },
                 part_id: Some(crate::archive::file_id(&part).unwrap()),
                 synced: Some(3),
                 folder: ReceivedFolder::Both,
-                unpacking: None,
-                moving: Some(session::Owned {
-                    path: dir.join("Photos (2).zip"),
-                    id: crate::archive::file_id(&part).unwrap(),
-                }),
-                leftovers: Vec::new(),
             },
             done_hash: Some([0; 32]),
+            done_sent: false,
             ended: true,
         };
         record.save(&dir).unwrap();

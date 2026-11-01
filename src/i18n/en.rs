@@ -158,6 +158,7 @@ pub const EN: Strings = Strings {
     connection_lost_balloon: "“{item}”: waiting for the connection to come back.",
     continuing_balloon_title: "Transfer continues",
     continuing_balloon: "“{item}”: the transfer continues.",
+    peer_unpacking_balloon: "“{item}”: all of it has arrived. {name} is unpacking the folder, so the transfer can no longer be cancelled.",
     restored_balloon_title: "Unfinished transfer",
     restored_balloon: "“{item}”: the transfer was interrupted last time and continues as soon as you are both online.",
 

@@ -57,11 +57,9 @@ pub enum Side {
     },
     Receive {
         dest_dir: PathBuf,
-        /// The `.part` file. For a folder that is only unpacked, its zip in
-        /// the temporary folder (see [`temporary_part`]); for a folder whose
-        /// zip is kept, `<name>.zip.part` in `dest_dir`. Once it has been
-        /// renamed to its final name (see `moving`), the item itself.
-        part_path: PathBuf,
+        /// The files that the last step of the receive changes.
+        #[serde(flatten)]
+        files: ReceiveFiles,
         /// The identity of the part file (see [`Owned`]): what has its name
         /// is the part only while it is that file, so that a later start
         /// never cuts, deletes or completes something else of the same name.
@@ -77,32 +75,63 @@ pub enum Side {
         /// transfer was accepted. Records of earlier versions only unpack.
         #[serde(default)]
         folder: ReceivedFolder,
-        /// The folder that a received folder is being unpacked into, noted
-        /// before anything is written to it. It is complete only once the
-        /// record is gone: a later start deletes it and unpacks the archive
-        /// again into a new folder, and ending the transfer otherwise deletes
-        /// it. Records of earlier versions have only its path (see
-        /// [`unpacking_of_any_version`]).
-        #[serde(default, deserialize_with = "unpacking_of_any_version")]
-        unpacking: Option<Owned>,
-        /// Where the part file is being renamed to, with the part's identity:
-        /// noted before each attempt, so that after a crash right after the
-        /// rename the record finds the part again
-        /// ([`TransferRecord::follow_moved_part`]) and never takes a new file
-        /// under the part's old name for it.
-        #[serde(default)]
-        moving: Option<Owned>,
-        /// Folders of the transfer that have to go but could not be deleted
-        /// yet, such as an incomplete one of an earlier run in which another
-        /// program holds a file open. Ending the transfer deletes them: a
-        /// completed one tries once, a failed or cancelled one keeps its
-        /// record until they are gone.
-        #[serde(default)]
-        leftovers: Vec<Owned>,
     },
 }
 
-/// Reads `Side::Receive::unpacking` as any version wrote it. Earlier versions
+/// The files of a receive that its last step changes, which it works on as
+/// a copy ([`Session::receive_files`]) and notes in the record before each
+/// change on disk ([`Session::save_receive_files`]). Stored with the other
+/// fields of `Side::Receive`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ReceiveFiles {
+    /// The `.part` file. For a folder that is only unpacked, its zip in the
+    /// temporary folder (see [`temporary_part`]); for a folder whose zip is
+    /// kept, `<name>.zip.part` in the destination folder. Once it has been
+    /// renamed to its final name (see `moving`), the item itself.
+    #[serde(rename = "part_path")]
+    pub part: PathBuf,
+    /// The folder that a received folder is being unpacked into, noted
+    /// before anything is written to it. It is complete only once the
+    /// record is gone: a later start deletes it and unpacks the archive
+    /// again into a new folder, and ending the transfer otherwise deletes
+    /// it. Records of earlier versions have only its path (see
+    /// [`unpacking_of_any_version`]).
+    #[serde(default, deserialize_with = "unpacking_of_any_version")]
+    pub unpacking: Option<Owned>,
+    /// Where the part file is being renamed to, with the part's identity:
+    /// noted before each attempt and cleared when one fails, so that after a
+    /// crash right after the rename the record finds the part again
+    /// ([`TransferRecord::follow_moved_part`]) and never takes a new file
+    /// under the part's old name for it.
+    #[serde(default)]
+    pub moving: Option<Owned>,
+    /// Folders of the transfer that have to go but could not be deleted
+    /// yet, such as an incomplete one of an earlier run in which another
+    /// program holds a file open. Ending the transfer deletes them: a
+    /// completed one tries once, a failed or cancelled one keeps its
+    /// record until they are gone.
+    #[serde(default)]
+    pub leftovers: Vec<Owned>,
+}
+
+impl ReceiveFiles {
+    /// The files of a new receive, whose part is at `part`.
+    pub fn new(part: PathBuf) -> Self {
+        ReceiveFiles {
+            part,
+            unpacking: None,
+            moving: None,
+            leftovers: Vec::new(),
+        }
+    }
+
+    /// Whether the part file has its final name already.
+    pub fn part_in_place(&self) -> bool {
+        self.moving.as_ref().is_some_and(|m| m.path == self.part)
+    }
+}
+
+/// Reads `ReceiveFiles::unpacking` as any version wrote it. Earlier versions
 /// noted only the folder's path, which is trusted as they did: the folder is
 /// whatever has that name now.
 fn unpacking_of_any_version<'de, D: Deserializer<'de>>(
@@ -171,22 +200,6 @@ impl Owned {
     }
 }
 
-/// The files of a receive that its last step changes (see `Side::Receive`).
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct ReceiveFiles {
-    pub part: PathBuf,
-    pub unpacking: Option<Owned>,
-    pub moving: Option<Owned>,
-    pub leftovers: Vec<Owned>,
-}
-
-impl ReceiveFiles {
-    /// Whether the part file has its final name already.
-    pub fn part_in_place(&self) -> bool {
-        self.moving.as_ref().is_some_and(|m| m.path == self.part)
-    }
-}
-
 /// Deletes a file; whether it is gone.
 fn remove_file(path: &Path) -> bool {
     match fs::remove_file(path) {
@@ -244,6 +257,12 @@ pub struct TransferRecord {
     /// there (see [`Session::hand_over`]).
     #[serde(default)]
     pub done_hash: Option<[u8; 32]>,
+    /// Sending side: all of the data and `Done` have gone out. The receiver
+    /// may have all of it, and the item is the receiver's once it has
+    /// checked it, so until the sender learns the receiver's verdict a cancel
+    /// waits for it (see [`Session::defer_cancel`]), also after a restart.
+    #[serde(default)]
+    pub done_sent: bool,
     /// The transfer has ended without its item, and its files are being
     /// deleted ([`discard`](Self::discard)): a later start finishes that
     /// instead of continuing the transfer.
@@ -276,15 +295,15 @@ impl TransferRecord {
     }
 
     /// The bytes this side already has (receiver: what is on disk of the part
-    /// file, at most what is known to be flushed).
+    /// file, at most what is known to be flushed; sender: all of them once
+    /// the receiver confirmed them, otherwise none known).
     pub fn have(&self) -> u64 {
         match &self.side {
-            Side::Receive {
-                part_path, synced, ..
-            } => {
-                let len = fs::metadata(part_path).map(|m| m.len()).unwrap_or(0);
+            Side::Receive { files, synced, .. } => {
+                let len = fs::metadata(&files.part).map(|m| m.len()).unwrap_or(0);
                 synced.map_or(len, |s| s.min(len))
             }
+            Side::Send { .. } if self.done_hash.is_some() => self.offer.size,
             Side::Send { .. } => 0,
         }
     }
@@ -294,7 +313,7 @@ impl TransferRecord {
     /// part is not there (see [`part_is_there`](Self::part_is_there)).
     pub fn truncate_to_synced(&self) -> io::Result<()> {
         if let Side::Receive {
-            part_path,
+            files,
             synced: Some(synced),
             ..
         } = &self.side
@@ -305,11 +324,11 @@ impl TransferRecord {
                     crate::i18n::tr!(error_part_missing),
                 ));
             }
-            let len = fs::metadata(part_path)?.len();
+            let len = fs::metadata(&files.part)?.len();
             if len > *synced {
                 fs::OpenOptions::new()
                     .write(true)
-                    .open(part_path)?
+                    .open(&files.part)?
                     .set_len(*synced)?;
             }
         }
@@ -330,41 +349,37 @@ impl TransferRecord {
     /// was created, or with the name it was being renamed to.
     fn part_identity(&self) -> Option<FileId> {
         match &self.side {
-            Side::Receive {
-                part_id, moving, ..
-            } => part_id.or(moving.as_ref().map(|m| m.id)),
+            Side::Receive { part_id, files, .. } => part_id.or(files.moving.as_ref().map(|m| m.id)),
             Side::Send { .. } => None,
         }
     }
 
     /// The part file of a receive as an [`Owned`], if its identity is known.
     fn owned_part(&self) -> Option<Owned> {
-        match &self.side {
-            Side::Receive { part_path, .. } => self.part_identity().map(|id| Owned {
-                path: part_path.clone(),
-                id,
-            }),
-            Side::Send { .. } => None,
-        }
+        let path = &self.receive_files()?.part;
+        self.part_identity().map(|id| Owned {
+            path: path.clone(),
+            id,
+        })
     }
 
     /// Whether the part file of a receive is there: the same file as when it
     /// was created, or (in records of earlier versions) anything of its name.
     pub fn part_is_there(&self) -> bool {
-        match (&self.side, self.owned_part()) {
-            (Side::Receive { .. }, Some(part)) => part.is_there(),
-            (Side::Receive { part_path, .. }, None) => part_path.exists(),
-            (Side::Send { .. }, _) => false,
+        match (self.receive_files(), self.owned_part()) {
+            (Some(_), Some(part)) => part.is_there(),
+            (Some(files), None) => files.part.exists(),
+            (None, _) => false,
         }
     }
 
     /// Deletes the part file of a receive if it is still this transfer's
     /// (see [`Owned::remove_file`]); whether it is gone.
     fn remove_part(&self) -> bool {
-        match (&self.side, self.owned_part()) {
-            (Side::Receive { .. }, Some(part)) => part.remove_file(),
-            (Side::Receive { part_path, .. }, None) => remove_file(part_path),
-            (Side::Send { .. }, _) => true,
+        match (self.receive_files(), self.owned_part()) {
+            (Some(_), Some(part)) => part.remove_file(),
+            (Some(files), None) => remove_file(&files.part),
+            (None, _) => true,
         }
     }
 
@@ -423,24 +438,29 @@ impl TransferRecord {
     /// only temporary. The part file of a received item has already been
     /// renamed into place, so its old name may by now belong to another
     /// transfer of the same name and must not be deleted; only a temporary
-    /// part is.
+    /// part is. A record that cannot be deleted now is completed again at
+    /// the next start, and never continued or discarded: the tombstone,
+    /// which is written first, says that the transfer completed (see
+    /// [`load_all`]).
     pub fn complete(&self, data_dir: &Path) {
         match &self.side {
-            Side::Receive {
-                part_path,
-                leftovers,
-                ..
-            } => {
+            Side::Receive { files, .. } => {
                 self.remove(data_dir);
                 if self.part_is_temporary() {
-                    let _ = fs::remove_file(part_path);
+                    let _ = fs::remove_file(&files.part);
                 }
                 // Once: the record that would keep trying is gone.
-                for folder in leftovers {
+                for folder in &files.leftovers {
                     folder.remove_folder();
                 }
             }
-            Side::Send { .. } => self.discard(data_dir),
+            // No need to mark the record as ended first (see `discard`): one
+            // that is left completes at the next start.
+            Side::Send { .. } => {
+                if self.delete_files() {
+                    self.remove(data_dir);
+                }
+            }
         }
     }
 
@@ -456,81 +476,67 @@ impl TransferRecord {
             ended.ended = true;
             let _ = ended.save(data_dir);
         }
-        let gone = match &self.side {
-            Side::Send {
-                source, data_path, ..
-            } => data_path == source || remove_file(data_path),
-            Side::Receive {
-                unpacking,
-                leftovers,
-                ..
-            } => {
-                let part = self.remove_part();
-                // Every one is tried, whether or not the others go.
-                let kept = unpacking
-                    .iter()
-                    .chain(leftovers)
-                    .filter(|folder| !folder.remove_folder())
-                    .count();
-                part && kept == 0
-            }
-        };
-        if gone {
+        if self.delete_files() {
             self.remove(data_dir);
         }
     }
 
-    /// What the last step of a receive works with (`None` for a send).
-    pub(crate) fn receive_files(&self) -> Option<ReceiveFiles> {
+    /// Deletes what a transfer that ends without its item leaves behind (see
+    /// [`discard`](Self::discard)); whether all of it is gone.
+    fn delete_files(&self) -> bool {
         match &self.side {
-            Side::Receive {
-                part_path,
-                unpacking,
-                moving,
-                leftovers,
-                ..
-            } => Some(ReceiveFiles {
-                part: part_path.clone(),
-                unpacking: unpacking.clone(),
-                moving: moving.clone(),
-                leftovers: leftovers.clone(),
-            }),
+            Side::Send {
+                source, data_path, ..
+            } => data_path == source || remove_file(data_path),
+            Side::Receive { files, .. } => {
+                let part = self.remove_part();
+                // Every one is tried, whether or not the others go.
+                let kept = files
+                    .unpacking
+                    .iter()
+                    .chain(&files.leftovers)
+                    .filter(|folder| !folder.remove_folder())
+                    .count();
+                part && kept == 0
+            }
+        }
+    }
+
+    /// What the last step of a receive works with (`None` for a send).
+    pub fn receive_files(&self) -> Option<&ReceiveFiles> {
+        match &self.side {
+            Side::Receive { files, .. } => Some(files),
             Side::Send { .. } => None,
         }
     }
 
-    fn set_receive_files(&mut self, files: &ReceiveFiles) {
-        if let Side::Receive {
-            part_path,
-            unpacking,
-            moving,
-            leftovers,
-            ..
-        } = &mut self.side
-        {
-            part_path.clone_from(&files.part);
-            unpacking.clone_from(&files.unpacking);
-            moving.clone_from(&files.moving);
-            leftovers.clone_from(&files.leftovers);
+    fn receive_files_mut(&mut self) -> Option<&mut ReceiveFiles> {
+        match &mut self.side {
+            Side::Receive { files, .. } => Some(files),
+            Side::Send { .. } => None,
         }
     }
 
     /// After a restart: if the part file was renamed before the program
     /// ended, but the record not yet changed with it (see
-    /// `Side::Receive::moving`), the record follows it. Whether it did.
+    /// [`ReceiveFiles::moving`]), the record follows it. Whether it did.
+    /// Only a part that is no longer under its old name has moved: on FAT and
+    /// exFAT, where every item has the same identity, anything that has the
+    /// new name would count as the part.
     pub fn follow_moved_part(&mut self) -> bool {
-        if let Side::Receive {
-            part_path,
-            moving: Some(moving),
-            ..
-        } = &mut self.side
-            && *part_path != moving.path
-            && moving.is_there()
-        {
-            part_path.clone_from(&moving.path);
-            return true;
+        let Some(files) = self.receive_files() else {
+            return false;
+        };
+        let Some(moving) = files.moving.clone().filter(|m| m.path != files.part) else {
+            return false;
+        };
+        if self.part_is_there() || !moving.is_there() {
+            return false;
         }
-        false
+        if let Some(files) = self.receive_files_mut() {
+            files.part = moving.path;
+        }
+        true
     }
 
     /// After a restart: the received item, if it was in place already and
@@ -541,14 +547,7 @@ impl TransferRecord {
         let files = self.receive_files()?;
         let single = self.offer.kind == Kind::File
             || self.received_folder() == Some(ReceivedFolder::KeepZip);
-        match &self.side {
-            Side::Receive { part_path, .. }
-                if single && files.part_in_place() && self.part_is_there() =>
-            {
-                Some(part_path)
-            }
-            _ => None,
-        }
+        (single && files.part_in_place() && self.part_is_there()).then_some(files.part.as_path())
     }
 }
 
@@ -580,35 +579,48 @@ fn is_old(path: &Path, max_age: Duration) -> bool {
         .is_some_and(|age| age > max_age)
 }
 
-/// The unfinished transfers from earlier runs. Old records (with their
-/// partial data) and old tombstones are deleted on the way.
+/// The unfinished transfers from earlier runs. On the way, the records of
+/// transfers that completed are forgotten (their tombstone says so; only the
+/// record, or something temporary, could not be deleted then), old records
+/// go with their partial data, and old tombstones go.
 pub fn load_all(data_dir: &Path) -> Vec<TransferRecord> {
     let mut records = Vec::new();
     let Ok(entries) = fs::read_dir(records_dir(data_dir)) else {
         return records;
     };
-    for entry in entries.flatten() {
-        let path = entry.path();
-        let is_json = path.extension().and_then(|e| e.to_str()) == Some("json");
-        let record = is_json
-            .then(|| fs::read_to_string(&path).ok())
-            .flatten()
+    let (json, other): (Vec<PathBuf>, Vec<PathBuf>) = entries
+        .flatten()
+        .map(|entry| entry.path())
+        .partition(|path| path.extension().and_then(|e| e.to_str()) == Some("json"));
+    // The records first: whether a transfer completed is in its tombstone,
+    // which may be about to go.
+    for path in json {
+        let record = fs::read_to_string(&path)
+            .ok()
             .and_then(|text| serde_json::from_str::<TransferRecord>(&text).ok());
-        if is_old(&path, MAX_AGE) {
-            if let Some(record) = &record {
-                record.discard(data_dir);
-            }
-            let _ = fs::remove_file(&path);
-            continue;
-        }
         match record {
+            // Its item is in place: nothing of it may be deleted.
+            Some(record) if tombstone(data_dir, &record.token) == Some(true) => {
+                record.complete(data_dir);
+            }
+            Some(record) if is_old(&path, MAX_AGE) => {
+                record.delete_files();
+                let _ = fs::remove_file(&path);
+            }
             Some(record) => records.push(record),
+            None if is_old(&path, MAX_AGE) => {
+                let _ = fs::remove_file(&path);
+            }
             // A damaged record is kept aside instead of being read again at
             // every start.
-            None if is_json => {
+            None => {
                 let _ = fs::rename(&path, path.with_extension("json.bad"));
             }
-            None => {}
+        }
+    }
+    for path in other {
+        if is_old(&path, MAX_AGE) {
+            let _ = fs::remove_file(&path);
         }
     }
     records.sort_by_key(|r| r.created);
@@ -629,7 +641,7 @@ pub fn cleanup_temp(dir: &Path, records: &[TransferRecord]) {
         .iter()
         .map(|r| match &r.side {
             Side::Send { data_path, .. } => data_path.as_path(),
-            Side::Receive { part_path, .. } => part_path.as_path(),
+            Side::Receive { files, .. } => files.part.as_path(),
         })
         .collect();
     for entry in entries.flatten() {
@@ -724,14 +736,24 @@ pub(crate) struct Streams {
 /// folder can take long) on a thread of its own instead of one of the
 /// runtime's worker threads, and waits for it.
 pub(crate) async fn off_runtime<T: Send + 'static>(work: impl FnOnce() -> T + Send + 'static) -> T {
-    match tokio::task::spawn_blocking(work).await {
+    joined(&mut tokio::task::spawn_blocking(work)).await
+}
+
+/// Waits for what `task` returns. A panic in it goes on here; a task that
+/// the runtime dropped because it is shutting down never returns, since
+/// nothing waits for it any more.
+pub(crate) async fn joined<T>(task: &mut tokio::task::JoinHandle<T>) -> T {
+    match task.await {
         Ok(value) => value,
         Err(error) => match error.try_into_panic() {
             Ok(panic) => std::panic::resume_unwind(panic),
-            // The runtime is shutting down: nothing waits for this any more.
             Err(_) => std::future::pending().await,
         },
     }
+}
+
+fn lock(mutex: &Mutex<()>) -> MutexGuard<'_, ()> {
+    mutex.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
 /// How far a running transfer has come, as far as ending it goes.
@@ -739,23 +761,33 @@ pub(crate) async fn off_runtime<T: Send + 'static>(work: impl FnOnce() -> T + Se
 enum Stage {
     /// A cancel ends the transfer.
     Running,
-    /// The last step of a receive runs (see [`Session::finishing`]): a
-    /// cancel is left to it.
+    /// A cancel is left to the transfer's task, which acts on it at its next
+    /// step. On the receiving side, the last step runs (see
+    /// [`Session::finishing`]) and stops. On the sending side, the receiver
+    /// may have all of the item and the sender waits for its verdict, or the
+    /// record is being saved for the first time (see
+    /// [`Session::defer_cancel`]).
     Finishing,
     /// The item is the receiver's. On the receiving side, it is being put in
-    /// place or is in place ([`Session::place`]); on the sending side, the
-    /// receiver has confirmed all of it ([`Session::hand_over`]). A cancel
-    /// comes too late.
+    /// place ([`Session::place`]); on the sending side, the receiver has
+    /// confirmed all of it ([`Session::hand_over`]). A cancel comes too late.
     HandedOver,
+    /// The transfer has ended on this side ([`Session::end`], a cancel, or
+    /// once the item is in place): a cancel comes too late and changes
+    /// nothing of how it ended.
+    Ended,
 }
 
 /// What a session's lock guards: the record and the stage, which change
-/// together.
+/// together. File work never holds the lock (see [`Session::save_with`]).
 struct State {
     /// The record on disk, once the transfer was accepted; taken when the
     /// transfer ends.
     record: Option<TransferRecord>,
     stage: Stage,
+    /// A cancel came while the stage was `Finishing`, and was left to the
+    /// transfer's task.
+    cancel_left: bool,
 }
 
 /// A running transfer as seen by the connection router and by cancellation.
@@ -769,6 +801,11 @@ pub(crate) struct Session {
     /// The connection in use, closed on shutdown or when replaced.
     pub current: Mutex<Option<Connection>>,
     state: Mutex<State>,
+    /// Held while the record is written, or deleted when the transfer ends,
+    /// so that the writes happen in the order of the changes and none brings
+    /// a record back after the end deleted it. Only threads of their own
+    /// take it, never the runtime's worker threads.
+    writing: Arc<Mutex<()>>,
     /// The receiver is writing data to the part file, or getting it onto the
     /// disk and into the record after a connection ended. Shutdown waits for
     /// that, so that the next start continues from everything received.
@@ -797,6 +834,8 @@ pub(crate) struct Ending {
     /// Boxed: much larger than the rest of what a cancel returns.
     record: Option<Box<TransferRecord>>,
     completed: bool,
+    /// The session's lock for writing the record (see `Session::writing`).
+    writing: Option<Arc<Mutex<()>>>,
 }
 
 impl Ending {
@@ -805,10 +844,14 @@ impl Ending {
         Ending {
             record: None,
             completed: false,
+            writing: None,
         }
     }
 
     pub fn forget_blocking(self, data_dir: &Path) {
+        // After a save that is still under way, which would otherwise bring
+        // the record back once it is deleted.
+        let _writing = self.writing.as_deref().map(lock);
         forget(data_dir, self.record.map(|r| *r), self.completed);
     }
 
@@ -827,11 +870,14 @@ impl Ending {
 pub(crate) enum Cancel {
     /// The transfer has ended.
     Ended(Ending),
-    /// The last step runs and will end the transfer once it has stopped. The
-    /// record is marked as ended, which is still to be saved
-    /// ([`Session::save_record`]).
+    /// The transfer's task acts on the cancel at its next step (see
+    /// `Stage::Finishing`). On the receiving side, the last step stops and
+    /// ends the transfer; the record is marked as ended, which is still to
+    /// be saved ([`Session::save_record`]). On the sending side, the transfer
+    /// ends as cancelled unless the receiver has the item by then.
     LeftToStep,
-    /// Too late: the transfer ends by itself, completed.
+    /// Too late: the transfer ends by itself, as it would have without the
+    /// cancel (completed, once the item is the receiver's).
     TooLate,
 }
 
@@ -853,7 +899,9 @@ impl Session {
             state: Mutex::new(State {
                 record: None,
                 stage: Stage::Running,
+                cancel_left: false,
             }),
+            writing: Arc::new(Mutex::new(())),
             syncing: AtomicBool::new(false),
         };
         (Arc::new(session), rx)
@@ -863,25 +911,34 @@ impl Session {
         self.state.lock().unwrap()
     }
 
+    fn ending(&self, record: Option<TransferRecord>, completed: bool) -> Ending {
+        Ending {
+            record: record.map(Box::new),
+            completed,
+            writing: Some(self.writing.clone()),
+        }
+    }
+
     /// The transfer was accepted: from now on it has this record.
     pub fn set_record(&self, record: TransferRecord) {
         self.state().record = Some(record);
     }
 
-    /// `f` of the record, if the transfer has one (and has not ended).
+    /// `f` of the record, if the transfer has one (and has not ended). `f`
+    /// runs under the session's lock: no file work in it.
     pub fn with_record<T>(&self, f: impl FnOnce(&TransferRecord) -> T) -> Option<T> {
         self.state().record.as_ref().map(f)
     }
 
     /// Runs `change` on the session off the runtime's worker threads (see
     /// [`off_runtime`]): saving the record syncs it to disk.
-    pub async fn update(
+    pub async fn update<T: Send + 'static>(
         self: &Arc<Self>,
         data_dir: &Path,
-        change: impl FnOnce(&Session, &Path) + Send + 'static,
-    ) {
+        change: impl FnOnce(&Session, &Path) -> T + Send + 'static,
+    ) -> T {
         let (session, data_dir) = (self.clone(), data_dir.to_path_buf());
-        off_runtime(move || change(&session, &data_dir)).await;
+        off_runtime(move || change(&session, &data_dir)).await
     }
 
     pub fn set_current(&self, conn: Option<Connection>) -> Option<Connection> {
@@ -894,38 +951,56 @@ impl Session {
         }
     }
 
+    /// Changes the record with `change` and saves it; `None` if the transfer
+    /// has no record (any more). Blocking, but without the session's lock
+    /// during the write: a cancel, or the router, never waits for the disk.
+    /// The writes still happen in the order of the changes.
+    fn save_with<T>(
+        &self,
+        data_dir: &Path,
+        change: impl FnOnce(&mut TransferRecord) -> T,
+    ) -> Option<(T, io::Result<()>)> {
+        let _writing = lock(&self.writing);
+        let (value, record) = {
+            let mut state = self.state();
+            let record = state.record.as_mut()?;
+            let value = change(record);
+            (value, record.clone())
+        };
+        Some((value, record.save(data_dir)))
+    }
+
     /// Updates the stored pause state of the record.
     pub fn save_paused(&self, data_dir: &Path, paused: bool) {
-        if let Some(record) = self.state().record.as_mut() {
-            record.paused = paused;
-            let _ = record.save(data_dir);
-        }
+        self.save_with(data_dir, |record| record.paused = paused);
     }
 
     /// Remembers how much of the part file is on disk.
     pub fn save_synced(&self, data_dir: &Path, on_disk: u64) {
-        if let Some(record) = self.state().record.as_mut()
-            && let Side::Receive { synced, .. } = &mut record.side
-        {
-            *synced = Some(on_disk);
-            let _ = record.save(data_dir);
-        }
+        self.save_with(data_dir, |record| {
+            if let Side::Receive { synced, .. } = &mut record.side {
+                *synced = Some(on_disk);
+            }
+        });
     }
 
     /// Remembers the sender's final hash (see `TransferRecord::done_hash`).
     pub fn save_done_hash(&self, data_dir: &Path, hash: [u8; 32]) {
-        if let Some(record) = self.state().record.as_mut() {
-            record.done_hash = Some(hash);
-            let _ = record.save(data_dir);
+        self.save_with(data_dir, |record| record.done_hash = Some(hash));
+    }
+
+    /// Remembers that all of the data and `Done` have gone out (see
+    /// `TransferRecord::done_sent`), unless the record knows it already.
+    pub fn save_done_sent(&self, data_dir: &Path) {
+        if self.with_record(|record| !record.done_sent) == Some(true) {
+            self.save_with(data_dir, |record| record.done_sent = true);
         }
     }
 
-    /// Saves the record as it is now (after a cancel left to the last step,
-    /// say).
-    pub fn save_record(&self, data_dir: &Path) {
-        if let Some(record) = self.state().record.as_ref() {
-            let _ = record.save(data_dir);
-        }
+    /// Saves the record as it is now (the first time, or after a cancel left
+    /// to the last step); `None` if the transfer has no record (any more).
+    pub fn save_record(&self, data_dir: &Path) -> Option<io::Result<()>> {
+        self.save_with(data_dir, |_| ()).map(|((), saved)| saved)
     }
 
     /// The files the last step of a receive works with.
@@ -934,25 +1009,28 @@ impl Session {
             .record
             .as_ref()
             .and_then(TransferRecord::receive_files)
+            .cloned()
     }
 
-    /// Changes the files of a receive in the record and saves it, so that
-    /// the record always knows them. Fails if the record could not be saved
-    /// (the change is made in memory all the same), and with [`Cancelled`]
-    /// once the transfer has ended or is to end (a cancel left to the last
-    /// step): the step stops then, before it does anything more.
+    /// Notes `files` in the record of a receive and saves it, so that a later
+    /// start, and the end of the transfer, know them. Fails with
+    /// [`Cancelled`] once the transfer has ended or is to end (a cancel left
+    /// to the last step): the step stops then, before it does anything more.
+    /// The note is kept also then. A record that cannot be saved does not
+    /// stop the step, which would throw away an item that arrived intact
+    /// (the end of the transfer deletes its files): the note is made all the
+    /// same, and only a crash before the next save that works loses it.
     pub fn save_receive_files(&self, data_dir: &Path, files: &ReceiveFiles) -> io::Result<()> {
-        let mut state = self.state();
-        let record = state
-            .record
-            .as_mut()
-            .ok_or_else(|| io::Error::other(Cancelled))?;
-        record.set_receive_files(files);
-        let saved = record.save(data_dir);
-        if record.ended {
-            return Err(io::Error::other(Cancelled));
+        let ended = self.save_with(data_dir, |record| {
+            if let Some(noted) = record.receive_files_mut() {
+                noted.clone_from(files);
+            }
+            record.ended
+        });
+        match ended {
+            Some((false, _)) => Ok(()),
+            _ => Err(io::Error::other(Cancelled)),
         }
-        saved
     }
 
     /// Starts the last step of a receive (unpacking a folder, then putting
@@ -973,7 +1051,8 @@ impl Session {
     /// Ends the transfer on this side: closes the connection (with `code`, if
     /// given) and takes the record. What the result's `forget` then does
     /// leaves a tombstone so the other side learns about the end later, and
-    /// deletes the partial or temporary data.
+    /// deletes the partial or temporary data. A cancel from now on comes too
+    /// late: the transfer has ended the way the caller reports.
     pub fn end(&self, code: Option<u32>, completed: bool) -> Ending {
         match code {
             Some(code) => self.close_current(code, b""),
@@ -981,8 +1060,12 @@ impl Session {
                 self.set_current(None);
             }
         }
-        let record = self.state().record.take().map(Box::new);
-        Ending { record, completed }
+        let record = {
+            let mut state = self.state();
+            state.stage = Stage::Ended;
+            state.record.take()
+        };
+        self.ending(record, completed)
     }
 
     /// The user cancelled. A running transfer ends like with
@@ -991,28 +1074,33 @@ impl Session {
     /// cancel is left to the step: the record is marked as ended, so that
     /// nothing more is put in place and (once it is saved) a later start
     /// deletes the files instead of finishing them, and the step ends the
-    /// transfer once it has stopped. Once the item is the receiver's
-    /// ([`place`](Self::place), [`hand_over`](Self::hand_over)), a cancel
+    /// transfer once it has stopped. While a send waits for the receiver
+    /// ([`defer_cancel`](Self::defer_cancel)), the cancel waits too. Once the
+    /// item is the receiver's ([`place`](Self::place),
+    /// [`hand_over`](Self::hand_over)), or the transfer has ended, a cancel
     /// comes too late.
     pub fn cancel(&self) -> Cancel {
         let record = {
             let mut state = self.state();
             match state.stage {
-                Stage::HandedOver => return Cancel::TooLate,
+                Stage::HandedOver | Stage::Ended => return Cancel::TooLate,
                 Stage::Finishing => {
-                    if let Some(record) = state.record.as_mut() {
+                    state.cancel_left = true;
+                    if self.role == Role::Receive
+                        && let Some(record) = state.record.as_mut()
+                    {
                         record.ended = true;
                     }
                     return Cancel::LeftToStep;
                 }
-                Stage::Running => state.record.take().map(Box::new),
+                Stage::Running => {
+                    state.stage = Stage::Ended;
+                    state.record.take()
+                }
             }
         };
         self.close_current(CLOSE_CANCELLED, b"");
-        Cancel::Ended(Ending {
-            record,
-            completed: false,
-        })
+        Cancel::Ended(self.ending(record, false))
     }
 
     /// [`cancel`](Self::cancel) with everything it leaves to do, on this
@@ -1025,21 +1113,66 @@ impl Session {
                 true
             }
             Cancel::LeftToStep => {
-                self.save_record(data_dir);
+                let _ = self.save_record(data_dir);
                 false
             }
             Cancel::TooLate => false,
         }
     }
 
+    /// Sending side: from now on a cancel waits for the transfer's task (see
+    /// `Stage::Finishing`). Called before `Done` goes out: from then on the
+    /// receiver may have all of the item, which is the receiver's once it
+    /// has checked it, so a cancel waits for its verdict (also after a
+    /// restart, see `TransferRecord::done_sent`). And while the record is
+    /// saved for the first time, so that a cancel meanwhile cannot leave it
+    /// behind.
+    pub fn defer_cancel(&self) {
+        let mut state = self.state();
+        if state.stage == Stage::Running {
+            state.stage = Stage::Finishing;
+        }
+    }
+
+    /// Sending side: what [`defer_cancel`](Self::defer_cancel) waited for
+    /// came without the hand-over (the receiver asks to continue, so it does
+    /// not have the item; or the record is on disk). A cancel ends the
+    /// transfer again, and one that came meanwhile ends it now, as
+    /// [`cancel`](Self::cancel) does; the result is what that leaves to do.
+    pub fn stop_deferring(&self) -> Option<Ending> {
+        let record = {
+            let mut state = self.state();
+            if state.stage != Stage::Finishing {
+                return None;
+            }
+            if !std::mem::take(&mut state.cancel_left) {
+                state.stage = Stage::Running;
+                return None;
+            }
+            state.stage = Stage::Ended;
+            state.record.take()
+        };
+        self.close_current(CLOSE_CANCELLED, b"");
+        Some(self.ending(record, false))
+    }
+
+    /// Whether a cancel would end the transfer now (see [`cancel`](Self::cancel)).
+    pub fn running(&self) -> bool {
+        self.state().stage == Stage::Running
+    }
+
     /// The receiver has confirmed that all of the item arrived intact
     /// (sending side): it is the receiver's from now on, to put in place or
     /// to cancel, and a cancel here comes too late.
     pub fn hand_over(&self) {
-        self.state().stage = Stage::HandedOver;
+        let mut state = self.state();
+        if state.stage != Stage::Ended {
+            state.stage = Stage::HandedOver;
+        }
     }
 
     /// Whether the item is the receiver's (see [`hand_over`](Self::hand_over)).
+    #[cfg(test)]
     pub fn handed_over(&self) -> bool {
         self.state().stage == Stage::HandedOver
     }
@@ -1071,9 +1204,10 @@ impl Session {
                 state.stage = before;
                 return placed;
             }
+            state.stage = Stage::Ended;
             state.record.take()
         };
-        forget(data_dir, record, true);
+        self.ending(record, true).forget_blocking(data_dir);
         placed
     }
 }
@@ -1095,6 +1229,9 @@ fn forget(data_dir: &Path, record: Option<TransferRecord>, completed: bool) {
 pub(crate) struct Control {
     pub cancel: CancelToken,
     pub paused: watch::Sender<bool>,
+    /// The user cancelled, but too late (see `Cancel::TooLate`): the
+    /// transfer does not end for it, so shutdown does not wait for it.
+    pub cancel_waits: AtomicBool,
 }
 
 impl Control {
@@ -1102,11 +1239,17 @@ impl Control {
         Control {
             cancel: CancelToken::new(),
             paused: watch::channel(paused).0,
+            cancel_waits: AtomicBool::new(false),
         }
     }
 
     pub fn is_paused(&self) -> bool {
         *self.paused.borrow()
+    }
+
+    /// Whether the user cancelled and the transfer is about to end for it.
+    pub fn cancelling(&self) -> bool {
+        self.cancel.flag().load(Ordering::Relaxed) && !self.cancel_waits.load(Ordering::Relaxed)
     }
 }
 
@@ -1193,6 +1336,7 @@ mod tests {
             created: SystemTime::now(),
             side,
             done_hash: None,
+            done_sent: false,
             ended: false,
         }
     }
@@ -1200,13 +1344,10 @@ mod tests {
     fn receive_side(dir: &Path, part: &Path, synced: Option<u64>) -> Side {
         Side::Receive {
             dest_dir: dir.to_path_buf(),
-            part_path: part.to_path_buf(),
+            files: ReceiveFiles::new(part.to_path_buf()),
             synced,
             part_id: None,
             folder: ReceivedFolder::Extract,
-            unpacking: None,
-            moving: None,
-            leftovers: Vec::new(),
         }
     }
 
@@ -1363,7 +1504,7 @@ mod tests {
         });
         let error = session.save_receive_files(&dir, &files).unwrap_err();
         assert!(archive::is_cancelled(&error.into()));
-        assert_eq!(load_all(&dir)[0].receive_files().unwrap(), files);
+        assert_eq!(load_all(&dir)[0].receive_files(), Some(&files));
         assert!(session.place(&dir, &mut || Ok(dir.join("a.bin"))).is_err());
         drop(finishing);
         assert!(session.finishing().is_err(), "it has ended");
@@ -1382,8 +1523,8 @@ mod tests {
         let dir = scratch("discard");
         let with_folder = |token: u8, part: &Path, folder: &Path| {
             let mut r = record(token, receive_side(&dir, part, None));
-            if let Side::Receive { unpacking, .. } = &mut r.side {
-                *unpacking = Some(Owned::at(folder).unwrap());
+            if let Some(files) = r.receive_files_mut() {
+                files.unpacking = Some(Owned::at(folder).unwrap());
             }
             r.save(&dir).unwrap();
             r
@@ -1444,8 +1585,8 @@ mod tests {
         fs::write(&part, b"data").unwrap();
         let placed = dir.join("a.bin");
         let mut r = record(13, receive_side(&dir, &part, None));
-        if let Side::Receive { moving, .. } = &mut r.side {
-            *moving = Some(Owned {
+        if let Some(files) = r.receive_files_mut() {
+            files.moving = Some(Owned {
                 path: placed.clone(),
                 id: archive::file_id(&part).unwrap(),
             });
@@ -1453,6 +1594,17 @@ mod tests {
         // Noted, but not renamed yet: nothing to follow.
         assert!(!r.follow_moved_part());
         assert_eq!(r.placed_item(), None);
+        // Not even when what has the new name counts as the part, as on FAT
+        // and exFAT, where every item has the same identity: the part is
+        // still under its old name.
+        fs::write(&placed, b"the user's").unwrap();
+        let mut fat = r.clone();
+        if let Side::Receive { part_id, files, .. } = &mut fat.side {
+            *part_id = Some(archive::file_id(&part).unwrap());
+            files.moving = Some(Owned::at(&placed).unwrap());
+        }
+        assert!(!fat.follow_moved_part());
+        fs::remove_file(&placed).unwrap();
 
         fs::rename(&part, &placed).unwrap();
         fs::write(&part, b"another transfer").unwrap();
@@ -1484,13 +1636,13 @@ mod tests {
         if let Side::Receive {
             folder,
             part_id,
-            moving,
+            files,
             ..
         } = &mut r.side
         {
             *folder = ReceivedFolder::KeepZip;
             *part_id = Some(archive::file_id(&zip).unwrap());
-            *moving = Some(Owned::at(&zip).unwrap());
+            files.moving = Some(Owned::at(&zip).unwrap());
         }
         assert!(r.files_present());
         assert_eq!(r.placed_item(), Some(zip.as_path()));
@@ -1521,8 +1673,8 @@ mod tests {
             fs::write(&part, b"zip").unwrap();
             let mut r = record(token, receive_side(&dir, &part, None));
             r.offer.kind = Kind::Folder;
-            if let Side::Receive { leftovers, .. } = &mut r.side {
-                leftovers.push(Owned::at(&old).unwrap());
+            if let Some(files) = r.receive_files_mut() {
+                files.leftovers.push(Owned::at(&old).unwrap());
             }
             r.save(&dir).unwrap();
             r
@@ -1576,21 +1728,153 @@ mod tests {
         fs::remove_dir_all(&dir).ok();
     }
 
+    fn send_record(dir: &Path, token: u8) -> (TransferRecord, PathBuf) {
+        let zip = dir.join(format!("send-{token}.zip"));
+        fs::write(&zip, b"zip").unwrap();
+        let record = record(
+            token,
+            Side::Send {
+                source: dir.join("Photos"),
+                source_len: 3,
+                source_mtime: None,
+                data_path: zip.clone(),
+            },
+        );
+        record.save(dir).unwrap();
+        (record, zip)
+    }
+
+    /// From `Done` on, a cancel on the sending side waits for the receiver's
+    /// verdict: once it has confirmed the item, the cancel was too late; if
+    /// it turns out not to have it, the cancel ends the transfer then.
+    #[test]
+    fn a_cancel_waits_for_the_receivers_verdict() {
+        let dir = scratch("verdict");
+        let peer = iroh::SecretKey::generate().public();
+
+        // The receiver did not have it: the cancel ends the transfer.
+        let (session, _rx) = Session::new(1, [20; 16], peer, Role::Send);
+        let (r, zip) = send_record(&dir, 20);
+        session.set_record(r);
+        session.defer_cancel();
+        assert!(!session.cancel_blocking(&dir), "it waits");
+        assert!(zip.exists() && !session.running());
+        assert!(!load_all(&dir)[0].ended, "a restart keeps the transfer");
+        let ending = session.stop_deferring().expect("the cancel ends it now");
+        ending.forget_blocking(&dir);
+        assert!(!zip.exists());
+        assert!(load_all(&dir).is_empty());
+        assert_eq!(tombstone(&dir, &[20; 16]), Some(false));
+        assert!(!session.cancel_blocking(&dir), "it has ended");
+
+        // The receiver confirmed it: too late.
+        let (session, _rx) = Session::new(2, [21; 16], peer, Role::Send);
+        let (r, zip) = send_record(&dir, 21);
+        session.set_record(r);
+        session.defer_cancel();
+        assert!(!session.cancel_blocking(&dir));
+        session.hand_over();
+        assert!(session.stop_deferring().is_none());
+        assert!(!session.cancel_blocking(&dir));
+        session.end(None, true).forget_blocking(&dir);
+        assert!(!zip.exists());
+        assert_eq!(tombstone(&dir, &[21; 16]), Some(true));
+
+        // Without a cancel, the transfer just goes on.
+        let (session, _rx) = Session::new(3, [22; 16], peer, Role::Send);
+        let (r, _zip) = send_record(&dir, 22);
+        session.set_record(r);
+        session.defer_cancel();
+        assert!(session.stop_deferring().is_none());
+        assert!(session.running());
+        assert!(session.cancel_blocking(&dir));
+        fs::remove_dir_all(&dir).ok();
+    }
+
+    /// Once a transfer has ended on this side, a cancel changes nothing of
+    /// how it ended, also while its files are still being seen to.
+    #[test]
+    fn a_cancel_after_the_end_is_too_late() {
+        let dir = scratch("after-end");
+        let peer = iroh::SecretKey::generate().public();
+        let (session, _rx) = Session::new(1, [23; 16], peer, Role::Send);
+        let (r, zip) = send_record(&dir, 23);
+        session.set_record(r);
+        let ending = session.end(None, true);
+        assert!(matches!(session.cancel(), Cancel::TooLate));
+        ending.forget_blocking(&dir);
+        assert!(!zip.exists());
+        assert_eq!(tombstone(&dir, &[23; 16]), Some(true));
+        fs::remove_dir_all(&dir).ok();
+    }
+
+    /// A record of a completed receive that could not be deleted then is
+    /// only completed at the next start: the folder that it names as being
+    /// unpacked into is the received item, not something to delete.
+    #[test]
+    fn a_completed_record_that_stayed_keeps_the_item() {
+        let dir = scratch("completed-stayed");
+        let temp = dir.join("recv-24.zip");
+        fs::write(&temp, b"zip").unwrap();
+        let folder = dir.join("Photos");
+        fs::create_dir_all(&folder).unwrap();
+        fs::write(folder.join("a.jpg"), b"received").unwrap();
+        let mut r = record(24, receive_side(&dir, &temp, None));
+        r.offer.kind = Kind::Folder;
+        r.done_hash = Some([1; 32]);
+        if let Some(files) = r.receive_files_mut() {
+            files.unpacking = Some(Owned::at(&folder).unwrap());
+        }
+        r.save(&dir).unwrap();
+        write_tombstone(&dir, &r.token, true);
+        assert!(load_all(&dir).is_empty());
+        assert_eq!(fs::read(folder.join("a.jpg")).unwrap(), b"received");
+        assert!(!temp.exists(), "only what was temporary goes");
+        assert!(!record_path(&dir, &r.token).exists());
+        assert_eq!(tombstone(&dir, &r.token), Some(true));
+        fs::remove_dir_all(&dir).ok();
+    }
+
+    /// The writes of a record keep the order of its changes, and none brings
+    /// the record back once the transfer has ended and deleted it.
+    #[test]
+    fn saves_never_outlive_the_end() {
+        let dir = scratch("saves");
+        let peer = iroh::SecretKey::generate().public();
+        let (session, _rx) = Session::new(1, [25; 16], peer, Role::Send);
+        let (r, _zip) = send_record(&dir, 25);
+        session.set_record(r);
+        let savers: Vec<_> = (0..8)
+            .map(|i| {
+                let (session, dir) = (session.clone(), dir.clone());
+                std::thread::spawn(move || session.save_paused(&dir, i % 2 == 0))
+            })
+            .collect();
+        session.end(None, false).forget_blocking(&dir);
+        for saver in savers {
+            saver.join().unwrap();
+        }
+        assert!(load_all(&dir).is_empty());
+        assert!(!record_path(&dir, &[25; 16]).exists());
+        fs::remove_dir_all(&dir).ok();
+    }
+
     #[test]
     fn records_of_earlier_versions_still_load() {
         let dir = scratch("legacy");
         let part = dir.join("old.bin.part");
         fs::write(&part, b"12345").unwrap();
-        // A record as written before `synced`, `done_hash`, `folder`,
-        // `unpacking`, `moving`, `part_id`, `leftovers`, `ended` and the
-        // offer's times existed.
+        // A record as written before `synced`, `done_hash`, `done_sent`,
+        // `folder`, `unpacking`, `moving`, `part_id`, `leftovers`, `ended`
+        // and the offer's times existed.
         let mut side = receive_side(&dir, &part, None);
         if let Side::Receive { folder, .. } = &mut side {
             *folder = ReceivedFolder::Both;
         }
         let mut json = serde_json::to_value(record(7, side)).unwrap();
-        json.as_object_mut().unwrap().remove("done_hash");
-        json.as_object_mut().unwrap().remove("ended");
+        for field in ["done_hash", "done_sent", "ended"] {
+            json.as_object_mut().unwrap().remove(field);
+        }
         let receive = json["side"]["receive"].as_object_mut().unwrap();
         for field in [
             "synced",
@@ -1637,7 +1921,7 @@ mod tests {
         assert_eq!(loaded.len(), 3);
         let unpacking = |token: u8| {
             let r = loaded.iter().find(|r| r.token == [token; 16]).unwrap();
-            r.receive_files().unwrap().unpacking
+            r.receive_files().unwrap().unpacking.clone()
         };
         assert_eq!(unpacking(9), Some(Owned::at(&partial).unwrap()));
         assert_eq!(unpacking(10), None);

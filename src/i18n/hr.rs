@@ -161,6 +161,7 @@ pub const HR: Strings = Strings {
     connection_lost_balloon: "„{item}”: čeka se ponovna uspostava veze.",
     continuing_balloon_title: "Prijenos se nastavlja",
     continuing_balloon: "„{item}”: prijenos se nastavlja.",
+    peer_unpacking_balloon: "„{item}”: sve je stiglo. Primatelj ({name}) raspakirava mapu pa se prijenos više ne može otkazati.",
     restored_balloon_title: "Nedovršeni prijenos",
     restored_balloon: "„{item}”: prijenos je prošli put prekinut i nastavlja se čim oboje budete na mreži.",
 

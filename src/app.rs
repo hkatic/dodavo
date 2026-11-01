@@ -660,6 +660,13 @@ fn handle_net_event(event: Event) -> Option<Event> {
                 }
             }
         }
+        Event::HandedOver { id } => {
+            if let Some(h) = transfer_window(id)
+                && !progress::set_handed_over(h)
+            {
+                return Some(Event::HandedOver { id });
+            }
+        }
         Event::Progress { id, done, total } => {
             // The first report tells the size; show it right away (a paused
             // transfer may not report again for a long time).
