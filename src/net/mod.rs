@@ -75,12 +75,6 @@ pub struct Accept {
     pub folder: ReceivedFolder,
 }
 
-impl Accept {
-    pub fn new(dir: PathBuf, folder: ReceivedFolder) -> Self {
-        Accept { dir, folder }
-    }
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Phase {
     Preparing,
@@ -127,7 +121,8 @@ pub enum Event {
     /// An unfinished transfer from an earlier run; its phases follow.
     Restored {
         id: u64,
-        record: TransferRecord,
+        /// Boxed: much larger than the other events.
+        record: Box<TransferRecord>,
         /// Bytes already transferred.
         have: u64,
     },
@@ -450,7 +445,7 @@ fn restore(shared: &Arc<Shared>, endpoint: &Endpoint) {
         let have = record.have();
         shared.emit(Event::Restored {
             id,
-            record: record.clone(),
+            record: Box::new(record.clone()),
             have,
         });
         if !record.files_present() {
@@ -731,8 +726,10 @@ mod tests {
                             } else {
                                 ReceivedFolder::Extract
                             };
-                            let accept = (offer.name != "decline.txt")
-                                .then(|| Accept::new(recv_dir.clone(), folder));
+                            let accept = (offer.name != "decline.txt").then(|| Accept {
+                                dir: recv_dir.clone(),
+                                folder,
+                            });
                             b.send(Command::Respond { id, accept });
                         }
                         Event::Progress { id, done, .. } if done > 0 && !paused_once => {
@@ -921,7 +918,10 @@ mod tests {
                     {
                         Event::Offer { id, .. } => b.send(Command::Respond {
                             id,
-                            accept: Some(Accept::new(recv_dir.clone(), ReceivedFolder::Extract)),
+                            accept: Some(Accept {
+                                dir: recv_dir.clone(),
+                                folder: ReceivedFolder::Extract,
+                            }),
                         }),
                         Event::Phase { phase, .. } => phases.push(phase),
                         Event::Finished { outcome, .. } => return (outcome, phases),
@@ -1020,7 +1020,10 @@ mod tests {
         };
         b.send(Command::Respond {
             id: id_in,
-            accept: Some(Accept::new(recv_dir.clone(), ReceivedFolder::Extract)),
+            accept: Some(Accept {
+                dir: recv_dir.clone(),
+                folder: ReceivedFolder::Extract,
+            }),
         });
         wait_for(
             &rx_b,
@@ -1124,7 +1127,10 @@ mod tests {
         };
         b.send(Command::Respond {
             id: id_in,
-            accept: Some(Accept::new(recv_dir.clone(), ReceivedFolder::Extract)),
+            accept: Some(Accept {
+                dir: recv_dir.clone(),
+                folder: ReceivedFolder::Extract,
+            }),
         });
         // The sender is done as soon as the receiver has confirmed the data…
         assert!(matches!(wait_finished(&rx_a, id), Outcome::Completed(_)));
@@ -1148,6 +1154,16 @@ mod tests {
             "the sender's hash was saved"
         );
         assert!(!recv_dir.join("Photos").exists());
+        // As if the program had ended halfway through unpacking: a folder
+        // with part of the contents, which the record names.
+        let partial = recv_dir.join("Photos");
+        std::fs::create_dir_all(&partial).unwrap();
+        std::fs::write(partial.join("half.bin"), b"half").unwrap();
+        let mut record = records[0].clone();
+        if let session::Side::Receive { unpacking, .. } = &mut record.side {
+            *unpacking = Some(partial.clone());
+        }
+        record.save(&dir_b).unwrap();
 
         let (tx_b2, rx_b2) = mpsc::channel();
         let b2 = start(key_b, dir_b.clone(), base.join("temp"), sink(tx_b2));
@@ -1169,6 +1185,9 @@ mod tests {
             std::fs::read(recv_dir.join("Photos").join("a.bin")).unwrap(),
             data
         );
+        // The incomplete folder was removed, not left next to a copy.
+        assert!(!partial.join("half.bin").exists());
+        assert_eq!(leftovers(&recv_dir).len(), 1);
         assert!(session::load_all(&dir_b).is_empty());
         drop(b2);
         std::fs::remove_dir_all(&base).ok();

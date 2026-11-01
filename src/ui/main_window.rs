@@ -938,8 +938,12 @@ impl Handler for MainWindow {
                     NIN_BALLOONUSERCLICK => match app::with(|a| a.balloon_action.take()) {
                         Some(tray::BalloonAction::Reveal(path)) => shell::reveal_in_explorer(&path),
                         Some(tray::BalloonAction::Window(h)) if unsafe { IsWindow(h) } != 0 => {
-                            progress::show(h)
+                            window::bring_to_front(h)
                         }
+                        Some(tray::BalloonAction::Transfer(id)) => match app::transfer_window(id) {
+                            Some(h) => progress::show(h),
+                            None => window::bring_to_front(w.hwnd),
+                        },
                         _ => window::bring_to_front(w.hwnd),
                     },
                     _ => {}

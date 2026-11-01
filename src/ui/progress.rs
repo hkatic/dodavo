@@ -79,6 +79,8 @@ struct Progress {
     rate_shown: Option<Instant>,
     /// For a completed receive: where the item was saved.
     result_path: Option<PathBuf>,
+    /// What to do once the transfer has ended.
+    after: AfterFinish,
     title: HWND,
     status: HWND,
     bar: HWND,
@@ -102,6 +104,20 @@ pub struct Finished {
     /// by itself, or only its text changes, which screen readers do not
     /// announce; the notification is what makes the outcome perceivable.
     pub notify: bool,
+}
+
+/// What the window does after the transfer ended. Decided once, in `finish`,
+/// together with whether to notify, and carried out on `WM_APP_FINISHED`:
+/// deciding again then could disagree with the notification (the window may
+/// have been minimized or restored in between).
+enum AfterFinish {
+    /// Stays open to show what happened.
+    Stay,
+    Close,
+    /// Asks whether to open what arrived at this path, then closes.
+    AskOpen(PathBuf),
+    /// Tells that the item arrived (the message's main text), then closes.
+    TellSent(String),
 }
 
 /// What to tell the user about a change of phase.
@@ -142,6 +158,7 @@ pub fn open(
         samples: VecDeque::new(),
         rate_shown: None,
         result_path: None,
+        after: AfterFinish::Stay,
         title: std::ptr::null_mut(),
         status: std::ptr::null_mut(),
         bar: std::ptr::null_mut(),
@@ -472,16 +489,31 @@ impl Progress {
 
         let received = completed && self.dir == Direction::Receive;
         let sent = completed && self.dir == Direction::Send;
-        // A hidden or minimized window asks nothing (see `WM_APP_FINISHED`).
-        let hidden = self.background || unsafe { IsIconic(w.hwnd) } != 0;
-        let will_ask = !hidden && received && app::cfg().ask_after_receive;
-        let will_tell = !hidden && sent && app::cfg().show_after_send;
+        let (ask_after_receive, show_after_send) =
+            app::with(|a| (a.cfg.ask_after_receive, a.cfg.show_after_send));
         // A completed transfer's window closes by itself, after the question
         // or the message, if any; a failed one stays to show what happened.
-        if self.background || received || sent {
-            unsafe { PostMessageW(w.hwnd, WM_APP_FINISHED, 0, 0) };
+        // A hidden or minimized window asks nothing: a question needs a
+        // window that is seen, and the notification reports instead.
+        let hidden = self.background || window::is_minimized(w.hwnd);
+        self.after = if !completed && !self.background {
+            AfterFinish::Stay
+        } else if hidden {
+            AfterFinish::Close
+        } else if received
+            && ask_after_receive
+            && let Some(path) = &self.result_path
+        {
+            AfterFinish::AskOpen(path.clone())
+        } else if sent && show_after_send {
+            AfterFinish::TellSent(status.clone())
         } else {
+            AfterFinish::Close
+        };
+        if matches!(self.after, AfterFinish::Stay) {
             unsafe { FlashWindow(w.hwnd, 1) };
+        } else {
+            unsafe { PostMessageW(w.hwnd, WM_APP_FINISHED, 0, 0) };
         }
 
         let title = if completed {
@@ -502,7 +534,10 @@ impl Progress {
             title,
             text,
             path: self.result_path.clone(),
-            notify: !(will_ask || will_tell),
+            notify: !matches!(
+                self.after,
+                AfterFinish::AskOpen(_) | AfterFinish::TellSent(_)
+            ),
         }
     }
 
@@ -529,7 +564,7 @@ impl Progress {
             app::main_window(),
             tr!(background_balloon_title),
             &tr!(background_balloon, item = self.item),
-            Some(tray::BalloonAction::Window(w.hwnd)),
+            Some(tray::BalloonAction::Transfer(self.id)),
         );
     }
 
@@ -625,41 +660,23 @@ impl Progress {
         }
     }
 
-    /// After a completed send: tell the user unless they chose not to be
-    /// told, then close.
-    fn after_sent(&mut self, w: &Window) {
-        if app::cfg().show_after_send {
-            let instruction = if self.kind == Kind::File {
-                tr!(done_sent_file, name = self.peer)
-            } else {
-                tr!(done_sent_folder, name = self.peer)
-            };
-            let item = tr!(sent_item, item = self.item);
-            let (_, dont_show) = ask(
-                w.hwnd,
-                &instruction,
-                &item,
-                &[],
-                true,
-                Some(tr!(dont_show_again)),
-            );
-            if dont_show {
-                app::update_cfg(|c| c.show_after_send = false);
-            }
+    /// After a completed send: tells the user that the item arrived.
+    fn tell_sent(&self, w: &Window, instruction: &str) {
+        let item = tr!(sent_item, item = self.item);
+        let (_, dont_show) = ask(
+            w.hwnd,
+            instruction,
+            &item,
+            &[],
+            true,
+            Some(tr!(dont_show_again)),
+        );
+        if dont_show {
+            app::update_cfg(|c| c.show_after_send = false);
         }
-        w.close();
     }
 
-    /// After a completed receive: offer to open what arrived, then close.
-    fn after_received(&mut self, w: &Window) {
-        if let Some(path) = self.result_path.clone()
-            && app::cfg().ask_after_receive
-        {
-            self.ask_open(w, &path);
-        }
-        w.close();
-    }
-
+    /// After a completed receive: offers to open what arrived.
     fn ask_open(&self, w: &Window, path: &Path) {
         let file = self.received_file();
         let name = path
@@ -790,16 +807,21 @@ impl Handler for Progress {
     fn on_message(&mut self, w: &Window, msg: u32, wp: WPARAM, _lp: LPARAM) -> Option<LRESULT> {
         match msg {
             WM_APP_FINISHED => {
-                // A question needs a visible window; otherwise the
-                // notification has reported the outcome.
-                let minimized = unsafe { IsIconic(w.hwnd) } != 0;
-                if self.background || minimized {
-                    w.close();
-                } else if self.dir == Direction::Receive {
-                    self.after_received(w);
-                } else {
-                    self.after_sent(w);
+                let after = std::mem::replace(&mut self.after, AfterFinish::Stay);
+                if matches!(after, AfterFinish::AskOpen(_) | AfterFinish::TellSent(_))
+                    && window::is_minimized(w.hwnd)
+                {
+                    // Minimized since `finish`: no notification went out,
+                    // so the question has to be seen.
+                    window::bring_to_front(w.hwnd);
                 }
+                match after {
+                    AfterFinish::Stay => return Some(0),
+                    AfterFinish::Close => {}
+                    AfterFinish::AskOpen(path) => self.ask_open(w, &path),
+                    AfterFinish::TellSent(text) => self.tell_sent(w, &text),
+                }
+                w.close();
                 Some(0)
             }
             WM_TIMER if wp == TIMER_LOST => {

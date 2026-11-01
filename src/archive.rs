@@ -4,7 +4,10 @@
 use std::{
     fs::{File, FileTimes, Metadata, OpenOptions},
     io::{self, BufWriter, Read, Write},
-    os::windows::fs::{FileTimesExt, MetadataExt, OpenOptionsExt},
+    os::windows::{
+        ffi::OsStrExt,
+        fs::{FileTimesExt, MetadataExt, OpenOptionsExt},
+    },
     path::{Path, PathBuf},
     sync::atomic::{AtomicBool, Ordering},
     time::{Duration, SystemTime},
@@ -12,8 +15,10 @@ use std::{
 
 use anyhow::{Context, bail};
 use windows_sys::Win32::{
-    Foundation::{FILETIME, SYSTEMTIME},
-    Storage::FileSystem::{FILE_FLAG_BACKUP_SEMANTICS, FILE_WRITE_ATTRIBUTES},
+    Foundation::{
+        ERROR_ACCESS_DENIED, ERROR_LOCK_VIOLATION, ERROR_SHARING_VIOLATION, FILETIME, SYSTEMTIME,
+    },
+    Storage::FileSystem::{FILE_FLAG_BACKUP_SEMANTICS, FILE_WRITE_ATTRIBUTES, MoveFileExW},
     System::Time::{FileTimeToSystemTime, SystemTimeToTzSpecificLocalTime},
 };
 use zip::{
@@ -31,7 +36,10 @@ const BUF_SIZE: usize = 256 * 1024;
 /// 2-second steps; 7-Zip and others write this field too.
 const NTFS_EXTRA_FIELD: u16 = 0x000a;
 /// 100 ns intervals from 1601-01-01 to 1970-01-01.
-const FILETIME_UNIX_EPOCH: u64 = 116_444_736_000_000_000;
+pub(crate) const FILETIME_UNIX_EPOCH: u64 = 116_444_736_000_000_000;
+/// The pauses between attempts of a rename that another program blocks
+/// (see [`rename_new`]): about nine seconds in all.
+const RENAME_RETRY_MS: &[u64] = &[100, 200, 400, 800, 1600, 2000, 2000, 2000];
 
 /// The dates of a file or folder as Windows file times (100 ns since 1601,
 /// UTC). `None` when not known.
@@ -61,6 +69,17 @@ impl ItemTimes {
             self.modified.and_then(filetime_to_system),
             self.created.and_then(filetime_to_system),
         );
+    }
+
+    /// Like [`apply`](Self::apply), on a file that is open for writing and
+    /// whose data is all written: no need to open it once more.
+    pub fn apply_to(&self, file: &File) {
+        if let Some(times) = file_times(
+            self.modified.and_then(filetime_to_system),
+            self.created.and_then(filetime_to_system),
+        ) {
+            let _ = file.set_times(times);
+        }
     }
 
     /// The payload of the NTFS extra field.
@@ -111,14 +130,10 @@ pub fn filetime_to_system(filetime: u64) -> Option<SystemTime> {
     }
 }
 
-/// Sets the modified and created dates of a file or folder.
-pub fn set_times(
-    path: &Path,
-    modified: Option<SystemTime>,
-    created: Option<SystemTime>,
-) -> io::Result<()> {
+/// The dates to set, or `None` when there are none.
+fn file_times(modified: Option<SystemTime>, created: Option<SystemTime>) -> Option<FileTimes> {
     if modified.is_none() && created.is_none() {
-        return Ok(());
+        return None;
     }
     let mut times = FileTimes::new();
     if let Some(modified) = modified {
@@ -127,6 +142,18 @@ pub fn set_times(
     if let Some(created) = created {
         times = times.set_created(created);
     }
+    Some(times)
+}
+
+/// Sets the modified and created dates of a file or folder.
+pub fn set_times(
+    path: &Path,
+    modified: Option<SystemTime>,
+    created: Option<SystemTime>,
+) -> io::Result<()> {
+    let Some(times) = file_times(modified, created) else {
+        return Ok(());
+    };
     // Writing the attributes is all that is needed; backup semantics let
     // the same call open a folder.
     OpenOptions::new()
@@ -354,24 +381,25 @@ pub fn unzip(
         if let Some(parent) = target.parent() {
             std::fs::create_dir_all(parent)?;
         }
-        {
-            let mut out = BufWriter::with_capacity(BUF_SIZE, File::create(&target)?);
-            loop {
-                let n = entry.read(&mut buf)?;
-                if n == 0 {
-                    break;
-                }
-                out.write_all(&buf[..n])?;
-                done += n as u64;
-                progress(done, total);
-            }
-            out.flush()?;
-        }
-        // The file is closed: the mark first, as it changes the modified date.
+        let file = File::create(&target)?;
+        // The mark before the data and the dates: writing it changes the
+        // modified date.
         if mark {
             let _ = mark_of_the_web(&target);
         }
-        times.apply(&target);
+        let mut out = BufWriter::with_capacity(BUF_SIZE, file);
+        loop {
+            let n = entry.read(&mut buf)?;
+            if n == 0 {
+                break;
+            }
+            out.write_all(&buf[..n])?;
+            done += n as u64;
+            progress(done, total);
+        }
+        out.flush()?;
+        // All written: the dates go on through the same handle.
+        times.apply_to(out.get_ref());
     }
     // Children before their parents, so that nothing touches a folder after
     // its date has been set.
@@ -412,20 +440,127 @@ pub fn sanitize_file_name(name: &str) -> String {
     s
 }
 
-/// Returns `dir\name`, or `dir\name (2).ext`, `dir\name (3).ext`, ... if it already exists.
-pub fn unique_path(dir: &Path, name: &str, is_folder: bool) -> PathBuf {
-    let first = dir.join(name);
-    if !first.exists() {
-        return first;
-    }
+/// `name`, then `name (2).ext`, `name (3).ext`, … (a folder's number goes at
+/// the end, as folder names have no extension).
+fn numbered(name: &str, is_folder: bool) -> impl Iterator<Item = String> + '_ {
     let (stem, ext) = match (is_folder, name.rfind('.')) {
         (false, Some(pos)) if pos > 0 => (&name[..pos], &name[pos..]),
         _ => (name, ""),
     };
-    (2..)
-        .map(|i| dir.join(format!("{stem} ({i}){ext}")))
+    std::iter::once(name.to_string()).chain((2..).map(move |i| format!("{stem} ({i}){ext}")))
+}
+
+/// Returns `dir\name`, or `dir\name (2).ext`, `dir\name (3).ext`, ... if it
+/// already exists. The name may be taken by the time it is used; to put
+/// something there, use the functions below, which never replace anything.
+pub fn unique_path(dir: &Path, name: &str, is_folder: bool) -> PathBuf {
+    numbered(name, is_folder)
+        .map(|n| dir.join(n))
         .find(|p| !p.exists())
         .expect("infinite iterator")
+}
+
+/// Creates an empty file under the first free name of [`unique_path`]. The
+/// name is the caller's from then on.
+pub fn create_unique_file(dir: &Path, name: &str) -> io::Result<PathBuf> {
+    for candidate in numbered(name, false) {
+        let path = dir.join(candidate);
+        match OpenOptions::new().write(true).create_new(true).open(&path) {
+            Ok(_) => return Ok(path),
+            Err(e) if e.kind() == io::ErrorKind::AlreadyExists => continue,
+            Err(e) => return Err(e),
+        }
+    }
+    unreachable!("infinite iterator")
+}
+
+/// Creates a folder under the first free name of [`unique_path`] for which
+/// `also_free(name)` holds as well, for a name that goes with it (such as
+/// its ZIP file's). The folder did not exist before, so everything in it is
+/// the caller's.
+pub fn create_unique_dir(
+    dir: &Path,
+    name: &str,
+    also_free: impl Fn(&str) -> bool,
+) -> io::Result<PathBuf> {
+    for candidate in numbered(name, true).filter(|n| also_free(n)) {
+        let path = dir.join(candidate);
+        match std::fs::create_dir(&path) {
+            Ok(()) => return Ok(path),
+            Err(e) if e.kind() == io::ErrorKind::AlreadyExists => continue,
+            Err(e) => return Err(e),
+        }
+    }
+    unreachable!("infinite iterator")
+}
+
+/// Moves the file `from` to `dir\name`, or to the next free name of
+/// [`unique_path`], never replacing anything (see [`rename_new`]). Returns
+/// where it went.
+pub fn move_to_unique(from: &Path, dir: &Path, name: &str, is_folder: bool) -> io::Result<PathBuf> {
+    for candidate in numbered(name, is_folder) {
+        let to = dir.join(candidate);
+        if to.symlink_metadata().is_ok() {
+            continue;
+        }
+        match rename_new(from, &to) {
+            Ok(()) => return Ok(to),
+            // Taken since the check.
+            Err(e) if e.kind() == io::ErrorKind::AlreadyExists => continue,
+            Err(e) => return Err(e),
+        }
+    }
+    unreachable!("infinite iterator")
+}
+
+/// Renames `from` to `to` on the same volume, failing with `AlreadyExists`
+/// where `std::fs::rename` would replace a file that is there. A rename that
+/// another program blocks for a moment (a virus scanner reading the new
+/// file, typically) is tried again for a few seconds.
+pub fn rename_new(from: &Path, to: &Path) -> io::Result<()> {
+    let (from, to) = (wide_path(from)?, wide_path(to)?);
+    let mut pauses = RENAME_RETRY_MS.iter();
+    loop {
+        // SAFETY: both are NUL-terminated wide strings that outlive the call;
+        // no flags: fail rather than replace, and stay on the volume.
+        if unsafe { MoveFileExW(from.as_ptr(), to.as_ptr(), 0) } != 0 {
+            return Ok(());
+        }
+        let error = io::Error::last_os_error();
+        let blocked = matches!(
+            error.raw_os_error().map(|c| c as u32),
+            Some(ERROR_SHARING_VIOLATION | ERROR_LOCK_VIOLATION | ERROR_ACCESS_DENIED)
+        );
+        match pauses.next() {
+            Some(ms) if blocked => std::thread::sleep(Duration::from_millis(*ms)),
+            _ => return Err(error),
+        }
+    }
+}
+
+/// A path for a Win32 call: absolute, NUL-terminated, and with the `\\?\`
+/// prefix when it is too long for the plain form (as `std::fs` does).
+fn wide_path(path: &Path) -> io::Result<Vec<u16>> {
+    const VERBATIM: &str = r"\\?\";
+    let full = std::path::absolute(path)?;
+    let text: Vec<u16> = full.as_os_str().encode_wide().collect();
+    let verbatim: Vec<u16> = VERBATIM.encode_utf16().collect();
+    let mut wide = Vec::with_capacity(text.len() + 9);
+    // CreateDirectory's limit, a little below MAX_PATH, to be safe.
+    if text.len() >= 248 && !text.starts_with(&verbatim) {
+        if text.starts_with(&verbatim[..2]) {
+            // \\server\share\… → \\?\UNC\server\share\…
+            wide.extend(r"\\?\UNC".encode_utf16());
+            wide.extend_from_slice(&text[1..]);
+        } else {
+            wide.extend_from_slice(&verbatim);
+            wide.extend_from_slice(&text);
+        }
+    } else {
+        wide.extend_from_slice(&text);
+    }
+    wide.push(0);
+    Ok(wide)
 }
 
 pub fn temp_dir() -> io::Result<PathBuf> {
@@ -610,6 +745,55 @@ mod tests {
             base.join("my.folder (2)")
         );
         std::fs::remove_dir_all(&base).ok();
+    }
+
+    /// Putting something under a free name never replaces what is there,
+    /// also when the name was taken after it was found free.
+    #[test]
+    fn free_names_are_taken_without_replacing() {
+        let base = scratch("free");
+        std::fs::write(base.join("a.txt"), b"theirs").unwrap();
+        let created = create_unique_file(&base, "a.txt").unwrap();
+        assert_eq!(created, base.join("a (2).txt"));
+        assert_eq!(std::fs::read(base.join("a.txt")).unwrap(), b"theirs");
+
+        let part = base.join("a.txt.part");
+        std::fs::write(&part, b"mine").unwrap();
+        let err = rename_new(&part, &base.join("a.txt")).unwrap_err();
+        assert_eq!(err.kind(), io::ErrorKind::AlreadyExists);
+        let moved = move_to_unique(&part, &base, "a.txt", false).unwrap();
+        assert_eq!(moved, base.join("a (3).txt"));
+        assert_eq!(std::fs::read(&moved).unwrap(), b"mine");
+        assert_eq!(std::fs::read(base.join("a.txt")).unwrap(), b"theirs");
+        assert!(!part.exists());
+
+        // A folder whose ZIP name must be free too: "Photos (2).zip" is
+        // taken, so the pair is "Photos (3)" and "Photos (3).zip".
+        std::fs::create_dir(base.join("Photos")).unwrap();
+        std::fs::write(base.join("Photos (2).zip"), b"").unwrap();
+        let folder =
+            create_unique_dir(&base, "Photos", |n| !base.join(format!("{n}.zip")).exists())
+                .unwrap();
+        assert_eq!(folder, base.join("Photos (3)"));
+        assert!(folder.is_dir());
+        std::fs::remove_dir_all(&base).ok();
+    }
+
+    #[test]
+    fn long_paths_get_the_verbatim_prefix() {
+        let as_text = |w: Vec<u16>| String::from_utf16(&w[..w.len() - 1]).unwrap();
+        let short = as_text(wide_path(Path::new(r"C:\a\b.txt")).unwrap());
+        assert_eq!(short, r"C:\a\b.txt");
+        let long = format!(r"C:\{}\b.txt", "x".repeat(250));
+        assert_eq!(
+            as_text(wide_path(Path::new(&long)).unwrap()),
+            format!(r"\\?\{long}")
+        );
+        let unc = format!(r"\\server\share\{}", "y".repeat(250));
+        assert_eq!(
+            as_text(wide_path(Path::new(&unc)).unwrap()),
+            format!(r"\\?\UNC\server\share\{}", "y".repeat(250))
+        );
     }
 
     #[test]

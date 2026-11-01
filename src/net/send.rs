@@ -333,9 +333,7 @@ async fn prepare(
                 phase: Phase::Preparing,
             });
             tokio::fs::create_dir_all(&shared.temp_dir).await?;
-            let zip_path = shared
-                .temp_dir
-                .join(format!("send-{}.zip", protocol::token_hex(token)));
+            let zip_path = session::temp_archive(&shared.temp_dir, Role::Send, token);
             temp.0 = Some(zip_path.clone());
             let shared2 = shared.clone();
             let cancel = ctl.cancel.clone();

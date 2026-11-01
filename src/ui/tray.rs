@@ -43,6 +43,10 @@ pub enum BalloonAction {
     Reveal(PathBuf),
     /// Brings a window of the program to the front.
     Window(HWND),
+    /// Brings a transfer's progress window to the front, or the main window
+    /// once that has closed. By id, because the window handle of a closed
+    /// window may come back for a new, unrelated window.
+    Transfer(u64),
 }
 
 thread_local! {

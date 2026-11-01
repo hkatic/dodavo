@@ -428,7 +428,7 @@ pub fn accept_offer(
     refresh_transfer_views(id, true);
     net_send(Command::Respond {
         id,
-        accept: Some(net::Accept::new(dir, folder)),
+        accept: Some(net::Accept { dir, folder }),
     });
 }
 
@@ -634,7 +634,7 @@ fn handle_net_event(event: Event) -> Option<Event> {
                 main_window(),
                 tr!(restored_balloon_title),
                 &tr!(restored_balloon, item = record.offer.name),
-                Some(BalloonAction::Window(hwnd)),
+                Some(BalloonAction::Transfer(id)),
             );
         }
         Event::Phase { id, phase } => {
@@ -650,7 +650,12 @@ fn handle_net_event(event: Event) -> Option<Event> {
                     return Some(Event::Phase { id, phase });
                 };
                 if let Some((title, text)) = notice.balloon {
-                    tray::balloon(main_window(), &title, &text, Some(BalloonAction::Window(h)));
+                    tray::balloon(
+                        main_window(),
+                        &title,
+                        &text,
+                        Some(BalloonAction::Transfer(id)),
+                    );
                 }
             }
         }
@@ -696,11 +701,13 @@ fn handle_net_event(event: Event) -> Option<Event> {
                 };
                 let main_visible = unsafe { IsWindowVisible(main_window()) } != 0;
                 if done.notify || (!main_visible && matches!(outcome, Outcome::Completed(_))) {
+                    // A completed transfer's window closes by itself; by
+                    // then a click brings up the main window.
                     let action = match done.path {
-                        Some(path) => Some(BalloonAction::Reveal(path)),
-                        None => Some(BalloonAction::Window(h)),
+                        Some(path) => BalloonAction::Reveal(path),
+                        None => BalloonAction::Transfer(id),
                     };
-                    tray::balloon(main_window(), &done.title, &done.text, action);
+                    tray::balloon(main_window(), &done.title, &done.text, Some(action));
                 }
             }
         }

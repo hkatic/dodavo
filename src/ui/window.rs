@@ -836,14 +836,19 @@ pub fn focus(hwnd: HWND) {
     }
 }
 
+pub fn is_minimized(hwnd: HWND) -> bool {
+    unsafe { IsIconic(hwnd) != 0 }
+}
+
 /// Brings a (possibly hidden or minimized) window to the front.
 pub fn bring_to_front(hwnd: HWND) {
+    let show = if is_minimized(hwnd) {
+        SW_RESTORE
+    } else {
+        SW_SHOW
+    };
     unsafe {
-        if IsIconic(hwnd) != 0 {
-            ShowWindow(hwnd, SW_RESTORE);
-        } else {
-            ShowWindow(hwnd, SW_SHOW);
-        }
+        ShowWindow(hwnd, show);
         SetForegroundWindow(hwnd);
     }
 }

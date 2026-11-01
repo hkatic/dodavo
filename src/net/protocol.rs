@@ -1,4 +1,4 @@
-//! Wire protocol (`dodavo/2`). Every connection carries a single
+//! Wire protocol (`dodavo/3`). Every connection carries a single
 //! bidirectional stream. A transfer starts on one connection and may be
 //! continued on later ones (after a lost connection or a restart):
 //!
@@ -30,7 +30,7 @@ use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
 use crate::i18n::tr;
 
-pub const ALPN: &[u8] = b"dodavo/2";
+pub const ALPN: &[u8] = b"dodavo/3";
 const MAX_MSG_LEN: usize = 64 * 1024;
 /// The largest `Data` frame.
 pub const CHUNK: usize = 256 * 1024;
@@ -70,7 +70,9 @@ pub struct Offer {
     /// When the file or folder was last modified and when it was created, as
     /// Windows file times (100 ns since 1601, UTC). The receiver gives them to
     /// what it saves; the times inside a folder travel in its zip archive.
-    /// (`default` keeps transfer records of earlier versions readable.)
+    /// (`default` keeps transfer records of earlier versions readable. It
+    /// does nothing on the wire: postcard reads a struct as a fixed sequence
+    /// of fields, so adding these two needed a new ALPN.)
     #[serde(default)]
     pub modified: Option<u64>,
     #[serde(default)]

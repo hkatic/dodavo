@@ -24,8 +24,8 @@ use tokio::{
 };
 
 use super::{
-    Accept, CLOSE_CANCELLED, CLOSE_FAILED, CLOSE_OK, CLOSE_SUSPENDED, Event, Outcome, Phase,
-    ReceivedFolder, Shared, Throttle,
+    Accept, CLOSE_CANCELLED, CLOSE_FAILED, CLOSE_OK, CLOSE_SUSPENDED, CancelToken, Event, Outcome,
+    Phase, ReceivedFolder, Shared, Throttle,
     protocol::{self, CHUNK, Kind, Msg, Offer, Token},
     send::AbortOnDrop,
     session::{
@@ -182,10 +182,9 @@ pub(super) async fn handle(
         return;
     };
 
-    let cancel = ctl.cancel.clone();
     let outcome = tokio::select! {
         o = accept(&shared, &endpoint, id, &ctl, conn.clone(), send, recv, offer, from, dest_dir, folder) => o,
-        _ = cancel.cancelled() => cancelled(&shared, id, Some(&conn)),
+        () = cancelled(&shared, id, &ctl.cancel, Some(&conn)) => Outcome::Cancelled,
     };
     shared.finish(id, outcome);
 }
@@ -198,25 +197,31 @@ pub(super) async fn resume(
     record: TransferRecord,
     ctl: Arc<Control>,
 ) -> Outcome {
-    let cancel = ctl.cancel.clone();
     tokio::select! {
         o = continue_record(shared, endpoint, id, record, &ctl) => o,
-        _ = cancel.cancelled() => cancelled(shared, id, None),
+        () = cancelled(shared, id, &ctl.cancel, None) => Outcome::Cancelled,
     }
 }
 
-/// The user cancelled: tell the sender if connected, otherwise leave a
-/// tombstone for its next `Continue`, and delete the partial data.
-fn cancelled(shared: &Arc<Shared>, id: u64, conn: Option<&Connection>) -> Outcome {
+/// Finishes once the user has cancelled and the transfer has ended for it:
+/// the sender is told if connected, otherwise a tombstone waits for its next
+/// `Continue`, and the partial data is deleted. Never finishes if the cancel
+/// came too late, when the item is already being put in place: the transfer
+/// then ends by itself, completed (or failed).
+async fn cancelled(shared: &Shared, id: u64, cancel: &CancelToken, conn: Option<&Connection>) {
+    cancel.cancelled().await;
     match shared.session_by_id(id) {
-        Some(session) => session.end(&shared.data_dir, Some(CLOSE_CANCELLED), false),
+        Some(session) => {
+            if !session.cancel(&shared.data_dir) {
+                std::future::pending::<()>().await;
+            }
+        }
         None => {
             if let Some(conn) = conn {
                 conn.close(CLOSE_CANCELLED.into(), b"cancelled");
             }
         }
     }
-    Outcome::Cancelled
 }
 
 struct Receiver<'a> {
@@ -266,33 +271,29 @@ async fn accept(
     let name = archive::sanitize_file_name(&offer.name);
     let prepared: anyhow::Result<PathBuf> = async {
         tokio::fs::create_dir_all(&dest_dir).await?;
-        // Files go straight to the destination folder, and so do the zips of
-        // folders that are kept as such; a zip that is only unpacked arrives
-        // in the temp folder.
-        let (part_path, kept) = match (offer.kind, folder) {
-            (Kind::File, _) => (
-                archive::unique_path(&dest_dir, &format!("{name}.part"), false),
-                true,
-            ),
-            (Kind::Folder, ReceivedFolder::Extract) => {
-                tokio::fs::create_dir_all(&shared.temp_dir).await?;
-                let zip = shared
-                    .temp_dir
-                    .join(format!("recv-{}.zip", protocol::token_hex(&offer.token)));
-                (zip, false)
-            }
-            (Kind::Folder, ReceivedFolder::KeepZip | ReceivedFolder::Both) => (
-                archive::unique_path(&dest_dir, &format!("{name}.zip.part"), false),
-                true,
-            ),
+        // A zip that is only unpacked arrives in the temp folder; files go
+        // straight to the destination folder, and so do the zips of folders
+        // that are kept as such.
+        if session::temporary_part(offer.kind, folder) {
+            tokio::fs::create_dir_all(&shared.temp_dir).await?;
+            let zip = session::temp_archive(&shared.temp_dir, Role::Receive, &offer.token);
+            tokio::fs::File::create(&zip).await?;
+            return Ok(zip);
+        }
+        let part_name = match offer.kind {
+            Kind::File => format!("{name}.part"),
+            Kind::Folder => format!("{name}.zip.part"),
         };
-        tokio::fs::File::create(&part_path).await?;
+        // Created here and not over anything, also when another transfer of
+        // the same name starts at the same moment.
+        let dir = dest_dir.clone();
+        let part =
+            tokio::task::spawn_blocking(move || archive::create_unique_file(&dir, &part_name))
+                .await??;
         // Marked from the start: the mark stays with the file when it is
         // renamed into place, so it is never there unmarked.
-        if kept {
-            let _ = archive::mark_of_the_web(&part_path);
-        }
-        Ok(part_path)
+        let _ = archive::mark_of_the_web(&part);
+        Ok(part)
     }
     .await;
     let part_path = match prepared {
@@ -313,6 +314,7 @@ async fn accept(
             part_path: part_path.clone(),
             synced: Some(0),
             folder,
+            unpacking: None,
         },
         offer,
         done_hash: None,
@@ -361,12 +363,24 @@ async fn continue_record(
     shared: &Arc<Shared>,
     endpoint: &Endpoint,
     id: u64,
-    record: TransferRecord,
+    mut record: TransferRecord,
     ctl: &Control,
 ) -> Outcome {
     let Some(peer) = record.peer_id() else {
         record.discard(&shared.data_dir);
         return Outcome::Failed(tr!(error_bad_resume).into());
+    };
+    // The program ended while unpacking: that folder is incomplete. Gone
+    // before anything else, however the transfer goes on.
+    let data_dir = shared.data_dir.clone();
+    let record = match tokio::task::spawn_blocking(move || {
+        record.remove_unpacked(&data_dir);
+        record
+    })
+    .await
+    {
+        Ok(record) => record,
+        Err(e) => return Outcome::Failed(e.to_string()),
     };
     let Side::Receive {
         dest_dir,
@@ -621,10 +635,7 @@ impl Receiver<'_> {
             return Outcome::Failed(tr!(error_damaged).into());
         }
         match self.finalize().await {
-            Ok(path) => {
-                self.session.end(data_dir, None, true);
-                Outcome::Completed(Some(path))
-            }
+            Ok(path) => Outcome::Completed(Some(path)),
             Err(e) => {
                 self.session.end(data_dir, None, false);
                 Outcome::Failed(format!("{e:#}"))
@@ -654,10 +665,12 @@ impl Receiver<'_> {
         let data_dir = &self.shared.data_dir;
         match result {
             Ok(path) => {
-                // Let the Result go out, and give the sender a moment to read it and close.
+                // The item is in place and the transfer has ended (see
+                // `finalize`). Let the Result go out, and give the sender a
+                // moment to read it and close.
                 let _ = tokio::time::timeout(Duration::from_secs(10), writer).await;
                 let _ = tokio::time::timeout(Duration::from_secs(5), conn.closed()).await;
-                self.session.end(data_dir, None, true);
+                self.session.set_current(None);
                 Ok(path)
             }
             Err(e) if e.is::<Lost>() => {
@@ -840,7 +853,7 @@ impl Receiver<'_> {
     }
 
     /// Moves the file into place, or unpacks the folder and keeps its zip
-    /// as chosen.
+    /// as chosen. Once it succeeds, the transfer has ended as completed.
     async fn finalize(&mut self) -> anyhow::Result<PathBuf> {
         if self.kind == Kind::Folder && self.folder != ReceivedFolder::KeepZip {
             self.emit(Phase::Unpacking);
@@ -858,8 +871,12 @@ impl Receiver<'_> {
             self.dest_dir.clone(),
             self.name.clone(),
         );
+        let transfer = Transfer {
+            session: self.session.clone(),
+            data_dir: shared.data_dir.clone(),
+        };
         tokio::task::spawn_blocking(move || match kind {
-            Kind::File => finish_file(&part, &dest, &name, times),
+            Kind::File => transfer.place(&mut || finish_file(&part, &dest, &name, times)),
             Kind::Folder => {
                 let mut throttle = Throttle::new();
                 let mut progress = |done, total| {
@@ -875,6 +892,7 @@ impl Receiver<'_> {
                     times,
                     cancel.flag(),
                     &mut progress,
+                    &transfer,
                 )
             }
         })
@@ -882,11 +900,35 @@ impl Receiver<'_> {
     }
 }
 
+/// What finishing a received item needs from its transfer.
+trait Finishing {
+    /// Notes the new folder that is about to be unpacked into.
+    fn unpacking(&self, folder: &Path);
+    /// Runs the last step and ends the transfer as completed
+    /// (`Session::place`).
+    fn place(&self, step: &mut dyn FnMut() -> anyhow::Result<PathBuf>) -> anyhow::Result<PathBuf>;
+}
+
+/// A running transfer: its session, and the data folder for its record.
+struct Transfer {
+    session: Arc<Session>,
+    data_dir: PathBuf,
+}
+
+impl Finishing for Transfer {
+    fn unpacking(&self, folder: &Path) {
+        self.session.save_unpacking(&self.data_dir, folder);
+    }
+
+    fn place(&self, step: &mut dyn FnMut() -> anyhow::Result<PathBuf>) -> anyhow::Result<PathBuf> {
+        self.session.place(&self.data_dir, step)
+    }
+}
+
 /// Puts a received file in place under a free name, with the sender's
 /// dates. Returns where it went.
 fn finish_file(part: &Path, dest: &Path, name: &str, times: ItemTimes) -> anyhow::Result<PathBuf> {
-    let path = archive::unique_path(dest, name, false);
-    std::fs::rename(part, &path)?;
+    let path = archive::move_to_unique(part, dest, name, false)?;
     times.apply(&path);
     Ok(path)
 }
@@ -894,6 +936,8 @@ fn finish_file(part: &Path, dest: &Path, name: &str, times: ItemTimes) -> anyhow
 /// Unpacks a received folder from its zip `part`, keeps the zip as
 /// `<name>.zip`, or both, as `folder` says. The unpacked folder gets the
 /// sender's dates. Returns the folder, or the zip when only that is kept.
+/// Either all of it is in place or, after a failure, none of it.
+#[allow(clippy::too_many_arguments)]
 fn finish_folder(
     part: &Path,
     dest: &Path,
@@ -902,44 +946,32 @@ fn finish_folder(
     times: ItemTimes,
     cancel: &AtomicBool,
     progress: &mut dyn FnMut(u64, u64),
+    transfer: &dyn Finishing,
 ) -> anyhow::Result<PathBuf> {
     let zip_name = |stem: &str| format!("{stem}.zip");
-    // A name that is still free when the zip is renamed (unpacking may take
-    // a while, and renaming would replace a file that appeared meanwhile).
-    let keep_zip = |wanted: PathBuf| -> anyhow::Result<PathBuf> {
-        let zip = if wanted.exists() {
-            archive::unique_path(dest, &zip_name(name), false)
-        } else {
-            wanted
-        };
-        std::fs::rename(part, &zip)?;
-        Ok(zip)
-    };
-    let (target, zip) = match folder {
-        ReceivedFolder::KeepZip => {
-            return keep_zip(archive::unique_path(dest, &zip_name(name), false));
-        }
-        ReceivedFolder::Extract => (archive::unique_path(dest, name, true), None),
-        // The folder and its zip with the same number: "Photos (2)" and
-        // "Photos (2).zip".
-        ReceivedFolder::Both => {
-            let (target, zip) = std::iter::once(name.to_string())
-                .chain((2..).map(|i| format!("{name} ({i})")))
-                .map(|stem| (dest.join(&stem), dest.join(zip_name(&stem))))
-                .find(|(target, zip)| !target.exists() && !zip.exists())
-                .expect("infinite iterator");
-            (target, Some(zip))
-        }
-    };
+    if folder == ReceivedFolder::KeepZip {
+        return transfer
+            .place(&mut || Ok(archive::move_to_unique(part, dest, &zip_name(name), false)?));
+    }
+    // A new folder, so that everything in it is this transfer's. With its
+    // zip, both get the same number: "Photos (2)" and "Photos (2).zip".
+    let target = archive::create_unique_dir(dest, name, |stem| {
+        folder != ReceivedFolder::Both || !dest.join(zip_name(stem)).exists()
+    })?;
     let mut partial = Cleanup(Some(target.clone()));
+    transfer.unpacking(&target);
     archive::unzip(part, &target, true, cancel, progress)?;
     times.apply(&target);
+    // Last, the zip: until then, the part is what a restart finishes from.
+    let placed = transfer.place(&mut || {
+        if folder == ReceivedFolder::Both {
+            let stem = target.file_name().unwrap_or_default().to_string_lossy();
+            archive::move_to_unique(part, dest, &zip_name(&stem), false)?;
+        }
+        Ok(target.clone())
+    })?;
     partial.0 = None;
-    // Last: until now, the part is what a restart finishes from.
-    if let Some(zip) = zip {
-        keep_zip(zip)?;
-    }
-    Ok(target)
+    Ok(placed)
 }
 
 #[cfg(test)]
@@ -957,7 +989,7 @@ mod tests {
 
     fn times(secs: u64) -> (ItemTimes, SystemTime) {
         let at = SystemTime::UNIX_EPOCH + Duration::from_secs(secs);
-        let filetime = secs * 10_000_000 + 116_444_736_000_000_000;
+        let filetime = secs * 10_000_000 + archive::FILETIME_UNIX_EPOCH;
         let times = ItemTimes {
             modified: Some(filetime),
             accessed: None,
@@ -978,9 +1010,61 @@ mod tests {
         part
     }
 
-    fn finish(part: &Path, dest: &Path, folder: ReceivedFolder, t: ItemTimes) -> PathBuf {
+    /// Finishing without a running transfer. `place` fails when `ended` (a
+    /// cancel came first).
+    #[derive(Default)]
+    struct Alone {
+        unpacking: std::cell::RefCell<Vec<PathBuf>>,
+        ended: bool,
+    }
+
+    impl Finishing for Alone {
+        fn unpacking(&self, folder: &Path) {
+            assert!(
+                std::fs::read_dir(folder).unwrap().next().is_none(),
+                "noted before anything is in it"
+            );
+            self.unpacking.borrow_mut().push(folder.to_path_buf());
+        }
+
+        fn place(
+            &self,
+            step: &mut dyn FnMut() -> anyhow::Result<PathBuf>,
+        ) -> anyhow::Result<PathBuf> {
+            anyhow::ensure!(!self.ended, "Cancelled");
+            step()
+        }
+    }
+
+    fn finish_with(
+        transfer: &Alone,
+        part: &Path,
+        dest: &Path,
+        folder: ReceivedFolder,
+        t: ItemTimes,
+    ) -> anyhow::Result<PathBuf> {
         let cancel = AtomicBool::new(false);
-        finish_folder(part, dest, "Photos", folder, t, &cancel, &mut |_, _| {}).unwrap()
+        finish_folder(
+            part,
+            dest,
+            "Photos",
+            folder,
+            t,
+            &cancel,
+            &mut |_, _| {},
+            transfer,
+        )
+    }
+
+    fn finish(part: &Path, dest: &Path, folder: ReceivedFolder, t: ItemTimes) -> PathBuf {
+        let transfer = Alone::default();
+        let path = finish_with(&transfer, part, dest, folder, t).unwrap();
+        let noted = transfer.unpacking.take();
+        match folder {
+            ReceivedFolder::KeepZip => assert!(noted.is_empty()),
+            _ => assert_eq!(noted, vec![path.clone()]),
+        }
+        path
     }
 
     #[test]
@@ -1034,6 +1118,31 @@ mod tests {
         assert_eq!(std::fs::read(path.join("a.txt")).unwrap(), b"alpha");
         assert!(dest.join("Photos (2).zip").is_file());
         assert!(!part.exists());
+        std::fs::remove_dir_all(&base).ok();
+    }
+
+    /// When the last step cannot happen (here: the transfer was cancelled
+    /// meanwhile), nothing of the item stays: no unpacked folder and no
+    /// kept zip, only the part, which the end of the transfer deletes.
+    #[test]
+    fn a_folder_that_cannot_be_placed_leaves_nothing() {
+        let base = scratch("unplaced");
+        let dest = base.join("dest");
+        let (t, _) = times(1_400_000_000);
+        for folder in [ReceivedFolder::Extract, ReceivedFolder::Both] {
+            let part = received_zip(&base, "Photos.zip.part");
+            let transfer = Alone {
+                ended: true,
+                ..Alone::default()
+            };
+            assert!(finish_with(&transfer, &part, &dest, folder, t).is_err());
+            assert!(part.is_file());
+            let left: Vec<_> = std::fs::read_dir(&dest)
+                .unwrap()
+                .map(|e| e.unwrap().file_name())
+                .collect();
+            assert_eq!(left, vec![std::ffi::OsString::from("Photos.zip.part")]);
+        }
         std::fs::remove_dir_all(&base).ok();
     }
 }
