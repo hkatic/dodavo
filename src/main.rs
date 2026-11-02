@@ -11,7 +11,7 @@ mod ui;
 #[cfg(windows)]
 // The Win32 user interface reaches the library through `crate::net` and so on.
 pub(crate) use dodavo_core::{
-    archive, config, format, i18n, identity, net, platform, space, update,
+    archive, config, format, i18n, identity, net, platform, space, update, view,
 };
 
 #[cfg(windows)]

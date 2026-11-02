@@ -518,11 +518,20 @@ pub(crate) fn spawn_path_watch(
     })
 }
 
+#[derive(Clone)]
 pub struct NetHandle {
     tx: mpsc::UnboundedSender<Command>,
 }
 
 impl NetHandle {
+    /// A handle without a network behind it, for a program that will not get
+    /// to use it (another instance runs already, say).
+    pub fn idle() -> NetHandle {
+        NetHandle {
+            tx: mpsc::unbounded_channel().0,
+        }
+    }
+
     pub fn send(&self, cmd: Command) {
         let _ = self.tx.send(cmd);
     }

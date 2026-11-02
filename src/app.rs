@@ -136,48 +136,7 @@ impl Transfer {
     /// One line of state for the recipient list and the Transfers menu, such
     /// as “Sending – “report.pdf” (45%)”.
     pub fn describe(&self) -> String {
-        let state = match self.phase {
-            None => tr!(starting),
-            Some(Phase::Preparing) => tr!(tx_preparing),
-            Some(Phase::Connecting) => tr!(tx_connecting),
-            Some(Phase::WaitingForAccept) => tr!(tx_waiting_accept),
-            Some(Phase::Transferring) => match self.dir {
-                progress::Direction::Send => tr!(tx_sending),
-                progress::Direction::Receive => tr!(tx_receiving),
-            },
-            Some(Phase::Paused) => tr!(tx_paused),
-            Some(Phase::PausedByPeer) => tr!(tx_paused_by_peer),
-            Some(Phase::WaitingForConnection { .. }) => tr!(tx_waiting_connection),
-            Some(Phase::PartInUse { .. }) => match self.dir {
-                progress::Direction::Send => tr!(tx_peer_part_in_use),
-                progress::Direction::Receive => tr!(tx_part_in_use),
-            },
-            Some(Phase::Verifying) => tr!(tx_verifying),
-            Some(Phase::Unpacking) => tr!(tx_unpacking),
-            Some(Phase::PeerUnpacking) => tr!(tx_peer_unpacking),
-        };
-        let with_percent = self.total > 0
-            && matches!(
-                self.phase,
-                Some(
-                    Phase::Transferring
-                        | Phase::Paused
-                        | Phase::PausedByPeer
-                        | Phase::WaitingForConnection { .. }
-                        | Phase::PartInUse { .. }
-                )
-            );
-        if with_percent {
-            let percent = (self.done as u128 * 100 / self.total as u128).min(100);
-            tr!(
-                transfer_status_percent,
-                state = state,
-                item = self.item,
-                percent = percent
-            )
-        } else {
-            tr!(transfer_status, state = state, item = self.item)
-        }
+        crate::view::describe(self.phase, self.dir, self.done, self.total, &self.item)
     }
 
     /// Whether this is a running transfer with the given peer.
@@ -842,7 +801,7 @@ mod tests {
         assert!(!t.note_progress(start, 0, 1000));
         t.note_progress(later, 200, 1000);
         assert_eq!(t.rate(later), Some(100));
-        let stalled = later + progress::STALLED_AFTER;
+        let stalled = later + crate::view::STALLED_AFTER;
         assert_eq!(t.rate(stalled), Some(0));
         t.phase = Some(Phase::Unpacking);
         assert_eq!(t.rate(stalled), Some(100), "this side's own work");

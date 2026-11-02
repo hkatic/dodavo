@@ -5,7 +5,7 @@ use std::path::Path;
 
 use crate::{
     format::format_size,
-    i18n::tr,
+    i18n::{os_tr, tr},
     net::{Kind, Offer, ReceivedFolder},
     platform::disk_free,
 };
@@ -53,7 +53,14 @@ fn space_needed(offer: &Offer, folder: ReceivedFolder, same_volume: bool) -> (u6
     }
 }
 
+/// The name the Finder shows.
+#[cfg(target_os = "macos")]
+fn drive_name(root: &Path) -> String {
+    crate::platform::volume_name(root).unwrap_or_else(|| root.display().to_string())
+}
+
 /// `C:\` is shown as `C:`; other volume paths (e.g. network shares) as they are.
+#[cfg(not(target_os = "macos"))]
 fn drive_name(root: &Path) -> String {
     let s = root.display().to_string();
     match s.strip_suffix('\\') {
@@ -96,7 +103,7 @@ pub fn check_space(offer: &Offer, dir: &Path, temp: &Path, folder: ReceivedFolde
         return Space {
             enough: None,
             fits: false,
-            text: tr!(
+            text: os_tr!(
                 space_fat,
                 drive = drive_name(&dest_root),
                 size = format_size(largest)
@@ -112,9 +119,9 @@ pub fn check_space(offer: &Offer, dir: &Path, temp: &Path, folder: ReceivedFolde
     let ((root, free), needed) = short.copied().unwrap_or(checks[0]);
     let args = (format_size(needed), format_size(*free), drive_name(root));
     let mut text = if short.is_some() {
-        tr!(space_short, needed = args.0, free = args.1, drive = args.2)
+        os_tr!(space_short, needed = args.0, free = args.1, drive = args.2)
     } else {
-        tr!(space_ok, needed = args.0, free = args.1, drive = args.2)
+        os_tr!(space_ok, needed = args.0, free = args.1, drive = args.2)
     };
     if offer.kind == Kind::Folder && folder != ReceivedFolder::KeepZip {
         text = format!("{text} {}", tr!(space_folder_note));
@@ -193,10 +200,11 @@ mod tests {
         let space = check_space(&big, &dir, &dir, ReceivedFolder::Extract);
         crate::archive::PRETEND_FAT.set(false);
         assert!(!space.fits);
-        assert!(space.text.contains("FAT32"), "{}", space.text);
+        assert!(space.text.contains("FAT"), "{}", space.text);
         assert!(check_space(&big, &dir, &dir, ReceivedFolder::Extract).fits);
     }
 
+    #[cfg(windows)]
     #[test]
     fn drive_names() {
         assert_eq!(drive_name(Path::new(r"C:\")), "C:");

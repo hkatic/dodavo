@@ -61,4 +61,6 @@ jobs:
             target
           key: macos-${{ hashFiles('Cargo.lock') }}
       - name: Test
-        run: cargo test --locked -- --test-threads=1
+        run: cargo test --locked --workspace -- --test-threads=1
+      - name: Build the app
+        run: macos/build.sh --debug

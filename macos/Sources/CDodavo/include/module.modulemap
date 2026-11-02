@@ -1,0 +1,4 @@
+module CDodavo {
+    header "dodavo.h"
+    export *
+}

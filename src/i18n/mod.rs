@@ -11,6 +11,8 @@
 
 mod en;
 mod hr;
+#[cfg(any(target_os = "macos", test))]
+pub mod mac;
 mod sl;
 mod sr_latn;
 
@@ -135,28 +137,29 @@ pub struct Plural {
 }
 
 macro_rules! strings {
-    (texts { $($t:ident),* $(,)? } plurals { $($p:ident),* $(,)? }) => {
-        pub struct Strings {
+    ($name:ident; texts { $($t:ident),* $(,)? } plurals { $($p:ident),* $(,)? }) => {
+        pub struct $name {
             pub lang: Lang,
             $(pub $t: &'static str,)*
             $(pub $p: Plural,)*
         }
 
-        impl Strings {
-            #[cfg(test)]
+        impl $name {
             pub fn texts(&self) -> Vec<(&'static str, &'static str)> {
                 vec![$((stringify!($t), self.$t)),*]
             }
 
-            #[cfg(test)]
             pub fn plurals(&self) -> Vec<(&'static str, &Plural)> {
                 vec![$((stringify!($p), &self.$p)),*]
             }
         }
     };
 }
+#[cfg(any(target_os = "macos", test))]
+use strings;
 
 strings! {
+    Strings;
     texts {
         // Main window: menus.
         menu_file,
@@ -504,6 +507,16 @@ strings! {
     }
 }
 
+/// How the form of a number is chosen, for any table.
+pub fn pick_plural(lang: Lang, p: &Plural, n: u64) -> &'static str {
+    match plural_category(lang, n) {
+        Category::One => p.one,
+        Category::Two => p.two,
+        Category::Few => p.few,
+        Category::Other => p.other,
+    }
+}
+
 impl Strings {
     /// Picks the plural form for `n`.
     pub fn pick(&self, p: &Plural, n: u64) -> &'static str {
@@ -639,6 +652,33 @@ macro_rules! tr {
     };
 }
 
+/// Like [`tr!`], from the table of the Mac user interface.
+#[macro_export]
+macro_rules! mac_tr {
+    ($key:ident) => {
+        $crate::i18n::mac::s().$key
+    };
+    ($key:ident, $($name:ident = $value:expr),+ $(,)?) => {
+        $crate::i18n::fill(
+            $crate::i18n::mac::s().$key,
+            &[$((stringify!($name), &$value as &dyn ::std::fmt::Display)),+],
+        )
+    };
+}
+
+/// A text whose wording depends on the system ("app" or "program", a volume's
+/// name or a drive letter): on a Mac from its own table, under the same key.
+#[cfg(target_os = "macos")]
+#[macro_export]
+macro_rules! os_tr {
+    ($($args:tt)*) => { $crate::i18n::mac_tr!($($args)*) };
+}
+#[cfg(not(target_os = "macos"))]
+#[macro_export]
+macro_rules! os_tr {
+    ($($args:tt)*) => { $crate::i18n::tr!($($args)*) };
+}
+
 /// `trn!(key, n, name = value, …)` picks the plural form for `n` and fills
 /// `{n}` and the other placeholders.
 #[macro_export]
@@ -653,7 +693,7 @@ macro_rules! trn {
     }};
 }
 
-pub use crate::{tr, trn};
+pub use crate::{mac_tr, os_tr, tr, trn};
 
 #[cfg(test)]
 mod tests {

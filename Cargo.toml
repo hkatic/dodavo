@@ -1,3 +1,6 @@
+[workspace]
+members = ["crates/dodavo-ffi"]
+
 [package]
 name = "dodavo"
 version = "1.0.0"

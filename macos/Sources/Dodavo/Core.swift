@@ -1,0 +1,278 @@
+import CDodavo
+import Foundation
+
+/// What Rust says when the program starts.
+struct Started: Decodable {
+    let fatal: String?
+    let alreadyRunning: Bool
+    let warning: String?
+    let myId: String
+    let profile: String?
+    let language: String
+    let version: String
+    let copyright: String
+    let website: String
+    let donateUrl: String
+    let startHidden: Bool
+    let showInMenuBar: Bool
+    let openAtLogin: Bool
+    let languages: [[String]]
+}
+
+struct Contact: Decodable, Equatable {
+    let name: String
+    let id: String
+}
+
+struct Row: Decodable, Equatable {
+    let id: UInt64
+    let peerId: String
+    let peer: String
+    let sending: Bool
+    let item: String
+    let active: Bool
+    let succeeded: Bool
+    let status: String
+    let state: String
+    let fraction: Double?
+    let amount: String
+    let speed: String
+    let remaining: String
+    let detail: String
+    let canPause: Bool
+    let paused: Bool
+    let canCancel: Bool
+    let path: String?
+    let movingData: Bool
+}
+
+struct Notice: Decodable {
+    let title: String
+    let text: String
+}
+
+struct SpaceInfo: Decodable {
+    let text: String
+    let fits: Bool
+    let enough: Bool?
+}
+
+struct OfferInfo: Decodable {
+    let id: UInt64
+    let fromId: String
+    let fromName: String
+    let known: Bool
+    let headline: String
+    let description: String
+    let unknownWarning: String?
+    let addLabel: String?
+    let dir: String
+    let space: SpaceInfo
+}
+
+struct Settings: Codable {
+    var myName: String
+    var openAtLogin: Bool
+    var hideAtLogin: Bool
+    var showInMenuBar: Bool
+    var checkUpdates: Bool
+    var language: String?
+    var alwaysSave: Bool
+    var alwaysSaveDir: String?
+    var autoAccept: Bool
+    var receivedFolder: String
+}
+
+/// A message from Rust. An unknown one is decoded as nothing at all.
+enum Message: Decodable {
+    case status(online: Bool, text: String)
+    case row(Row, announce: String?)
+    case rowGone(id: UInt64)
+    case notice(id: UInt64, notice: Notice, path: String?)
+    case offer(OfferInfo, notice: Notice)
+    case offerGone(id: UInt64, notice: Notice)
+    case busy(Bool)
+    case error(String)
+    case fatal(String)
+
+    private enum Keys: String, CodingKey {
+        case type, online, text, row, announce, id, notice, path, offer, busy
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: Keys.self)
+        switch try c.decode(String.self, forKey: .type) {
+        case "status":
+            self = .status(
+                online: try c.decode(Bool.self, forKey: .online),
+                text: try c.decode(String.self, forKey: .text))
+        case "row":
+            self = .row(
+                try c.decode(Row.self, forKey: .row),
+                announce: try c.decodeIfPresent(String.self, forKey: .announce))
+        case "row_gone":
+            self = .rowGone(id: try c.decode(UInt64.self, forKey: .id))
+        case "notice":
+            self = .notice(
+                id: try c.decode(UInt64.self, forKey: .id),
+                notice: try c.decode(Notice.self, forKey: .notice),
+                path: try c.decodeIfPresent(String.self, forKey: .path))
+        case "offer":
+            self = .offer(
+                try c.decode(OfferInfo.self, forKey: .offer),
+                notice: try c.decode(Notice.self, forKey: .notice))
+        case "offer_gone":
+            self = .offerGone(
+                id: try c.decode(UInt64.self, forKey: .id),
+                notice: try c.decode(Notice.self, forKey: .notice))
+        case "busy":
+            self = .busy(try c.decode(Bool.self, forKey: .busy))
+        case "error":
+            self = .error(try c.decode(String.self, forKey: .text))
+        case "fatal":
+            self = .fatal(try c.decode(String.self, forKey: .text))
+        default:
+            throw DecodingError.dataCorruptedError(
+                forKey: .type, in: c, debugDescription: "an unknown message")
+        }
+    }
+}
+
+/// The Rust library, behind its C functions.
+enum Core {
+    private static let decoder: JSONDecoder = {
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        return decoder
+    }()
+
+    private static func take(_ text: UnsafeMutablePointer<CChar>?) -> Data? {
+        guard let text = text else { return nil }
+        defer { dodavo_free(text) }
+        return String(cString: text).data(using: .utf8)
+    }
+
+    /// Starts the program; `wake` is called, from any thread, when `poll` has
+    /// something.
+    static func start(
+        profile: String?,
+        hidden: Bool,
+        wake: @escaping @convention(c) (UnsafeMutableRawPointer?) -> Void
+    ) -> Started? {
+        let options: [String: Any?] = ["profile": profile, "hidden": hidden]
+        let json = try? JSONSerialization.data(
+            withJSONObject: options.compactMapValues { $0 })
+        let text = json.flatMap { String(data: $0, encoding: .utf8) } ?? "{}"
+        let reply = take(dodavo_start(text, wake, nil))
+        return reply.flatMap { try? decoder.decode(Started.self, from: $0) }
+    }
+
+    static func poll() -> Message? {
+        guard let data = take(dodavo_poll()) else { return nil }
+        return try? decoder.decode(Message.self, from: data)
+    }
+
+    /// Whether anything waits, also if what comes next cannot be read.
+    static func drain(_ handle: (Message) -> Void) {
+        while let data = take(dodavo_poll()) {
+            if let message = try? decoder.decode(Message.self, from: data) {
+                handle(message)
+            }
+        }
+    }
+
+    private static func raw(_ call: String, _ arguments: [String: Any]) -> Data? {
+        var object = arguments
+        object["call"] = call
+        guard let json = try? JSONSerialization.data(withJSONObject: object),
+            let text = String(data: json, encoding: .utf8)
+        else { return nil }
+        return take(dodavo_call(text))
+    }
+
+    /// Does `call`, and gives its answer.
+    static func call<T: Decodable>(
+        _ call: String, _ arguments: [String: Any] = [:], as type: T.Type = T.self
+    ) -> T? {
+        raw(call, arguments).flatMap { try? decoder.decode(T.self, from: $0) }
+    }
+
+    /// Does `call`, whatever the answer.
+    static func perform(_ call: String, _ arguments: [String: Any] = [:]) {
+        _ = raw(call, arguments)
+    }
+
+    /// `{ "error": … }`, or none.
+    static func errorOf(_ call: String, _ arguments: [String: Any]) -> String? {
+        struct Reply: Decodable { let error: String? }
+        let reply: Reply? = Core.call(call, arguments)
+        return reply?.error
+    }
+
+    /// `{ "problem": … }`, or none.
+    static func problemOf(_ call: String, _ arguments: [String: Any]) -> String? {
+        struct Reply: Decodable { let problem: String? }
+        let reply: Reply? = Core.call(call, arguments)
+        return reply?.problem
+    }
+
+    /// The texts of the user interface, by key as they are in Rust.
+    static func texts() -> [String: String] {
+        guard let data = raw("texts", [:]) else { return [:] }
+        return (try? JSONDecoder().decode([String: String].self, from: data)) ?? [:]
+    }
+
+    static func settings() -> Settings? {
+        call("settings")
+    }
+
+    static func settingsJSON(_ settings: Settings) -> [String: Any] {
+        let encoder = JSONEncoder()
+        encoder.keyEncodingStrategy = .convertToSnakeCase
+        guard let data = try? encoder.encode(settings),
+            let object = try? JSONSerialization.jsonObject(with: data)
+        else { return [:] }
+        return ["settings": object]
+    }
+
+    static var contacts: [Contact] {
+        call("contacts") ?? []
+    }
+}
+
+/// The texts of the user interface.
+enum L {
+    private static var table: [String: String] = [:]
+
+    static func load() {
+        table = Core.texts()
+    }
+
+    static subscript(_ key: K) -> String {
+        table[key.rawValue] ?? key.rawValue
+    }
+
+    /// The text with its `{name}` placeholders filled in.
+    static func f(_ key: K, _ values: [String: String]) -> String {
+        var text = L[key]
+        for (name, value) in values {
+            text = text.replacingOccurrences(of: "{\(name)}", with: value)
+        }
+        return text
+    }
+
+    /// The text for the number `n`.
+    static func plural(_ key: PluralK, _ n: Int, _ values: [String: String] = [:]) -> String {
+        var text = Core.call("plural", ["key": key.rawValue, "n": n], as: String.self) ?? ""
+        for (name, value) in values {
+            text = text.replacingOccurrences(of: "{\(name)}", with: value)
+        }
+        return text
+    }
+
+    /// `Settings…` on the macOS that calls it that, otherwise `Preferences…`.
+    static var settingsMenuItem: String {
+        if #available(macOS 13, *) { return L[.menu_settings] }
+        return L[.menu_preferences]
+    }
+}

@@ -44,12 +44,10 @@ pub const APP_NAME: &str = "Dodavo";
 /// copyright notice, from Cargo.toml (the years from
 /// `[package.metadata.dodavo]`, passed on by build.rs, which also writes all
 /// three into the program's version resource).
-pub const APP_AUTHOR: &str = env!("CARGO_PKG_AUTHORS");
-pub const APP_WEBSITE: &str = env!("CARGO_PKG_REPOSITORY");
-pub const COPYRIGHT_YEARS: &str = env!("DODAVO_COPYRIGHT_YEARS");
-/// The page that Help → Donate opens. The help pages name it too (a test
-/// checks them).
-pub const DONATE_URL: &str = "https://paypal.me/hrvix";
+pub const APP_AUTHOR: &str = dodavo_core::AUTHOR;
+pub const APP_WEBSITE: &str = dodavo_core::WEBSITE;
+pub const COPYRIGHT_YEARS: &str = dodavo_core::COPYRIGHT_YEARS;
+pub use dodavo_core::DONATE_URL;
 
 /// A text with the `\r\n` line ends a multiline edit control needs.
 pub fn crlf(text: &str) -> String {
