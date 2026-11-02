@@ -203,6 +203,10 @@ async fn start(
         .file_name()
         .map(|n| n.to_string_lossy().into_owned())
         .unwrap_or_else(|| tr!(untitled).into());
+    // Any receiver can take it as it is, and shows it as it is (see
+    // `archive::names`).
+    #[cfg(target_os = "macos")]
+    let name = archive::offer_name(&name);
     // The item's own dates, for the receiver to give to what it saves.
     let times = std::fs::metadata(&path)
         .map(|m| archive::ItemTimes::of(&m))

@@ -584,6 +584,7 @@ dependencies = [
  "core-foundation-sys",
  "ed25519-dalek",
  "embed-resource",
+ "icu_normalizer",
  "iroh",
  "iroh-mdns-address-lookup",
  "libc",

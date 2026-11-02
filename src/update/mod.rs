@@ -40,12 +40,12 @@ use std::{
 };
 
 use ed25519_dalek::VerifyingKey;
-use tokio_util::sync::CancellationToken;
 #[cfg(windows)]
 pub use installer::{
     InstallMode, close_handle, install_mode, launch_installer, setup_exited, setup_parameters,
 };
 use manifest::Manifest;
+use tokio_util::sync::CancellationToken;
 use version::Version;
 
 /// The manifest of the latest published release.

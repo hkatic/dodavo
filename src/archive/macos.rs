@@ -28,7 +28,9 @@ use std::{
 #[cfg(test)]
 use super::PRETEND_FAT;
 use super::{
-    FileId, ItemTimes, RENAME_RETRY_MS, file_times, filetime_to_system, retried, system_to_filetime,
+    FileId, ItemTimes, RENAME_RETRY_MS, file_times, filetime_to_system,
+    names::{Fidelity, bytes, cut_to, is_mac_name, link_stays_inside},
+    numbered, retried, system_to_filetime,
 };
 use crate::platform::{c_text, statfs_of};
 
@@ -145,15 +147,141 @@ pub(super) fn is_hidden(meta: &Metadata) -> bool {
     meta.st_flags() & libc::UF_HIDDEN != 0
 }
 
-/// How [`unzip`](super::unzip) opens the file of an entry: only a new one, so
-/// that entries whose names are the same here keep their data apart.
-pub(super) fn unpack_options() -> OpenOptions {
-    let mut options = OpenOptions::new();
-    options
-        .write(true)
-        .create_new(true)
-        .custom_flags(libc::O_NONBLOCK);
-    options
+/// Opens the file of a zip entry for [`unzip`](super::unzip): only a new one,
+/// under the next free name if it is taken, so that entries whose names are
+/// the same here keep their data apart. Composed and decomposed forms of a
+/// name are the same on APFS, and on FAT and exFAT the attributes of a file
+/// go into a file beside it (`._name`), which an entry may be called as well.
+pub(super) fn open_unpacked(target: PathBuf) -> io::Result<(File, PathBuf)> {
+    let name = target
+        .file_name()
+        .unwrap_or_default()
+        .to_string_lossy()
+        .into_owned();
+    let parent = target.parent().unwrap_or(Path::new("")).to_path_buf();
+    for candidate in numbered(&name, false) {
+        let path = parent.join(candidate);
+        match OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .custom_flags(libc::O_NONBLOCK)
+            .open(&path)
+        {
+            Ok(file) => return Ok((file, path)),
+            Err(e) if e.kind() == io::ErrorKind::AlreadyExists => continue,
+            Err(e) => return Err(e),
+        }
+    }
+    unreachable!("infinite iterator")
+}
+
+/// Whether a file can be run, by whoever may read it.
+pub(super) fn is_executable(meta: &Metadata) -> bool {
+    meta.mode() & 0o111 != 0
+}
+
+/// Lets those who may read the new file `file` run it, if the Unix mode in
+/// the zip entry's attributes says it can be. Nothing else of the mode comes
+/// along: a sender's read-only folder would hold up deleting a folder that was
+/// unpacked in part, and its other bits are not the receiver's business.
+pub(super) fn keep_executable(file: &File, attributes: u32) {
+    let mode = attributes >> 16;
+    if mode & 0o170000 != 0o100000 || mode & 0o111 == 0 {
+        return;
+    }
+    let Ok(meta) = file.metadata() else { return };
+    let readable = meta.mode() & 0o777;
+    let runnable = readable | ((readable & 0o444) >> 2);
+    // SAFETY: the descriptor is open during the call.
+    unsafe { libc::fchmod(file.as_raw_fd(), runnable as libc::mode_t) };
+}
+
+/// Whether a folder of this name is a document or an app to the Finder: its
+/// extension has to stay at the end of the name, or it no longer is.
+pub(super) fn is_package(name: &str) -> bool {
+    let extension = name.rsplit_once('.').map_or("", |(_, extension)| extension);
+    [
+        "app",
+        "appex",
+        "bundle",
+        "framework",
+        "fcpbundle",
+        "imovielibrary",
+        "kext",
+        "key",
+        "logicx",
+        "mpkg",
+        "musiclibrary",
+        "numbers",
+        "pages",
+        "photoslibrary",
+        "pkg",
+        "plugin",
+        "prefPane",
+        "qlgenerator",
+        "rtfd",
+        "saver",
+        "tvlibrary",
+        "xcodeproj",
+        "xcworkspace",
+    ]
+    .iter()
+    .any(|known| known.eq_ignore_ascii_case(extension))
+}
+
+/// Where [`unzip`](super::unzip) puts entries: under their own names where
+/// the zip says so (see [`super::names`]) and macOS can take them.
+#[derive(Default)]
+pub(super) struct UnpackedNames {
+    /// Each folder's path by its names in the zip, with its own names.
+    folders: std::collections::HashMap<PathBuf, PathBuf>,
+    /// The links to make: in which folder, name and target.
+    links: Vec<(PathBuf, String, String)>,
+}
+
+impl UnpackedNames {
+    /// The path of an entry whose path by its names in the zip is `rel`, and
+    /// the links it brings along.
+    pub fn place(
+        &mut self,
+        rel: PathBuf,
+        is_folder: bool,
+        fidelity: Fidelity,
+    ) -> (PathBuf, Vec<(String, String)>) {
+        let name = fidelity.name.filter(|name| is_mac_name(name)).or_else(|| {
+            rel.file_name()
+                .map(|name| cut_to(&name.to_string_lossy(), 240, bytes))
+        });
+        let parent = rel.parent().unwrap_or(Path::new(""));
+        let mut own = self
+            .folders
+            .get(parent)
+            .cloned()
+            .unwrap_or_else(|| parent.to_path_buf());
+        own.push(name.unwrap_or_default());
+        if is_folder {
+            self.folders.insert(rel, own.clone());
+        }
+        (own, fidelity.links)
+    }
+
+    /// Notes the links of the folder at the path `folder` in the new folder.
+    pub fn note_links(&mut self, folder: &Path, links: Vec<(String, String)>) {
+        let levels = folder.components().count();
+        for (name, target) in links {
+            if is_mac_name(&name) && link_stays_inside(levels, &target) {
+                self.links.push((folder.to_path_buf(), name, target));
+            }
+        }
+    }
+
+    /// Makes the noted links in the new folder `dest`. A name that is taken
+    /// stays with what has it.
+    pub fn make_links(&mut self, dest: &Path) {
+        for (folder, name, target) in self.links.drain(..) {
+            let _ = std::os::unix::fs::symlink(target, dest.join(folder).join(name));
+        }
+    }
 }
 
 /// Makes the file or folder at `path` hidden (see [`hide_open`]).
@@ -432,6 +560,26 @@ pub fn is_busy(error: &io::Error) -> bool {
         error.raw_os_error(),
         Some(libc::EBUSY | libc::ETXTBSY | libc::EPERM | libc::EACCES)
     )
+}
+
+/// Whether writing to the medium failed with `error` because the file system
+/// cannot do that (`F_FULLFSYNC`, which SMB refuses, say).
+pub fn full_sync_refused(error: &io::Error) -> bool {
+    matches!(
+        error.raw_os_error(),
+        Some(libc::ENOTSUP | libc::EINVAL | libc::ENOTTY)
+    )
+}
+
+/// Hands what was written to the file system, without asking it to go on to
+/// the medium (see [`full_sync_refused`]).
+pub fn sync_as_far_as_possible(file: &File) -> io::Result<()> {
+    // SAFETY: the descriptor is open during the call.
+    if unsafe { libc::fsync(file.as_raw_fd()) } == 0 {
+        Ok(())
+    } else {
+        Err(io::Error::last_os_error())
+    }
 }
 
 /// How a connection opens the part file of a receive: to append to it.

@@ -447,6 +447,9 @@ struct Receiver<'a> {
     /// The hash of those bytes; `None` until the part file was hashed again
     /// after a restart.
     hasher: Option<blake3::Hasher>,
+    /// `hasher` is of the part on disk, and no data was written since.
+    #[cfg(target_os = "macos")]
+    hashed_from_disk: bool,
     /// The sender's hash of the whole item, once `Done` arrived.
     done_hash: Option<[u8; 32]>,
     status: Arc<Status>,
@@ -565,6 +568,8 @@ async fn accept(
         size,
         have: 0,
         hasher: Some(blake3::Hasher::new()),
+        #[cfg(target_os = "macos")]
+        hashed_from_disk: false,
         done_hash: None,
         status: Status::new(shared, id, ctl.paused.subscribe()),
         peer_suspended: false,
@@ -710,6 +715,40 @@ fn cut_part(session: &Session, pauses: &[u64]) -> io::Result<()> {
     archive::while_busy(pauses, || record.truncate_to_synced())
 }
 
+/// Opens the part file to hash it (see `Receiver::rehash`). The handle that
+/// the connection writes to keeps it the part on Windows.
+#[cfg(windows)]
+fn open_to_hash(_session: &Session, path: &Path, pauses: &[u64]) -> io::Result<std::fs::File> {
+    archive::while_busy(pauses, || std::fs::File::open(path))
+}
+
+/// Opens the part file to hash it (see `Receiver::rehash`): only while it is
+/// still the part, as told by the handle that is read, since no connection
+/// keeps others from replacing it on macOS.
+#[cfg(target_os = "macos")]
+fn open_to_hash(session: &Session, _path: &Path, pauses: &[u64]) -> io::Result<std::fs::File> {
+    open_checked(session, &archive::last_step_options(false), pauses).map(|(part, _)| part)
+}
+
+/// Writes what arrived to the disk.
+#[cfg(windows)]
+async fn sync_part(out: &tokio::fs::File) -> io::Result<()> {
+    out.sync_data().await
+}
+
+/// Writes what arrived to the disk. Rust asks for all of it to reach the
+/// medium, which some file systems (SMB) refuse: then as far as they can do.
+#[cfg(target_os = "macos")]
+async fn sync_part(out: &tokio::fs::File) -> io::Result<()> {
+    match out.sync_data().await {
+        Err(e) if archive::full_sync_refused(&e) => {
+            let file = out.try_clone().await?.into_std().await;
+            off_runtime(move || archive::sync_as_far_as_possible(&file)).await
+        }
+        done => done,
+    }
+}
+
 /// Opens the part file of the receive with `options` if it is still the
 /// part (see `TransferRecord::open_part`), trying again while another
 /// program keeps it out, pausing as `pauses` says (see
@@ -836,6 +875,8 @@ impl<'a> Receiver<'a> {
             size: record.offer.size,
             have: record.have().min(record.offer.size),
             hasher: None,
+            #[cfg(target_os = "macos")]
+            hashed_from_disk: false,
             done_hash: record.done_hash,
             status: Status::new(shared, id, ctl.paused.subscribe()),
             peer_suspended: false,
@@ -1132,6 +1173,23 @@ impl<'a> Receiver<'a> {
         }
     }
 
+    /// Fails once the part is no longer where the record says. Nothing keeps
+    /// others from moving or deleting it on macOS during a connection, and
+    /// writes to a file that is in the Trash would be lost: better to know
+    /// now than after the rest of the data.
+    #[cfg(target_os = "macos")]
+    async fn check_part(&self) -> anyhow::Result<()> {
+        let session = self.session.clone();
+        let there = off_runtime(move || {
+            session
+                .with_record(TransferRecord::clone)
+                .is_none_or(|record| record.part_is_there())
+        })
+        .await;
+        anyhow::ensure!(there, session::part_missing());
+        Ok(())
+    }
+
     /// After a restart: the hash of the part file as it is on disk.
     async fn rehash(&mut self) -> anyhow::Result<()> {
         if self.hasher.is_some() {
@@ -1150,10 +1208,8 @@ impl<'a> Receiver<'a> {
         let mut pauses = archive::HELD_RETRY_MS;
         let mut waiting = false;
         let mut file = loop {
-            let path = self.part_path.clone();
-            match off_runtime(move || archive::while_busy(pauses, || std::fs::File::open(&path)))
-                .await
-            {
+            let (session, path) = (self.session.clone(), self.part_path.clone());
+            match off_runtime(move || open_to_hash(&session, &path, pauses)).await {
                 Err(e) if archive::is_busy(&e) => {
                     if !std::mem::replace(&mut waiting, true) {
                         self.status.set(Phase::PartInUse {
@@ -1170,6 +1226,13 @@ impl<'a> Receiver<'a> {
             self.status.set(Phase::Verifying);
         }
         let have = self.have;
+        // More than arrived means that another program has written to it,
+        // and the part cannot be trusted (see `archive::macos`). On Windows
+        // the handle that writes keeps others out.
+        #[cfg(target_os = "macos")]
+        if file.metadata()?.len() != have {
+            bail!(tr!(error_damaged));
+        }
         let cancel = self.ctl.cancel.clone();
         let shared = self.shared.clone();
         let id = self.id;
@@ -1192,6 +1255,10 @@ impl<'a> Receiver<'a> {
         })
         .await??;
         self.hasher = Some(hasher);
+        #[cfg(target_os = "macos")]
+        {
+            self.hashed_from_disk = true;
+        }
         Ok(())
     }
 
@@ -1224,7 +1291,7 @@ impl<'a> Receiver<'a> {
         // Whatever happened, what was written has to be on disk before `have`
         // is trusted, also after a power cut.
         out.flush().await?;
-        out.sync_data().await?;
+        sync_part(&out).await?;
         drop(out);
         drop(kept);
         self.save_synced().await;
@@ -1233,6 +1300,15 @@ impl<'a> Receiver<'a> {
         #[cfg(test)]
         while held_before_verifying(&self.name) {
             tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+
+        // On macOS nothing keeps other programs from writing to the part
+        // during a connection (see `archive::macos`), and the hash so far is
+        // of what arrived: what counts is what is on disk.
+        #[cfg(target_os = "macos")]
+        if !self.hashed_from_disk {
+            self.hasher = None;
+            self.rehash().await?;
         }
 
         if hash != *self.hasher.as_ref().unwrap().finalize().as_bytes() {
@@ -1289,12 +1365,18 @@ impl<'a> Receiver<'a> {
                     recv.read_exact(&mut buf[..len]).await.map_err(lost)?;
                     out.write_all(&buf[..len]).await?;
                     self.hasher.as_mut().unwrap().update(&buf[..len]);
+                    #[cfg(target_os = "macos")]
+                    {
+                        self.hashed_from_disk = false;
+                    }
                     self.have += len as u64;
                     unsynced += len as u64;
                     if unsynced >= SYNC_EVERY {
-                        out.sync_data().await?;
+                        sync_part(out).await?;
                         self.save_synced().await;
                         unsynced = 0;
+                        #[cfg(target_os = "macos")]
+                        self.check_part().await?;
                     }
                     if throttle.ready() || self.have == self.size {
                         self.shared.emit(Event::Progress {
@@ -1955,7 +2037,8 @@ mod tests {
         let part = base.join("a.txt.part");
         std::fs::write(&part, b"abc").unwrap();
         let transfer = receiving(&base, &part, Kind::File, ReceivedFolder::Extract);
-        let (opened, _) = open_checked(&transfer.session, &archive::connection_options(), &[]).unwrap();
+        let (opened, _) =
+            open_checked(&transfer.session, &archive::connection_options(), &[]).unwrap();
         assert!(transfer.session.cancel_blocking(&transfer.data_dir));
         let e = transfer.session.keep_part(&opened).err().unwrap();
         assert!(archive::is_cancelled(&e.into()));

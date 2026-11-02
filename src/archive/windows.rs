@@ -30,12 +30,12 @@ use windows_sys::Win32::{
     System::Time::{FileTimeToSystemTime, SystemTimeToTzSpecificLocalTime},
 };
 
-use super::{
-    FAT_CREATION_STEP, FILE_ATTRIBUTE_HIDDEN, FileId, ItemTimes,
-    RENAME_RETRY_MS, filetime_to_system, retried,
-};
 #[cfg(test)]
 use super::PRETEND_FAT;
+use super::{
+    FAT_CREATION_STEP, FILE_ATTRIBUTE_HIDDEN, FileId, ItemTimes, RENAME_RETRY_MS,
+    filetime_to_system, retried,
+};
 
 pub(super) fn item_times(meta: &Metadata) -> ItemTimes {
     let known = |t: u64| (t != 0).then_some(t);
@@ -106,17 +106,50 @@ pub(super) fn is_hidden(meta: &Metadata) -> bool {
     meta.file_attributes() & FILE_ATTRIBUTE_HIDDEN != 0
 }
 
-/// How [`unzip`](super::unzip) opens the file of an entry.
-pub(super) fn unpack_options() -> OpenOptions {
-    let mut options = OpenOptions::new();
-    options
+/// Opens the file of a zip entry for [`unzip`](super::unzip).
+pub(super) fn open_unpacked(target: PathBuf) -> io::Result<(File, PathBuf)> {
+    let file = OpenOptions::new()
         .write(true)
         .create(true)
         .truncate(true)
         // Also reading the attributes: a hidden file is hidden through
         // this handle (see `hide_open`).
-        .access_mode(GENERIC_WRITE | FILE_READ_ATTRIBUTES);
-    options
+        .access_mode(GENERIC_WRITE | FILE_READ_ATTRIBUTES)
+        .open(&target)?;
+    Ok((file, target))
+}
+
+/// Whether a file can be run: Windows goes by its extension, which travels.
+pub(super) fn is_executable(_meta: &Metadata) -> bool {
+    false
+}
+
+/// See [`is_executable`].
+pub(super) fn keep_executable(_file: &File, _attributes: u32) {}
+
+/// Whether a folder of this name is a package to the system: none on Windows.
+pub(super) fn is_package(_name: &str) -> bool {
+    false
+}
+
+/// Where [`unzip`](super::unzip) puts entries: on Windows, under their names
+/// in the zip, without links (see [`super::names`]).
+#[derive(Default)]
+pub(super) struct UnpackedNames;
+
+impl UnpackedNames {
+    pub fn place(
+        &mut self,
+        rel: PathBuf,
+        _is_folder: bool,
+        _fidelity: super::names::Fidelity,
+    ) -> (PathBuf, Vec<(String, String)>) {
+        (rel, Vec::new())
+    }
+
+    pub fn note_links(&mut self, _folder: &Path, _links: Vec<(String, String)>) {}
+
+    pub fn make_links(&mut self, _dest: &Path) {}
 }
 
 /// Makes the file or folder at `path` hidden (see [`hide_open`]).
@@ -258,10 +291,11 @@ pub fn created_now(path: &Path) -> io::Result<FileId> {
             };
         }
     };
-    let set = match filetime_to_system(super::filetime_now() / FAT_CREATION_STEP * FAT_CREATION_STEP) {
-        Some(now) => item.set_times(FileTimes::new().set_created(now)),
-        None => Err(io::ErrorKind::InvalidData.into()),
-    };
+    let set =
+        match filetime_to_system(super::filetime_now() / FAT_CREATION_STEP * FAT_CREATION_STEP) {
+            Some(now) => item.set_times(FileTimes::new().set_created(now)),
+            None => Err(io::ErrorKind::InvalidData.into()),
+        };
     let id = FileId::of(&item)?;
     match set {
         Err(e) if !id.numbered() => Err(e),

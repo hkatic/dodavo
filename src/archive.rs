@@ -1,6 +1,10 @@
 //! Folder packing/unpacking, file dates, the mark of the web and file name
 //! helpers.
 
+#[cfg(target_os = "macos")]
+use std::os::macos::fs::FileTimesExt;
+#[cfg(windows)]
+use std::os::windows::fs::FileTimesExt;
 use std::{
     fs::{File, FileTimes, Metadata, OpenOptions},
     io::{self, BufWriter, Read, Write},
@@ -8,10 +12,6 @@ use std::{
     sync::atomic::{AtomicBool, Ordering},
     time::{Duration, SystemTime},
 };
-#[cfg(target_os = "macos")]
-use std::os::macos::fs::FileTimesExt;
-#[cfg(windows)]
-use std::os::windows::fs::FileTimesExt;
 
 use anyhow::{Context, bail};
 use serde::{Deserialize, Serialize};
@@ -34,12 +34,17 @@ mod windows;
 #[cfg(windows)]
 use self::windows as os;
 
-use os::{hide, hide_open, is_taken};
+mod names;
+pub use names::offer_name;
+
 pub use os::{
-    being_deleted, connection_options, created_now, delete_held, delete_on_close, file_id,
-    file_system, cannot_tell, is_busy, keep_creation_time, last_step_options, length_options,
+    being_deleted, cannot_tell, connection_options, created_now, delete_held, delete_on_close,
+    file_id, file_system, is_busy, keep_creation_time, last_step_options, length_options,
     mark_of_the_web, name_taken, rename_new, rename_open, set_times, temp_dir, temp_dir_for,
 };
+#[cfg(target_os = "macos")]
+pub use os::{full_sync_refused, sync_as_far_as_possible};
+use os::{hide, hide_open, is_taken};
 
 const BUF_SIZE: usize = 256 * 1024;
 
@@ -247,8 +252,12 @@ struct Entry {
     is_dir: bool,
     /// The file or folder is hidden (see [`unzip`]).
     hidden: bool,
+    /// A file that can be run (see [`os::is_executable`]).
+    executable: bool,
     size: u64,
     times: ItemTimes,
+    /// What the name does not say (see [`names`]).
+    fidelity: names::Fidelity,
 }
 
 impl Entry {
@@ -262,6 +271,8 @@ impl Entry {
     ) -> anyhow::Result<FullFileOptions<'static, 'static>> {
         let (mode, folder) = if self.is_dir {
             (0o040755, FILE_ATTRIBUTE_DIRECTORY)
+        } else if self.executable {
+            (0o100755, 0)
         } else {
             (0o100644, 0)
         };
@@ -276,47 +287,119 @@ impl Entry {
             .external_attributes(mode << 16 | folder | hidden)
             .into_full_options();
         options.add_extra_field(NTFS_EXTRA_FIELD, self.times.ntfs_extra(), false)?;
+        if let Some(data) = self.fidelity.clone().encode() {
+            options.add_extra_field(names::EXTRA_FIELD, data, false)?;
+        }
         Ok(options)
     }
 }
 
-fn collect(root: &Path) -> anyhow::Result<Vec<Entry>> {
+/// Whether this system writes zips for any receiver (see [`names`]). Windows'
+/// own names are fine as they are.
+const PORTABLE_NAMES: bool = cfg!(target_os = "macos");
+
+/// The folder's items as they go into the zip. With `portable`, as [`names`]
+/// says.
+fn collect(root: &Path, portable: bool) -> anyhow::Result<Vec<Entry>> {
     let mut out = Vec::new();
-    let mut stack = vec![(root.to_path_buf(), String::new())];
-    while let Some((dir, prefix)) = stack.pop() {
+    let mut namer = names::Namer::default();
+    let mut root_links = Vec::new();
+    // Each folder with its name in the zip, its depth and its entry.
+    let mut stack = vec![(root.to_path_buf(), String::new(), 0, None)];
+    while let Some((dir, prefix, levels, entry_of_dir)) = stack.pop() {
         let read = std::fs::read_dir(&dir)
             .with_context(|| tr!(error_cannot_read_folder, path = dir.display()))?;
+        let mut links = Vec::new();
         for item in read {
             let item = item?;
+            let own_name = item.file_name().to_string_lossy().into_owned();
+            if portable && names::is_system_item(&own_name) {
+                continue;
+            }
             // symlink_metadata: do not follow links/junctions (avoids loops and escaping the folder).
             let meta = item.path().symlink_metadata()?;
             if meta.file_type().is_symlink() {
+                if portable
+                    && let Some(target) = std::fs::read_link(item.path())
+                        .ok()
+                        .and_then(|t| t.to_str().map(str::to_string))
+                        .filter(|t| names::link_stays_inside(levels, t))
+                {
+                    links.push((own_name, target));
+                }
                 continue;
             }
-            let name = format!("{prefix}{}", item.file_name().to_string_lossy());
+            let (short, original) = if portable {
+                let short = namer.name(&prefix, &own_name, meta.is_dir());
+                // Only what composing does not explain: it would carry
+                // nearly every name that came from HFS+ along otherwise.
+                let same = names::composed(&own_name) == short;
+                (short, (!same).then_some(own_name.clone()))
+            } else {
+                (own_name.clone(), None)
+            };
+            let name = format!("{prefix}{short}");
             let times = ItemTimes::of(&meta);
-            let hidden = os::is_hidden(&meta);
+            // On macOS, a name with a dot in front is hidden just the same.
+            let hidden = os::is_hidden(&meta) || (portable && own_name.starts_with('.'));
+            let fidelity = names::Fidelity {
+                name: original,
+                links: Vec::new(),
+            };
             if meta.is_dir() {
                 out.push(Entry {
                     path: item.path(),
                     name: format!("{name}/"),
                     is_dir: true,
                     hidden,
+                    executable: false,
                     size: 0,
                     times,
+                    fidelity,
                 });
-                stack.push((item.path(), format!("{name}/")));
+                stack.push((
+                    item.path(),
+                    format!("{name}/"),
+                    levels + 1,
+                    Some(out.len() - 1),
+                ));
             } else if meta.is_file() {
                 out.push(Entry {
                     path: item.path(),
                     name,
                     is_dir: false,
                     hidden,
+                    executable: os::is_executable(&meta),
                     size: meta.len(),
                     times,
+                    fidelity,
                 });
             }
         }
+        match entry_of_dir {
+            Some(entry) => {
+                let entry: &mut Entry = &mut out[entry];
+                entry.fidelity.links = links;
+            }
+            None => root_links = links,
+        }
+    }
+    // The links at the top go on an entry for the folder itself, which
+    // `unzip` of every version skips.
+    if !root_links.is_empty() {
+        out.push(Entry {
+            path: root.to_path_buf(),
+            name: "./".into(),
+            is_dir: true,
+            hidden: false,
+            executable: false,
+            size: 0,
+            times: ItemTimes::default(),
+            fidelity: names::Fidelity {
+                name: None,
+                links: root_links,
+            },
+        });
     }
     Ok(out)
 }
@@ -338,8 +421,19 @@ pub fn zip_folder(
     cancel: &AtomicBool,
     progress: &mut dyn FnMut(u64, u64),
 ) -> anyhow::Result<Packed> {
+    zip_folder_as(root, dest, PORTABLE_NAMES, cancel, progress)
+}
+
+/// [`zip_folder`], with `portable` as in [`collect`].
+fn zip_folder_as(
+    root: &Path,
+    dest: &Path,
+    portable: bool,
+    cancel: &AtomicBool,
+    progress: &mut dyn FnMut(u64, u64),
+) -> anyhow::Result<Packed> {
     // The folder is walked once; the same list gives the statistics for the offer.
-    let entries = collect(root)?;
+    let entries = collect(root, portable)?;
     let file_count = entries.iter().filter(|e| !e.is_dir).count() as u64;
     let total: u64 = entries.iter().map(|e| e.size).sum();
     let largest = entries.iter().map(|e| e.size).max().unwrap_or(0);
@@ -417,6 +511,7 @@ pub fn unzip(
     if mark {
         os::mark_folder(dest);
     }
+    let mut unpacked_names = os::UnpackedNames::default();
     let mut done = 0u64;
     let mut buf = vec![0u8; BUF_SIZE];
     // Creating anything in a folder changes its modified date, so the dates
@@ -430,13 +525,16 @@ pub fn unzip(
         let Some(rel) = entry.name().ok().and_then(|name| entry_path(&name)) else {
             bail!(tr!(error_unsafe_path, path = format!("{:?}", entry.name())));
         };
+        let fidelity = fidelity_of(&entry);
         if rel.as_os_str().is_empty() {
             if entry.is_dir() {
+                unpacked_names.note_links(Path::new(""), fidelity.links);
                 continue;
             }
             bail!(tr!(error_unsafe_path, path = format!("{:?}", entry.name())));
         }
-        let target = dest.join(rel);
+        let (rel, links) = unpacked_names.place(rel, entry.is_dir(), fidelity);
+        let target = dest.join(&rel);
         let times = ItemTimes::of_entry(&entry);
         let hidden = is_hidden(&entry);
         if entry.is_dir() {
@@ -444,13 +542,14 @@ pub fn unzip(
             if mark {
                 os::mark_folder(&target);
             }
+            unpacked_names.note_links(&rel, links);
             folders.push((target, times, hidden));
             continue;
         }
         if let Some(parent) = target.parent() {
             std::fs::create_dir_all(parent)?;
         }
-        let file = os::unpack_options().open(&target)?;
+        let (file, target) = os::open_unpacked(target)?;
         // The mark before the data and the dates: writing it changes the
         // modified date.
         if mark {
@@ -474,11 +573,14 @@ pub fn unzip(
         out.flush()?;
         // All written: the dates, and whether it is hidden, go on through
         // the same handle.
+        os::keep_executable(out.get_ref(), entry.external_attributes());
         times.apply_to(out.get_ref());
         if hidden {
             let _ = hide_open(out.get_ref());
         }
     }
+    // Last: nothing was written through them, and once they exist nothing is.
+    unpacked_names.make_links(dest);
     // Children before their parents, so that nothing touches a folder after
     // its date has been set.
     folders.sort_by_key(|(path, ..)| std::cmp::Reverse(path.components().count()));
@@ -489,6 +591,19 @@ pub fn unzip(
         }
     }
     Ok(())
+}
+
+/// What the private field of a zip entry says (see [`names`]).
+fn fidelity_of<R: Read>(entry: &zip::read::ZipFile<'_, R>) -> names::Fidelity {
+    entry
+        .extra_data_fields()
+        .find_map(|field| match field {
+            ExtraField::Custom(custom) if custom.header_id == names::EXTRA_FIELD => {
+                names::Fidelity::decode(&custom.data)
+            }
+            _ => None,
+        })
+        .unwrap_or_default()
 }
 
 /// Whether a zip entry is a hidden file or folder, as [`zip_folder`] notes
@@ -591,6 +706,10 @@ pub fn sanitize_file_name(name: &str) -> String {
     if is_device_name(&s) {
         return format!("_{s}");
     }
+    // APFS counts bytes, not characters, and the part and a number still have
+    // to fit (`.zip.part`, " (99)").
+    #[cfg(target_os = "macos")]
+    let s = names::cut_to(&s, 240, names::bytes);
     s
 }
 
@@ -600,7 +719,7 @@ pub fn sanitize_file_name(name: &str) -> String {
 /// used, so nothing checks for a free name first and uses it later: the
 /// functions below take each name in one step that never replaces anything.
 fn numbered(name: &str, is_folder: bool) -> impl Iterator<Item = String> + '_ {
-    let (stem, ext) = match (is_folder, name.rfind('.')) {
+    let (stem, ext) = match (is_folder && !os::is_package(name), name.rfind('.')) {
         (false, Some(pos)) if pos > 0 => (&name[..pos], &name[pos..]),
         _ => (name, ""),
     };
@@ -957,7 +1076,9 @@ pub mod testing {
                 libc::XATTR_NOFOLLOW,
             )
         };
-        len > 0 && value[..len as usize].starts_with(b"0083;") && value.windows(6).any(|w| w == b"Dodavo")
+        len > 0
+            && value[..len as usize].starts_with(b"0083;")
+            && value.windows(6).any(|w| w == b"Dodavo")
     }
 
     /// Makes `link`, a link to the folder `target`.
@@ -989,6 +1110,10 @@ pub mod testing {
         os::is_hidden(&path.symlink_metadata().unwrap())
     }
 }
+
+#[cfg(all(test, target_os = "macos"))]
+#[path = "archive/macos_volumes.rs"]
+mod macos_volumes;
 
 #[cfg(test)]
 mod tests {
@@ -1377,12 +1502,14 @@ mod tests {
             name: "./".into(),
             is_dir: true,
             hidden: false,
+            executable: false,
             size: 0,
             times: ItemTimes {
                 modified: Some(long_ago),
                 accessed: None,
                 created: Some(long_ago),
             },
+            fidelity: names::Fidelity::default(),
         };
         let zip_path = base.join("dot.zip");
         let mut zip = ZipWriter::new(File::create(&zip_path).unwrap());
@@ -1559,6 +1686,205 @@ mod tests {
         assert!(!same_creation(t, t + 26 * 60 * minute + 15 * minute));
         assert!(!same_creation(t, t + FAT_CREATION_STEP));
         assert!(!same_creation(t, t + 14 * minute));
+    }
+
+    /// A zip as a Mac writes it unpacks under the rules of every receiver:
+    /// on Windows under the names in the zip, which that accepts, and without
+    /// links; on a Mac with each item's own name back and its links. What a
+    /// peer says there is checked: it decides where things go.
+    #[test]
+    fn a_zip_for_any_receiver_unpacks_everywhere() {
+        let base = scratch("any-receiver");
+        let plain = |name: &str, is_dir, executable, fidelity| Entry {
+            path: base.clone(),
+            name: name.into(),
+            is_dir,
+            hidden: false,
+            executable,
+            size: 0,
+            times: ItemTimes::default(),
+            fidelity,
+        };
+        let named = |name: &str| names::Fidelity {
+            name: Some(name.into()),
+            links: Vec::new(),
+        };
+        let zip_path = base.join("mac.zip");
+        let mut zip = ZipWriter::new(File::create(&zip_path).unwrap());
+        let file = |zip: &mut ZipWriter<File>, entry: Entry, data: &[u8]| {
+            let options = entry.options(SimpleFileOptions::default()).unwrap();
+            zip.start_file(entry.name.as_str(), options).unwrap();
+            zip.write_all(data).unwrap();
+        };
+        let root = plain(
+            "./",
+            true,
+            false,
+            names::Fidelity {
+                name: None,
+                links: vec![
+                    ("to-a".into(), "a_b_.txt".into()),
+                    ("to-sub".into(), "sub_/x.txt".into()),
+                    // Those two must not come to be.
+                    ("out".into(), "../secret".into()),
+                    ("a/b".into(), "a_b_.txt".into()),
+                ],
+            },
+        );
+        zip.add_directory("./", root.options(SimpleFileOptions::default()).unwrap())
+            .unwrap();
+        file(
+            &mut zip,
+            plain("a_b_.txt", false, false, named("a:b?.txt")),
+            b"a",
+        );
+        file(
+            &mut zip,
+            plain("run.sh", false, true, names::Fidelity::default()),
+            b"r",
+        );
+        // A name that would go elsewhere is not used.
+        file(
+            &mut zip,
+            plain("evil.txt", false, false, named("../evil.txt")),
+            b"e",
+        );
+        let sub = plain("sub_/", true, false, named("su:b"));
+        zip.add_directory(
+            sub.name.as_str(),
+            sub.options(SimpleFileOptions::default()).unwrap(),
+        )
+        .unwrap();
+        file(
+            &mut zip,
+            plain("sub_/x.txt", false, false, names::Fidelity::default()),
+            b"x",
+        );
+        zip.finish().unwrap();
+
+        let out = base.join("out");
+        let cancel = AtomicBool::new(false);
+        unzip(
+            File::open(&zip_path).unwrap(),
+            &out,
+            false,
+            &cancel,
+            &mut |_, _| {},
+        )
+        .unwrap();
+
+        assert_eq!(std::fs::read(out.join("evil.txt")).unwrap(), b"e");
+        assert!(!base.join("evil.txt").exists());
+        assert!(!out.join("out").exists() && !out.join("a").exists());
+        #[cfg(windows)]
+        {
+            assert_eq!(std::fs::read(out.join("a_b_.txt")).unwrap(), b"a");
+            assert_eq!(std::fs::read(out.join("sub_/x.txt")).unwrap(), b"x");
+            assert!(!out.join("to-a").exists());
+        }
+        #[cfg(target_os = "macos")]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            assert_eq!(std::fs::read(out.join("a:b?.txt")).unwrap(), b"a");
+            assert_eq!(std::fs::read(out.join("su:b/x.txt")).unwrap(), b"x");
+            assert!(!out.join("a_b_.txt").exists() && !out.join("sub_").exists());
+            let mode = |name: &str| out.join(name).metadata().unwrap().permissions().mode() & 0o111;
+            assert_ne!(mode("run.sh"), 0, "it can still be run");
+            assert_eq!(mode("su:b/x.txt"), 0);
+            assert!(out.join("to-a").is_symlink());
+            assert!(out.join("to-sub").is_symlink());
+        }
+        std::fs::remove_dir_all(&base).ok();
+    }
+
+    /// What a Mac packs is what Windows accepts, whatever the names are here,
+    /// and another Mac gets it back as it was.
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn a_folder_with_any_names_goes_to_any_receiver() {
+        use std::os::unix::fs::PermissionsExt;
+        let base = scratch("any-names");
+        let src = base.join("src");
+        std::fs::create_dir_all(src.join("su:b/in?ner")).unwrap();
+        let nfd = "Kuc\u{301}a.jpg";
+        for (name, data) in [
+            ("a:b?.txt", "1"),
+            ("CON.txt", "2"),
+            ("trailing.", "3"),
+            ("star*.log", "4"),
+            ("su:b/in?ner/deep|file", "5"),
+            (nfd, "6"),
+            (".hidden", "7"),
+            // What is not sent.
+            (".DS_Store", "no"),
+            ("._a.txt", "no"),
+            ("Icon\r", "no"),
+        ] {
+            std::fs::write(src.join(name), data).unwrap();
+        }
+        let script = src.join("run.sh");
+        std::fs::write(&script, "#!/bin/sh\n").unwrap();
+        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+        std::os::unix::fs::symlink("a:b?.txt", src.join("inside")).unwrap();
+        std::os::unix::fs::symlink("/etc/hosts", src.join("outside")).unwrap();
+        std::os::unix::fs::symlink("../../secret", src.join("su:b/climbs")).unwrap();
+
+        let zip = base.join("x.zip");
+        let cancel = AtomicBool::new(false);
+        let packed = zip_folder(&src, &zip, &cancel, &mut |_, _| {}).unwrap();
+        assert_eq!(packed.files, 8);
+
+        // Windows' rule (and what the released version would do with it).
+        let mut archive = ZipArchive::new(File::open(&zip).unwrap()).unwrap();
+        for i in 0..archive.len() {
+            let entry = archive.by_index(i).unwrap();
+            let name = entry.name().unwrap();
+            assert!(entry_path(&name).is_some(), "{name}");
+        }
+        drop(archive);
+
+        let out = base.join("out");
+        unzip(
+            File::open(&zip).unwrap(),
+            &out,
+            true,
+            &cancel,
+            &mut |_, _| {},
+        )
+        .unwrap();
+        for (name, data) in [
+            ("a:b?.txt", "1"),
+            ("CON.txt", "2"),
+            ("trailing.", "3"),
+            ("star*.log", "4"),
+            ("su:b/in?ner/deep|file", "5"),
+            (".hidden", "7"),
+        ] {
+            assert_eq!(
+                std::fs::read_to_string(out.join(name)).unwrap(),
+                data,
+                "{name}"
+            );
+        }
+        // Normalization does not count here.
+        assert_eq!(std::fs::read_to_string(out.join("Kuća.jpg")).unwrap(), "6");
+        assert!(!out.join(".DS_Store").exists());
+        assert!(!out.join("._a.txt").exists());
+        assert_ne!(
+            out.join("run.sh").metadata().unwrap().permissions().mode() & 0o111,
+            0
+        );
+        assert_eq!(
+            std::fs::read_link(out.join("inside")).unwrap(),
+            Path::new("a:b?.txt")
+        );
+        assert!(!out.join("outside").exists() && !out.join("su:b/climbs").exists());
+        assert!(testing::hidden(&out.join(".hidden")));
+        assert!(
+            testing::has_mark(&out.join("su:b")),
+            "folders are marked too"
+        );
+        std::fs::remove_dir_all(&base).ok();
     }
 
     #[test]
