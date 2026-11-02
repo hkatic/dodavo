@@ -581,9 +581,9 @@ async fn bind(secret: SecretKey) -> anyhow::Result<Endpoint> {
 
 /// Runs the task of the transfer `id` to its outcome. A panic in it (a
 /// bug, which the panic hook has told the user about) ends the transfer as
-/// failed, with what it leaves deleted, rather than leaving its window
-/// waiting for an end that never comes and its record to fail the same way
-/// at every start.
+/// failed, as an error would, with what it leaves deleted and the peer
+/// told, rather than leaving its window waiting for an end that never comes
+/// and its record to fail the same way at every start.
 async fn guarded(
     shared: &Arc<Shared>,
     id: u64,
@@ -595,10 +595,15 @@ async fn guarded(
             if let Some(session) = shared.session_by_id(id) {
                 let data_dir = shared.data_dir.clone();
                 // A task of its own too: the panic may have left the
-                // session's state poisoned.
+                // session's state poisoned. The peer learns at once that
+                // the transfer failed, not only at its next query after a
+                // lost connection, unless it had ended here already (a
+                // received item is in place, and the sender is given a
+                // moment to read so): that end stands.
                 let _ = tokio::spawn(async move {
+                    let code = (!session.has_ended()).then_some(CLOSE_FAILED);
                     session
-                        .end(None, protocol::Ended::Failed)
+                        .end(code, protocol::Ended::Failed)
                         .forget(&data_dir)
                         .await;
                 })

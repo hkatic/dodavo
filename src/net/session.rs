@@ -1886,6 +1886,12 @@ impl Session {
         self.state().stage == Stage::HandedOver
     }
 
+    /// Whether the transfer has ended on this side ([`end`](Self::end), a
+    /// cancel, or once the item is in place).
+    pub fn has_ended(&self) -> bool {
+        self.state().stage == Stage::Ended
+    }
+
     /// Puts a received item in place with `step` (renaming the part file,
     /// say) and ends the transfer as completed right away: from then on the
     /// part's old name may belong to another transfer, and neither a late

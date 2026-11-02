@@ -141,10 +141,47 @@ struct Sender<'a> {
     /// The last connection was closed by the receiver on purpose (it is
     /// exiting): the wait for the next one is not a network problem.
     peer_suspended: bool,
-    /// How much has gone out by the record's last note (see `note_sent`),
-    /// and the write of that note while it is under way.
+    /// The record's notes of how much has gone out (see `note_sent`).
+    notes: SentNotes,
+}
+
+/// The record's notes of how much has gone out (see `Side::Send::sent`).
+/// Each is written on a blocking thread, since it is synced to disk, so
+/// that it does not hold up the data. A note that is still being written
+/// when the send ends is not waited for: the transfer has ended as it did
+/// (completed, or as the receiver says), which a panic in a note must not
+/// turn into a failure, and the panic hook has told the user about it.
+#[derive(Default)]
+struct SentNotes {
+    /// How much had gone out by the last note.
     noted: u64,
-    noting: Option<tokio::task::JoinHandle<()>>,
+    /// The write of the last note, until it is waited for.
+    writing: Option<tokio::task::JoinHandle<()>>,
+}
+
+impl SentNotes {
+    /// Notes `done` with `write`, unless the last note is still being
+    /// written: then this one is left out. A panic in the last one goes on
+    /// here, so that the transfer fails (see `net::guarded`).
+    async fn note(&mut self, done: u64, write: impl FnOnce() + Send + 'static) {
+        if self.writing.as_ref().is_some_and(|w| !w.is_finished()) {
+            return;
+        }
+        // It has finished, so this only takes its result, though it may
+        // yield once (tokio's budget for a task can make any wait for
+        // another task do that).
+        self.wait().await;
+        self.noted = done;
+        self.writing = Some(tokio::task::spawn_blocking(write));
+    }
+
+    /// Waits until the last note is written. A panic in it goes on here, so
+    /// that the transfer fails (see `net::guarded`).
+    async fn wait(&mut self) {
+        if let Some(mut writing) = self.writing.take() {
+            session::joined(&mut writing).await;
+        }
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -311,8 +348,7 @@ async fn start(
         peer_paused: false,
         peer_part_in_use: false,
         peer_suspended: false,
-        noted: 0,
-        noting: None,
+        notes: SentNotes::default(),
     };
     // From here on `stream` watches each connection, and only while it
     // lasts: a watcher of this one could still report it after it is gone.
@@ -353,8 +389,7 @@ async fn continue_record(
         peer_paused: false,
         peer_part_in_use: false,
         peer_suspended: false,
-        noted: 0,
-        noting: None,
+        notes: SentNotes::default(),
     };
     let handed_over = record.done_hash.is_some();
     if handed_over {
@@ -429,23 +464,12 @@ impl Sender<'_> {
         self.shared.emit(Event::Phase { id: self.id, phase });
     }
 
-    /// Notes in the record how much has gone out (see `Side::Send::sent`),
-    /// without holding up the data: while the last note is still being
-    /// written (it is synced to disk), this one is left out. A panic in the
-    /// last one goes on here, so that the transfer fails (see `net::guarded`).
+    /// Notes in the record how much has gone out (see `SentNotes`).
     async fn note_sent(&mut self, done: u64) {
-        if let Some(writing) = &mut self.noting {
-            if !writing.is_finished() {
-                return;
-            }
-            // Finished: this returns at once.
-            session::joined(writing).await;
-        }
-        self.noted = done;
         let (session, data_dir) = (self.session.clone(), self.shared.data_dir.clone());
-        self.noting = Some(tokio::task::spawn_blocking(move || {
-            session.save_sent(&data_dir, done)
-        }));
+        self.notes
+            .note(done, move || session.save_sent(&data_dir, done))
+            .await;
     }
 
     /// The status while connected: paused here, paused there, held up by a
@@ -758,9 +782,7 @@ impl Sender<'_> {
     ) -> anyhow::Result<Outcome> {
         // What the receiver has, which can be less than what had gone out:
         // after the last note is written, so that this one comes last.
-        if let Some(mut writing) = self.noting.take() {
-            session::joined(&mut writing).await;
-        }
+        self.notes.wait().await;
         self.note_sent(have).await;
         let mut hasher = self.hasher_at(have).await?;
         self.emit_pause_phase();
@@ -818,7 +840,7 @@ impl Sender<'_> {
                         if throttle.ready() || done == self.size {
                             self.shared.emit(Event::Progress { id: self.id, done, total: self.size });
                         }
-                        if done - self.noted >= SAVE_SENT_EVERY {
+                        if done - self.notes.noted >= SAVE_SENT_EVERY {
                             self.note_sent(done).await;
                         }
                         if let Some(paused) = announce.take() {
@@ -914,5 +936,72 @@ impl Sender<'_> {
                 None => return Err(lost(tr!(error_connection_lost))),
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The outcome of `task` as a transfer's task, with a panic in it turned
+    /// into a failure (see `net::guarded`).
+    async fn as_task(task: impl Future<Output = Outcome> + Send + 'static) -> Outcome {
+        // Nothing is written there: the transfer has no session.
+        let (shared, _) = super::super::tests::recording_shared(&std::env::temp_dir());
+        super::super::guarded(&shared, 1, task).await
+    }
+
+    fn failed_unexpectedly(outcome: &Outcome) -> bool {
+        matches!(outcome, Outcome::Failed(text) if text == tr!(error_unexpected))
+    }
+
+    /// A panic in the write of a note of how much has gone out fails the
+    /// send, whether the next note or the next connection comes to it,
+    /// rather than going unnoticed with the note (see `SentNotes`).
+    #[tokio::test]
+    async fn a_note_that_panics_fails_the_send() {
+        let outcome = as_task(async {
+            let mut notes = SentNotes::default();
+            notes.note(1, || panic!("boom")).await;
+            while !notes.writing.as_ref().unwrap().is_finished() {
+                tokio::time::sleep(Duration::from_millis(5)).await;
+            }
+            notes.note(2, || ()).await;
+            Outcome::Completed(None)
+        })
+        .await;
+        assert!(failed_unexpectedly(&outcome), "next note: {outcome:?}");
+        let outcome = as_task(async {
+            let mut notes = SentNotes::default();
+            notes.note(1, || panic!("boom")).await;
+            notes.wait().await;
+            Outcome::Completed(None)
+        })
+        .await;
+        assert!(
+            failed_unexpectedly(&outcome),
+            "next connection: {outcome:?}"
+        );
+    }
+
+    /// While a note is still being written, the next one is left out at
+    /// once, and the wait for the notes waits for that write.
+    #[tokio::test]
+    async fn a_note_is_left_out_while_the_last_is_written() {
+        let mut notes = SentNotes::default();
+        let (go, held) = std::sync::mpsc::channel::<()>();
+        notes
+            .note(1, move || {
+                let _ = held.recv();
+            })
+            .await;
+        let left_out = notes.note(2, || panic!("written"));
+        tokio::time::timeout(Duration::from_secs(10), left_out)
+            .await
+            .expect("not left out");
+        assert_eq!(notes.noted, 1);
+        go.send(()).unwrap();
+        notes.wait().await;
+        assert!(notes.writing.is_none());
     }
 }
