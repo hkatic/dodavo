@@ -875,7 +875,7 @@ impl<'a> Receiver<'a> {
                 .session
                 .with_record(TransferRecord::part_identity)
                 .flatten();
-            let ending = self.session.end(None, Ended::Completed);
+            let ending = self.session.end_placed(&path);
             let (data_dir, item) = (self.shared.data_dir.clone(), path.clone());
             off_runtime(move || {
                 // As in `finish_file`.
@@ -1380,7 +1380,10 @@ impl<'a> Receiver<'a> {
                 }
             }),
         };
-        tokio::task::spawn_blocking(move || {
+        // A panic in the step goes on in this task rather than turning into
+        // a failure, so that one after the item is in place leaves the
+        // transfer completed (see `net::guarded`).
+        off_runtime(move || {
             // Until this is over, a cancel is left to it.
             let _finishing = transfer.session.finishing()?;
             match kind {
@@ -1404,7 +1407,7 @@ impl<'a> Receiver<'a> {
                 }
             }
         })
-        .await?
+        .await
     }
 }
 

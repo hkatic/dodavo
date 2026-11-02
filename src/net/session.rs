@@ -1328,10 +1328,10 @@ enum Stage {
     /// the sending side, the receiver has confirmed all of it (see
     /// [`Session::hand_over`]). A cancel comes too late.
     HandedOver,
-    /// The transfer has ended on this side ([`Session::end`], a cancel, or
-    /// once the item is in place): a cancel comes too late and changes
-    /// nothing of how it ended.
-    Ended,
+    /// The transfer has ended on this side, as it says ([`Session::end`], a
+    /// cancel, or once the item is in place): a cancel comes too late and
+    /// changes nothing of how it ended.
+    Ended(Ended),
 }
 
 /// What a session's lock guards: the record and the stage, which change
@@ -1341,6 +1341,9 @@ struct State {
     /// transfer ends.
     record: Option<TransferRecord>,
     stage: Stage,
+    /// Receiving side: where the item was put, once it is in place (see
+    /// [`Session::place`]).
+    placed: Option<PathBuf>,
     /// A cancel came while the stage was `Finishing`, and was left to the
     /// transfer's task.
     cancel_left: bool,
@@ -1495,6 +1498,7 @@ impl Session {
             state: Mutex::new(State {
                 record: None,
                 stage: Stage::Running,
+                placed: None,
                 cancel_left: false,
             }),
             writing: Arc::new(Mutex::new(())),
@@ -1717,7 +1721,8 @@ impl Session {
     /// given) and takes the record. What the result's `forget` then does
     /// leaves a tombstone so the other side learns later how it `ended`, and
     /// deletes the partial or temporary data. A cancel from now on comes too
-    /// late: the transfer has ended the way the caller reports.
+    /// late: the transfer has ended the way the caller reports, unless it
+    /// had ended before, which stands (see [`ended`](Self::ended)).
     pub fn end(&self, code: Option<u32>, ended: Ended) -> Ending {
         match code {
             Some(code) => self.close_current(code, b""),
@@ -1727,7 +1732,9 @@ impl Session {
         }
         let record = {
             let mut state = self.state();
-            state.stage = Stage::Ended;
+            if !matches!(state.stage, Stage::Ended(_)) {
+                state.stage = Stage::Ended(ended);
+            }
             state.record.take()
         };
         self.ending(record, ended)
@@ -1749,7 +1756,7 @@ impl Session {
         let record = {
             let mut state = self.state();
             match state.stage {
-                Stage::HandedOver | Stage::Ended => return Cancel::TooLate,
+                Stage::HandedOver | Stage::Ended(_) => return Cancel::TooLate,
                 Stage::Finishing => {
                     state.cancel_left = true;
                     let (to_save, waits) = match (state.record.as_mut(), self.role) {
@@ -1771,7 +1778,7 @@ impl Session {
                     return Cancel::LeftToStep { to_save, waits };
                 }
                 Stage::Running => {
-                    state.stage = Stage::Ended;
+                    state.stage = Stage::Ended(Ended::Cancelled);
                     state.record.take()
                 }
             }
@@ -1857,7 +1864,7 @@ impl Session {
                 state.stage = Stage::Running;
                 return None;
             }
-            state.stage = Stage::Ended;
+            state.stage = Stage::Ended(Ended::Cancelled);
             state.record.take()
         };
         self.close_current(CLOSE_CANCELLED, b"");
@@ -1876,7 +1883,7 @@ impl Session {
     /// restart (see `TransferRecord::placed_item`).
     pub fn hand_over(&self) {
         let mut state = self.state();
-        if state.stage != Stage::Ended {
+        if !matches!(state.stage, Stage::Ended(_)) {
             state.stage = Stage::HandedOver;
         }
     }
@@ -1886,10 +1893,15 @@ impl Session {
         self.state().stage == Stage::HandedOver
     }
 
-    /// Whether the transfer has ended on this side ([`end`](Self::end), a
-    /// cancel, or once the item is in place).
-    pub fn has_ended(&self) -> bool {
-        self.state().stage == Stage::Ended
+    /// How the transfer has ended on this side, if it has ([`end`](Self::end),
+    /// a cancel, or once the item is in place), with where a received item
+    /// was put (see [`place`](Self::place)).
+    pub fn ended(&self) -> Option<(Ended, Option<PathBuf>)> {
+        let state = self.state();
+        match state.stage {
+            Stage::Ended(ended) => Some((ended, state.placed.clone())),
+            _ => None,
+        }
     }
 
     /// Puts a received item in place with `step` (renaming the part file,
@@ -1912,19 +1924,38 @@ impl Session {
             std::mem::replace(&mut state.stage, Stage::HandedOver)
         };
         let placed = step();
-        let record = {
+        let (record, item) = {
             let mut state = self.state();
-            if placed.is_err() {
-                // Still running: it can be cancelled, or end as failed.
-                state.stage = before;
-                return placed;
+            match placed {
+                Ok(item) => (Self::complete(&mut state, &item), item),
+                Err(e) => {
+                    // Still running: it can be cancelled, or end as failed.
+                    state.stage = before;
+                    return Err(e);
+                }
             }
-            state.stage = Stage::Ended;
-            state.record.take()
         };
         self.ending(record, Ended::Completed)
             .forget_blocking(data_dir);
-        placed
+        Ok(item)
+    }
+
+    /// Receiving side: the item was in place at `item` already before a
+    /// restart, and only the end of the transfer was interrupted (see
+    /// `receive::Receiver::continue_restored`). Ends the transfer as
+    /// completed, as [`place`](Self::place) does once it has put it there.
+    pub fn end_placed(&self, item: &Path) -> Ending {
+        self.set_current(None);
+        let record = Self::complete(&mut self.state(), item);
+        self.ending(record, Ended::Completed)
+    }
+
+    /// Ends the transfer as completed, with the item in place at `item`;
+    /// the record, for the end to forget.
+    fn complete(state: &mut State, item: &Path) -> Option<TransferRecord> {
+        state.stage = Stage::Ended(Ended::Completed);
+        state.placed = Some(item.to_path_buf());
+        state.record.take()
     }
 }
 
@@ -2212,6 +2243,13 @@ mod tests {
         assert_eq!(fs::read(&placed).unwrap(), b"data");
         assert_eq!(tombstone(&dir, &[2; 16]), Some(Ended::Completed));
         assert!(records(&dir).is_empty());
+        // That end stands, with where the item is, also when the transfer
+        // is ended again (after a panic, see `net::guarded`).
+        let completed = Some((Ended::Completed, Some(placed.clone())));
+        assert_eq!(session.ended(), completed);
+        session.end(None, Ended::Failed).forget_blocking(&dir);
+        assert_eq!(session.ended(), completed);
+        assert_eq!(tombstone(&dir, &[2; 16]), Some(Ended::Completed));
 
         // A step that fails leaves the transfer running, so it can still
         // be cancelled (or ended as failed).
@@ -2222,7 +2260,9 @@ mod tests {
                 .place(&dir, &mut || anyhow::bail!("blocked"))
                 .is_err()
         );
+        assert_eq!(session.ended(), None);
         assert!(session.cancel_blocking(&dir));
+        assert_eq!(session.ended(), Some((Ended::Cancelled, None)));
         fs::remove_dir_all(&dir).ok();
     }
 

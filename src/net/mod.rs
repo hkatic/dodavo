@@ -583,33 +583,46 @@ async fn bind(secret: SecretKey) -> anyhow::Result<Endpoint> {
 /// bug, which the panic hook has told the user about) ends the transfer as
 /// failed, as an error would, with what it leaves deleted and the peer
 /// told, rather than leaving its window waiting for an end that never comes
-/// and its record to fail the same way at every start.
+/// and its record to fail the same way at every start. A transfer that had
+/// ended before the panic stays as it ended, for the peer too, and one that
+/// had completed (a received item is in place, say) is reported as
+/// completed: the panic only cut short what came after. A cancel or a
+/// failure is reported as a failure, since its cleanup may have been cut
+/// short.
 async fn guarded(
     shared: &Arc<Shared>,
     id: u64,
     task: impl Future<Output = Outcome> + Send + 'static,
 ) -> Outcome {
+    fn failed() -> Outcome {
+        Outcome::Failed(crate::i18n::tr!(error_unexpected).into())
+    }
     match tokio::spawn(task).await {
         Ok(outcome) => outcome,
         Err(error) if error.is_panic() => {
-            if let Some(session) = shared.session_by_id(id) {
-                let data_dir = shared.data_dir.clone();
-                // A task of its own too: the panic may have left the
-                // session's state poisoned. The peer learns at once that
-                // the transfer failed, not only at its next query after a
-                // lost connection, unless it had ended here already (a
-                // received item is in place, and the sender is given a
-                // moment to read so): that end stands.
-                let _ = tokio::spawn(async move {
-                    let code = (!session.has_ended()).then_some(CLOSE_FAILED);
-                    session
-                        .end(code, protocol::Ended::Failed)
-                        .forget(&data_dir)
-                        .await;
-                })
-                .await;
-            }
-            Outcome::Failed(crate::i18n::tr!(error_unexpected).into())
+            let Some(session) = shared.session_by_id(id) else {
+                return failed();
+            };
+            let data_dir = shared.data_dir.clone();
+            // A task of its own too: the panic may have left the session's
+            // state poisoned (then the transfer fails, with nothing more
+            // done). Unless the transfer had ended already, the peer learns
+            // at once that it failed, not only at its next query after a
+            // lost connection.
+            tokio::spawn(async move {
+                let earlier = session.ended();
+                let code = earlier.is_none().then_some(CLOSE_FAILED);
+                session
+                    .end(code, protocol::Ended::Failed)
+                    .forget(&data_dir)
+                    .await;
+                match earlier {
+                    Some((protocol::Ended::Completed, placed)) => Outcome::Completed(placed),
+                    _ => failed(),
+                }
+            })
+            .await
+            .unwrap_or_else(|_| failed())
         }
         // The runtime shuts down, and nothing is reported any more.
         Err(_) => std::future::pending().await,
@@ -1882,6 +1895,38 @@ mod tests {
         let dir = scratch("guarded");
         let (shared, _) = recording_shared(&dir);
         let outcome = guarded(&shared, 7, panics()).await;
+        assert!(
+            matches!(&outcome, Outcome::Failed(text) if text == crate::i18n::tr!(error_unexpected)),
+            "{outcome:?}"
+        );
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// A panic once the transfer has completed here (the received item is
+    /// in place) leaves it completed, with the item where it was put; one
+    /// after a cancel is still a failure, since the cancel's cleanup may
+    /// have been cut short (see `guarded`).
+    #[tokio::test]
+    async fn a_transfer_that_completed_before_a_panic_stays_completed() {
+        async fn panics() -> Outcome {
+            panic!("boom")
+        }
+        let dir = scratch("guarded-completed");
+        let (shared, _) = recording_shared(&dir);
+        let peer = SecretKey::generate().public();
+        let (session, _rx) = Session::new(7, [7; 16], peer, Role::Receive);
+        let item = dir.join("a.bin");
+        session.end_placed(&item).forget(&dir).await;
+        shared.add_session(session);
+        let outcome = guarded(&shared, 7, panics()).await;
+        assert!(
+            matches!(&outcome, Outcome::Completed(Some(path)) if *path == item),
+            "{outcome:?}"
+        );
+        let (session, _rx) = Session::new(8, [8; 16], peer, Role::Receive);
+        assert!(session.cancel_blocking(&dir));
+        shared.add_session(session);
+        let outcome = guarded(&shared, 8, panics()).await;
         assert!(
             matches!(&outcome, Outcome::Failed(text) if text == crate::i18n::tr!(error_unexpected)),
             "{outcome:?}"
