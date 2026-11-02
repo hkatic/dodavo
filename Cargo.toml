@@ -16,6 +16,13 @@ publish = false
 [package.metadata.dodavo]
 copyright-years = "2026"
 
+# What does not depend on a user interface. A separate library, so that each
+# platform's user interface can build on it.
+[lib]
+name = "dodavo_core"
+path = "src/lib.rs"
+doctest = false
+
 [[bin]]
 name = "Dodavo"
 path = "src/main.rs"

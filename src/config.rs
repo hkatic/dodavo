@@ -208,14 +208,14 @@ impl Config {
         self.last_save_dir
             .clone()
             .filter(|d| d.is_dir())
-            .unwrap_or_else(crate::ui::shell::downloads_dir)
+            .unwrap_or_else(crate::platform::downloads_dir)
     }
 
     /// The folder used for transfers that start without asking.
     pub fn auto_save_dir(&self) -> PathBuf {
         match &self.always_save_dir {
             Some(dir) if self.always_save => dir.clone(),
-            _ => crate::ui::shell::downloads_dir(),
+            _ => crate::platform::downloads_dir(),
         }
     }
 }

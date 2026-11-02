@@ -609,6 +609,7 @@ pub fn fill(template: &str, args: &[(&str, &dyn Display)]) -> String {
 }
 
 /// `tr!(key)` gives the text; `tr!(key, name = value, …)` fills placeholders.
+#[macro_export]
 macro_rules! tr {
     ($key:ident) => {
         $crate::i18n::s().$key
@@ -623,6 +624,7 @@ macro_rules! tr {
 
 /// `trn!(key, n, name = value, …)` picks the plural form for `n` and fills
 /// `{n}` and the other placeholders.
+#[macro_export]
 macro_rules! trn {
     ($key:ident, $n:expr $(, $name:ident = $value:expr)* $(,)?) => {{
         let s = $crate::i18n::s();
@@ -634,7 +636,7 @@ macro_rules! trn {
     }};
 }
 
-pub(crate) use {tr, trn};
+pub use crate::{tr, trn};
 
 #[cfg(test)]
 mod tests {

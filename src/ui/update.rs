@@ -284,30 +284,6 @@ fn checked(trigger: Trigger, result: Result<Option<UpdateInfo>, Error>) {
     }
 }
 
-impl Error {
-    /// The error as a sentence for the user.
-    pub fn text(&self) -> String {
-        match self {
-            Error::Network(detail) => tr!(update_err_network, detail = detail),
-            Error::Http(status) => tr!(update_err_http, status = status),
-            Error::TooLarge => tr!(update_err_too_large).to_string(),
-            Error::Manifest(detail) => tr!(update_err_manifest, detail = detail),
-            Error::Signature => tr!(update_err_signature).to_string(),
-            Error::Size => tr!(update_err_size).to_string(),
-            Error::Checksum => tr!(update_err_checksum).to_string(),
-            Error::Io(detail) => tr!(update_err_io, detail = detail),
-            Error::DiskSpace { needed, free } => tr!(
-                update_err_disk_space,
-                needed = format_size(*needed),
-                free = format_size(*free)
-            ),
-            Error::Cancelled => tr!(cancelled).to_string(),
-            Error::Launch(detail) => tr!(update_err_launch, detail = detail),
-            Error::SetupExit(code) => tr!(update_err_setup_exit, code = code),
-        }
-    }
-}
-
 impl UpdateWindow {
     fn install(&mut self, w: &Window) {
         if app::active_transfer_count() > 0 {

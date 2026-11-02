@@ -56,7 +56,7 @@ use windows_sys::Win32::{
     },
 };
 
-use crate::ui::wide;
+use crate::platform::wide;
 use manifest::Manifest;
 use version::Version;
 
@@ -166,6 +166,30 @@ pub enum Error {
     Launch(String),
     /// Setup ended right away (for example, the elevation prompt was declined).
     SetupExit(u32),
+}
+
+impl Error {
+    /// The error as a sentence for the user.
+    pub fn text(&self) -> String {
+        match self {
+            Error::Network(detail) => crate::i18n::tr!(update_err_network, detail = detail),
+            Error::Http(status) => crate::i18n::tr!(update_err_http, status = status),
+            Error::TooLarge => crate::i18n::tr!(update_err_too_large).to_string(),
+            Error::Manifest(detail) => crate::i18n::tr!(update_err_manifest, detail = detail),
+            Error::Signature => crate::i18n::tr!(update_err_signature).to_string(),
+            Error::Size => crate::i18n::tr!(update_err_size).to_string(),
+            Error::Checksum => crate::i18n::tr!(update_err_checksum).to_string(),
+            Error::Io(detail) => crate::i18n::tr!(update_err_io, detail = detail),
+            Error::DiskSpace { needed, free } => crate::i18n::tr!(
+                update_err_disk_space,
+                needed = crate::format::format_size(*needed),
+                free = crate::format::format_size(*free)
+            ),
+            Error::Cancelled => crate::i18n::tr!(cancelled).to_string(),
+            Error::Launch(detail) => crate::i18n::tr!(update_err_launch, detail = detail),
+            Error::SetupExit(code) => crate::i18n::tr!(update_err_setup_exit, code = code),
+        }
+    }
 }
 
 pub enum Event {
@@ -395,7 +419,7 @@ fn uninstall_location(root: HKEY, wow_flag: u32) -> Option<PathBuf> {
     if read != ERROR_SUCCESS || kind != REG_SZ {
         return None;
     }
-    let text = crate::ui::from_wide_ptr(buf.as_ptr());
+    let text = crate::platform::from_wide_ptr(buf.as_ptr());
     (!text.trim().is_empty()).then(|| PathBuf::from(text.trim()))
 }
 

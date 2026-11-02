@@ -4,13 +4,12 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod app;
-mod archive;
-mod config;
-mod i18n;
-mod identity;
-mod net;
 mod ui;
-mod update;
+
+// The Win32 user interface reaches the library through `crate::net` and so on.
+pub(crate) use dodavo_core::{
+    archive, config, format, i18n, identity, net, platform, space, update,
+};
 
 use std::sync::atomic::{AtomicBool, AtomicIsize, Ordering};
 
