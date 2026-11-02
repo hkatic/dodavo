@@ -120,6 +120,59 @@ pub enum Outcome {
     Failed(String),
 }
 
+impl Outcome {
+    /// How a transfer that ends here with this outcome ended, for its
+    /// tombstone (see `Msg::Gone`).
+    fn ended(&self) -> protocol::Ended {
+        use protocol::Ended;
+        match self {
+            Outcome::Completed(_) => Ended::Completed,
+            Outcome::Cancelled | Outcome::CancelledByPeer | Outcome::Declined => Ended::Cancelled,
+            Outcome::Failed(_) | Outcome::Unreachable(_) => Ended::Failed,
+        }
+    }
+}
+
+/// The text of a failure for the user, cause after cause as `{error:#}`
+/// shows them, but with Windows' own text of an I/O error without the
+/// "(os error 32)" that Rust adds, a text of our own where only the kind of
+/// the error is known (tokio's files keep only that of a failed write), and
+/// a general one for a panic, whose details the panic hook has shown.
+pub(crate) fn failure_text(error: &anyhow::Error) -> String {
+    let causes: Vec<String> = error
+        .chain()
+        .map(|cause| {
+            if cause
+                .downcast_ref::<tokio::task::JoinError>()
+                .is_some_and(|e| e.is_panic())
+            {
+                return crate::i18n::tr!(error_unexpected).into();
+            }
+            match cause.downcast_ref::<std::io::Error>() {
+                Some(e) => io_error_text(e),
+                None => cause.to_string(),
+            }
+        })
+        .collect();
+    causes.join(": ")
+}
+
+/// See [`failure_text`].
+fn io_error_text(error: &std::io::Error) -> String {
+    if let Some(code) = error.raw_os_error() {
+        let text = error.to_string();
+        return text
+            .strip_suffix(&format!(" (os error {code})"))
+            .map_or(text.clone(), str::to_string);
+    }
+    match error.kind() {
+        std::io::ErrorKind::StorageFull if error.get_ref().is_none() => {
+            crate::i18n::tr!(error_disk_full).into()
+        }
+        _ => error.to_string(),
+    }
+}
+
 #[derive(Debug)]
 pub enum Event {
     BindFailed(String),
@@ -455,6 +508,45 @@ async fn bind(secret: SecretKey) -> anyhow::Result<Endpoint> {
     Ok(endpoint)
 }
 
+/// Runs the task of the transfer `id` to its outcome. A panic in it (a
+/// bug, which the panic hook has told the user about) ends the transfer as
+/// failed, with what it leaves deleted, rather than leaving its window
+/// waiting for an end that never comes and its record to fail the same way
+/// at every start.
+async fn guarded(
+    shared: &Arc<Shared>,
+    id: u64,
+    task: impl Future<Output = Outcome> + Send + 'static,
+) -> Outcome {
+    match tokio::spawn(task).await {
+        Ok(outcome) => outcome,
+        Err(error) if error.is_panic() => {
+            if let Some(session) = shared.session_by_id(id) {
+                let data_dir = shared.data_dir.clone();
+                // A task of its own too: the panic may have left the
+                // session's state poisoned.
+                let _ = tokio::spawn(async move {
+                    session
+                        .end(None, protocol::Ended::Failed)
+                        .forget(&data_dir)
+                        .await;
+                })
+                .await;
+            }
+            Outcome::Failed(crate::i18n::tr!(error_unexpected).into())
+        }
+        // The runtime shuts down, and nothing is reported any more.
+        Err(_) => std::future::pending().await,
+    }
+}
+
+/// How a transfer that this side no longer has ended here, for `Msg::Gone`:
+/// as its tombstone says, or failed, since without one nothing is known of it
+/// (it never got as far as its record, say, or a start had to end it).
+fn gone(data_dir: &Path, token: &protocol::Token) -> protocol::Ended {
+    session::tombstone(data_dir, token).unwrap_or(protocol::Ended::Failed)
+}
+
 /// Handles a new connection: an offer, the continuation of an interrupted
 /// transfer, or a question about one.
 async fn accept(shared: Arc<Shared>, endpoint: Endpoint, conn: Connection) {
@@ -490,7 +582,7 @@ async fn accept(shared: Arc<Shared>, endpoint: Endpoint, conn: Connection) {
                     return;
                 }
                 None => Msg::Gone {
-                    completed: session::tombstone(&shared.data_dir, &token) == Some(true),
+                    ended: gone(&shared.data_dir, &token),
                 },
             }
         }
@@ -503,7 +595,7 @@ async fn accept(shared: Arc<Shared>, endpoint: Endpoint, conn: Connection) {
                 Msg::Alive
             } else {
                 Msg::Gone {
-                    completed: session::tombstone(&shared.data_dir, &token) == Some(true),
+                    ended: gone(&shared.data_dir, &token),
                 }
             }
         }
@@ -522,15 +614,35 @@ async fn restore(shared: &Arc<Shared>, endpoint: &Endpoint) {
         let endpoint = endpoint.clone();
         let token = record.token;
         tokio::spawn(async move {
-            let outcome = match record.role() {
-                Role::Send => send::resume(&shared, &endpoint, id, record, ctl).await,
-                Role::Receive => receive::resume(&shared, &endpoint, id, record, ctl).await,
+            let task = {
+                let shared = shared.clone();
+                async move {
+                    match record.role() {
+                        Role::Send => send::resume(&shared, &endpoint, id, record, ctl).await,
+                        Role::Receive => receive::resume(&shared, &endpoint, id, record, ctl).await,
+                    }
+                }
             };
+            let outcome = guarded(&shared, id, task).await;
             // However it ended (also before the session was registered):
             // questions about it must not wait any longer.
             shared.restored(&token);
             shared.finish(id, outcome);
         });
+    }
+}
+
+/// Why a transfer from an earlier run cannot go on, its files being gone
+/// (see `TransferRecord::files_present`): what the user sent, or the data
+/// that was partly transferred (a received part, or a folder's packed data).
+fn missing_text(record: &TransferRecord) -> String {
+    use crate::i18n::tr;
+    match &record.side {
+        session::Side::Send { source, .. } if !source.exists() => match record.offer.kind {
+            Kind::File => tr!(error_file_missing, path = source.display()),
+            Kind::Folder => tr!(error_folder_missing, path = source.display()),
+        },
+        _ => tr!(error_part_missing).into(),
     }
 }
 
@@ -541,8 +653,8 @@ async fn restore(shared: &Arc<Shared>, endpoint: &Endpoint) {
 /// registered `Control`.
 async fn restore_records(shared: &Arc<Shared>) -> Vec<(u64, TransferRecord, Arc<Control>)> {
     // Reading the records and looking at their files is file work: each
-    // transfer that goes on with how many bytes it has and whether it can
-    // go on.
+    // transfer that goes on with how many bytes it has and, if it cannot go
+    // on, why.
     let (going_on, over) = {
         let (data_dir, temp_dir) = (shared.data_dir.clone(), shared.temp_dir.clone());
         session::off_runtime(move || {
@@ -555,7 +667,10 @@ async fn restore_records(shared: &Arc<Shared>) -> Vec<(u64, TransferRecord, Arc<
             let going_on = found
                 .going_on
                 .into_iter()
-                .map(|record| (record.have(), record.can_go_on(), record))
+                .map(|record| {
+                    let missing = (!record.can_go_on()).then(|| missing_text(&record));
+                    (record.have(), missing, record)
+                })
                 .collect::<Vec<_>>();
             (going_on, found.over)
         })
@@ -605,9 +720,9 @@ async fn restore_records(shared: &Arc<Shared>) -> Vec<(u64, TransferRecord, Arc<
         }
     }
     let mut resumed = Vec::new();
-    for (have, present, record) in going_on {
-        if !present {
-            report_failed(&record, have, crate::i18n::tr!(error_part_missing));
+    for (have, missing, record) in going_on {
+        if let Some(error) = missing {
+            report_failed(&record, have, &error);
             shared.restored(&record.token);
             in_background(shared, move |dir| record.discard(dir));
             continue;
@@ -696,10 +811,16 @@ async fn run(secret: SecretKey, shared: Arc<Shared>, mut rx: mpsc::UnboundedRece
                 let shared = shared.clone();
                 let endpoint = endpoint.clone();
                 tokio::spawn(async move {
-                    let outcome = send::run(
-                        &shared, &endpoint, id, to, path, kind, my_name, peer_name, ctl,
-                    )
-                    .await;
+                    let task = {
+                        let shared = shared.clone();
+                        async move {
+                            send::run(
+                                &shared, &endpoint, id, to, path, kind, my_name, peer_name, ctl,
+                            )
+                            .await
+                        }
+                    };
+                    let outcome = guarded(&shared, id, task).await;
                     shared.finish(id, outcome);
                 });
             }
@@ -1383,6 +1504,7 @@ mod tests {
                 size: 3,
                 file_count: 1,
                 content_size: 3,
+                largest_file: 3,
                 sender_name: "Ana".into(),
                 token: [5; 16],
                 modified: None,
@@ -1606,6 +1728,7 @@ mod tests {
                 size,
                 file_count: 1,
                 content_size: size,
+                largest_file: size,
                 sender_name: "Ana".into(),
                 token: [token; 16],
                 modified: None,
@@ -1638,6 +1761,77 @@ mod tests {
             shutting_down: AtomicBool::new(false),
         });
         (shared, events)
+    }
+
+    /// The text of a failure: Windows' own, without Rust's error code; one
+    /// of ours where only the kind of the error is known; a general one for
+    /// a panic, whose details the panic hook shows.
+    #[tokio::test]
+    async fn failure_texts() {
+        let held =
+            anyhow::Error::from(std::io::Error::from_raw_os_error(32)).context("Cannot open x");
+        let text = failure_text(&held);
+        assert!(text.starts_with("Cannot open x: "), "{text}");
+        assert!(!text.contains("os error"), "{text}");
+        let full = std::io::Error::from(std::io::ErrorKind::StorageFull);
+        assert_eq!(
+            failure_text(&full.into()),
+            crate::i18n::tr!(error_disk_full)
+        );
+        let panicked = tokio::task::spawn_blocking(|| -> u8 { panic!("boom") })
+            .await
+            .unwrap_err();
+        let text = failure_text(&anyhow::Error::from(panicked).context("x"));
+        assert_eq!(text, format!("x: {}", crate::i18n::tr!(error_unexpected)));
+    }
+
+    /// A panic in a transfer's task ends the transfer as failed, rather than
+    /// leaving it without an end (see `guarded`).
+    #[tokio::test]
+    async fn a_transfer_whose_task_panics_fails() {
+        async fn panics() -> Outcome {
+            panic!("boom")
+        }
+        let dir = scratch("guarded");
+        let (shared, _) = recording_shared(&dir);
+        let outcome = guarded(&shared, 7, panics()).await;
+        assert!(
+            matches!(&outcome, Outcome::Failed(text) if text == crate::i18n::tr!(error_unexpected)),
+            "{outcome:?}"
+        );
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// Without a tombstone, a transfer that this side does not know (any
+    /// more) cannot go on: for the other side, it failed here.
+    #[test]
+    fn gone_without_a_tombstone_failed() {
+        let dir = scratch("gone");
+        assert_eq!(gone(&dir, &[1; 16]), protocol::Ended::Failed);
+        session::write_tombstone(&dir, &[1; 16], protocol::Ended::Cancelled);
+        assert_eq!(gone(&dir, &[1; 16]), protocol::Ended::Cancelled);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// A send that cannot go on because what it sends is gone says so, not
+    /// that the partly transferred data is gone.
+    #[test]
+    fn a_send_without_its_source_names_it() {
+        let dir = scratch("source-gone");
+        let peer = iroh::SecretKey::generate().public().to_string();
+        let source = dir.join("gone.bin");
+        let side = session::Side::Send {
+            source: source.clone(),
+            source_len: 3,
+            source_mtime: None,
+            data_path: source.clone(),
+        };
+        let record = file_record(1, &peer, 3, side);
+        assert_eq!(
+            missing_text(&record),
+            crate::i18n::tr!(error_file_missing, path = source.display())
+        );
+        std::fs::remove_dir_all(&dir).ok();
     }
 
     /// Whether `Event::CancelWaits` was emitted for the transfer `id`.
@@ -1936,7 +2130,10 @@ mod tests {
         );
         assert_eq!(std::fs::read(&item).unwrap(), b"0123456789");
         assert!(session::records(&data_dir).is_empty());
-        assert_eq!(session::tombstone(&data_dir, &[4; 16]), Some(true));
+        assert_eq!(
+            session::tombstone(&data_dir, &[4; 16]),
+            Some(protocol::Ended::Completed)
+        );
         net.shutdown(Duration::from_secs(5));
         std::fs::remove_dir_all(&base).ok();
     }

@@ -214,6 +214,7 @@ pub const SL: Strings = Strings {
     space_unknown: "Prostega prostora na izbranem pogonu ni bilo mogoče ugotoviti.",
     space_folder_note: "Mape potrebujejo prostor za prenos in za razpakiranje.",
     space_confirm: "Za ta prenos ni dovolj prostega prostora na disku.\n\n{details}\n\nAli ga želite vseeno sprejeti?",
+    space_fat: "Pogon {drive} uporablja FAT32, ki ne more shraniti datotek, velikih 4 GB ali več, prenos pa bi tja shranil datoteko velikosti {size}. Izberite mapo na drugem pogonu.",
 
     add_recipient_title: "Dodaj prejemnika",
     edit_recipient_title: "Uredi prejemnika",
@@ -327,6 +328,7 @@ pub const SL: Strings = Strings {
     receiving_balloon_title: "Prejemanje",
     receiving_balloon: "{name} vam pošilja »{item}«.",
     panic_message: "Prišlo je do nepričakovane napake in program se mora zapreti.\n\n{info}",
+    panic_message_goes_on: "Prišlo je do nepričakovane napake. Dodavo deluje naprej, vendar to, kar je v tistem trenutku počel, morda ni uspelo.\n\n{info}",
     identity_failed: "Vaše identitete ni bilo mogoče prebrati ali ustvariti v mapi {path}:\n{error}",
     identity_damaged: "Datoteka secret.key je poškodovana: vsebuje {size} namesto 32 bajtov. \
         Obnovite jo iz varnostne kopije ali jo izbrišite, da dobite nov ID stika.",
@@ -352,6 +354,10 @@ pub const SL: Strings = Strings {
     error_expired_receiver_may_have: "Pri prenosu se več kot 30 dni ni zgodilo nič. Prejemnik je element morda vseeno prejel",
     error_bad_resume: "Napaka protokola: prenosa ni mogoče nadaljevati",
     error_connection_lost: "Povezava je bila prekinjena",
+    error_unexpected: "Prišlo je do nepričakovane napake",
+    error_disk_full: "Na disku ni dovolj prostora",
+    error_file_missing: "Datoteka, ki se pošilja, ne obstaja več: {path}",
+    error_folder_missing: "Mapa, ki se pošilja, ne obstaja več: {path}",
 
     drop_confirm: Plural {
         one: "Ali želite poslati {n} element prejemniku ({name})? Vsak element se pošlje kot ločen prenos.",

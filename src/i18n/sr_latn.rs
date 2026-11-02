@@ -214,6 +214,7 @@ pub const SR_LATN: Strings = Strings {
     space_unknown: "Nije moguće utvrditi koliko slobodnog prostora ima na izabranom disku.",
     space_folder_note: "Za fascikle je potreban prostor za preuzimanje i za raspakivanje.",
     space_confirm: "Za ovaj prenos nema dovoljno slobodnog prostora na disku.\n\n{details}\n\nŽelite li ipak da ga prihvatite?",
+    space_fat: "Disk {drive} koristi FAT32, koji ne može da sačuva datoteke od 4 GB ili veće, a prenos bi tamo sačuvao datoteku od {size}. Izaberite fasciklu na drugom disku.",
 
     add_recipient_title: "Dodaj primaoca",
     edit_recipient_title: "Uredi primaoca",
@@ -327,6 +328,7 @@ pub const SR_LATN: Strings = Strings {
     receiving_balloon_title: "Primanje",
     receiving_balloon: "{name} vam šalje „{item}“.",
     panic_message: "Došlo je do neočekivane greške i program mora da se zatvori.\n\n{info}",
+    panic_message_goes_on: "Došlo je do neočekivane greške. Dodavo nastavlja sa radom, ali ono što je u tom trenutku radio možda nije uspelo.\n\n{info}",
     identity_failed: "Vaš identitet nije moguće pročitati ni kreirati u fascikli {path}:\n{error}",
     identity_damaged: "Datoteka secret.key je oštećena: sadrži {size} umesto 32 bajta. \
         Vratite je iz rezervne kopije ili je izbrišite da biste dobili novi ID kontakta.",
@@ -352,6 +354,10 @@ pub const SR_LATN: Strings = Strings {
     error_expired_receiver_may_have: "U prenosu se više od 30 dana ništa nije desilo. Primalac je možda ipak primio stavku",
     error_bad_resume: "Greška protokola: prenos ne može da se nastavi",
     error_connection_lost: "Veza je prekinuta",
+    error_unexpected: "Došlo je do neočekivane greške",
+    error_disk_full: "Nema dovoljno prostora na disku",
+    error_file_missing: "Datoteka koja se šalje više ne postoji: {path}",
+    error_folder_missing: "Fascikla koja se šalje više ne postoji: {path}",
 
     drop_confirm: Plural {
         one: "Želite li da pošaljete {n} stavku primaocu ({name})? Svaka stavka se šalje kao zaseban prenos.",

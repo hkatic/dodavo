@@ -12,7 +12,7 @@ mod net;
 mod ui;
 mod update;
 
-use std::sync::atomic::{AtomicIsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicIsize, Ordering};
 
 use windows_sys::Win32::{
     Foundation::{CloseHandle, ERROR_ALREADY_EXISTS, GetLastError, HANDLE},
@@ -115,7 +115,31 @@ fn show_running_instance(title: &str) {
 
 fn main() {
     std::panic::set_hook(Box::new(|info| {
-        ui::error(std::ptr::null_mut(), &tr!(panic_message, info = info));
+        // One message at a time: several tasks may fail the same way at once.
+        static SHOWING: AtomicBool = AtomicBool::new(false);
+        match std::thread::current().name() {
+            // The UI thread: the program ends once it has unwound.
+            Some("main") => ui::error(std::ptr::null_mut(), &tr!(panic_message, info = info)),
+            // The network thread's own loop: nothing can be sent or
+            // received any more, so the program ends after the message
+            // (unfinished transfers go on at the next start).
+            Some("network") => {
+                ui::error(std::ptr::null_mut(), &tr!(panic_message, info = info));
+                std::process::exit(1);
+            }
+            // Another thread ends (a transfer's task, which then fails, see
+            // `net::guarded`), and the program goes on. The message gets a
+            // thread of its own, so that this one unwinds at once instead of
+            // staying stuck in the message box, holding up what waits for it.
+            _ if !SHOWING.swap(true, Ordering::SeqCst) => {
+                let text = tr!(panic_message_goes_on, info = info);
+                std::thread::spawn(move || {
+                    ui::error(std::ptr::null_mut(), &text);
+                    SHOWING.store(false, Ordering::SeqCst);
+                });
+            }
+            _ => {}
+        }
     }));
 
     let args = parse_args();

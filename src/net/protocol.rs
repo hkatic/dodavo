@@ -66,6 +66,12 @@ pub struct Offer {
     /// For folders: number of files and their total uncompressed size.
     pub file_count: u64,
     pub content_size: u64,
+    /// For folders: the size of the largest file in it, which tells whether
+    /// a file system that limits the size of a file (FAT32) can hold the
+    /// folder unpacked. For files: their size. (`default`: records of
+    /// earlier versions.)
+    #[serde(default)]
+    pub largest_file: u64,
     /// The display name the sender chose for themselves.
     pub sender_name: String,
     pub token: Token,
@@ -79,6 +85,19 @@ pub struct Offer {
     pub modified: Option<u64>,
     #[serde(default)]
     pub created: Option<u64>,
+}
+
+/// How a transfer ended on a side that no longer has it (see `Msg::Gone`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Ended {
+    /// The receiver has the item.
+    Completed,
+    /// The user on that side cancelled it (or the other side's cancel ended
+    /// it there).
+    Cancelled,
+    /// It failed there, or that side knows nothing of it (any more), so it
+    /// cannot go on.
+    Failed,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -114,8 +133,8 @@ pub enum Msg {
     PartInUse { in_use: bool },
     // Either direction.
     /// Answer to `Continue` or `Query`: this side no longer has the transfer,
-    /// because it was cancelled, failed or (for `completed`) finished.
-    Gone { completed: bool },
+    /// and how it ended here.
+    Gone { ended: Ended },
     /// The user on this side paused the transfer.
     Paused,
     /// The user on this side resumed the transfer.
@@ -158,6 +177,7 @@ mod tests {
                 size: 123_456_789_012,
                 file_count: 42,
                 content_size: 999,
+                largest_file: 999,
                 sender_name: "Ana".into(),
                 token: [7; 16],
                 modified: Some(133_000_000_000_000_000),
@@ -176,7 +196,13 @@ mod tests {
                 ok: false,
                 message: "nope".into(),
             },
-            Msg::Gone { completed: true },
+            Msg::Gone {
+                ended: Ended::Completed,
+            },
+            Msg::Gone {
+                ended: Ended::Failed,
+            },
+            Msg::PartInUse { in_use: true },
             Msg::Paused,
             Msg::Resumed,
         ];

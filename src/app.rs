@@ -586,12 +586,13 @@ fn handle_net_event(event: Event) -> Option<Event> {
             let from = from.to_string();
             let (name, known) = peer_name(&from, &offer.sender_name);
             let cfg = cfg();
-            // Without enough disk space, ask instead (the window explains why).
+            // Without enough disk space, or on a drive that cannot hold a
+            // file this large, ask instead (the window explains why).
             let auto_dir = Some(cfg.auto_save_dir()).filter(|d| {
-                cfg.auto_accept
-                    && known
-                    && std::fs::create_dir_all(d).is_ok()
-                    && incoming::check_space(&offer, d, cfg.received_folder).enough != Some(false)
+                cfg.auto_accept && known && std::fs::create_dir_all(d).is_ok() && {
+                    let space = incoming::check_space(&offer, d, cfg.received_folder);
+                    space.fits && space.enough != Some(false)
+                }
             });
             if let Some(dir) = auto_dir {
                 accept_offer(id, &from, &name, &offer, dir, false);

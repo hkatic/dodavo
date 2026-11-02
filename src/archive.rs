@@ -9,7 +9,7 @@ use std::{
         fs::{FileTimesExt, MetadataExt, OpenOptionsExt},
         io::AsRawHandle,
     },
-    path::{Component, Path, PathBuf},
+    path::{Path, PathBuf},
     sync::atomic::{AtomicBool, Ordering},
     time::{Duration, SystemTime},
 };
@@ -339,19 +339,28 @@ fn collect(root: &Path) -> anyhow::Result<Vec<Entry>> {
     Ok(out)
 }
 
-/// Packs the *contents* of `root` into a zip file at `dest` and returns the
-/// number of files and their total (uncompressed) size.
-/// `progress(done_bytes, total_bytes)` is called regularly.
+/// What [`zip_folder`] packed: the number of files, their total
+/// (uncompressed) size and the size of the largest one.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Packed {
+    pub files: u64,
+    pub size: u64,
+    pub largest: u64,
+}
+
+/// Packs the *contents* of `root` into a zip file at `dest` and says what
+/// it packed. `progress(done_bytes, total_bytes)` is called regularly.
 pub fn zip_folder(
     root: &Path,
     dest: &Path,
     cancel: &AtomicBool,
     progress: &mut dyn FnMut(u64, u64),
-) -> anyhow::Result<(u64, u64)> {
+) -> anyhow::Result<Packed> {
     // The folder is walked once; the same list gives the statistics for the offer.
     let entries = collect(root)?;
     let file_count = entries.iter().filter(|e| !e.is_dir).count() as u64;
     let total: u64 = entries.iter().map(|e| e.size).sum();
+    let largest = entries.iter().map(|e| e.size).max().unwrap_or(0);
     let mut zip = ZipWriter::new(BufWriter::with_capacity(BUF_SIZE, File::create(dest)?));
     let mut done = 0u64;
     let mut buf = vec![0u8; BUF_SIZE];
@@ -395,7 +404,11 @@ pub fn zip_folder(
         }
     }
     zip.finish()?.flush()?;
-    Ok((file_count, total))
+    Ok(Packed {
+        files: file_count,
+        size: total,
+        largest,
+    })
 }
 
 /// Extracts the open zip file `zip` into the folder `dest`, which must be new
@@ -428,7 +441,7 @@ pub fn unzip(
             bail!(Cancelled);
         }
         let mut entry = archive.by_index(i)?;
-        let Some(rel) = entry.enclosed_name().map(|rel| inside(&rel)) else {
+        let Some(rel) = entry.name().ok().and_then(|name| entry_path(&name)) else {
             bail!(tr!(error_unsafe_path, path = format!("{:?}", entry.name())));
         };
         if rel.as_os_str().is_empty() {
@@ -481,21 +494,71 @@ pub fn unzip(
     Ok(())
 }
 
-/// The path of a zip entry inside the folder it is unpacked into, without
-/// "." and ".." ("a/../b" is "b", and nothing creates "a"): empty for the
-/// folder itself. `rel` is an enclosed name, which never goes above it.
-fn inside(rel: &Path) -> PathBuf {
-    let mut path = PathBuf::new();
-    for part in rel.components() {
+/// The path of a zip entry named `name` inside the folder it is unpacked
+/// into, without "." and ".." ("a/../b" is "b", and nothing creates "a"):
+/// empty for the folder itself. `None` for a name that reaches above that
+/// folder, or that has a part Windows would not take as one plain file or
+/// folder name (see [`is_plain_name`]): a drive ("C:"), a stream ("a:b"), a
+/// device ("CON"), a name it would shorten ("a.").
+///
+/// Checked here rather than with the zip crate's `enclosed_name`, whose check
+/// for device names panics on many ordinary names, such as "Kuća.jpg" or
+/// any Cyrillic one (it splits the name at byte 3; zip 9.1 and 9.2).
+fn entry_path(name: &str) -> Option<PathBuf> {
+    let mut parts = Vec::new();
+    for part in name.split(['/', '\\']) {
         match part {
-            Component::Normal(name) => path.push(name),
-            Component::ParentDir => {
-                path.pop();
+            "" | "." => {}
+            ".." => {
+                parts.pop()?;
             }
-            _ => {}
+            _ if is_plain_name(part) => parts.push(part),
+            _ => return None,
         }
     }
-    path
+    Some(parts.iter().collect())
+}
+
+/// Whether `name` can be a single file or folder name on Windows as it is:
+/// not empty, at most 255 UTF-16 units, none of the characters Windows does
+/// not allow in a name (":" would also make it a drive or a stream), no
+/// trailing dot or space (which Windows drops), and not a device name.
+fn is_plain_name(name: &str) -> bool {
+    !name.is_empty()
+        && name.encode_utf16().count() <= 255
+        && !name.chars().any(|c| {
+            matches!(c, '<' | '>' | ':' | '"' | '/' | '\\' | '|' | '?' | '*') || (c as u32) < 32
+        })
+        && !name.ends_with(['.', ' '])
+        && !is_device_name(name)
+}
+
+/// Whether Windows takes the file name `name` for a device: "CON", "nul.txt",
+/// "COM1 .log", "lpt²", whatever follows the first dot.
+fn is_device_name(name: &str) -> bool {
+    let stem = name
+        .split('.')
+        .next()
+        .unwrap_or(name)
+        .trim_end_matches([' ', '.']);
+    const DEVICES: &[&str] = &["CON", "PRN", "AUX", "NUL", "CONIN$", "CONOUT$", "CLOCK$"];
+    if DEVICES.iter().any(|d| stem.eq_ignore_ascii_case(d)) {
+        return true;
+    }
+    // COM and LPT with one digit, 1 to 9 or a superscript ¹, ² or ³. `get`,
+    // because byte 3 may be inside a character ("Kuća").
+    match (stem.get(..3), stem.get(3..)) {
+        (Some(prefix), Some(number))
+            if prefix.eq_ignore_ascii_case("COM") || prefix.eq_ignore_ascii_case("LPT") =>
+        {
+            let mut chars = number.chars();
+            matches!(
+                (chars.next(), chars.next()),
+                (Some('1'..='9' | '¹' | '²' | '³'), None)
+            )
+        }
+        _ => false,
+    }
 }
 
 /// Makes a name received from the network safe to use as a single file or
@@ -517,12 +580,7 @@ pub fn sanitize_file_name(name: &str) -> String {
     if s.is_empty() || s == "." || s == ".." {
         return "Received".into();
     }
-    let stem = s.split('.').next().unwrap_or("").to_ascii_uppercase();
-    const RESERVED: &[&str] = &[
-        "CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8",
-        "COM9", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
-    ];
-    if RESERVED.contains(&stem.as_str()) {
+    if is_device_name(&s) {
         return format!("_{s}");
     }
     s
@@ -803,6 +861,28 @@ fn on_fat(handle: HANDLE) -> bool {
     if PRETEND_FAT.get() {
         return true;
     }
+    // "FAT", "FAT32" or "exFAT".
+    file_system_of(handle).is_some_and(|name| name.to_ascii_uppercase().contains("FAT"))
+}
+
+/// The file system of the volume that holds `path`, an existing file or
+/// folder (such as the root of the volume): "NTFS", "FAT32", "exFAT", …
+/// Tests pretend "FAT32" with [`PRETEND_FAT`].
+pub fn file_system(path: &Path) -> Option<String> {
+    #[cfg(test)]
+    if PRETEND_FAT.get() {
+        return Some("FAT32".into());
+    }
+    let item = OpenOptions::new()
+        .access_mode(0)
+        .custom_flags(FILE_FLAG_BACKUP_SEMANTICS)
+        .open(path)
+        .ok()?;
+    file_system_of(item.as_raw_handle())
+}
+
+/// See [`file_system`]: by an open handle.
+fn file_system_of(handle: HANDLE) -> Option<String> {
     let mut name = [0u16; MAX_PATH as usize + 1];
     // SAFETY: the handle is open; the call writes at most `name.len()`
     // characters to the local buffer, and the other outputs are not wanted.
@@ -819,10 +899,7 @@ fn on_fat(handle: HANDLE) -> bool {
         )
     } != 0;
     let len = name.iter().position(|&c| c == 0).unwrap_or(name.len());
-    // "FAT", "FAT32" or "exFAT".
-    ok && String::from_utf16_lossy(&name[..len])
-        .to_ascii_uppercase()
-        .contains("FAT")
+    ok.then(|| String::from_utf16_lossy(&name[..len]))
 }
 
 /// Creates an empty file under the first free one of the numbered names. The
@@ -1149,7 +1226,14 @@ mod tests {
         let zip = base.join("x.zip");
         let cancel = AtomicBool::new(false);
         let stats = zip_folder(&src, &zip, &cancel, &mut |_, _| {}).unwrap();
-        assert_eq!(stats, (3, 5 + 1_000_000 + 3));
+        assert_eq!(
+            stats,
+            Packed {
+                files: 3,
+                size: 5 + 1_000_000 + 3,
+                largest: 1_000_000
+            }
+        );
         let out = base.join("out");
         unzip(
             File::open(&zip).unwrap(),
@@ -1168,6 +1252,119 @@ mod tests {
         assert!(out.join("empty").is_dir());
         assert!(!out.join("a.txt:Zone.Identifier").exists());
         std::fs::remove_dir_all(&base).ok();
+    }
+
+    /// Names with characters of more than one byte anywhere, which made the
+    /// zip crate's own check of entry names panic (byte 3 inside "ć", "Д",
+    /// "😀"), go through packing and unpacking.
+    #[test]
+    fn names_in_any_script_round_trip() {
+        let base = scratch("names");
+        let src = base.join("src");
+        let names = [
+            "Kuća.jpg",
+            "Račun 2026.pdf",
+            "Moć.txt",
+            "Crème.txt",
+            "Документи/Ђорђе.txt",
+            "Lošinj ljeto/Vožnja.txt",
+            "😀 emoji/x.txt",
+            "a😀.txt",
+            "中文资料.txt",
+            "COMé.txt",
+        ];
+        for name in names {
+            let path = src.join(name);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(&path, name.as_bytes()).unwrap();
+        }
+        let zip = base.join("x.zip");
+        let cancel = AtomicBool::new(false);
+        zip_folder(&src, &zip, &cancel, &mut |_, _| {}).unwrap();
+        let out = base.join("out");
+        unzip(
+            File::open(&zip).unwrap(),
+            &out,
+            false,
+            &cancel,
+            &mut |_, _| {},
+        )
+        .unwrap();
+        for name in names {
+            assert_eq!(
+                std::fs::read(out.join(name)).unwrap(),
+                name.as_bytes(),
+                "{name}"
+            );
+        }
+        std::fs::remove_dir_all(&base).ok();
+    }
+
+    #[test]
+    fn entry_paths() {
+        let path = |name: &str| entry_path(name).map(|p| p.to_string_lossy().into_owned());
+        assert_eq!(path("a/b.txt").as_deref(), Some(r"a\b.txt"));
+        assert_eq!(path(r"a\b.txt").as_deref(), Some(r"a\b.txt"));
+        assert_eq!(path("Kuća/Račun.pdf").as_deref(), Some(r"Kuća\Račun.pdf"));
+        assert_eq!(path("a/../b.txt").as_deref(), Some("b.txt"));
+        assert_eq!(path("./a//b/").as_deref(), Some(r"a\b"));
+        assert_eq!(path("/a.txt").as_deref(), Some("a.txt"));
+        assert_eq!(path("./").as_deref(), Some(""));
+        for unsafe_name in [
+            "../a.txt",
+            "a/../../b.txt",
+            r"..\a.txt",
+            "C:/a.txt",
+            "c:a.txt",
+            "a/b:stream",
+            "a/CON",
+            "nul.txt",
+            "a./b",
+            "a /b",
+            "a\u{1}b",
+            "a*b",
+        ] {
+            assert_eq!(path(unsafe_name), None, "{unsafe_name}");
+        }
+        assert_eq!(path(&"x".repeat(255)).map(|p| p.len()), Some(255));
+        assert_eq!(path(&"x".repeat(256)), None);
+    }
+
+    #[test]
+    fn device_names() {
+        for name in [
+            "CON",
+            "con.txt",
+            "Nul",
+            "aux.tar.gz",
+            "COM1",
+            "com9.log",
+            "LPT1 .txt",
+            "COM¹",
+            "lpt³.x",
+            "CONIN$",
+            "clock$",
+        ] {
+            assert!(is_device_name(name), "{name}");
+        }
+        for name in [
+            "CONSOLE",
+            "COM",
+            "COM0",
+            "COM10",
+            "COMx",
+            "LPT",
+            "Kuća",
+            "Čćžšđ",
+            "Документ",
+            "😀 emoji",
+            "a😀",
+            "COMé",
+            "NULL.txt",
+            "x.con",
+        ] {
+            assert!(!is_device_name(name), "{name}");
+        }
     }
 
     fn at(secs: u64) -> SystemTime {
@@ -1763,6 +1960,9 @@ mod tests {
         assert_eq!(sanitize_file_name("a/b:c"), "a_b_c");
         assert_eq!(sanitize_file_name(".."), "Received");
         assert_eq!(sanitize_file_name("con.txt"), "_con.txt");
+        assert_eq!(sanitize_file_name("COM1 .log"), "_COM1 .log");
+        assert_eq!(sanitize_file_name("lpt².txt"), "_lpt².txt");
+        assert_eq!(sanitize_file_name("Kuća.jpg"), "Kuća.jpg");
         assert_eq!(sanitize_file_name("name. "), "name");
     }
 }

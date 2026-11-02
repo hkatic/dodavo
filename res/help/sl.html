@@ -205,7 +205,7 @@
 <dt><span class="ui">Shrani v:</span> (<kbd>Alt</kbd>+<kbd>S</kbd>)</dt>
 <dd>Mapa, v katero se bo element shranil. To je mapa iz možnosti <span class="ui">Vedno shrani prejete datoteke v to mapo</span>, če ste jo nastavili v nastavitvah, sicer mapa, ki ste jo uporabili zadnjič, ali vaša mapa Prenosi. Lahko vnesete drugo mapo ali jo izberete z gumbom <span class="ui">Prebrskaj…</span> (<kbd>Alt</kbd>+<kbd>P</kbd>).</dd>
 <dt>Prosti prostor na disku</dt>
-<dd>Stavek pod mapo pove, ali je na tem pogonu dovolj prostora, koliko ga je potrebno in koliko ga je na voljo. Mapa, ki se razpakira, potrebuje prostor za prenos in za razpakiranje; mapa, ki jo obdržite le kot datoteko ZIP, potrebuje prostor za datoteko ZIP (glejte <span class="ui">Po prejemu mape</span> v <a href="#settings-receiving">nastavitvah</a>). Stavek se posodobi, ko mapo izberete z gumbom Prebrskaj ali zapustite polje z mapo.</dd>
+<dd>Stavek pod mapo pove, ali je na tem pogonu dovolj prostora, koliko ga je potrebno in koliko ga je na voljo. Mapa, ki se razpakira, potrebuje prostor za prenos in za razpakiranje; mapa, ki jo obdržite le kot datoteko ZIP, potrebuje prostor za datoteko ZIP (glejte <span class="ui">Po prejemu mape</span> v <a href="#settings-receiving">nastavitvah</a>). Stavek se posodobi, ko mapo izberete z gumbom Prebrskaj ali zapustite polje z mapo. Na pogonu z datotečnim sistemom FAT32, ki ga ima veliko pogonov USB in pomnilniških kartic, nobena datoteka ne more biti velika 4 GB ali več: če bi prenos tja shranil takšno datoteko, stavek to pove in izbrati morate mapo na drugem pogonu.</dd>
 <dt><span class="ui">Sprejmi</span> (<kbd>Alt</kbd>+<kbd>J</kbd>) in <span class="ui">Odkloni</span> (<kbd>Alt</kbd>+<kbd>O</kbd>)</dt>
 <dd>Ko se okno odpre, je fokus na gumbu <span class="ui">Sprejmi</span>, zato s tipko <kbd>Enter</kbd> prenos sprejmete; bralniki zaslona običajno najprej preberejo besedilo okna, od krepke vrstice do stavka o prostem prostoru na disku. S tipko <kbd>Esc</kbd> ali z zaprtjem okna ga odklonite.</dd>
 </dl>
@@ -484,7 +484,7 @@
 <p>Za začetek prenosa da: Dodavo se mora izvajati v obeh računalnikih, sicer vidite <span class="ui">Povezave z računalnikom (…) ni bilo mogoče vzpostaviti.</span> Ko je prenos enkrat sprejet, lahko katera koli stran izgubi povezavo, preide v spanje ali konča Dodavo; prenos se nadaljuje, ko sta obe spet tu, kot je opisano v prejšnjem odgovoru.</p>
 
 <h3 id="faq-size">Ali obstaja omejitev velikosti?</h3>
-<p>Ne. Dodavo ne omejuje velikosti datoteke ali mape; edina omejitev je prosti prostor na pogonu, ki prejema. Za mapo potrebuje računalnik, ki prejema, prostor tako za arhiv kot za razpakirano mapo, torej med razpakiranjem približno dvakratno velikost mape (razen če obdrži le datoteko ZIP). Okno Dohodni prenos pove, ali je prostora dovolj, še preden sprejmete.</p>
+<p>Ne. Dodavo ne omejuje velikosti datoteke ali mape; edini omejitvi sta prosti prostor na pogonu, ki prejema, in to, da na pogonu z datotečnim sistemom FAT32 (veliko pogonov USB in pomnilniških kartic) nobena datoteka ne more biti velika 4 GB ali več. Za mapo potrebuje računalnik, ki prejema, prostor tako za arhiv kot za razpakirano mapo, torej med razpakiranjem približno dvakratno velikost mape (razen če obdrži le datoteko ZIP). Okno Dohodni prenos pove, ali je prostora dovolj, še preden sprejmete.</p>
 
 <h3 id="faq-several">Ali lahko pošljem več elementov hkrati ali več osebam?</h3>
 <p>Da. Začnete lahko poljubno število prenosov, isti osebi ali različnim osebam, vsak pa ima svoje okno napredka. Če želite poslati več datotek ali map naenkrat, jih iz Raziskovalca povlecite na osebo na seznamu prejemnikov; ko potrdite, se vsak element pošlje kot ločen prenos. Glejte <a href="#drag-and-drop">Vlečenje elementov na osebo</a>. Stolpec <span class="ui">Prenos</span> na seznamu prejemnikov in meni <span class="ui">Prenosi</span> spremljata vse.</p>
@@ -534,8 +534,8 @@
 <dd>Dodavo se v drugem računalniku ne izvaja ali pa eden od vaju ni povezan. Prosite drugo osebo, naj zažene Dodavo, preverite vrstico stanja na dnu obeh glavnih oken in poskusite znova. Preverite tudi, ali imate pravilen ID stika te osebe.</dd>
 <dt>»Datoteka je bila spremenjena po začetku prenosa«</dt>
 <dd>Datoteka, ki jo pošiljate, je bila spremenjena, medtem ko je prenos čakal na povezavo, zato se ne more nadaljevati. Pošljite jo znova.</dd>
-<dt>»Prenos je bil preklican na drugi strani (…).«, druga oseba pa pravi, da ga ni preklicala</dt>
-<dd>Njen Dodavo tega prenosa ne pozna več: bil je zaprt, preden je bil prenos sprejet, datoteka, ki jo je pošiljala, je bila spremenjena ali pa je minilo več kot 30 dni. Prosite jo, naj element pošlje znova.</dd>
+<dt>»Prejemnik je sporočil, da prenos na drugem računalniku ni uspel« ali »Pošiljatelj je sporočil, da prenos na drugem računalniku ni uspel«</dt>
+<dd>Dodavo na drugem računalniku prenosa ni mogel nadaljevati ali ga ne pozna več: element, ki se pošilja, je bil spremenjen ali izbrisan, delno prenesenih podatkov ni več, bil je zaprt, preden je bil prenos sprejet, ali pa je minilo več kot 30 dni. Okno napredka na drugem računalniku pove, kaj se je tam zgodilo. Prosite pošiljatelja, naj element pošlje znova.</dd>
 <dt>Prenos pravi, da je povezava prekinjena, a sva oba povezana</dt>
 <dd>Počakajte trenutek: Dodavo poskuša znova vsakih nekaj sekund. Če je bil Dodavo na kateri koli strani znova zagnan, preverite, ali se izvaja v obeh računalnikih. Prenos lahko vedno prekličete in ga začnete znova.</dd>
 <dt>Vrstica stanja pravi Brez povezave</dt>

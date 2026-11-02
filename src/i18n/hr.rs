@@ -214,6 +214,7 @@ pub const HR: Strings = Strings {
     space_unknown: "Nije moguće utvrditi koliko je slobodnog prostora na odabranom pogonu.",
     space_folder_note: "Za mape je potreban prostor za preuzimanje i za raspakiravanje.",
     space_confirm: "Za ovaj prijenos nema dovoljno slobodnog prostora na disku.\n\n{details}\n\nŽelite li ga ipak prihvatiti?",
+    space_fat: "Pogon {drive} koristi FAT32, koji ne može spremiti datoteke od 4 GB ili veće, a prijenos bi ondje spremio datoteku od {size}. Odaberite mapu na drugom pogonu.",
 
     add_recipient_title: "Dodaj primatelja",
     edit_recipient_title: "Uredi primatelja",
@@ -327,6 +328,7 @@ pub const HR: Strings = Strings {
     receiving_balloon_title: "Primanje",
     receiving_balloon: "{name} vam šalje „{item}”.",
     panic_message: "Došlo je do neočekivane pogreške i program se mora zatvoriti.\n\n{info}",
+    panic_message_goes_on: "Došlo je do neočekivane pogreške. Dodavo nastavlja s radom, ali ono što je u tom trenutku radio možda nije uspjelo.\n\n{info}",
     identity_failed: "Vaš identitet ne može se pročitati ni stvoriti u mapi {path}:\n{error}",
     identity_damaged: "Datoteka secret.key je oštećena: sadrži {size} umjesto 32 bajta. \
         Vratite je iz sigurnosne kopije ili je izbrišite da biste dobili novi ID kontakta.",
@@ -352,6 +354,10 @@ pub const HR: Strings = Strings {
     error_expired_receiver_may_have: "U prijenosu se više od 30 dana ništa nije dogodilo. Primatelj je možda ipak primio stavku",
     error_bad_resume: "Pogreška protokola: prijenos se ne može nastaviti",
     error_connection_lost: "Veza je prekinuta",
+    error_unexpected: "Došlo je do neočekivane pogreške",
+    error_disk_full: "Na disku nema dovoljno prostora",
+    error_file_missing: "Datoteka koja se šalje više ne postoji: {path}",
+    error_folder_missing: "Mapa koja se šalje više ne postoji: {path}",
 
     drop_confirm: Plural {
         one: "Želite li poslati {n} stavku primatelju ({name})? Svaka se stavka šalje kao zaseban prijenos.",

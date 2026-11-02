@@ -211,6 +211,7 @@ pub const EN: Strings = Strings {
     space_unknown: "The free disk space on the selected drive could not be determined.",
     space_folder_note: "Folders need room for the download and for unpacking.",
     space_confirm: "There is not enough free disk space for this transfer.\n\n{details}\n\nDo you want to accept it anyway?",
+    space_fat: "Drive {drive} uses FAT32, which cannot hold files of 4 GB or more, but this transfer would save a file of {size} there. Choose a folder on another drive.",
 
     add_recipient_title: "Add Recipient",
     edit_recipient_title: "Edit Recipient",
@@ -324,6 +325,7 @@ pub const EN: Strings = Strings {
     receiving_balloon_title: "Receiving",
     receiving_balloon: "{name} is sending you “{item}”.",
     panic_message: "An unexpected error occurred and the program has to close.\n\n{info}",
+    panic_message_goes_on: "An unexpected error occurred. Dodavo goes on running, but what it was doing at that moment may have failed.\n\n{info}",
     identity_failed: "Your identity could not be read or created in {path}:\n{error}",
     identity_damaged: "The file secret.key is damaged: it contains {size} instead of 32 bytes. \
         Restore it from a backup, or delete it to get a new Contact ID.",
@@ -349,6 +351,10 @@ pub const EN: Strings = Strings {
     error_expired_receiver_may_have: "Nothing happened in the transfer for more than 30 days. The recipient may have received the item all the same",
     error_bad_resume: "Protocol error: the transfer cannot be continued",
     error_connection_lost: "The connection was lost",
+    error_unexpected: "An unexpected error occurred",
+    error_disk_full: "There is not enough space on the disk",
+    error_file_missing: "The file being sent is no longer there: {path}",
+    error_folder_missing: "The folder being sent is no longer there: {path}",
 
     drop_confirm: Plural {
         one: "Send {n} item to {name}?",

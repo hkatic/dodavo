@@ -18,7 +18,7 @@ use tokio::{
 
 use super::{
     CLOSE_FAILED, CLOSE_OK, CLOSE_SUSPENDED, Event, Outcome, Phase, Shared, Throttle,
-    protocol::{self, CHUNK, Kind, Msg, Offer, Token},
+    protocol::{self, CHUNK, Ended, Kind, Msg, Offer, Token},
     session::{
         self, Control, Lost, PeerClose, Role, Session, Side, Snapshots, Streams, TransferRecord,
         lost, off_runtime, peer_close,
@@ -167,9 +167,9 @@ async fn start(
     // 1. Prepare the data (zip folders). `size` is what gets streamed.
     let mut temp = TempFile(None);
     let prepared = prepare(shared, id, &path, kind, &token, ctl, &mut temp).await;
-    let (data_path, file_count, content_size, size) = match prepared {
+    let (data_path, packed, size) = match prepared {
         Ok(p) => p,
-        Err(e) => return Outcome::Failed(format!("{e:#}")),
+        Err(e) => return Outcome::Failed(super::failure_text(&e)),
     };
     // What a later run compares to notice a changed source: the file, or the
     // zip the folder was packed into.
@@ -195,8 +195,9 @@ async fn start(
         kind,
         name,
         size,
-        file_count,
-        content_size,
+        file_count: packed.files,
+        content_size: packed.size,
+        largest_file: packed.largest,
         sender_name: my_name,
         token,
         modified: times.modified,
@@ -233,7 +234,7 @@ async fn start(
                 PeerClose::Failed => Outcome::Failed(tr!(error_recipient_failed).into()),
                 PeerClose::Suspended | PeerClose::Lost => {
                     session.close_current(CLOSE_FAILED, b"failed");
-                    Outcome::Failed(format!("{e:#}"))
+                    Outcome::Failed(super::failure_text(&e))
                 }
             };
         }
@@ -275,10 +276,10 @@ async fn start(
             }
             None => {
                 session
-                    .end(Some(CLOSE_FAILED), false)
+                    .end(Some(CLOSE_FAILED), Ended::Failed)
                     .forget(&shared.data_dir)
                     .await;
-                Outcome::Failed(format!("{e:#}"))
+                Outcome::Failed(super::failure_text(&e.into()))
             }
         };
     }
@@ -357,7 +358,8 @@ async fn continue_record(
 }
 
 /// Zips a folder (reporting progress) or measures a file. Returns what is
-/// streamed: its path, the number of files, their size, and the stream size.
+/// streamed: its path, what it holds (see `archive::Packed`), and the stream
+/// size.
 async fn prepare(
     shared: &Arc<Shared>,
     id: u64,
@@ -366,14 +368,19 @@ async fn prepare(
     token: &Token,
     ctl: &Control,
     temp: &mut TempFile,
-) -> anyhow::Result<(PathBuf, u64, u64, u64)> {
+) -> anyhow::Result<(PathBuf, archive::Packed, u64)> {
     match kind {
         Kind::File => {
             let size = tokio::fs::metadata(path)
                 .await
                 .with_context(|| tr!(error_cannot_read, path = path.display()))?
                 .len();
-            Ok((path.clone(), 1, size, size))
+            let packed = archive::Packed {
+                files: 1,
+                size,
+                largest: size,
+            };
+            Ok((path.clone(), packed, size))
         }
         Kind::Folder => {
             shared.emit(Event::Phase {
@@ -387,7 +394,7 @@ async fn prepare(
             let cancel = ctl.cancel.clone();
             let src = path.clone();
             let zip_dst = zip_path.clone();
-            let (file_count, content_size) = tokio::task::spawn_blocking(move || {
+            let packed = tokio::task::spawn_blocking(move || {
                 let mut throttle = Throttle::new();
                 archive::zip_folder(&src, &zip_dst, cancel.flag(), &mut |done, total| {
                     if throttle.ready() || done == total {
@@ -397,7 +404,7 @@ async fn prepare(
             })
             .await??;
             let size = tokio::fs::metadata(&zip_path).await?.len();
-            Ok((zip_path, file_count, content_size, size))
+            Ok((zip_path, packed, size))
         }
     }
 }
@@ -434,8 +441,8 @@ impl Sender<'_> {
 
     /// Ends the transfer on this side (see `Session::end`) and deletes what
     /// goes, off the runtime's worker threads.
-    async fn end(&self, code: Option<u32>, completed: bool) {
-        let ending = self.session.end(code, completed);
+    async fn end(&self, code: Option<u32>, ended: Ended) {
+        let ending = self.session.end(code, ended);
         ending.forget(&self.shared.data_dir).await;
     }
 
@@ -499,7 +506,7 @@ impl Sender<'_> {
             // matters (and failing would not end the transfer there); it is
             // checked if the receiver turns out not to have it.
             if self.session.running() && !self.source_unchanged().await {
-                self.end(None, false).await;
+                self.end(None, Ended::Failed).await;
                 return Err(Outcome::Failed(tr!(error_source_changed).into()));
             }
             let dialed = tokio::select! {
@@ -538,26 +545,29 @@ impl Sender<'_> {
                                 .update(&self.shared.data_dir, |s, d| s.clear_done_sent(d))
                                 .await;
                             if !self.source_unchanged().await {
-                                self.end(Some(CLOSE_FAILED), false).await;
+                                self.end(Some(CLOSE_FAILED), Ended::Failed).await;
                                 return Err(Outcome::Failed(tr!(error_source_changed).into()));
                             }
                         }
                         return Ok(streams);
                     }
-                    Err(Some(completed)) => {
-                        self.end(None, completed).await;
-                        return Err(if completed {
+                    Err(Some(ended)) => {
+                        let outcome = if ended == Ended::Completed {
                             Outcome::Completed(None)
                         } else if self.ctl.cancelled() && !handed_over {
                             // Ended there too, without the item, as the user
                             // wanted here.
                             Outcome::Cancelled
-                        } else {
+                        } else if ended == Ended::Cancelled {
                             // Ended there, by the receiver: also when the
                             // user's cancel here came too late, since the
                             // item was the receiver's by then.
                             Outcome::CancelledByPeer
-                        });
+                        } else {
+                            Outcome::Failed(tr!(error_recipient_failed).into())
+                        };
+                        self.end(None, outcome.ended()).await;
+                        return Err(outcome);
                     }
                     Err(None) => {}
                 }
@@ -581,9 +591,10 @@ impl Sender<'_> {
         }
     }
 
-    /// `Continue` on a new connection. `Err(Some(completed))` if the receiver
-    /// no longer has the transfer, `Err(None)` to try again later.
-    async fn handshake(&self, conn: Connection) -> Result<(Streams, u64), Option<bool>> {
+    /// `Continue` on a new connection. `Err(Some(ended))` if the receiver no
+    /// longer has the transfer (and how it ended there), `Err(None)` to try
+    /// again later.
+    async fn handshake(&self, conn: Connection) -> Result<(Streams, u64), Option<Ended>> {
         // Known to shutdown from the first byte, so that it is suspended like
         // any other and never cut off by the endpoint closing.
         self.session.set_current(Some(conn.clone()));
@@ -599,9 +610,9 @@ impl Sender<'_> {
             Ok((Msg::ContinueFrom { have }, send, recv)) if have <= self.size => {
                 Ok((Streams { conn, send, recv }, have))
             }
-            Ok((Msg::Gone { completed }, _, _)) => {
+            Ok((Msg::Gone { ended }, _, _)) => {
                 conn.close(CLOSE_OK.into(), b"gone");
-                Err(Some(completed))
+                Err(Some(ended))
             }
             _ => {
                 conn.close(CLOSE_SUSPENDED.into(), b"retry");
@@ -637,16 +648,16 @@ impl Sender<'_> {
         let result = self.pump(&mut send, &mut ctl_rx, have).await;
         match result {
             Ok(outcome) => {
-                self.end(Some(CLOSE_OK), true).await;
+                self.end(Some(CLOSE_OK), Ended::Completed).await;
                 Ok(outcome)
             }
             Err(e) if e.is::<Lost>() => match peer_close(&conn) {
                 PeerClose::Cancelled => {
-                    self.end(None, false).await;
+                    self.end(None, Ended::Cancelled).await;
                     Err(End::Final(Outcome::CancelledByPeer))
                 }
                 PeerClose::Failed => {
-                    self.end(None, false).await;
+                    self.end(None, Ended::Failed).await;
                     Err(End::Final(Outcome::Failed(
                         tr!(error_recipient_failed).into(),
                     )))
@@ -662,8 +673,8 @@ impl Sender<'_> {
                 }
             },
             Err(e) => {
-                self.end(Some(CLOSE_FAILED), false).await;
-                Err(End::Final(Outcome::Failed(format!("{e:#}"))))
+                self.end(Some(CLOSE_FAILED), Ended::Failed).await;
+                Err(End::Final(Outcome::Failed(super::failure_text(&e))))
             }
         }
     }

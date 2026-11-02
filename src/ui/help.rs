@@ -267,6 +267,8 @@ mod tests {
                 s.cancel_download,
                 s.update_balloon_title,
                 s.updated_balloon_title,
+                s.error_recipient_failed,
+                s.error_sender_failed,
             ];
             for text in texts {
                 let text = visible(text);

@@ -348,6 +348,7 @@ strings! {
         space_unknown,
         space_folder_note,
         space_confirm,
+        space_fat,
         // Recipient dialog.
         add_recipient_title,
         edit_recipient_title,
@@ -460,6 +461,7 @@ strings! {
         receiving_balloon_title,
         receiving_balloon,
         panic_message,
+        panic_message_goes_on,
         identity_failed,
         identity_damaged,
         // Transfer errors.
@@ -484,6 +486,10 @@ strings! {
         error_expired_receiver_may_have,
         error_bad_resume,
         error_connection_lost,
+        error_unexpected,
+        error_disk_full,
+        error_file_missing,
+        error_folder_missing,
     }
     plurals {
         drop_confirm,

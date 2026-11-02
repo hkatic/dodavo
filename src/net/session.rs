@@ -22,7 +22,7 @@ use tokio::sync::{mpsc, watch};
 
 use super::{
     CLOSE_CANCELLED, CLOSE_FAILED, CLOSE_SUSPENDED, CancelToken, ReceivedFolder,
-    protocol::{Kind, Offer, Token, token_hex},
+    protocol::{Ended, Kind, Offer, Token, token_hex},
 };
 use crate::archive::{self, Cancelled, FileId};
 
@@ -417,7 +417,36 @@ impl TransferRecord {
             Some(id) if !FileId::of(&part).is_ok_and(|now| id.same_item(&now)) => {
                 Err(part_missing())
             }
+            _ if self.part_shorter() => Err(part_missing()),
             _ => Ok(part),
+        }
+    }
+
+    /// On FAT and exFAT: whether what has the part's name is shorter than
+    /// what the record knows was written to the part and reached the disk
+    /// (`synced`). Then it is not the part, although its identity says so:
+    /// there the identity is only the creation time, which Windows also
+    /// gives a file made under the part's name moments after the part was
+    /// deleted (see `FileId::same_item`), and such a file must be neither
+    /// written to nor deleted. Where the identity has the part's number, it
+    /// tells the part from any other file, and a part that lost its end goes
+    /// on from what is there (see [`have`](Self::have)); on FAT such a part
+    /// (of a drive pulled out during a write, say) cannot be told from
+    /// another file, so it is left as it is, for the user to delete. (By the
+    /// part's name: a connection's handle may not read the size.)
+    fn part_shorter(&self) -> bool {
+        if !self.part_identity().is_some_and(|id| id.by_creation_time()) {
+            return false;
+        }
+        match (&self.side, self.receive_files()) {
+            (
+                Side::Receive {
+                    synced: Some(synced),
+                    ..
+                },
+                Some(files),
+            ) => fs::metadata(&files.part).is_ok_and(|m| m.len() < *synced),
+            _ => false,
         }
     }
 
@@ -482,10 +511,11 @@ impl TransferRecord {
 
     /// Whether the part file of a receive is there: the same file as when it
     /// was created (see [`Owned`]), or (in records of earlier versions)
-    /// anything of its name.
+    /// anything of its name, and not shorter than what reached the disk (see
+    /// [`part_shorter`](Self::part_shorter)).
     pub fn part_is_there(&self) -> bool {
         match (self.receive_files(), self.owned_part()) {
-            (Some(files), _) if files.part_gone => false,
+            (Some(files), _) if files.part_gone || self.part_shorter() => false,
             (Some(_), Some(part)) => part.is_there(),
             (Some(files), None) => files.part.exists(),
             (None, _) => false,
@@ -497,7 +527,8 @@ impl TransferRecord {
     /// [`remove_file`].
     fn remove_part(&self, patient: bool) -> bool {
         match (self.receive_files(), self.owned_part()) {
-            (Some(files), _) if files.part_gone => true,
+            // Not the part (see `part_shorter`): there is none to delete.
+            (Some(files), _) if files.part_gone || self.part_shorter() => true,
             (Some(_), Some(part)) => part.remove_file(patient),
             (Some(files), None) => remove_file(&files.part, patient),
             (None, _) => true,
@@ -793,24 +824,35 @@ impl TransferRecord {
     }
 }
 
-/// Remembers that a transfer ended while the other side could not be told.
-/// A transfer that completed stays completed: a later report that it ended
+/// Remembers how a transfer ended, for the other side to learn later. A
+/// transfer that completed stays completed: a later report that it ended
 /// (after a restart that could not tell, say) does not change that.
-pub fn write_tombstone(data_dir: &Path, token: &Token, completed: bool) {
-    if !completed && tombstone(data_dir, token) == Some(true) {
+pub fn write_tombstone(data_dir: &Path, token: &Token, ended: Ended) {
+    if ended != Ended::Completed && tombstone(data_dir, token) == Some(Ended::Completed) {
         return;
     }
     let path = tombstone_path(data_dir, token);
     if fs::create_dir_all(path.parent().unwrap()).is_ok() {
-        let _ = fs::write(path, if completed { "completed" } else { "ended" });
+        let text = match ended {
+            Ended::Completed => "completed",
+            Ended::Cancelled => "cancelled",
+            Ended::Failed => "failed",
+        };
+        let _ = fs::write(path, text);
     }
 }
 
-/// `Some(completed)` if the transfer ended on this side.
-pub fn tombstone(data_dir: &Path, token: &Token) -> Option<bool> {
+/// How the transfer ended on this side, if it did. ("ended", which earlier
+/// versions wrote for any end without the item, reads as cancelled, as they
+/// reported it.)
+pub fn tombstone(data_dir: &Path, token: &Token) -> Option<Ended> {
     fs::read_to_string(tombstone_path(data_dir, token))
         .ok()
-        .map(|s| s.trim() == "completed")
+        .map(|s| match s.trim() {
+            "completed" => Ended::Completed,
+            "failed" => Ended::Failed,
+            _ => Ended::Cancelled,
+        })
 }
 
 fn modified(path: &Path) -> Option<SystemTime> {
@@ -932,7 +974,7 @@ pub fn load_all(data_dir: &Path) -> Found {
                 .and_then(|text| serde_json::from_str::<TransferRecord>(&text).ok())
                 .filter(|record| is_record_of(&path, &record.token))
                 .map(|mut record| {
-                    let verdict = if tombstone(data_dir, &record.token) == Some(true) {
+                    let verdict = if tombstone(data_dir, &record.token) == Some(Ended::Completed) {
                         Verdict::Completed
                     } else if record.ended {
                         // A record of an earlier version ended when it was
@@ -1167,11 +1209,33 @@ pub fn hash_range(
     cancel: &AtomicBool,
     progress: &mut dyn FnMut(u64, u64),
 ) -> io::Result<()> {
+    // An empty range without opening the file, which may be gone.
+    if to <= from {
+        return Ok(());
+    }
+    hash_open(
+        &mut fs::File::open(path)?,
+        from,
+        to,
+        hasher,
+        cancel,
+        progress,
+    )
+}
+
+/// [`hash_range`] of a file that is open already.
+pub fn hash_open(
+    file: &mut fs::File,
+    from: u64,
+    to: u64,
+    hasher: &mut blake3::Hasher,
+    cancel: &AtomicBool,
+    progress: &mut dyn FnMut(u64, u64),
+) -> io::Result<()> {
     let total = to.saturating_sub(from);
     if total == 0 {
         return Ok(());
     }
-    let mut file = fs::File::open(path)?;
     file.seek(SeekFrom::Start(from))?;
     let mut buf = vec![0u8; HASH_BUF];
     let mut done = 0u64;
@@ -1332,7 +1396,7 @@ impl Drop for Finishing<'_> {
 pub(crate) struct Ending {
     /// Boxed: much larger than the rest of what a cancel returns.
     record: Option<Box<TransferRecord>>,
-    completed: bool,
+    ended: Ended,
     /// The session's lock for writing the record (see `Session::writing`).
     writing: Option<Arc<Mutex<()>>>,
     /// A second handle to the part file of a receive, if a connection was
@@ -1345,7 +1409,7 @@ impl Ending {
     pub fn nothing() -> Self {
         Ending {
             record: None,
-            completed: false,
+            ended: Ended::Cancelled,
             writing: None,
             part: None,
         }
@@ -1359,8 +1423,8 @@ impl Ending {
         // the record back once it is deleted.
         let _writing = self.writing.as_deref().map(lock);
         if let Some(record) = self.record {
-            write_tombstone(data_dir, &record.token, self.completed);
-            if self.completed {
+            write_tombstone(data_dir, &record.token, self.ended);
+            if self.ended == Ended::Completed {
                 record.complete_with(data_dir, true);
             } else {
                 record.discard_with(data_dir, self.part.as_ref(), true);
@@ -1437,10 +1501,10 @@ impl Session {
         self.state.lock().unwrap()
     }
 
-    fn ending(&self, record: Option<TransferRecord>, completed: bool) -> Ending {
+    fn ending(&self, record: Option<TransferRecord>, ended: Ended) -> Ending {
         Ending {
             record: record.map(Box::new),
-            completed,
+            ended,
             writing: Some(self.writing.clone()),
             part: lock(&self.open_part).take(),
         }
@@ -1634,10 +1698,10 @@ impl Session {
 
     /// Ends the transfer on this side: closes the connection (with `code`, if
     /// given) and takes the record. What the result's `forget` then does
-    /// leaves a tombstone so the other side learns about the end later, and
+    /// leaves a tombstone so the other side learns later how it `ended`, and
     /// deletes the partial or temporary data. A cancel from now on comes too
     /// late: the transfer has ended the way the caller reports.
-    pub fn end(&self, code: Option<u32>, completed: bool) -> Ending {
+    pub fn end(&self, code: Option<u32>, ended: Ended) -> Ending {
         match code {
             Some(code) => self.close_current(code, b""),
             None => {
@@ -1649,7 +1713,7 @@ impl Session {
             state.stage = Stage::Ended;
             state.record.take()
         };
-        self.ending(record, completed)
+        self.ending(record, ended)
     }
 
     /// The user cancelled. A running transfer ends like with
@@ -1696,7 +1760,7 @@ impl Session {
             }
         };
         self.close_current(CLOSE_CANCELLED, b"");
-        Cancel::Ended(self.ending(record, false))
+        Cancel::Ended(self.ending(record, Ended::Cancelled))
     }
 
     /// [`cancel`](Self::cancel) with everything it leaves to do, on this
@@ -1780,7 +1844,7 @@ impl Session {
             state.record.take()
         };
         self.close_current(CLOSE_CANCELLED, b"");
-        Some(self.ending(record, false))
+        Some(self.ending(record, Ended::Cancelled))
     }
 
     /// Whether a cancel would end the transfer now (see [`cancel`](Self::cancel)).
@@ -1835,7 +1899,8 @@ impl Session {
             state.stage = Stage::Ended;
             state.record.take()
         };
-        self.ending(record, true).forget_blocking(data_dir);
+        self.ending(record, Ended::Completed)
+            .forget_blocking(data_dir);
         placed
     }
 }
@@ -1960,6 +2025,7 @@ mod tests {
                 size: 10,
                 file_count: 1,
                 content_size: 10,
+                largest_file: 10,
                 sender_name: "Ana".into(),
                 token: [token; 16],
                 modified: Some(130_000_000_000_000_000),
@@ -2101,7 +2167,7 @@ mod tests {
             Ok(dir.join("a.bin"))
         });
         assert!(placed.is_err() && !ran);
-        assert_eq!(tombstone(&dir, &[1; 16]), Some(false));
+        assert_eq!(tombstone(&dir, &[1; 16]), Some(Ended::Cancelled));
 
         // Placed first: a cancel while placing or afterwards changes nothing,
         // and the transfer has ended as completed.
@@ -2120,7 +2186,7 @@ mod tests {
             .unwrap();
         assert!(!session.cancel_blocking(&dir));
         assert_eq!(fs::read(&placed).unwrap(), b"data");
-        assert_eq!(tombstone(&dir, &[2; 16]), Some(true));
+        assert_eq!(tombstone(&dir, &[2; 16]), Some(Ended::Completed));
         assert!(records(&dir).is_empty());
 
         // A step that fails leaves the transfer running, so it can still
@@ -2167,10 +2233,10 @@ mod tests {
         assert!(session.place(&dir, &mut || Ok(dir.join("a.bin"))).is_err());
         drop(finishing);
         assert!(session.finishing().is_err(), "it has ended");
-        session.end(None, false).forget_blocking(&dir);
+        session.end(None, Ended::Cancelled).forget_blocking(&dir);
         assert!(!part.exists());
         assert!(records(&dir).is_empty());
-        assert_eq!(tombstone(&dir, &[1; 16]), Some(false));
+        assert_eq!(tombstone(&dir, &[1; 16]), Some(Ended::Cancelled));
         fs::remove_dir_all(&dir).ok();
     }
 
@@ -2467,9 +2533,9 @@ mod tests {
         session.hand_over();
         assert!(!session.cancel_blocking(&dir));
         assert!(zip.exists() && session.with_record(|_| ()).is_some());
-        session.end(None, true).forget_blocking(&dir);
+        session.end(None, Ended::Completed).forget_blocking(&dir);
         assert!(!zip.exists());
-        assert_eq!(tombstone(&dir, &[17; 16]), Some(true));
+        assert_eq!(tombstone(&dir, &[17; 16]), Some(Ended::Completed));
         fs::remove_dir_all(&dir).ok();
     }
 
@@ -2517,7 +2583,7 @@ mod tests {
         ending.forget_blocking(&dir);
         assert!(!zip.exists());
         assert!(records(&dir).is_empty());
-        assert_eq!(tombstone(&dir, &[20; 16]), Some(false));
+        assert_eq!(tombstone(&dir, &[20; 16]), Some(Ended::Cancelled));
         assert!(!session.cancel_blocking(&dir), "it has ended");
 
         // The receiver confirmed it: too late, also after a restart.
@@ -2531,9 +2597,9 @@ mod tests {
         assert!(!records(&dir)[0].cancel_pending());
         assert!(session.stop_deferring().is_none());
         assert!(!session.cancel_blocking(&dir));
-        session.end(None, true).forget_blocking(&dir);
+        session.end(None, Ended::Completed).forget_blocking(&dir);
         assert!(!zip.exists());
-        assert_eq!(tombstone(&dir, &[21; 16]), Some(true));
+        assert_eq!(tombstone(&dir, &[21; 16]), Some(Ended::Completed));
 
         // Without a cancel, the transfer just goes on; `Done` goes out again
         // later, so a restart until then does not wait for a verdict.
@@ -2616,7 +2682,7 @@ mod tests {
             files.moving = None;
         }
         other.save(&dir).unwrap();
-        write_tombstone(&dir, &other.token, true);
+        write_tombstone(&dir, &other.token, Ended::Completed);
         let loaded = records(&dir);
         assert_eq!(loaded.len(), 1);
         assert_eq!(loaded[0].receive_files().unwrap().part, part);
@@ -2817,11 +2883,11 @@ mod tests {
         let (session, _rx) = Session::new(1, [23; 16], peer, Role::Send);
         let (r, zip) = send_record(&dir, 23);
         session.set_record(r);
-        let ending = session.end(None, true);
+        let ending = session.end(None, Ended::Completed);
         assert!(matches!(session.cancel(), Cancel::TooLate));
         ending.forget_blocking(&dir);
         assert!(!zip.exists());
-        assert_eq!(tombstone(&dir, &[23; 16]), Some(true));
+        assert_eq!(tombstone(&dir, &[23; 16]), Some(Ended::Completed));
         fs::remove_dir_all(&dir).ok();
     }
 
@@ -2843,12 +2909,12 @@ mod tests {
             files.unpacking = Some(Owned::at(&folder).unwrap());
         }
         r.save(&dir).unwrap();
-        write_tombstone(&dir, &r.token, true);
+        write_tombstone(&dir, &r.token, Ended::Completed);
         assert!(records(&dir).is_empty());
         assert_eq!(fs::read(folder.join("a.jpg")).unwrap(), b"received");
         assert!(!temp.exists(), "only what was temporary goes");
         assert!(!record_path(&dir, &r.token).exists());
-        assert_eq!(tombstone(&dir, &r.token), Some(true));
+        assert_eq!(tombstone(&dir, &r.token), Some(Ended::Completed));
         fs::remove_dir_all(&dir).ok();
     }
 
@@ -2867,7 +2933,7 @@ mod tests {
                 std::thread::spawn(move || session.save_paused(&dir, i % 2 == 0))
             })
             .collect();
-        session.end(None, false).forget_blocking(&dir);
+        session.end(None, Ended::Cancelled).forget_blocking(&dir);
         for saver in savers {
             saver.join().unwrap();
         }
@@ -3415,14 +3481,84 @@ mod tests {
         fs::remove_dir_all(&dir).ok();
     }
 
+    /// A tombstone tells how the transfer ended; a completed one stays
+    /// completed, and the "ended" of earlier versions reads as cancelled.
     #[test]
     fn tombstones() {
         let dir = scratch("tomb");
         assert_eq!(tombstone(&dir, &[3; 16]), None);
-        write_tombstone(&dir, &[3; 16], false);
-        write_tombstone(&dir, &[4; 16], true);
-        assert_eq!(tombstone(&dir, &[3; 16]), Some(false));
-        assert_eq!(tombstone(&dir, &[4; 16]), Some(true));
+        write_tombstone(&dir, &[3; 16], Ended::Cancelled);
+        write_tombstone(&dir, &[4; 16], Ended::Completed);
+        write_tombstone(&dir, &[5; 16], Ended::Failed);
+        assert_eq!(tombstone(&dir, &[3; 16]), Some(Ended::Cancelled));
+        assert_eq!(tombstone(&dir, &[4; 16]), Some(Ended::Completed));
+        assert_eq!(tombstone(&dir, &[5; 16]), Some(Ended::Failed));
+        write_tombstone(&dir, &[4; 16], Ended::Failed);
+        assert_eq!(tombstone(&dir, &[4; 16]), Some(Ended::Completed));
+        fs::write(tombstone_path(&dir, &[6; 16]), "ended").unwrap();
+        assert_eq!(tombstone(&dir, &[6; 16]), Some(Ended::Cancelled));
+        fs::remove_dir_all(&dir).ok();
+    }
+
+    /// On FAT and exFAT, a file made under the part's name moments after the
+    /// part was deleted gets the part's creation time, and so its identity
+    /// (see `TransferRecord::part_shorter`). One that is shorter than what
+    /// reached the disk is still not the part: it is not opened, cut or
+    /// deleted. Elsewhere the part's number tells, and a part that lost its
+    /// end stays the part.
+    #[test]
+    fn a_shorter_file_under_the_parts_name_on_fat_is_not_the_part() {
+        use std::os::windows::fs::FileTimesExt;
+        let dir = scratch("shorter-fat");
+        let part = dir.join("d.bin.part");
+        for fat in [true, false] {
+            archive::PRETEND_FAT.set(fat);
+            fs::write(&part, b"0123456789").unwrap();
+            let mut r = record(31, receive_side(&dir, &part, Some(8)));
+            if let Side::Receive { part_id, .. } = &mut r.side {
+                *part_id = Some(archive::file_id(&part).unwrap());
+            }
+            assert!(r.part_is_there());
+            let created = fs::metadata(&part).unwrap().created().unwrap();
+            fs::remove_file(&part).unwrap();
+            fs::write(&part, b"new").unwrap();
+            let times = fs::FileTimes::new().set_created(created);
+            fs::File::options()
+                .write(true)
+                .open(&part)
+                .unwrap()
+                .set_times(times)
+                .unwrap();
+            if fat {
+                assert!(
+                    r.part_identity()
+                        .unwrap()
+                        .same_item(&archive::file_id(&part).unwrap())
+                );
+                assert!(!r.part_is_there());
+                let opened = r.open_part(fs::OpenOptions::new().read(true));
+                assert_eq!(
+                    opened.err().unwrap().to_string(),
+                    crate::i18n::tr!(error_part_missing)
+                );
+                assert!(r.truncate_to_synced().is_err());
+                r.discard(&dir);
+                assert_eq!(fs::read(&part).unwrap(), b"new", "neither cut nor deleted");
+            } else {
+                // Another file by its number.
+                assert!(!r.part_is_there());
+            }
+            fs::remove_file(&part).ok();
+        }
+        // The part itself, shorter than noted (a disk that lost its end):
+        // still the part, which goes on from what is there.
+        fs::write(&part, b"012").unwrap();
+        let mut r = record(32, receive_side(&dir, &part, Some(8)));
+        if let Side::Receive { part_id, .. } = &mut r.side {
+            *part_id = Some(archive::file_id(&part).unwrap());
+        }
+        assert!(r.part_is_there());
+        assert_eq!(r.have(), 3);
         fs::remove_dir_all(&dir).ok();
     }
 

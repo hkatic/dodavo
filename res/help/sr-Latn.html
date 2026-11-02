@@ -205,7 +205,7 @@
 <dt><span class="ui">Sačuvaj u:</span> (<kbd>Alt</kbd>+<kbd>S</kbd>)</dt>
 <dd>Fascikla u kojoj će se stavka sačuvati. To je fascikla iz opcije <span class="ui">Uvek čuvaj primljene datoteke u ovoj fascikli</span> ako ste je podesili u postavkama, inače fascikla koju ste koristili prošli put ili vaša fascikla Preuzimanja. Možete da upišete drugu fasciklu ili da je izaberete dugmetom <span class="ui">Pregledaj…</span> (<kbd>Alt</kbd>+<kbd>P</kbd>).</dd>
 <dt>Slobodan prostor na disku</dt>
-<dd>Rečenica ispod fascikle kaže da li na tom disku ima dovoljno slobodnog prostora, koliko je potrebno i koliko je dostupno. Fascikli koja se raspakuje potreban je prostor i za preuzimanje i za raspakivanje; fascikli koju zadržavate samo kao ZIP datoteku potreban je prostor za ZIP datoteku (pogledajte <span class="ui">Posle prijema fascikle</span> u <a href="#settings-receiving">postavkama</a>). Rečenica se ažurira kada fasciklu izaberete dugmetom Pregledaj ili napustite polje sa fasciklom.</dd>
+<dd>Rečenica ispod fascikle kaže da li na tom disku ima dovoljno slobodnog prostora, koliko je potrebno i koliko je dostupno. Fascikli koja se raspakuje potreban je prostor i za preuzimanje i za raspakivanje; fascikli koju zadržavate samo kao ZIP datoteku potreban je prostor za ZIP datoteku (pogledajte <span class="ui">Posle prijema fascikle</span> u <a href="#settings-receiving">postavkama</a>). Rečenica se ažurira kada fasciklu izaberete dugmetom Pregledaj ili napustite polje sa fasciklom. Na disku sa sistemom datoteka FAT32, kakav imaju mnogi USB fleš diskovi i memorijske kartice, nijedna datoteka ne može biti od 4 GB ili veća: ako bi prenos tamo sačuvao takvu datoteku, rečenica to kaže i treba da izaberete fasciklu na drugom disku.</dd>
 <dt><span class="ui">Prihvati</span> (<kbd>Alt</kbd>+<kbd>I</kbd>) i <span class="ui">Odbij</span> (<kbd>Alt</kbd>+<kbd>O</kbd>)</dt>
 <dd>Kada se prozor otvori, fokus je na dugmetu <span class="ui">Prihvati</span>, pa pritiskom tastera <kbd>Enter</kbd> prihvatate prenos; čitači ekrana obično najpre pročitaju tekst prozora, od podebljanog reda do rečenice o slobodnom prostoru na disku. Pritiskom tastera <kbd>Esc</kbd> ili zatvaranjem prozora odbijate ga.</dd>
 </dl>
@@ -484,7 +484,7 @@
 <p>Za pokretanje prenosa da: Dodavo mora da bude pokrenut na oba računara, inače vidite <span class="ui">Povezivanje sa računarom (…) nije uspelo.</span> Kada je prenos jednom prihvaćen, bilo koja strana može da ode van mreže, pređe u stanje spavanja ili izađe iz programa Dodavo; prenos se nastavlja kada su obe ponovo tu, kako je opisano u prethodnom odgovoru.</p>
 
 <h3 id="faq-size">Da li postoji ograničenje veličine?</h3>
-<p>Ne. Dodavo ne ograničava veličinu datoteke ni fascikle; jedino ograničenje je slobodan prostor na disku koji prima. Za fasciklu računar koji prima treba mesta i za arhivu i za raspakovanu fasciklu, dakle otprilike dvostruku veličinu fascikle dok traje raspakivanje (osim ako zadržava samo ZIP datoteku). Prozor Dolazni prenos kaže da li ima dovoljno prostora pre nego što prihvatite.</p>
+<p>Ne. Dodavo ne ograničava veličinu datoteke ni fascikle; jedina ograničenja su slobodan prostor na disku koji prima i, na disku sa sistemom datoteka FAT32 (mnogi USB fleš diskovi i memorijske kartice), to da nijedna datoteka ne može biti od 4 GB ili veća. Za fasciklu računar koji prima treba mesta i za arhivu i za raspakovanu fasciklu, dakle otprilike dvostruku veličinu fascikle dok traje raspakivanje (osim ako zadržava samo ZIP datoteku). Prozor Dolazni prenos kaže da li ima dovoljno prostora pre nego što prihvatite.</p>
 
 <h3 id="faq-several">Da li mogu da pošaljem više stavki odjednom ili većem broju osoba?</h3>
 <p>Da. Možete da pokrenete koliko god prenosa želite, istoj osobi ili različitim osobama, a svaki ima sopstveni prozor napretka. Da biste poslali više datoteka ili fascikli u jednom potezu, prevucite ih iz Istraživača datoteka na osobu na listi primalaca; nakon što potvrdite, svaka stavka se šalje kao zaseban prenos. Pogledajte <a href="#drag-and-drop">Prevlačenje stavki na osobu</a>. Kolona <span class="ui">Prenos</span> na listi primalaca i meni <span class="ui">Prenosi</span> prate ih sve.</p>
@@ -534,8 +534,8 @@
 <dd>Dodavo nije pokrenut na drugom računaru ili neko od vas nije na mreži. Zamolite drugu osobu da pokrene Dodavo, proverite red statusa na dnu oba glavna prozora, a zatim pokušajte ponovo. Proverite i da li imate tačan ID kontakta te osobe.</dd>
 <dt>„Datoteka je promenjena posle početka prenosa“</dt>
 <dd>Datoteka koju šaljete izmenjena je dok je prenos čekao vezu, pa ne može da se nastavi. Pošaljite je ponovo.</dd>
-<dt>„Prenos je otkazan na drugoj strani (…).“, a druga osoba kaže da ga nije otkazala</dt>
-<dd>Njen Dodavo više ne zna za taj prenos: zatvoren je pre nego što je prenos prihvaćen, datoteka koju je slala je promenjena ili je prošlo više od 30 dana. Zamolite je da stavku pošalje ponovo.</dd>
+<dt>„Primalac je javio da prenos na drugom računaru nije uspeo“ ili „Pošiljalac je javio da prenos na drugom računaru nije uspeo“</dt>
+<dd>Dodavo na drugom računaru nije mogao da nastavi prenos ili više ne zna za njega: stavka koja se šalje je promenjena ili izbrisana, delimično primljeni podaci više ne postoje, zatvoren je pre nego što je prenos prihvaćen ili je prošlo više od 30 dana. Prozor napretka na drugom računaru kaže šta se tamo dogodilo. Zamolite pošiljaoca da stavku pošalje ponovo.</dd>
 <dt>Prenos kaže da je veza prekinuta, a oboje smo na mreži</dt>
 <dd>Sačekajte trenutak: Dodavo pokušava ponovo svakih nekoliko sekundi. Ako je Dodavo na bilo kojoj strani ponovo pokrenut, proverite da li je pokrenut na oba računara. Prenos uvek možete da otkažete i da ga započnete iznova.</dd>
 <dt>Red statusa kaže Van mreže</dt>

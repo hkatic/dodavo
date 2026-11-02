@@ -205,7 +205,7 @@
 <dt><span class="ui">Save to:</span> (<kbd>Alt</kbd>+<kbd>S</kbd>)</dt>
 <dd>The folder the item will be saved in. It is the folder from <span class="ui">Always save received files to this folder</span> if you set one in Settings, otherwise the folder you used last time, or your Downloads folder. You can type a different folder, or use <span class="ui">Browse…</span> (<kbd>Alt</kbd>+<kbd>B</kbd>) to choose one.</dd>
 <dt>Free disk space</dt>
-<dd>A sentence below the folder says whether there is enough free space on that drive, how much is needed and how much is available. A folder that is unpacked needs room both for the download and for unpacking; a folder that you keep only as a ZIP file needs room for the ZIP file (see <span class="ui">After receiving a folder</span> in <a href="#settings-receiving">Settings</a>). The sentence is updated when you choose a folder with Browse or leave the folder field.</dd>
+<dd>A sentence below the folder says whether there is enough free space on that drive, how much is needed and how much is available. A folder that is unpacked needs room both for the download and for unpacking; a folder that you keep only as a ZIP file needs room for the ZIP file (see <span class="ui">After receiving a folder</span> in <a href="#settings-receiving">Settings</a>). The sentence is updated when you choose a folder with Browse or leave the folder field. On a drive with the FAT32 file system, such as many USB sticks and memory cards, no file can be 4 GB or larger: if the transfer would save such a file there, the sentence says so, and you need to choose a folder on another drive.</dd>
 <dt><span class="ui">Accept</span> (<kbd>Alt</kbd>+<kbd>A</kbd>) and <span class="ui">Decline</span> (<kbd>Alt</kbd>+<kbd>D</kbd>)</dt>
 <dd>When the window opens, the focus is on <span class="ui">Accept</span>, so pressing <kbd>Enter</kbd> accepts; screen readers usually read the text of the window first, from the bold line to the free disk space sentence. Pressing <kbd>Esc</kbd> or closing the window declines.</dd>
 </dl>
@@ -484,7 +484,7 @@
 <p>To start a transfer, yes: Dodavo must be running on both computers, otherwise you see <span class="ui">Could not connect to …</span>. Once a transfer has been accepted, either side may go offline, go to sleep or exit Dodavo; the transfer continues when both are back, as described in the previous answer.</p>
 
 <h3 id="faq-size">Is there a size limit?</h3>
-<p>No. Dodavo has no limit on the size of a file or folder; the only limit is the free space on the receiving drive. For a folder, the receiving computer needs room for the archive and for the unpacked folder, so roughly twice the folder's size while unpacking (unless it keeps only the ZIP file). The Incoming Transfer window says whether there is enough space before you accept.</p>
+<p>No. Dodavo has no limit on the size of a file or folder; the only limits are the free space on the receiving drive and, on a drive with the FAT32 file system (many USB sticks and memory cards), that no single file can be 4 GB or larger. For a folder, the receiving computer needs room for the archive and for the unpacked folder, so roughly twice the folder's size while unpacking (unless it keeps only the ZIP file). The Incoming Transfer window says whether there is enough space before you accept.</p>
 
 <h3 id="faq-several">Can I send several items at once, or to several people?</h3>
 <p>Yes. You can start as many transfers as you like, to the same person or to different people, and each has its own progress window. To send several files or folders in one go, drag them from File Explorer onto the person in your recipient list; after you confirm, each item is sent as a separate transfer. See <a href="#drag-and-drop">Dragging items onto a person</a>. The <span class="ui">Transfer</span> column of the recipient list and the <span class="ui">Transfers</span> menu keep track of all of them.</p>
@@ -534,8 +534,8 @@
 <dd>Dodavo is not running on the other computer, or one of you is offline. Ask the other person to start Dodavo and check the status line at the bottom of both main windows, then try again. Also check that you have the right Contact ID for them.</dd>
 <dt>“The file was changed after the transfer started”</dt>
 <dd>The file you are sending was modified while the transfer was waiting for the connection, so it cannot be continued. Send it again.</dd>
-<dt>“… cancelled the transfer.”, but the other person says they did not</dt>
-<dd>Their Dodavo no longer knows this transfer: it was closed before the transfer was accepted, the file they were sending has changed, or more than 30 days have passed. Ask them to send the item again.</dd>
+<dt>“The recipient reported that the transfer failed on the other computer” or “The sender reported that the transfer failed on the other computer”</dt>
+<dd>Dodavo on the other computer could not go on with the transfer, or no longer knows it: the item being sent was changed or deleted, the partly received data is gone, it was closed before the transfer was accepted, or more than 30 days have passed. The progress window on the other computer says what happened there. Ask the sender to send the item again.</dd>
 <dt>The transfer says the connection was lost, but we are both online</dt>
 <dd>Wait a moment: Dodavo tries again every few seconds. If Dodavo was restarted on either side, make sure it is running on both. You can always cancel the transfer and start it again.</dd>
 <dt>The status line says Offline</dt>
