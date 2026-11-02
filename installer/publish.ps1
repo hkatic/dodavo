@@ -44,6 +44,15 @@ $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 Set-Location $root
 
+# Runs a program whose error output does not matter, for its output and
+# $LASTEXITCODE. Windows PowerShell turns what a program writes to stderr into
+# errors, which 'Stop' makes fatal even with 2>$null.
+function Invoke-Quietly {
+    param([string]$Exe, [string[]]$Arguments)
+    $ErrorActionPreference = 'Continue'
+    & $Exe @Arguments 2>$null
+}
+
 if (-not $Version) {
     $metadata = cargo metadata --no-deps --format-version 1 | ConvertFrom-Json
     $Version = ($metadata.packages | Where-Object { $_.name -eq 'dodavo' }).version
@@ -88,7 +97,7 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 # The built installer should be the committed, tagged source.
-$head = git describe --tags --exact-match 2>$null
+$head = Invoke-Quietly 'git' @('describe', '--tags', '--exact-match')
 if ($head -ne $tag) {
     Write-Warning "HEAD is not tagged $tag (git describe says '$head'). Tag the release commit: git tag $tag"
 }
@@ -113,7 +122,7 @@ if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
     throw 'The GitHub CLI (gh) is not installed. Upload the files by hand on the Releases page.'
 }
 
-$existing = gh release view $tag --repo $Repo --json isDraft 2>$null
+$existing = Invoke-Quietly 'gh' @('release', 'view', $tag, '--repo', $Repo, '--json', 'isDraft')
 if ($LASTEXITCODE -eq 0) {
     throw "The release $tag exists already on GitHub. Delete it or upload the files by hand."
 }
