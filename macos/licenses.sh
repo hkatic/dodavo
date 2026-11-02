@@ -34,7 +34,7 @@ rust_version=$(rustc --version | cut -d' ' -f2)
     echo "================================================================================"
     echo
     if [ -f "$library" ]; then
-        textutil -convert txt -stdout "$library"
+        textutil -convert txt -stdout "$library" | tr -d '\r'
     else
         echo "Rust is dual licensed under the MIT license and the Apache License, version 2.0."
         echo "See https://github.com/rust-lang/rust/blob/master/COPYRIGHT"
