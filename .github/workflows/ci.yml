@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  push:
+    branches: [master, macos]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 90
+    steps:
+      # The tests read committed files such as the help pages and the license,
+      # so they get the bytes that were committed.
+      - name: Keep line ends as committed
+        run: git config --global core.autocrlf false
+      - uses: actions/checkout@v7
+      - name: Install Rust
+        run: |
+          rustup toolchain install stable --profile minimal --no-self-update
+          rustup default stable
+      - uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: windows-${{ hashFiles('Cargo.lock') }}
+      - name: Build
+        run: cargo build --release --locked
+      - name: Check the imports against the Windows baseline
+        run: powershell -ExecutionPolicy Bypass -File installer\check-imports.ps1 target\release\Dodavo.exe
+      # Kept with each run, so that a change that loses a test shows up.
+      - name: List the tests
+        run: cargo test --locked -- --list > tests-windows.txt
+      - uses: actions/upload-artifact@v7
+        with:
+          name: tests-windows
+          path: tests-windows.txt
+      # One at a time: the network tests start real iroh endpoints.
+      - name: Test
+        run: cargo test --locked -- --test-threads=1
