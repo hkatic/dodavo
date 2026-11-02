@@ -30,9 +30,6 @@ use crate::{
     update,
 };
 
-/// Speed is averaged over the progress reports of the last few seconds.
-const RATE_WINDOW: Duration = Duration::from_secs(4);
-
 pub const WM_APP_NET: u32 = WM_APP + 1;
 
 pub struct App {
@@ -80,10 +77,8 @@ pub struct Transfer {
     pub total: u64,
     /// False once the transfer has ended; its window may still be open.
     pub active: bool,
-    /// Bytes per second over the last few seconds, when known.
-    pub rate: Option<u64>,
-    /// Recent progress reports (time, bytes done) for the speed.
-    samples: VecDeque<(Instant, u64)>,
+    /// The speed, from the progress reports, as the progress window has it.
+    speed: progress::Speed,
     /// When the recipient list last showed this transfer's state.
     list_shown: Option<Instant>,
 }
@@ -107,8 +102,7 @@ impl Transfer {
             done: 0,
             total,
             active: true,
-            rate: None,
-            samples: VecDeque::new(),
+            speed: progress::Speed::default(),
             list_shown: None,
         }
     }
@@ -119,24 +113,24 @@ impl Transfer {
         let changed = self.total != total;
         self.done = done;
         self.total = total;
-        self.samples.push_back((now, done));
-        while self.samples.len() > 2 && now.duration_since(self.samples[0].0) > RATE_WINDOW {
-            self.samples.pop_front();
-        }
-        self.rate = match (self.samples.front(), self.samples.back()) {
-            (Some(&(t0, d0)), Some(&(t1, d1))) => {
-                let secs = t1.duration_since(t0).as_secs_f64();
-                (secs > 0.5 && d1 > d0).then(|| ((d1 - d0) as f64 / secs) as u64)
-            }
-            _ => None,
-        };
+        self.speed.note(now, done);
         changed
     }
 
     /// A phase change (pause, lost connection, …) makes the old speed stale.
     fn clear_rate(&mut self) {
-        self.samples.clear();
-        self.rate = None;
+        self.speed.reset();
+    }
+
+    /// Bytes per second at `now`, when known; zero once the data of a
+    /// transfer has stopped coming, as in the progress window (see
+    /// `progress::Speed::stalled`).
+    fn rate(&self, now: Instant) -> Option<u64> {
+        if self.phase == Some(Phase::Transferring) && self.speed.stalled(now) {
+            Some(0)
+        } else {
+            self.speed.rate()
+        }
     }
 
     /// One line of state for the recipient list and the Transfers menu, such
@@ -229,11 +223,11 @@ fn status_of(mine: &[&Transfer]) -> String {
 
 /// The tooltip of the notification area icon (what a screen reader reads on
 /// it): the running transfer, or how many there are, with progress and speed.
-fn tray_tip(active: &[&Transfer]) -> String {
+fn tray_tip(active: &[&Transfer], now: Instant) -> String {
     let speed = |rate: u64| tr!(speed_value, rate = format_size(rate));
     match active {
         [] => APP_NAME.to_string(),
-        [t] => match t.rate {
+        [t] => match t.rate(now) {
             Some(rate) => tr!(
                 tray_tip_one_speed,
                 app = APP_NAME,
@@ -252,8 +246,9 @@ fn tray_tip(active: &[&Transfer]) -> String {
                     (d + t.done.min(t.total) as u128, s + t.total as u128)
                 });
             let percent = (done * 100).checked_div(total).unwrap_or(0);
-            let rate: u64 = many.iter().filter_map(|t| t.rate).sum();
-            if many.iter().any(|t| t.rate.is_some()) {
+            let rates: Vec<u64> = many.iter().filter_map(|t| t.rate(now)).collect();
+            let rate: u64 = rates.iter().sum();
+            if !rates.is_empty() {
                 tr!(
                     tray_tip_many_speed,
                     app = APP_NAME,
@@ -512,6 +507,13 @@ fn refresh_transfer_views(id: u64, force: bool) {
     refresh_tray(force);
 }
 
+/// The data of transfer `id` has stopped coming (see `progress::Speed`): the
+/// notification area icon's speed says so at once, since no report comes
+/// that would update it.
+pub fn transfer_stalled(id: u64) {
+    refresh_transfer_views(id, true);
+}
+
 /// Shows the running transfers on the notification area icon: a count badge
 /// and a tooltip with progress and speed.
 fn refresh_tray(force: bool) {
@@ -526,7 +528,7 @@ fn refresh_tray(force: bool) {
     let (count, tip, busy) = with(|a| {
         let active: Vec<&Transfer> = a.transfers.values().filter(|t| t.active).collect();
         let busy = active.iter().any(|t| t.moving_data());
-        (active.len(), tray_tip(&active), busy)
+        (active.len(), tray_tip(&active, Instant::now()), busy)
     });
     tray::set_status(main_window(), count, &tip);
     keep_awake(busy);
@@ -830,44 +832,55 @@ mod tests {
         assert!(!text.contains("report.pdf"), "{text}");
     }
 
+    /// The speed is the progress window's (see `progress::Speed`), also
+    /// zero once the data of a transfer has stopped coming.
     #[test]
     fn speed_comes_from_the_recent_reports() {
         let mut t = transfer(Some(Phase::Transferring), 0, 1000);
         let start = Instant::now();
+        let later = start + Duration::from_secs(2);
         assert!(!t.note_progress(start, 0, 1000));
-        // Too early for a rate.
-        t.note_progress(start + Duration::from_millis(200), 100, 1000);
-        assert_eq!(t.rate, None);
-        t.note_progress(start + Duration::from_secs(2), 1000 - 800, 1000);
-        assert_eq!(t.rate, Some(100));
-        // Old samples fall out of the window; the first report sets the size.
-        t.note_progress(start + Duration::from_secs(7), 700, 1000);
-        assert_eq!(t.samples.len(), 2);
-        assert!(t.note_progress(start + Duration::from_secs(8), 800, 2000));
+        t.note_progress(later, 200, 1000);
+        assert_eq!(t.rate(later), Some(100));
+        let stalled = later + progress::STALLED_AFTER;
+        assert_eq!(t.rate(stalled), Some(0));
+        t.phase = Some(Phase::Unpacking);
+        assert_eq!(t.rate(stalled), Some(100), "this side's own work");
+        // The first report sets the size.
+        assert!(t.note_progress(later, 300, 2000));
         t.clear_rate();
-        assert_eq!(t.rate, None);
+        assert_eq!(t.rate(stalled), None);
+    }
+
+    /// Gives `t` a speed of `rate` bytes per second, as of a second after
+    /// `start`.
+    fn moving(t: &mut Transfer, start: Instant, rate: u64) {
+        t.speed.note(start, 0);
+        t.speed.note(start + Duration::from_secs(1), rate);
     }
 
     #[test]
     fn tray_tip_names_one_transfer_and_counts_several() {
-        assert_eq!(tray_tip(&[]), APP_NAME);
+        let start = Instant::now();
+        let now = start + Duration::from_secs(1);
+        assert_eq!(tray_tip(&[], now), APP_NAME);
         let mut one = transfer(Some(Phase::Transferring), 45, 100);
-        let tip = tray_tip(&[&one]);
+        let tip = tray_tip(&[&one], now);
         assert!(tip.starts_with(APP_NAME), "{tip}");
         assert!(tip.contains("report.pdf") && tip.contains("45"), "{tip}");
         assert!(!tip.contains("/s"), "{tip}");
-        one.rate = Some(2048);
-        let tip = tray_tip(&[&one]);
+        moving(&mut one, start, 2048);
+        let tip = tray_tip(&[&one], now);
         assert!(tip.contains("/s") && tip.contains("2"), "{tip}");
 
         let mut two = transfer(Some(Phase::Transferring), 0, 0);
-        let tip = tray_tip(&[&one, &two]);
+        let tip = tray_tip(&[&one, &two], now);
         assert!(tip.contains('2') && !tip.contains("report.pdf"), "{tip}");
         assert!(tip.contains("45%") || tip.contains("45 %"), "{tip}");
         two.total = 100;
         two.done = 100;
-        two.rate = Some(1024);
-        let tip = tray_tip(&[&one, &two]);
+        moving(&mut two, start, 1024);
+        let tip = tray_tip(&[&one, &two], now);
         assert!(tip.contains("72%") || tip.contains("72 %"), "{tip}");
         assert!(tip.contains("3.0 KB") || tip.contains("3,0 KB"), "{tip}");
         assert!(!tip.contains('{'), "{tip}");

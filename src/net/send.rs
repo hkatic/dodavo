@@ -141,6 +141,10 @@ struct Sender<'a> {
     /// The last connection was closed by the receiver on purpose (it is
     /// exiting): the wait for the next one is not a network problem.
     peer_suspended: bool,
+    /// How much has gone out by the record's last note (see `note_sent`),
+    /// and the write of that note while it is under way.
+    noted: u64,
+    noting: Option<tokio::task::JoinHandle<()>>,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -191,7 +195,7 @@ async fn start(
         Err(e) => return Outcome::Unreachable(e),
     };
     session.set_current(Some(conn.clone()));
-    let _watch = AbortOnDrop(spawn_path_watch(shared.clone(), id, conn.clone()));
+    let path_watch = AbortOnDrop(spawn_path_watch(shared.clone(), id, conn.clone()));
 
     // 3. Offer and wait for the answer.
     let offer = Offer {
@@ -307,7 +311,12 @@ async fn start(
         peer_paused: false,
         peer_part_in_use: false,
         peer_suspended: false,
+        noted: 0,
+        noting: None,
     };
+    // From here on `stream` watches each connection, and only while it
+    // lasts: a watcher of this one could still report it after it is gone.
+    drop(path_watch);
     sender.drive(Some(streams), 0).await
 }
 
@@ -344,6 +353,8 @@ async fn continue_record(
         peer_paused: false,
         peer_part_in_use: false,
         peer_suspended: false,
+        noted: 0,
+        noting: None,
     };
     let handed_over = record.done_hash.is_some();
     if handed_over {
@@ -416,6 +427,20 @@ async fn prepare(
 impl Sender<'_> {
     fn emit(&self, phase: Phase) {
         self.shared.emit(Event::Phase { id: self.id, phase });
+    }
+
+    /// Notes in the record how much has gone out (see `Side::Send::sent`),
+    /// without holding up the data: while the last note is still being
+    /// written (it is synced to disk), this one is left out.
+    fn note_sent(&mut self, done: u64) {
+        if self.noting.as_ref().is_some_and(|w| !w.is_finished()) {
+            return;
+        }
+        self.noted = done;
+        let (session, data_dir) = (self.session.clone(), self.shared.data_dir.clone());
+        self.noting = Some(tokio::task::spawn_blocking(move || {
+            session.save_sent(&data_dir, done)
+        }));
     }
 
     /// The status while connected: paused here, paused there, held up by a
@@ -726,6 +751,12 @@ impl Sender<'_> {
         ctl_rx: &mut mpsc::UnboundedReceiver<Msg>,
         have: u64,
     ) -> anyhow::Result<Outcome> {
+        // What the receiver has, which can be less than what had gone out:
+        // after the last note is written, so that this one comes last.
+        if let Some(writing) = self.noting.take() {
+            let _ = writing.await;
+        }
+        self.note_sent(have);
         let mut hasher = self.hasher_at(have).await?;
         self.emit_pause_phase();
         self.shared.emit(Event::Progress {
@@ -742,8 +773,6 @@ impl Sender<'_> {
         }
 
         let mut done = have;
-        // What the record says has gone out (see `Side::Send::sent`).
-        let mut noted = have;
         let mut buf = vec![0u8; CHUNK];
         // The frame being written: header and payload, and how much of it went out.
         let mut pending: Vec<u8> = Vec::new();
@@ -784,11 +813,8 @@ impl Sender<'_> {
                         if throttle.ready() || done == self.size {
                             self.shared.emit(Event::Progress { id: self.id, done, total: self.size });
                         }
-                        if done - noted >= SAVE_SENT_EVERY {
-                            noted = done;
-                            self.session
-                                .update(&self.shared.data_dir, move |s, d| s.save_sent(d, done))
-                                .await;
+                        if done - self.noted >= SAVE_SENT_EVERY {
+                            self.note_sent(done);
                         }
                         if let Some(paused) = announce.take() {
                             let msg = if paused { Msg::Paused } else { Msg::Resumed };

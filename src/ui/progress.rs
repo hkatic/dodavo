@@ -59,11 +59,65 @@ const RATE_INTERVAL: Duration = Duration::from_secs(1);
 /// Shows the speed and the remaining time again, also when no data comes
 /// (see `Progress::show_rate`).
 const TIMER_RATE: usize = 3;
-/// How long no data may come while it should before the speed says so and
-/// the connection line no longer says how the data goes: a computer that is
-/// switched off or loses its network is noticed only after half a minute,
-/// and the connection may switch to a relay server meanwhile.
-const STALLED_AFTER: Duration = Duration::from_secs(5);
+/// How long the data of a transfer may stop coming before its speed is
+/// zero (see `Speed::stalled`): a computer that is switched off or loses its
+/// network is noticed only after half a minute.
+pub const STALLED_AFTER: Duration = Duration::from_secs(5);
+/// The reports of the last this long give the speed; reports further apart
+/// do not make one together.
+const SPEED_WINDOW: Duration = Duration::from_secs(4);
+
+/// The speed of a transfer from its progress reports, which the progress
+/// window and the notification area icon show (`app::Transfer`).
+#[derive(Default)]
+pub struct Speed {
+    /// The reports (time, bytes done) of the last few seconds: at least two,
+    /// once there are, so that they span some time.
+    samples: VecDeque<(Instant, u64)>,
+    /// When the amount done last grew in this phase.
+    moved: Option<Instant>,
+}
+
+impl Speed {
+    /// Starts over: a new phase may count something else, and after a pause
+    /// or a lost connection the old speed says nothing.
+    pub fn reset(&mut self) {
+        *self = Speed::default();
+    }
+
+    /// Notes the report that `done` bytes are done, at `now`.
+    pub fn note(&mut self, now: Instant, done: u64) {
+        if let Some(&(at, before)) = self.samples.back() {
+            if done > before {
+                self.moved = Some(now);
+            }
+            // Data that comes again after a while starts a new measurement.
+            if now.duration_since(at) > SPEED_WINDOW {
+                self.samples.clear();
+            }
+        }
+        self.samples.push_back((now, done));
+        while self.samples.len() > 2 && now.duration_since(self.samples[0].0) > SPEED_WINDOW {
+            self.samples.pop_front();
+        }
+    }
+
+    /// Bytes per second over the recent reports, once they span half a
+    /// second in which the amount grew.
+    pub fn rate(&self) -> Option<u64> {
+        let (&(t0, d0), &(t1, d1)) = (self.samples.front()?, self.samples.back()?);
+        let secs = t1.duration_since(t0).as_secs_f64();
+        (secs > 0.5 && d1 > d0).then(|| ((d1 - d0) as f64 / secs) as u64)
+    }
+
+    /// The amount grew in this phase, but not for `STALLED_AFTER` up to
+    /// `now`. Not before it grew: a sender that checks what it sent before a
+    /// restart sends nothing for a while on a connection that is fine.
+    pub fn stalled(&self, now: Instant) -> bool {
+        self.moved
+            .is_some_and(|at| now.duration_since(at) >= STALLED_AFTER)
+    }
+}
 const MIN_WIDTH: i32 = 460;
 const HEIGHT: i32 = 238;
 
@@ -124,17 +178,13 @@ struct Progress {
     /// the Cancel button nor closing the window offers it, and a lost
     /// connection asks nothing: the receiver finishes without it.
     handed_over: bool,
-    samples: VecDeque<(Instant, u64)>,
+    meter: Speed,
     /// When the speed was last worked out (see `RATE_INTERVAL`).
     rate_shown: Option<Instant>,
     /// What the speed and remaining time rows show.
     rate_text: Rate,
     /// The amount done and the total, as last reported.
     progress: (u64, u64),
-    /// When the amount done last changed, or the phase began.
-    last_data: Instant,
-    /// No data has come for a while in a transfer (see `STALLED_AFTER`).
-    stalled: bool,
     /// How the connection goes, as the network last said: directly, through
     /// a relay server, or not at all (see `Event::Path`).
     route: Option<bool>,
@@ -344,7 +394,7 @@ enum Rate {
     Calculating,
     /// Bytes per second, and seconds left.
     Known { rate: u64, left: u64 },
-    /// No data has come for `STALLED_AFTER`.
+    /// The data of a transfer has stopped coming (see `Speed::stalled`).
     Stalled,
 }
 
@@ -370,12 +420,10 @@ impl Progress {
             part_in_use_told: false,
             had_data: false,
             handed_over: false,
-            samples: VecDeque::new(),
+            meter: Speed::default(),
             rate_shown: None,
             rate_text: Rate::Nothing,
             progress: (0, 0),
-            last_data: Instant::now(),
-            stalled: false,
             route: None,
             result_path: None,
             after: AfterFinish::Stay,
@@ -418,25 +466,22 @@ impl Progress {
         for h in [self.speed, self.remaining] {
             set_text(h, "");
         }
-        self.samples.clear();
+        self.meter.reset();
         self.rate_shown = None;
         self.rate_text = Rate::Nothing;
-        // A new phase waits for its data afresh.
-        self.last_data = Instant::now();
-        if std::mem::take(&mut self.stalled) {
-            self.show_connection();
-        }
     }
 
-    /// The speed and the remaining time at `now`, from the data of the last
-    /// few seconds (`samples`): only while data moves and some is still to
-    /// come, and a speed of zero once none has come for a while.
+    /// The speed and the remaining time at `now` (see `Speed`): only while
+    /// data moves and some is still to come, and in a transfer a speed of
+    /// zero once its data has stopped coming. The other phases are this
+    /// computer's own work, whose reports can pause without anything wrong
+    /// (a folder with many empty files).
     fn rate(&self, now: Instant) -> Rate {
         let (done, total) = self.progress;
         if !moves_data(self.phase) || done >= total {
             return Rate::Nothing;
         }
-        if now.duration_since(self.last_data) >= STALLED_AFTER {
+        if self.phase == Some(Phase::Transferring) && self.meter.stalled(now) {
             return Rate::Stalled;
         }
         if self
@@ -445,14 +490,11 @@ impl Progress {
         {
             return Rate::Unchanged;
         }
-        match self.samples.front() {
-            Some(&(t0, d0)) if done > d0 && now.duration_since(t0) > Duration::from_millis(500) => {
-                let rate = (done - d0) as f64 / now.duration_since(t0).as_secs_f64();
-                Rate::Known {
-                    rate: rate as u64,
-                    left: ((total - done) as f64 / rate) as u64,
-                }
-            }
+        match self.meter.rate() {
+            Some(rate) if rate > 0 => Rate::Known {
+                rate,
+                left: (total - done) / rate,
+            },
             _ if self.rate_shown.is_none() => Rate::Calculating,
             _ => Rate::Unchanged,
         }
@@ -462,45 +504,38 @@ impl Progress {
     /// and every second, so that they also show when data stops coming.
     fn show_rate(&mut self, now: Instant) {
         let rate = self.rate(now);
-        // Data that stops coming in a transfer: the connection may be gone
-        // without a word yet, so the connection line says nothing either.
-        let stalled = rate == Rate::Stalled && self.phase == Some(Phase::Transferring);
-        if stalled != self.stalled {
-            self.stalled = stalled;
-            self.show_connection();
+        if let Rate::Known { .. } = rate {
+            self.rate_shown = Some(now);
         }
-        if rate == Rate::Unchanged || rate == self.rate_text {
+        if rate == self.rate_text {
             return;
         }
-        self.rate_text = rate;
         let (speed, remaining) = match rate {
             Rate::Unchanged => return,
             Rate::Nothing => (String::new(), String::new()),
             Rate::Calculating => (tr!(calculating).to_string(), tr!(calculating).to_string()),
-            Rate::Known { rate, left } => {
-                self.rate_shown = Some(now);
-                (
-                    tr!(speed_value, rate = format_size(rate)),
-                    tr!(remaining_value, left = format_duration(left)),
-                )
-            }
+            Rate::Known { rate, left } => (
+                tr!(speed_value, rate = format_size(rate)),
+                tr!(remaining_value, left = format_duration(left)),
+            ),
             Rate::Stalled => {
-                // Data that comes again starts a new measurement.
-                self.samples.clear();
+                // Data that comes again is measured anew.
                 self.rate_shown = None;
+                // No report comes that would update the notification area
+                // icon's tooltip.
+                app::transfer_stalled(self.id);
                 (tr!(speed_value, rate = format_size(0)), String::new())
             }
         };
+        self.rate_text = rate;
         set_text(self.speed, &speed);
         set_text(self.remaining, &remaining);
     }
 
     /// The connection line: how the data goes, as the network last said
-    /// (`route`); nothing while there is no connection, nor while data has
-    /// stopped coming in a transfer (see `show_rate`).
+    /// (`route`); nothing while there is no connection.
     fn connection_text(&self) -> &'static str {
         match self.route {
-            _ if self.stalled => "",
             Some(true) => tr!(connection_direct),
             Some(false) => tr!(connection_relay),
             None => "",
@@ -772,16 +807,8 @@ impl Progress {
 
         // Speed over the last few seconds.
         let now = Instant::now();
-        if done != self.progress.0 {
-            self.last_data = now;
-        }
         self.progress = (done, total);
-        self.samples.push_back((now, done));
-        while self.samples.len() > 2
-            && now.duration_since(self.samples[0].0) > Duration::from_secs(4)
-        {
-            self.samples.pop_front();
-        }
+        self.meter.note(now, done);
         self.show_rate(now);
     }
 
@@ -1363,23 +1390,56 @@ mod tests {
     const IN_USE: Phase = Phase::PartInUse { finishing: false };
     const IN_USE_FINISHING: Phase = Phase::PartInUse { finishing: true };
 
-    /// The speed shows while data moves and some is still to come, zero
-    /// once none has come for a while; the connection line then says
-    /// nothing, as it does while there is no connection.
+    /// The speed comes from the reports of the last few seconds, and a
+    /// measurement starts over after a gap; it stalls only once the amount
+    /// grew and then did not.
+    #[test]
+    fn speed_comes_from_the_recent_reports() {
+        let mut s = Speed::default();
+        let start = Instant::now();
+        let at = |secs: u64| start + Duration::from_millis(secs * 100);
+        s.note(at(0), 0);
+        assert!(!s.stalled(at(100)), "nothing has moved yet");
+        s.note(at(2), 100);
+        assert_eq!(s.rate(), None, "too early");
+        s.note(at(20), 200);
+        assert_eq!(s.rate(), Some(100));
+        s.note(at(70), 700);
+        assert_eq!(s.samples.len(), 1, "after a gap");
+        assert_eq!(s.rate(), None);
+        assert!(!s.stalled(at(70) + STALLED_AFTER - Duration::from_millis(1)));
+        assert!(s.stalled(at(70) + STALLED_AFTER));
+        s.reset();
+        assert!(s.rate().is_none() && !s.stalled(at(200)));
+    }
+
+    /// The window shows a speed while data moves and some is still to come,
+    /// and zero once the data of a transfer has stopped coming; the
+    /// connection line says nothing while there is no connection.
     #[test]
     fn the_speed_and_the_connection_follow_the_data() {
         let mut p = Progress::new(1, Direction::Receive, "Ana", "a.bin", Kind::File);
         let start = Instant::now();
+        let later = start + Duration::from_secs(1);
         p.phase = Some(Phase::Transferring);
         p.progress = (0, 1000);
-        p.last_data = start;
+        p.meter.note(start, 0);
         assert_eq!(p.rate(start), Rate::Calculating);
-        let later = start + Duration::from_secs(1);
-        p.samples.extend([(start, 0), (later, 100)]);
+        assert_eq!(
+            p.rate(start + STALLED_AFTER),
+            Rate::Calculating,
+            "nothing came yet"
+        );
+        p.meter.note(later, 100);
         p.progress = (100, 1000);
-        p.last_data = later;
         assert_eq!(p.rate(later), Rate::Known { rate: 100, left: 9 });
         assert_eq!(p.rate(later + STALLED_AFTER), Rate::Stalled);
+        p.phase = Some(Phase::Unpacking);
+        assert_ne!(
+            p.rate(later + STALLED_AFTER),
+            Rate::Stalled,
+            "this side's own work"
+        );
         p.phase = Some(Phase::WaitingForConnection { lost: true });
         assert_eq!(p.rate(later), Rate::Nothing);
         p.phase = None;
@@ -1388,11 +1448,17 @@ mod tests {
         p.progress = (1000, 1000);
         assert_eq!(p.rate(later), Rate::Nothing, "all of it is there");
 
+        // A rate worked out a moment ago stays, also when it came out the
+        // same as the one shown.
+        p.progress = (100, 1000);
+        p.show_rate(later);
+        let again = later + RATE_INTERVAL;
+        p.show_rate(again);
+        assert_eq!(p.rate_shown, Some(again));
+        assert_eq!(p.rate(again + Duration::from_millis(100)), Rate::Unchanged);
+
         p.route = Some(false);
         assert_eq!(p.connection_text(), tr!(connection_relay));
-        p.stalled = true;
-        assert_eq!(p.connection_text(), "");
-        p.stalled = false;
         p.route = None;
         assert_eq!(p.connection_text(), "");
     }

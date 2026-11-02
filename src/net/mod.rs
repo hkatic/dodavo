@@ -164,19 +164,33 @@ pub(crate) fn failure_text(error: &anyhow::Error) -> String {
 
 /// Whether `error`, one cause of a failure (see [`failure_text`]), is the
 /// end of a connection, or the error of a read or a write on a connection
-/// that ended, which an `io::Error` carries (its own source skips it).
+/// that ended, which an `io::Error` carries (its own source skips it). Only
+/// an end that says nothing more: one that the network timed out, that the
+/// other side reset or closed, or that this side closed. A protocol error,
+/// for one, keeps its own text.
 fn ends_connection(error: &(dyn std::error::Error + 'static)) -> bool {
     use iroh::endpoint::ConnectionError;
-    if error.is::<ConnectionError>() {
-        return true;
+    let ended = |e: &(dyn std::error::Error + 'static)| {
+        e.downcast_ref::<ConnectionError>().map(|e| {
+            matches!(
+                e,
+                ConnectionError::TimedOut
+                    | ConnectionError::Reset
+                    | ConnectionError::ApplicationClosed(_)
+                    | ConnectionError::LocallyClosed
+            )
+        })
+    };
+    if let Some(ended) = ended(error) {
+        return ended;
     }
     let mut next = error
         .downcast_ref::<std::io::Error>()
         .and_then(|e| e.get_ref())
         .map(|inner| inner as &(dyn std::error::Error + 'static));
     while let Some(e) = next {
-        if e.is::<ConnectionError>() {
-            return true;
+        if let Some(ended) = ended(e) {
+            return ended;
         }
         next = e.source();
     }
@@ -1848,6 +1862,9 @@ mod tests {
         assert_eq!(failure_text(&ended.clone().into()), lost);
         let read = std::io::Error::from(iroh::endpoint::ReadError::ConnectionLost(ended));
         assert_eq!(failure_text(&anyhow::Error::from(read).context("x")), format!("x: {lost}"));
+        // Not an error of the protocol, which keeps the library's text.
+        let broken = iroh::endpoint::ConnectionError::VersionMismatch;
+        assert_eq!(failure_text(&broken.clone().into()), broken.to_string());
     }
 
     /// A panic in a transfer's task ends the transfer as failed, rather than

@@ -18,8 +18,8 @@ use anyhow::{Context, bail};
 use serde::{Deserialize, Serialize};
 use windows_sys::Win32::{
     Foundation::{
-        ERROR_ACCESS_DENIED, ERROR_LOCK_VIOLATION, ERROR_SHARING_VIOLATION, FILETIME, HANDLE,
-        INVALID_HANDLE_VALUE, MAX_PATH, SYSTEMTIME,
+        ERROR_ACCESS_DENIED, ERROR_LOCK_VIOLATION, ERROR_SHARING_VIOLATION, FILETIME,
+        GENERIC_WRITE, HANDLE, INVALID_HANDLE_VALUE, MAX_PATH, SYSTEMTIME,
     },
     Storage::FileSystem::{
         BY_HANDLE_FILE_INFORMATION, DELETE, FILE_ATTRIBUTE_DIRECTORY, FILE_ATTRIBUTE_HIDDEN,
@@ -483,7 +483,14 @@ pub fn unzip(
         if let Some(parent) = target.parent() {
             std::fs::create_dir_all(parent)?;
         }
-        let file = File::create(&target)?;
+        let file = OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            // Also reading the attributes: a hidden file is hidden through
+            // this handle (see `hide_open`).
+            .access_mode(GENERIC_WRITE | FILE_READ_ATTRIBUTES)
+            .open(&target)?;
         // The mark before the data and the dates: writing it changes the
         // modified date.
         if mark {
@@ -505,11 +512,11 @@ pub fn unzip(
             }
         }
         out.flush()?;
-        // All written: the dates go on through the same handle.
+        // All written: the dates, and whether it is hidden, go on through
+        // the same handle.
         times.apply_to(out.get_ref());
-        drop(out);
         if hidden {
-            let _ = hide(&target);
+            let _ = hide_open(out.get_ref());
         }
     }
     // Children before their parents, so that nothing touches a folder after
@@ -535,19 +542,25 @@ fn is_hidden<R: Read>(entry: &zip::read::ZipFile<'_, R>) -> bool {
     entry.system() == System::Dos && entry.external_attributes() & FILE_ATTRIBUTE_HIDDEN != 0
 }
 
-/// Makes the file or folder at `path` hidden, keeping its other attributes
-/// and its dates (the zero dates of the change leave them as they are).
+/// Makes the file or folder at `path` hidden (see [`hide_open`]).
 fn hide(path: &Path) -> io::Result<()> {
     let item = OpenOptions::new()
         .access_mode(FILE_READ_ATTRIBUTES | FILE_WRITE_ATTRIBUTES)
         .custom_flags(FILE_FLAG_BACKUP_SEMANTICS)
         .open(path)?;
+    hide_open(&item)
+}
+
+/// Makes the open file or folder `item` hidden, keeping its other
+/// attributes and its dates (the zero dates of the change leave them as
+/// they are). Its handle needs to read and write the attributes.
+fn hide_open(item: &File) -> io::Result<()> {
     let info = FILE_BASIC_INFO {
         FileAttributes: item.metadata()?.file_attributes() | FILE_ATTRIBUTE_HIDDEN,
         ..FILE_BASIC_INFO::default()
     };
     set_file_info(
-        &item,
+        item,
         FileBasicInfo,
         std::slice::from_ref(&info),
         size_of::<FILE_BASIC_INFO>(),
