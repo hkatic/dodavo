@@ -46,6 +46,9 @@ pub const APP_NAME: &str = "Dodavo";
 pub const APP_AUTHOR: &str = env!("CARGO_PKG_AUTHORS");
 pub const APP_WEBSITE: &str = env!("CARGO_PKG_REPOSITORY");
 pub const COPYRIGHT_YEARS: &str = env!("DODAVO_COPYRIGHT_YEARS");
+/// The page that Help → Donate opens. The help pages name it too (a test
+/// checks them).
+pub const DONATE_URL: &str = "https://paypal.me/hrvix";
 
 pub fn wide(s: &str) -> Vec<u16> {
     s.encode_utf16().chain(std::iter::once(0)).collect()

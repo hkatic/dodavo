@@ -14,7 +14,8 @@ use windows_sys::Win32::{
 };
 
 use super::{
-    APP_NAME, ask, confirm, info, progress, send, set_text, shell, short_id, tray, wide,
+    APP_NAME, DONATE_URL, ask, confirm, info, progress, send, set_text, shell, short_id, tray,
+    wide,
     window::{self, CreateOptions, Handler, Window},
     without_shortcut,
 };
@@ -42,6 +43,7 @@ const ID_SHOW_TRANSFERS: u16 = 113;
 const ID_SHOW_CONTACT_TRANSFERS: u16 = 114;
 const ID_CHECK_UPDATES: u16 = 115;
 const ID_LICENSE: u16 = 116;
+const ID_DONATE: u16 = 117;
 const ID_LIST: u16 = 200;
 /// The first automatic update check, shortly after the start.
 const TIMER_UPDATE_START: usize = 1;
@@ -175,9 +177,10 @@ fn build_menu() -> (HMENU, HMENU) {
     menu_item(help, ID_VIEW_HELP, tr!(menu_view_help));
     menu_item(help, ID_HELP, tr!(menu_how));
     menu_separator(help);
-    menu_item(help, ID_CHECK_UPDATES, tr!(menu_check_updates));
-    menu_separator(help);
     menu_item(help, ID_LICENSE, tr!(menu_license));
+    menu_item(help, ID_DONATE, tr!(menu_donate));
+    menu_separator(help);
+    menu_item(help, ID_CHECK_UPDATES, tr!(menu_check_updates));
     menu_item(help, ID_ABOUT, tr!(menu_about));
     menu_popup(bar, help, tr!(menu_help));
     (bar, transfers)
@@ -657,6 +660,7 @@ impl MainWindow {
             ID_HELP => info(w.hwnd, tr!(help_text)),
             ID_CHECK_UPDATES => super::update::check_now(w.hwnd),
             ID_LICENSE => super::license::show(w.hwnd),
+            ID_DONATE => super::about::open_link(w.hwnd, DONATE_URL),
             ID_ABOUT => super::about::show(w.hwnd),
             _ => return false,
         }
@@ -1044,5 +1048,36 @@ fn urgent_message(w: &Window, msg: u32, wp: WPARAM, _lp: LPARAM) -> Option<LRESU
             Some(0)
         }
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Donate comes right after License, Check for Updates right before About.
+    #[test]
+    fn help_menu_order() {
+        let (bar, _) = build_menu();
+        let help = unsafe { GetSubMenu(bar, 2) };
+        let ids: Vec<u32> = (0..unsafe { GetMenuItemCount(help) })
+            .map(|i| unsafe { GetMenuItemID(help, i) })
+            .collect();
+        unsafe { DestroyMenu(bar) };
+        let separator = 0;
+        assert_eq!(
+            ids,
+            [
+                ID_VIEW_HELP,
+                ID_HELP,
+                separator,
+                ID_LICENSE,
+                ID_DONATE,
+                separator,
+                ID_CHECK_UPDATES,
+                ID_ABOUT,
+            ]
+            .map(u32::from)
+        );
     }
 }

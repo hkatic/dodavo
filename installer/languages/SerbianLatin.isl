@@ -38,7 +38,7 @@ LanguageCodePage=1250
 
 ; *** Application titles
 SetupAppTitle=Instalacija
-SetupWindowTitle=Instalacija - %1
+SetupWindowTitle=Instalacija – %1
 UninstallAppTitle=Deinstalacija
 UninstallAppFullTitle=Deinstalacija programa %1
 
@@ -69,8 +69,8 @@ WinVersionTooLowError=Program zahteva %1 verziju %2 ili noviju.
 WinVersionTooHighError=Program nije moguće instalirati na %1 verziju %2 ili noviju.
 AdminPrivilegesRequired=Morate biti prijavljeni kao administrator da biste instalirali program.
 PowerUserPrivilegesRequired=Morate biti prijavljeni kao administrator ili kao član grupe „Power Users“ da biste instalirali ovaj program.
-SetupAppRunningError=Instalacioni program je utvrdio da je %1 trenutno pokrenut.%n%nZatvorite ga i kliknite na dugme „U redu“ da nastavite ili „Otkaži“ da napustite instalaciju.
-UninstallAppRunningError=Deinstalacioni program je utvrdio da je %1 trenutno pokrenut.%n%nZatvorite ga i kliknite na dugme „U redu“ da nastavite ili „Otkaži“ da napustite deinstalaciju.
+SetupAppRunningError=Instalacioni program je utvrdio da je %1 trenutno pokrenut.%n%nZatvorite sve njegove primerke i kliknite na dugme „U redu“ da nastavite ili „Otkaži“ da napustite instalaciju.
+UninstallAppRunningError=Deinstalacioni program je utvrdio da je %1 trenutno pokrenut.%n%nZatvorite sve njegove primerke i kliknite na dugme „U redu“ da nastavite ili „Otkaži“ da napustite deinstalaciju.
 
 ; *** Startup questions
 PrivilegesRequiredOverrideTitle=Odaberite način instalacije programa
@@ -167,7 +167,7 @@ CannotInstallToUNCPath=Nije moguće instalirati program na mrežnu lokaciju.
 InvalidPath=Morate navesti punu putanju sa slovom diska; npr.:%n%nC:\APP%n%nili mrežnu lokaciju u obliku:%n%n\\server\share
 InvalidDrive=Izabrani disk ili mrežna lokacija ne postoji ili nije dostupna. Izaberite drugu.
 DiskSpaceWarningTitle=Nedovoljno prostora na disku
-DiskSpaceWarning=Za instalaciju je potrebno najmanje %1 KB slobodnog prostora, a izabrani disk na raspolaganju ima samo %2 KB.%n%nŽelite li ipak da nastavite?
+DiskSpaceWarning=Za instalaciju je potrebno najmanje %1 kB slobodnog prostora, a izabrani disk na raspolaganju ima samo %2 kB.%n%nŽelite li ipak da nastavite?
 DirNameTooLong=Naziv fascikle ili putanja je predugačka.
 InvalidDirName=Naziv fascikle nije ispravan.
 BadDirName32=Naziv fascikle ne sme sadržati nijedan od sledećih znakova:%n%n%1
@@ -186,7 +186,7 @@ CompactInstallation=Kompaktna instalacija
 CustomInstallation=Prilagođena instalacija
 NoUninstallWarningTitle=Komponente već postoje
 NoUninstallWarning=Instalacioni program je otkrio da su sledeće komponente već instalirane na računaru:%n%n%1%n%nPoništavanje izbora ovih komponenti ih neće ukloniti.%n%nŽelite li ipak da nastavite?
-ComponentSize1=%1 KB
+ComponentSize1=%1 kB
 ComponentSize2=%1 MB
 ComponentsDiskSpaceGBLabel=Izabrane stavke zahtevaju najmanje [gb] GB prostora na disku.
 ComponentsDiskSpaceMBLabel=Izabrane stavke zahtevaju najmanje [mb] MB prostora na disku.
@@ -306,8 +306,8 @@ StatusRollback=Poništavam izmene...
 ; *** Misc. errors
 ErrorInternal2=Unutrašnja greška: %1
 ErrorFunctionFailedNoCode=%1: neuspešno
-ErrorFunctionFailed=%1: neuspešno; kod %2
-ErrorFunctionFailedWithMessage=%1: neuspešno; kod %2.%n%3
+ErrorFunctionFailed=%1: neuspešno; kôd %2
+ErrorFunctionFailedWithMessage=%1: neuspešno; kôd %2.%n%3
 ErrorExecutingProgram=Nije moguće pokrenuti datoteku:%n%1
 
 ; *** Registry errors
@@ -337,14 +337,14 @@ ExistingFileReadOnlyKeepExisting=&Zadržite postojeću datoteku
 ErrorReadingExistingDest=Došlo je do greške pri čitanju postojeće datoteke:
 FileExistsSelectAction=Odaberite radnju
 FileExists2=Datoteka već postoji.
-FileExistsOverwriteExisting=&Zameni postojeću datoteku
+FileExistsOverwriteExisting=&Zamenite postojeću datoteku
 FileExistsKeepExisting=Zadr&žite postojeću datoteku
-FileExistsOverwriteOrKeepAll=&Uradi ovo i za naredne konflikte
+FileExistsOverwriteOrKeepAll=&Uradite ovo i za naredne konflikte
 ExistingFileNewerSelectAction=Odaberite radnju
 ExistingFileNewer2=Postojeća datoteka je novija od one koju instalacioni program pokušava da instalira.
-ExistingFileNewerOverwriteExisting=&Zameni postojeću datoteku
+ExistingFileNewerOverwriteExisting=&Zamenite postojeću datoteku
 ExistingFileNewerKeepExisting=Zadr&žite postojeću datoteku (preporučeno)
-ExistingFileNewerOverwriteOrKeepAll=&Uradi ovo i za naredne konflikte
+ExistingFileNewerOverwriteOrKeepAll=&Uradite ovo i za naredne konflikte
 ErrorChangingAttr=Došlo je do greške pri izmeni atributa postojeće datoteke:
 ErrorCreatingTemp=Došlo je do greške pri pravljenju datoteke u odredišnoj fascikli:
 ErrorReadingSource=Došlo je do greške pri čitanju izvorne datoteke:

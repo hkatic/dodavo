@@ -21,6 +21,7 @@ pub const SR_LATN: Strings = Strings {
     menu_how: "&Kako funkcioniše",
     menu_about: "&O programu",
     menu_license: "&Licenca",
+    menu_donate: "&Doniraj",
     menu_check_updates: "Proveri da li ima &ažuriranja…",
     ctx_send_file: "Pošalji &datoteku…",
     ctx_send_folder: "Pošalji &fasciklu…",
@@ -43,7 +44,7 @@ pub const SR_LATN: Strings = Strings {
     col_contact_id: "ID kontakta",
     col_transfer: "Prenos",
     transfer_status: "{state} – „{item}“",
-    transfer_status_percent: "{state} – „{item}“ ({percent} %)",
+    transfer_status_percent: "{state} – „{item}“ ({percent}%)",
     tx_preparing: "Pakovanje",
     tx_connecting: "Povezivanje",
     tx_waiting_accept: "Čeka se prihvatanje",
@@ -66,23 +67,23 @@ pub const SR_LATN: Strings = Strings {
     pick_file_title: "Izaberite datoteku za slanje – primalac: {name}",
     pick_folder_title: "Izaberite fasciklu za slanje – primalac: {name}",
     remove_confirm: "Želite li da uklonite „{name}“ sa liste primalaca?",
-    id_copied: "Vaš ID kontakta je kopiran u ostavu:\n\n{id}\n\n\
+    id_copied: "Vaš ID kontakta je kopiran u međuspremnik:\n\n{id}\n\n\
         Nalepite ga u e-poruku ili poruku ćaskanja i pošaljite ga svima koji žele da vam šalju datoteke. \
         Oni vas dodaju pomoću opcije „Dodaj primaoca“.",
-    clipboard_busy: "Ostavu trenutno koristi drugi program. Pokušajte ponovo.",
+    clipboard_busy: "Međuspremnik trenutno koristi drugi program. Pokušajte ponovo.",
     help_text: "Kako funkcioniše\n\n\
         1. Svaki računar na kojem radi Dodavo ima sopstveni ID kontakta. Kliknite na „Kopiraj moj ID kontakta“ \
         i pošaljite ga osobama koje treba da mogu da vam šalju datoteke.\n\n\
         2. Da biste nekome slali datoteke, dodajte ga opcijom „Dodaj primaoca“ pomoću njegovog ID-a kontakta.\n\n\
         3. Izaberite osobu na listi i kliknite na „Pošalji datoteku“ ili „Pošalji fasciklu“ (ili prevucite datoteke na nju). \
         Fascikle se automatski pakuju i na drugom računaru ponovo raspakuju.\n\n\
-        4. Primalac treba da prihvati prenos. Dodavo mora biti pokrenut na njegovom \
+        4. Od primaoca se traži da prihvati prenos. Dodavo mora biti pokrenut na njegovom \
         računaru (nastavlja da radi u oblasti za obaveštenja kada se prozor zatvori).\n\n\
         Datoteke idu direktno sa računara na računar, potpuno šifrovane. Kada direktna veza \
         nije moguća, šifrovani podaci se prosleđuju preko javnog posredničkog servera.",
     about_instruction: "{app}, verzija {version}",
     about_text: "Šaljite datoteke i fascikle direktno sa računara na računar – \
-        bez naloga, bez otpremanja u oblak, bez veza.\n\nVeze su potpuno šifrovane i \
+        bez naloga, bez otpremanja u oblak, bez veza za deljenje.\n\nVeze su potpuno šifrovane i \
         uspostavljaju se pomoću tehnologije iroh (iroh.computer).",
     about_license: "Dodavo je slobodan softver: možete da ga delite i menjate pod uslovima licence GNU General \
         Public License, verzije 3 ili bilo koje novije verzije. Dolazi bez ikakve garancije. Izaberite „Licenca“ \
@@ -95,7 +96,7 @@ pub const SR_LATN: Strings = Strings {
     license_intro: "{app} je slobodan softver: možete da ga delite i menjate pod uslovima licence GNU General \
         Public License, verzije 3 ili bilo koje novije verzije. Dolazi bez ikakve garancije. {app} sadrži i \
         komponente otvorenog koda drugih autora, koje su dostupne pod njihovim sopstvenim licencama. Tekstovi \
-        licenci su na engleskom jeziku. Izvorni kod: {website}",
+        licenci su na engleskom jeziku. Izvorni kôd: {website}",
     license_show_label: "&Prikaži:",
     license_dodavo: "Dodavo (GNU General Public License, verzija 3)",
     license_components: "Komponente drugih autora",
@@ -123,7 +124,7 @@ pub const SR_LATN: Strings = Strings {
     row_speed: "Brzina:",
     row_remaining: "Preostalo vreme:",
     progress_bar: "Napredak",
-    progress_of: "{done} od {total} ({percent} %)",
+    progress_of: "{done} od {total} ({percent}%)",
     speed_value: "{rate}/s",
     remaining_value: "približno {left}",
     calculating: "Izračunavanje…",
@@ -221,9 +222,9 @@ pub const SR_LATN: Strings = Strings {
     recipient_name_label: "&Ime (služi samo da biste prepoznali osobu):",
     contact_id_label: "I&D kontakta:",
     recipient_hint: "Zamolite osobu da u svom programu Dodavo klikne na „Kopiraj moj ID kontakta“ \
-        i pošalje vam kod, na primer e-poštom ili u ćaskanju.",
+        i pošalje vam kôd, na primer e-poštom ili u ćaskanju.",
     enter_recipient_name: "Unesite ime ovog primaoca.",
-    invalid_contact_id: "Ovo nije važeći ID kontakta.\n\nID kontakta je kod od 64 znaka sastavljen od cifara 0–9 \
+    invalid_contact_id: "Ovo nije važeći ID kontakta.\n\nID kontakta je kôd od 64 znaka sastavljen od cifara 0–9 \
         i slova a–f. Zamolite osobu da klikne na „Kopiraj moj ID kontakta“ i ponovo vam ga pošalje.",
     own_contact_id: "Ovo je vaš sopstveni ID kontakta. Unesite ID kontakta druge osobe.",
     contact_id_taken: "Ovaj ID kontakta već pripada primaocu „{name}“.",
@@ -244,7 +245,7 @@ pub const SR_LATN: Strings = Strings {
     received_both: "Zadrži raspakovanu fasciklu i ZIP datoteku",
     general_heading: "Opšte",
     start_with_windows: "Pokreni p&ri prijavljivanju u Windows",
-    start_minimized: "Uvek pokreni &minimizovano u oblast za obaveštenja",
+    start_minimized: "Uvek pokreni u&manjeno u oblast za obaveštenja",
     keep_in_tray: "&Nastavi rad u oblasti za obaveštenja kada se prozor zatvori",
     check_updates: "Automatski proveravaj da li ima &ažuriranja (jednom dnevno)",
     ask_after_receive: "Posle prijema pitaj da li da se &otvori datoteka ili fascikla",
@@ -271,8 +272,8 @@ pub const SR_LATN: Strings = Strings {
 
     tray_tip_one: "{app} – {status}",
     tray_tip_one_speed: "{app} – {status}, {speed}",
-    tray_tip_many: "{app} – {transfers}, {percent} %",
-    tray_tip_many_speed: "{app} – {transfers}, {percent} %, {speed}",
+    tray_tip_many: "{app} – {transfers}, {percent}%",
+    tray_tip_many_speed: "{app} – {transfers}, {percent}%, {speed}",
 
     update_checking: "Provera ažuriranja…",
     update_latest: "Imate najnoviju verziju programa Dodavo ({version}).",
@@ -281,14 +282,14 @@ pub const SR_LATN: Strings = Strings {
     update_balloon: "Dostupan je Dodavo {version}. Izaberite ovo obaveštenje da biste videli šta je novo i instalirali ažuriranje.",
     updated_balloon_title: "Dodavo je ažuriran",
     updated_balloon: "Dodavo je ažuriran na verziju {version}.",
-    update_not_installed: "Ažuriranje na Dodavo {version} nije instalirano. Možete pokušati ponovo komandom „Proveri da li ima ažuriranja“ u meniju Pomoć.",
+    update_not_installed: "Ažuriranje na Dodavo {version} nije instalirano. Možete pokušati ponovo opcijom „Proveri da li ima ažuriranja“ u meniju Pomoć.",
     update_title: "Dostupno ažuriranje",
     update_headline: "Dostupan je Dodavo {version} (imate {current}).",
     release_notes_label: "&Napomene uz izdanje:",
     install_update: "&Instaliraj ažuriranje",
     remind_later: "Podseti me &kasnije",
     cancel_download: "&Otkaži preuzimanje",
-    update_downloading: "Preuzimanje ažuriranja… {done} od {total} ({percent} %)",
+    update_downloading: "Preuzimanje ažuriranja… {done} od {total} ({percent}%)",
     update_verifying: "Provera preuzete datoteke…",
     update_launching: "Pokretanje instalacije… Dodavo se zatvara čim instalacioni program bude spreman i ponovo se pokreće kada ažuriranje bude instalirano.",
     update_launching_admin: "Pokretanje instalacije… Windows traži dozvolu administratora jer je Dodavo instaliran za sve korisnike. Dodavo se zatvara čim instalacioni program bude spreman i ponovo se pokreće kada ažuriranje bude instalirano.",

@@ -18,6 +18,7 @@ pub const EN: Strings = Strings {
     menu_how: "&How It Works",
     menu_about: "&About",
     menu_license: "&License",
+    menu_donate: "&Donate",
     menu_check_updates: "Check for &Updates…",
     ctx_send_file: "Send &File…",
     ctx_send_folder: "Send F&older…",
@@ -64,7 +65,7 @@ pub const EN: Strings = Strings {
     pick_folder_title: "Choose a folder to send to {name}",
     remove_confirm: "Remove {name} from your recipients?",
     id_copied: "Your Contact ID has been copied to the clipboard:\n\n{id}\n\n\
-        Paste it into an e-mail or chat message and send it to anyone who wants to send you files. \
+        Paste it into an email or chat message and send it to anyone who wants to send you files. \
         They add you with “Add Recipient”.",
     clipboard_busy: "The clipboard is in use by another program. Please try again.",
     help_text: "How it works\n\n\
@@ -215,10 +216,10 @@ pub const EN: Strings = Strings {
 
     add_recipient_title: "Add Recipient",
     edit_recipient_title: "Edit Recipient",
-    recipient_name_label: "&Name (only used so you can recognise the person):",
+    recipient_name_label: "&Name (only used so you can recognize the person):",
     contact_id_label: "&Contact ID:",
     recipient_hint: "Ask the person to click “Copy My Contact ID” in their copy of Dodavo \
-        and send the code to you, for example by e-mail or in a chat.",
+        and send the code to you, for example by email or in a chat.",
     enter_recipient_name: "Please enter a name for this recipient.",
     invalid_contact_id: "This is not a valid Contact ID.\n\nA Contact ID is a 64 character code made of the digits 0–9 \
         and the letters a–f. Ask the person to click “Copy My Contact ID” and send it to you again.",

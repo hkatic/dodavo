@@ -21,6 +21,7 @@ pub const SL: Strings = Strings {
     menu_how: "&Kako deluje",
     menu_about: "&O programu",
     menu_license: "&Licenca",
+    menu_donate: "&Doniraj",
     menu_check_updates: "Pre&veri, ali so na voljo posodobitve…",
     ctx_send_file: "Pošlji &datoteko…",
     ctx_send_folder: "Pošlji &mapo…",
@@ -82,7 +83,7 @@ pub const SL: Strings = Strings {
         povezava ni mogoča, se šifrirani podatki posredujejo prek javnega posredovalnega strežnika.",
     about_instruction: "{app}, različica {version}",
     about_text: "Pošiljajte datoteke in mape neposredno od računalnika do računalnika – \
-        brez računov, brez nalaganja v oblak, brez povezav.\n\nPovezave so celovito šifrirane in \
+        brez računov, brez nalaganja v oblak, brez povezav za skupno rabo.\n\nPovezave so celovito šifrirane in \
         vzpostavljene s tehnologijo iroh (iroh.computer).",
     about_license: "Dodavo je prosta programska oprema: lahko jo delite z drugimi in spreminjate pod pogoji licence \
         GNU General Public License, različice 3 ali katere koli poznejše različice. Na voljo je brez kakršnega koli \
@@ -136,7 +137,7 @@ pub const SL: Strings = Strings {
     declined: "Prenos je bil zavrnjen.",
     cancelled: "Prenos je bil preklican.",
     cancelled_by_peer: "Prenos je bil preklican na drugi strani ({name}).",
-    unreachable: "Povezave z računalnikom ({name}) ni bilo mogoče vzpostaviti. Preverite, ali se Dodavo izvaja v tem računalniku in ali sta oba povezana v internet.",
+    unreachable: "Povezave z računalnikom ({name}) ni bilo mogoče vzpostaviti. Preverite, ali se Dodavo izvaja v tem računalniku in ali sta oba povezana z internetom.",
     failed: "Prenos ni uspel.",
     close: "Zapri",
     cancelling: "Preklicevanje…",
@@ -152,12 +153,12 @@ pub const SL: Strings = Strings {
     minimize_background: "&Pomanjšaj v ozadje",
     phase_paused: "Začasno ustavljeno. Za nadaljevanje izberite »Nadaljuj«.",
     phase_paused_by_peer: "Prenos je bil začasno ustavljen na drugi strani ({name}).",
-    phase_waiting_connection: "Povezava je bila prekinjena. Prenos se nadaljuje, takoj ko sta oba spet povezana, tudi po vnovičnem zagonu.",
+    phase_waiting_connection: "Povezava je bila prekinjena. Prenos se nadaljuje, takoj ko bosta oba spet povezana, tudi po vnovičnem zagonu.",
     phase_verifying: "Preverjanje že prenesenih podatkov…",
     phase_part_in_use: "Delno prejeto datoteko uporablja drug program. Prenos se nadaljuje, takoj ko jo ta program zapre.",
     phase_peer_part_in_use: "Na drugi strani ({name}) delno prejeto datoteko uporablja drug program. Prenos se nadaljuje, takoj ko jo ta program zapre.",
     connection_lost_instruction: "Povezava je bila prekinjena.",
-    connection_lost_text: "Dodavo lahko počaka in nadaljuje prenos tam, kjer se je ustavil, takoj ko je povezava spet vzpostavljena, \
+    connection_lost_text: "Dodavo lahko počaka in nadaljuje prenos tam, kjer se je ustavil, takoj ko bo povezava spet vzpostavljena, \
         tudi po vnovičnem zagonu. Prenos lahko tudi prekličete.",
     wait_for_connection: "Počakaj na po&vezavo",
     paused_balloon_title: "Prenos je začasno ustavljen",
@@ -173,8 +174,8 @@ pub const SL: Strings = Strings {
     handed_over_title: "Vse je prispelo",
     handed_over_balloon: "»{item}«: vse je prispelo, zato prenosa ni več mogoče preklicati.",
     restored_balloon_title: "Nedokončan prenos",
-    restored_balloon: "»{item}«: prenos je bil zadnjič prekinjen in se nadaljuje, takoj ko sta oba povezana.",
-    restored_cancelling_balloon: "»{item}«: prenos se še preklicuje. Takoj ko sta oba povezana, bo Dodavo izvedel, ali je bilo prepozno.",
+    restored_balloon: "»{item}«: prenos je bil zadnjič prekinjen in se nadaljuje, takoj ko bosta oba povezana.",
+    restored_cancelling_balloon: "»{item}«: prenos se še preklicuje. Takoj ko bosta oba povezana, bo Dodavo izvedel, ali je bilo prepozno.",
 
     close_running_instruction: "Ta prenos še poteka.",
     close_running_text: "Lahko ga prekličete ali pustite, da se nadaljuje v ozadju. \
@@ -205,7 +206,7 @@ pub const SL: Strings = Strings {
     save_to: "&Shrani v:",
     browse: "&Prebrskaj…",
     accept: "Spre&jmi",
-    decline: "&Odkloni",
+    decline: "&Zavrni",
     pick_save_folder: "Izberite, kam naj se shranjujejo prejete datoteke",
     choose_save_folder: "Izberite mapo, v katero naj se shranijo prejete datoteke.",
     folder_unusable: "Mape ni mogoče uporabiti:\n{path}\n\n{error}",
@@ -330,18 +331,18 @@ pub const SL: Strings = Strings {
     panic_message: "Prišlo je do nepričakovane napake in program se mora zapreti.\n\n{info}",
     panic_message_goes_on: "Prišlo je do nepričakovane napake. Dodavo deluje naprej, vendar to, kar je v tistem trenutku počel, morda ni uspelo.\n\n{info}",
     identity_failed: "Vaše identitete ni bilo mogoče prebrati ali ustvariti v mapi {path}:\n{error}",
-    identity_damaged: "Datoteka secret.key je poškodovana: vsebuje {size} namesto 32 bajtov. \
+    identity_damaged: "Datoteka secret.key je poškodovana: njena velikost je {size} namesto 32 bajtov. \
         Obnovite jo iz varnostne kopije ali jo izbrišite, da dobite nov ID stika.",
 
     untitled: "Neimenovano",
     error_cannot_read: "Ni mogoče prebrati: {path}",
-    error_timeout: "Poskus povezave je potekel",
+    error_timeout: "Časovna omejitev poskusa povezave je potekla",
     error_peer_not_found: "Drugega računalnika ni bilo mogoče najti v omrežju",
     error_unexpected_answer: "Nepričakovan odgovor prejemnika: {answer}",
     error_file_shorter: "Datoteka se je med pošiljanjem skrajšala",
     error_peer_reported: "Prejemnik je sporočil napako: {message}",
-    error_recipient_failed: "Prejemnik je sporočil, da prenos na drugem računalniku ni uspel",
-    error_sender_failed: "Pošiljatelj je sporočil, da prenos na drugem računalniku ni uspel",
+    error_recipient_failed: "Prejemnik je sporočil, da prenos v drugem računalniku ni uspel",
+    error_sender_failed: "Pošiljatelj je sporočil, da prenos v drugem računalniku ni uspel",
     error_protocol_end: "Napaka protokola: pričakovan je bil konec prenosa",
     error_message_too_large: "Napaka protokola: sporočilo je preveliko",
     error_damaged: "Prejeti podatki so poškodovani (kontrolna vsota se ne ujema)",

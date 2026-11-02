@@ -16,14 +16,14 @@ use crate::i18n::tr;
 /// The button that opens the license.
 const ID_LICENSE: i32 = 100;
 
-/// Opens the website when its link is chosen (with the mouse, or with Tab
-/// and Enter), and says so when that fails, for example when no web browser
-/// is set up.
-fn open_link(dialog: HWND, url: &str) {
-    // The href of the link, which this dialog wrote itself.
-    if url.starts_with("https://") && !shell::open_url(dialog, url) {
+/// Opens a page of ours in the web browser: the website when its link here is
+/// chosen (with the mouse, or with Tab and Enter), the page of Help → Donate.
+/// Says so when that fails, for example when no web browser is set up.
+pub fn open_link(owner: HWND, url: &str) {
+    // The href of the link, which this dialog wrote itself, or a constant.
+    if url.starts_with("https://") && !shell::open_url(owner, url) {
         error(
-            dialog,
+            owner,
             &tr!(website_failed, error = io::Error::last_os_error()),
         );
     }

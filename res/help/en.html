@@ -33,6 +33,7 @@
 <li><a href="#faq">Frequently asked questions</a></li>
 <li><a href="#troubleshooting">Troubleshooting</a></li>
 <li><a href="#license">License</a></li>
+<li><a href="#donate">Donating</a></li>
 </ol>
 </nav>
 
@@ -49,7 +50,7 @@
 <h2 id="how-it-works">How Dodavo works</h2>
 <p>Every computer running Dodavo has a permanent <strong>Contact ID</strong>: a code of 64 characters made of the digits 0–9 and the letters a–f. The Contact ID works like a phone number for Dodavo. To send files to someone, you need their Contact ID; to receive files, you give your Contact ID to the people who will send them.</p>
 <ol>
-<li>You copy your Contact ID and send it to the other person, for example by e-mail or in a chat message.</li>
+<li>You copy your Contact ID and send it to the other person, for example by email or in a chat message.</li>
 <li>The other person adds you to their recipient list, and you add them to yours.</li>
 <li>To send something, you select the person in your recipient list and choose a file or a folder.</li>
 <li>The other person is asked whether to accept the transfer and where to save it.</li>
@@ -88,7 +89,7 @@
 <dd>Closes the window. Dodavo reminds you again a day later; until then you can still install the update from the <span class="ui">Help</span> menu.</dd>
 </dl>
 <p>When you choose <span class="ui">Install Update</span>, Dodavo first asks what to do with transfers that are still running, with the same three choices as when exiting: <span class="ui">Don't exit</span>, <span class="ui">Exit and continue the transfers later</span> and <span class="ui">Cancel the transfers and exit</span>. Then it downloads the setup program; a line in the window shows the progress, and the focus moves to <span class="ui">Cancel Download</span> (<kbd>Alt</kbd>+<kbd>C</kbd>), which stops the download after a confirmation. The downloaded file is accepted only if its size, its checksum and its digital signature match what the Dodavo authors published; otherwise an error message says so and nothing is installed. Then Setup starts: the line in the window says so, screen readers usually read it aloud, and the focus returns to the release notes. If Dodavo is installed for all users, Windows first asks for administrator permission. As soon as Setup is ready, Dodavo closes, Setup installs the new version silently in the same place and with the same choice between “for me only” and “for all users”, and Dodavo starts again by itself with the notification <span class="ui">Dodavo was updated</span>. Your settings, your recipient list and your Contact ID are kept, and interrupted transfers continue as after any other restart. If you run Dodavo with several profiles, the other profiles are closed as well and have to be started again by hand.</p>
-<p>To check at any time, choose <span class="ui">Check for Updates…</span> from the <span class="ui">Help</span> menu. When there is nothing new, a message says that you have the latest version; when the check fails, for example without an Internet connection, the message says why. To stop the daily check, clear <span class="ui">Check for updates automatically (once a day)</span> in the settings; checks you start from the <span class="ui">Help</span> menu still work. You can also update by hand at any time: run the setup program of the new version from the <a href="https://github.com/hkatic/dodavo/releases">Dodavo page on GitHub</a>. It replaces the program in the same place and keeps your settings, your recipient list and your Contact ID.</p>
+<p>To check at any time, choose <span class="ui">Check for Updates…</span> from the <span class="ui">Help</span> menu. When there is nothing new, a message says that you have the latest version; when the check fails, for example without an internet connection, the message says why. To stop the daily check, clear <span class="ui">Check for updates automatically (once a day)</span> in the settings; checks you start from the <span class="ui">Help</span> menu still work. You can also update by hand at any time: run the setup program of the new version from the <a href="https://github.com/hkatic/dodavo/releases">Dodavo page on GitHub</a>. It replaces the program in the same place and keeps your settings, your recipient list and your Contact ID.</p>
 <h3 id="uninstall">Uninstalling Dodavo</h3>
 <ol>
 <li>Exit Dodavo.</li>
@@ -104,7 +105,7 @@
 <ol>
 <li>Start Dodavo. Its main window opens with your recipient list, which is empty at first.</li>
 <li>Check your name: open the <span class="ui">File</span> menu (<kbd>Alt</kbd>+<kbd>F</kbd>) and choose <span class="ui">Settings…</span>. The first field, <span class="ui">Your name (shown to the people you send files to)</span>, is filled in with your Windows user name. Change it if you like, then press <kbd>Enter</kbd> to save.</li>
-<li>Share your Contact ID: choose <span class="ui">Copy My Contact ID</span> from the <span class="ui">File</span> menu, activate the <span class="ui">Copy My Contact ID</span> button, or press <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>C</kbd>. Dodavo copies the ID to the clipboard and shows it in a message. Paste it into an e-mail or chat message to the people who should be able to send you files.</li>
+<li>Share your Contact ID: choose <span class="ui">Copy My Contact ID</span> from the <span class="ui">File</span> menu, activate the <span class="ui">Copy My Contact ID</span> button, or press <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>C</kbd>. Dodavo copies the ID to the clipboard and shows it in a message. Paste it into an email or chat message to the people who should be able to send you files.</li>
 <li>Add the people you want to send files to, as described in <a href="#add-recipient">Adding a recipient</a>.</li>
 </ol>
 <p class="note"><strong>Note:</strong> Your Contact ID is not secret. Anyone who has it can offer you files, but only the people in your recipient list can start a transfer without asking you, because <span class="ui">Start transfers automatically, without asking</span> is on (you can turn it off in Settings). An offer from anyone else always opens the Incoming Transfer window first, and nothing is saved until you accept it.</p>
@@ -114,7 +115,7 @@
 <h2 id="main-window">The main window</h2>
 <p>The main window contains, in Tab order:</p>
 <dl>
-<dt>Recipients list (<kbd>Alt</kbd>+<kbd>R</kbd>)</dt>
+<dt>Recipient list (<kbd>Alt</kbd>+<kbd>R</kbd>)</dt>
 <dd>The people you can send files to. It has three columns: <span class="ui">Name</span>, <span class="ui">Contact ID</span> and <span class="ui">Transfer</span>. The Contact ID is shortened to its first eight and last six characters. While a transfer with a person is running, the <span class="ui">Transfer</span> column says what is happening, for example <span class="ui">Sending – “report.pdf” (45%)</span> or <span class="ui">Waiting for the connection – “report.pdf” (45%)</span>, refreshed about once a second; with several transfers, it says how many are in progress. Otherwise it is empty. Move through the list with the arrow keys. <kbd>Enter</kbd> or a double-click opens the menu of actions for the selected person (see below). When the list is empty, it says so and tells you how to add someone.</dd>
 <dt><span class="ui">Send File…</span> and <span class="ui">Send Folder…</span> buttons (<kbd>Ctrl</kbd>+<kbd>O</kbd> and <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>O</kbd>)</dt>
 <dd>Send something to the selected person.</dd>
@@ -131,7 +132,7 @@
 <li><span class="ui">Offline – check your internet connection. Transfers within your local network still work.</span></li>
 </ul>
 <p>The status line cannot receive keyboard focus. To hear it, use your screen reader's command for reading the whole window: <kbd>NVDA</kbd>+<kbd>B</kbd> in NVDA, <kbd>Insert</kbd>+<kbd>B</kbd> in JAWS, or <kbd>Narrator</kbd>+<kbd>W</kbd> in Narrator.</p>
-<p>The menu bar has three menus. The <span class="ui">File</span> menu (<kbd>Alt</kbd>+<kbd>F</kbd>) contains <span class="ui">Send File…</span>, <span class="ui">Send Folder…</span>, <span class="ui">Add Recipient…</span>, <span class="ui">Edit Recipient…</span>, <span class="ui">Remove Recipient</span>, <span class="ui">Copy My Contact ID</span>, <span class="ui">Settings…</span> and <span class="ui">Exit</span>. The <span class="ui">Transfers</span> menu (<kbd>Alt</kbd>+<kbd>T</kbd>) lists every transfer in progress, with the person, the item and the state, and ends with <span class="ui">Show All Transfers</span> (<kbd>Ctrl</kbd>+<kbd>T</kbd>); when nothing is running, it says <span class="ui">No transfers in progress</span>. See <a href="#finding-transfers">Finding a transfer that runs in the background</a>. The <span class="ui">Help</span> menu (<kbd>Alt</kbd>+<kbd>H</kbd>) contains <span class="ui">View Help</span>, <span class="ui">How It Works</span> (a short summary), <span class="ui">Check for Updates…</span> (see <a href="#update">Updating Dodavo</a>), <span class="ui">License</span> and <span class="ui">About</span> (the version, the author, the website and the license; see <a href="#license">License</a>).</p>
+<p>The menu bar has three menus. The <span class="ui">File</span> menu (<kbd>Alt</kbd>+<kbd>F</kbd>) contains <span class="ui">Send File…</span>, <span class="ui">Send Folder…</span>, <span class="ui">Add Recipient…</span>, <span class="ui">Edit Recipient…</span>, <span class="ui">Remove Recipient</span>, <span class="ui">Copy My Contact ID</span>, <span class="ui">Settings…</span> and <span class="ui">Exit</span>. The <span class="ui">Transfers</span> menu (<kbd>Alt</kbd>+<kbd>T</kbd>) lists every transfer in progress, with the person, the item and the state, and ends with <span class="ui">Show All Transfers</span> (<kbd>Ctrl</kbd>+<kbd>T</kbd>); when nothing is running, it says <span class="ui">No transfers in progress</span>. See <a href="#finding-transfers">Finding a transfer that runs in the background</a>. The <span class="ui">Help</span> menu (<kbd>Alt</kbd>+<kbd>H</kbd>) contains <span class="ui">View Help</span>, <span class="ui">How It Works</span> (a short summary), <span class="ui">License</span> (see <a href="#license">License</a>), <span class="ui">Donate</span> (see <a href="#donate">Donating</a>), <span class="ui">Check for Updates…</span> (see <a href="#update">Updating Dodavo</a>) and <span class="ui">About</span> (the version, the author, the website and the license; see <a href="#about">About Dodavo</a>).</p>
 <p>When a person is selected in the list, the menu of actions (<kbd>Enter</kbd>, a double-click, <kbd>Shift</kbd>+<kbd>F10</kbd> or the Menu key, or a right-click) offers <span class="ui">Send File…</span>, <span class="ui">Send Folder…</span>, <span class="ui">Show Transfer</span> (only while a transfer with that person is running; <span class="ui">Show Transfers</span> when there are several), <span class="ui">Edit…</span> and <span class="ui">Remove</span>.</p>
 </section>
 
@@ -142,7 +143,7 @@
 <ol>
 <li>Ask the person to choose <span class="ui">Copy My Contact ID</span> in their copy of Dodavo and send you the code.</li>
 <li>Press <kbd>Ctrl</kbd>+<kbd>N</kbd>, or activate the <span class="ui">Add Recipient…</span> button. The <span class="ui">Add Recipient</span> dialog opens.</li>
-<li>In <span class="ui">Name (only used so you can recognise the person)</span>, type a name. Only you see this name.</li>
+<li>In <span class="ui">Name (only used so you can recognize the person)</span>, type a name. Only you see this name.</li>
 <li>Press <kbd>Tab</kbd> and paste the code into <span class="ui">Contact ID</span> with <kbd>Ctrl</kbd>+<kbd>V</kbd>.</li>
 <li>Press <kbd>Enter</kbd> or activate <span class="ui">OK</span>.</li>
 </ol>
@@ -248,7 +249,7 @@
 <p>A paused transfer stays paused until you resume it, even if the connection is lost in the meantime or Dodavo is restarted. You can still cancel it.</p>
 
 <h3 id="connection-lost">When the connection is lost</h3>
-<p>If the Internet connection drops, one of the computers goes to sleep, or Dodavo is closed on either side, the transfer is not lost. The step line says <span class="ui">The connection was lost. The transfer continues as soon as you are both online again, even after a restart.</span> Dodavo keeps what has already arrived and continues from that point when the two computers can reach each other again – after a few seconds, or days later.</p>
+<p>If the internet connection drops, one of the computers goes to sleep, or Dodavo is closed on either side, the transfer is not lost. The step line says <span class="ui">The connection was lost. The transfer continues as soon as you are both online again, even after a restart.</span> Dodavo keeps what has already arrived and continues from that point when the two computers can reach each other again – after a few seconds, or days later.</p>
 <p>If the connection stays lost for a few seconds, Dodavo asks what to do:</p>
 <ul>
 <li><span class="ui">Wait for the connection</span> leaves the transfer waiting. It continues by itself.</li>
@@ -285,7 +286,7 @@
 <li>The icon's menu contains <span class="ui">Open</span>, <span class="ui">Transfers</span> (a submenu with the transfers in progress, see <a href="#finding-transfers">Finding a transfer that runs in the background</a>), <span class="ui">Copy My Contact ID</span> and <span class="ui">Exit</span>.</li>
 <li>While transfers run, the icon shows their number in a small badge, and its tooltip (what a screen reader reads when you move to the icon) says what is going on, refreshed about once a second: for example <span class="ui">Dodavo – Sending – “report.pdf” (45%), 12.3 MB/s</span>, or <span class="ui">Dodavo – 2 transfers in progress, 45%, 12.3 MB/s</span> when there are several.</li>
 </ul>
-<p>To quit Dodavo completely, choose <span class="ui">Exit</span> from the <span class="ui">File</span> menu or from the icon's menu. If transfers are still running, Dodavo asks first and offers three choices: <span class="ui">Don't exit</span> (the default, so <kbd>Enter</kbd> or <kbd>Esc</kbd> keeps Dodavo running), <span class="ui">Exit and continue the transfers later</span> (they are interrupted and continue the next time Dodavo and the other computer are both running) and <span class="ui">Cancel the transfers and exit</span>. When you log off or shut down Windows, Dodavo does not ask; the transfers continue the next time. After exiting, you can no longer receive files until you start Dodavo again.</p>
+<p>To quit Dodavo completely, choose <span class="ui">Exit</span> from the <span class="ui">File</span> menu or from the icon's menu. If transfers are still running, Dodavo asks first and offers three choices: <span class="ui">Don't exit</span> (the default, so <kbd>Enter</kbd> or <kbd>Esc</kbd> keeps Dodavo running), <span class="ui">Exit and continue the transfers later</span> (they are interrupted and continue the next time Dodavo and the other computer are both running) and <span class="ui">Cancel the transfers and exit</span>. When you sign out of Windows or shut it down, Dodavo does not ask; the transfers continue the next time. After exiting, you can no longer receive files until you start Dodavo again.</p>
 <p>Dodavo reports finished transfers, incoming transfers, pauses by the other side, lost and restored connections, available updates and other events with Windows notifications, also while a progress window is minimized to the background. Screen readers usually announce them. Selecting a notification about a transfer brings its window to the front. If you miss one, or if Do not disturb is on, you can find it in the Windows notification center (<kbd>Windows</kbd>+<kbd>N</kbd> in Windows 11).</p>
 </section>
 
@@ -435,7 +436,7 @@
 <dt>Folders</dt>
 <dd>Dodavo refuses to unpack a received folder that contains unsafe paths, such as paths that would write outside the destination folder.</dd>
 <dt>Received files are marked as coming from another computer</dt>
-<dd>Like a web browser with downloads, Dodavo marks every file it receives (also the files in a received folder, and a kept ZIP file) as coming from the Internet. Windows SmartScreen therefore checks a received program before it runs, and Microsoft Office opens received documents in Protected View. The mark is stored with the file on NTFS drives; drives formatted with FAT32 or exFAT, such as many USB sticks, cannot keep it. See <a href="#troubleshooting">Troubleshooting</a> if Windows warns about a file you trust.</dd>
+<dd>Like a web browser with downloads, Dodavo marks every file it receives (also the files in a received folder, and a kept ZIP file) as coming from the internet. Windows SmartScreen therefore checks a received program before it runs, and Microsoft Office opens received documents in Protected View. The mark is stored with the file on NTFS drives; drives formatted with FAT32 or exFAT, such as many USB sticks, cannot keep it. See <a href="#troubleshooting">Troubleshooting</a> if Windows warns about a file you trust.</dd>
 </dl>
 <h3 id="your-data">Your settings and identity</h3>
 <p>Dodavo stores its settings, your recipient list and your secret key in the folder <code>%APPDATA%\Dodavo</code>. The secret key is what makes your Contact ID yours. Don't share the contents of this folder. If you move to another computer and want to keep your Contact ID, copy this folder to the same place on the new computer while Dodavo is not running there. If the folder is deleted, Dodavo creates a new Contact ID, and everyone has to add you again.</p>
@@ -446,7 +447,7 @@
 
 <h3 id="faq-advantage">What is the advantage of Dodavo over social networks, messaging apps and cloud services?</h3>
 <p>With Dodavo, the file goes from your computer straight to the other person's. Nothing is uploaded to a server, so nothing is stored, scanned or kept by a third party, and there is no account to create, no storage quota and no link that expires. Files arrive exactly as they are: photos and videos are not shrunk or recompressed, and there is no size limit. Every transfer is end-to-end encrypted, and computers on the same network exchange files even without an internet connection.</p>
-<p>The trade-off is that Dodavo must be running on both computers when a transfer starts. If one side goes away afterwards, the transfer waits and continues later; see <a href="#faq-offline">What happens if the Internet connection drops or Dodavo exits on either side?</a></p>
+<p>The trade-off is that Dodavo must be running on both computers when a transfer starts. If one side goes away afterwards, the transfer waits and continues later; see <a href="#faq-offline">What happens to a transfer if something interrupts it?</a></p>
 
 <h3 id="faq-how">How does a transfer work?</h3>
 <p>You select a person in your recipient list and choose a file or a folder. Dodavo looks up the other computer by its Contact ID and connects to it, directly if possible or through a relay server otherwise. The other person sees the name and size of the item and chooses <span class="ui">Accept</span> and a folder to save it in, or <span class="ui">Decline</span>. The data then streams, encrypted, from your computer to theirs, and both sides show a progress window. At the end, the received data is checked against a checksum; only then does the file get its real name. See <a href="#how-it-works">How Dodavo works</a> and <a href="#progress">Following a transfer</a>.</p>
@@ -473,7 +474,7 @@
 <dt>The internet connection drops</dt>
 <dd>The progress window says <span class="ui">The connection was lost. The transfer continues as soon as you are both online again, even after a restart.</span> After a few seconds, Dodavo asks whether to <span class="ui">Wait for the connection</span> or <span class="ui">Cancel the transfer</span>, unless you have chosen an answer for good in Settings. Computers on the same home or office network keep transferring without the internet.</dd>
 <dt>Any of this happens on the other person's computer</dt>
-<dd>Your window says that the connection was lost, or that the transfer was paused on the other side, and the <span class="ui">Transfer</span> column of your recipient list shows the same. You need do nothing: the transfer continues when the other side is back.</dd>
+<dd>Your window says that the connection was lost, or that the transfer was paused on the other side, and the <span class="ui">Transfer</span> column of your recipient list shows the same. You don't need to do anything: the transfer continues when the other side is back.</dd>
 <dt>Another program is using the partly received file</dt>
 <dd>A virus scanner, a backup or sync program, or a program in which you opened the <code>.part</code> file can keep Dodavo from writing to it, or, once all of it has arrived, from saving or unpacking it. The progress window on the receiving side then says <span class="ui">Another program is using the partly received file. The transfer continues as soon as that program closes it.</span>, and Dodavo shows a notification; the <span class="ui">Transfer</span> column of the recipient list says <span class="ui">Waiting for another program</span>. Nothing is lost: the transfer waits and continues by itself as soon as the file is free, and Dodavo says so. On the sending side, the progress window and a notification say that another program on the other side is using the file, and the <span class="ui">Transfer</span> column says <span class="ui">Waiting for a program on the other side</span>. If it takes long, close the other program, or cancel the transfer.</dd>
 <dt>When a transfer is not continued</dt>
@@ -502,7 +503,7 @@
 <h3 id="faq-id-secret">Is my Contact ID secret? Can anyone send me files?</h3>
 <p>The Contact ID is not secret; it works like a phone number. Anyone who has it can offer you a file. Only transfers from people in your recipient list start by themselves (<span class="ui">Start transfers automatically, without asking</span>, which you can turn off in Settings). From anyone else, nothing is saved on your computer until you choose <span class="ui">Accept</span>, and their offers are marked with an unknown sender warning. See <a href="#auto-accept">Receiving without being asked</a>.</p>
 
-<h3 id="faq-servers">What does Dodavo send to servers on the Internet?</h3>
+<h3 id="faq-servers">What does Dodavo send to servers on the internet?</h3>
 <p>Only what is needed for other computers to find yours. Dodavo publishes the addresses at which your computer can currently be reached under your Contact ID, to the lookup service of the iroh network, and keeps a connection to a relay server so that a transfer can be set up even when a direct connection is not possible. The names and contents of your files travel only inside the encrypted connection to the other computer. Once a day, when <span class="ui">Check for updates automatically (once a day)</span> is on, Dodavo also fetches from the Dodavo page on GitHub (github.com) a small file that describes the latest version, and it downloads the setup program from there when you choose to install an update; see <a href="#update">Updating Dodavo</a>. Dodavo has no accounts and sends no usage statistics.</p>
 
 <h3 id="faq-intact">How do I know that a received file is intact?</h3>
@@ -583,6 +584,11 @@
 <p>Setup also installs both texts in the folder Dodavo is installed in, as <code>LICENSE.txt</code> and <code>THIRD-PARTY-LICENSES.txt</code>.</p>
 <h3 id="about">About Dodavo</h3>
 <p><span class="ui">About</span> in the <span class="ui">Help</span> menu (<kbd>Alt</kbd>+<kbd>H</kbd>, then <kbd>A</kbd>) shows the version of Dodavo, its author, the address of its website and a short license notice. Screen readers read the whole text when the window opens. The focus is on <span class="ui">Close</span>; <kbd>Tab</kbd> moves between the link to the website (<kbd>Enter</kbd> opens it in your web browser), the <span class="ui">License</span> button, which opens the License window, and <span class="ui">Close</span>. If the website cannot be opened, for example because no web browser is set up, a message says why. <kbd>Esc</kbd> closes the window.</p>
+</section>
+
+<section aria-labelledby="donate">
+<h2 id="donate">Donating</h2>
+<p>Dodavo is free, and everything in it works without a donation. If you find it useful and want to support its development, choose <span class="ui">Donate</span> from the <span class="ui">Help</span> menu (<kbd>Alt</kbd>+<kbd>H</kbd>, then <kbd>D</kbd>). The author's PayPal page, <a href="https://paypal.me/hrvix">paypal.me/hrvix</a>, opens in your web browser; you choose the amount and make the payment there. Dodavo itself takes no part in the payment and sends nothing to PayPal. If the page cannot be opened, for example because no web browser is set up, a message says why.</p>
 </section>
 
 </main>

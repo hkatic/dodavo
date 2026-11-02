@@ -17,10 +17,11 @@ pub const HR: Strings = Strings {
     menu_copy_id: "Kopiraj moj &ID kontakta\tCtrl+Shift+C",
     menu_settings: "&Postavke…",
     menu_exit: "I&zlaz",
-    menu_view_help: "&Prikaz pomoći\tF1",
+    menu_view_help: "&Prikaži pomoć\tF1",
     menu_how: "&Kako funkcionira",
     menu_about: "&O programu",
     menu_license: "&Licenca",
+    menu_donate: "&Doniraj",
     menu_check_updates: "Provjeri ima li &ažuriranja…",
     ctx_send_file: "Pošalji &datoteku…",
     ctx_send_folder: "Pošalji &mapu…",
@@ -67,7 +68,7 @@ pub const HR: Strings = Strings {
     pick_folder_title: "Odaberite mapu za slanje – primatelj: {name}",
     remove_confirm: "Želite li ukloniti „{name}” s popisa primatelja?",
     id_copied: "Vaš ID kontakta kopiran je u međuspremnik:\n\n{id}\n\n\
-        Zalijepite ga u poruku e-pošte ili chata i pošaljite svima koji vam žele slati datoteke. \
+        Zalijepite ga u poruku e-pošte ili čavrljanja i pošaljite svima koji vam žele slati datoteke. \
         Oni vas dodaju pomoću naredbe „Dodaj primatelja”.",
     clipboard_busy: "Međuspremnik trenutačno koristi drugi program. Pokušajte ponovno.",
     help_text: "Kako funkcionira\n\n\
@@ -76,7 +77,7 @@ pub const HR: Strings = Strings {
         2. Da biste nekome slali datoteke, dodajte ga naredbom „Dodaj primatelja” pomoću njegova ID-a kontakta.\n\n\
         3. Odaberite osobu na popisu i kliknite „Pošalji datoteku” ili „Pošalji mapu” (ili povucite datoteke na nju). \
         Mape se automatski pakiraju i na drugom računalu ponovno raspakiravaju.\n\n\
-        4. Primatelj mora prihvatiti prijenos. Dodavo mora biti pokrenut na njegovu \
+        4. Od primatelja se traži da prihvati prijenos. Dodavo mora biti pokrenut na njegovu \
         računalu (nastavlja raditi u području obavijesti kada se prozor zatvori).\n\n\
         Datoteke idu izravno s računala na računalo, sveobuhvatno šifrirane. Kada izravna veza \
         nije moguća, šifrirani se podaci prosljeđuju preko javnog relejnog poslužitelja.",
@@ -184,7 +185,7 @@ pub const HR: Strings = Strings {
     dont_ask_again: "&Ne pitaj me ponovno",
     dont_show_again: "&Ne prikazuj ponovno",
     background_balloon_title: "Prijenos se nastavlja u pozadini",
-    background_balloon: "„{item}”: bit ćete obaviješteni kada prijenos završi. Prozor možete vratiti iz izbornika „Prijenosi”.",
+    background_balloon: "„{item}”: bit ćete obaviješteni kada prijenos završi. Prozor možete vratiti s izbornika „Prijenosi”.",
 
     finished_question: "Spremljeno: „{item}”\nMjesto: {folder}\n\nŠto želite učiniti?",
     sent_item: "Poslano: „{item}”",
@@ -221,7 +222,7 @@ pub const HR: Strings = Strings {
     recipient_name_label: "&Ime (služi samo da biste prepoznali osobu):",
     contact_id_label: "I&D kontakta:",
     recipient_hint: "Zamolite osobu da u svojem programu Dodavo klikne „Kopiraj moj ID kontakta” \
-        i pošalje vam kôd, na primjer e-poštom ili u chatu.",
+        i pošalje vam kôd, na primjer e-poštom ili u čavrljanju.",
     enter_recipient_name: "Unesite ime ovog primatelja.",
     invalid_contact_id: "Ovo nije valjan ID kontakta.\n\nID kontakta kôd je od 64 znaka sastavljen od znamenki 0–9 \
         i slova a–f. Zamolite osobu da klikne „Kopiraj moj ID kontakta” i ponovno vam ga pošalje.",
@@ -281,7 +282,7 @@ pub const HR: Strings = Strings {
     update_balloon: "Dostupan je Dodavo {version}. Odaberite ovu obavijest da biste vidjeli što je novo i instalirali ažuriranje.",
     updated_balloon_title: "Dodavo je ažuriran",
     updated_balloon: "Dodavo je ažuriran na verziju {version}.",
-    update_not_installed: "Ažuriranje na Dodavo {version} nije instalirano. Možete pokušati ponovno naredbom „Provjeri ima li ažuriranja” u izborniku Pomoć.",
+    update_not_installed: "Ažuriranje na Dodavo {version} nije instalirano. Možete pokušati ponovno naredbom „Provjeri ima li ažuriranja” na izborniku Pomoć.",
     update_title: "Dostupno ažuriranje",
     update_headline: "Dostupan je Dodavo {version} (imate {current}).",
     release_notes_label: "&Napomene uz izdanje:",
@@ -291,7 +292,7 @@ pub const HR: Strings = Strings {
     update_downloading: "Preuzimanje ažuriranja… {done} od {total} ({percent} %)",
     update_verifying: "Provjera preuzete datoteke…",
     update_launching: "Pokretanje instalacije… Dodavo se zatvara čim instalacijski program bude spreman i ponovno se pokreće kada ažuriranje bude instalirano.",
-    update_launching_admin: "Pokretanje instalacije… Windows traži dozvolu administratora jer je Dodavo instaliran za sve korisnike. Dodavo se zatvara čim instalacijski program bude spreman i ponovno se pokreće kada ažuriranje bude instalirano.",
+    update_launching_admin: "Pokretanje instalacije… Windows traži administratorsku dozvolu jer je Dodavo instaliran za sve korisnike. Dodavo se zatvara čim instalacijski program bude spreman i ponovno se pokreće kada ažuriranje bude instalirano.",
     update_cancel_confirm: "Želite li odustati od preuzimanja ažuriranja?",
     update_failed: "Ažuriranje nije moguće instalirati.\n\n{error}\n\nMožete pokušati ponovno kasnije.",
     update_err_network: "Nema veze s poslužiteljem za ažuriranja: {detail}",
@@ -304,7 +305,7 @@ pub const HR: Strings = Strings {
     update_err_io: "Ažuriranje nije moguće spremiti u privremenu mapu: {detail}",
     update_err_disk_space: "Nema dovoljno slobodnog prostora na disku za ažuriranje: potrebno je {needed}, dostupno je {free}.",
     update_err_launch: "Instalacijski program nije moguće pokrenuti: {detail}",
-    update_err_setup_exit: "Instalacijski program završio je prije nego što je ažuriranje instalirano (kôd {code}). Ako je Windows zatražio dozvolu administratora, sljedeći put odaberite Da.",
+    update_err_setup_exit: "Instalacijski program završio je prije nego što je ažuriranje instalirano (kôd {code}). Ako je Windows zatražio administratorsku dozvolu, sljedeći put odaberite Da.",
 
     ok: "U redu",
     cancel: "Odustani",

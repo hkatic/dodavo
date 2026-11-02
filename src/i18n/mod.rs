@@ -173,6 +173,7 @@ strings! {
         menu_how,
         menu_about,
         menu_license,
+        menu_donate,
         // The recipient's actions menu.
         ctx_send_file,
         ctx_send_folder,
@@ -717,8 +718,9 @@ mod tests {
                     vec![
                         s.menu_view_help,
                         s.menu_how,
-                        s.menu_check_updates,
                         s.menu_license,
+                        s.menu_donate,
+                        s.menu_check_updates,
                         s.menu_about,
                     ],
                 ),

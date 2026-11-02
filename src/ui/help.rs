@@ -144,6 +144,25 @@ mod tests {
         }
     }
 
+    /// A link names the topic it leads to, so it cannot keep an old title.
+    /// Links to the settings read "in Settings", in the case the sentence needs.
+    #[test]
+    fn links_name_their_headings() {
+        for lang in Lang::ALL {
+            let html = page(lang);
+            for (i, marker) in html.match_indices("<a href=\"#") {
+                let (target, rest) = html[i + marker.len()..].split_once("\">").unwrap();
+                let (text, _) = rest.split_once("</a>").unwrap();
+                let id = format!(" id=\"{target}\">");
+                let Some(start) = html.find(&id) else { continue };
+                let (heading, _) = html[start + id.len()..].split_once("</h").unwrap();
+                if !matches!(target, "settings" | "settings-receiving") {
+                    assert_eq!(text, heading, "{lang:?}: the link to #{target}");
+                }
+            }
+        }
+    }
+
     /// The help names controls exactly as the program shows them.
     #[test]
     fn pages_use_the_program_texts() {
@@ -162,6 +181,7 @@ mod tests {
                 s.menu_how,
                 s.menu_about,
                 s.menu_license,
+                s.menu_donate,
                 s.license_title,
                 s.license_show_label,
                 s.license_text_label,
@@ -280,6 +300,10 @@ mod tests {
             }
             // The author, as in Cargo.toml.
             assert!(html.contains(crate::ui::APP_AUTHOR), "{lang:?}: author");
+            assert!(
+                html.contains(&format!("href=\"{}\"", crate::ui::DONATE_URL)),
+                "{lang:?}: the donation page"
+            );
         }
     }
 }

@@ -33,6 +33,7 @@
 <li><a href="#faq">Česta pitanja</a></li>
 <li><a href="#troubleshooting">Rešavanje problema</a></li>
 <li><a href="#license">Licenca</a></li>
+<li><a href="#donate">Donacije</a></li>
 </ol>
 </nav>
 
@@ -41,13 +42,13 @@
 <section aria-labelledby="using-help">
 <h2 id="using-help">Korišćenje ove pomoći</h2>
 <p>Ova pomoć se otvara u vašem veb pregledaču, na jeziku koji Dodavo koristi. Da biste je ponovo otvorili, pritisnite <kbd>F1</kbd> u bilo kom prozoru programa Dodavo ili u meniju <span class="ui">Pomoć</span> izaberite <span class="ui">Prikaži pomoć</span>.</p>
-<p>Svaka tema je naslov drugog nivoa. Pomoću čitača ekrana možete da se krećete od teme do teme po naslovima (na primer, tasterom <kbd>H</kbd> u režimu pregledanja u čitačima NVDA i JAWS ili u režimu skeniranja u Naratoru). Sadržaj na vrhu stranice sadrži veze ka svim temama.</p>
+<p>Svaka tema je naslov drugog nivoa. Pomoću čitača ekrana možete da se krećete od teme do teme po naslovima (na primer, tasterom <kbd>H</kbd> u režimu pretraživanja u čitačima NVDA i JAWS ili u režimu skeniranja u Naratoru). Sadržaj na vrhu stranice sadrži veze ka svim temama.</p>
 <p>Nazivi menija, dugmadi i ostalih kontrola napisani su tačno onako kako se prikazuju u programu Dodavo. Sve može da se uradi samo pomoću tastature; tasteri su navedeni u svakoj temi i sakupljeni u odeljku <a href="#shortcuts">Tasterske prečice</a>.</p>
 </section>
 
 <section aria-labelledby="how-it-works">
 <h2 id="how-it-works">Kako Dodavo funkcioniše</h2>
-<p>Svaki računar na kojem radi Dodavo ima trajni <strong>ID kontakta</strong>: kod od 64 znaka sastavljen od cifara 0–9 i slova a–f. ID kontakta je za Dodavo isto što i broj telefona za telefon. Da biste nekome slali datoteke, potreban vam je njegov ID kontakta; da biste primali datoteke, svoj ID kontakta dajete osobama koje će vam ih slati.</p>
+<p>Svaki računar na kojem radi Dodavo ima trajni <strong>ID kontakta</strong>: kôd od 64 znaka sastavljen od cifara 0–9 i slova a–f. ID kontakta je za Dodavo isto što i broj telefona za telefon. Da biste nekome slali datoteke, potreban vam je njegov ID kontakta; da biste primali datoteke, svoj ID kontakta dajete osobama koje će vam ih slati.</p>
 <ol>
 <li>Kopirate svoj ID kontakta i pošaljete ga drugoj osobi, na primer e-poštom ili u poruci ćaskanja.</li>
 <li>Druga osoba vas dodaje na svoju listu primalaca, a vi nju na svoju.</li>
@@ -61,15 +62,15 @@
 
 <section aria-labelledby="installing">
 <h2 id="installing">Instalacija i deinstalacija</h2>
-<p>Dodavo se instalira instalacionim programom pod nazivom <code>Dodavo-<var>verzija</var>-setup.exe</code>. Instalacioni program je standardni čarobnjak sistema Windows: <kbd>Tab</kbd> premešta fokus između kontrola na stranici, <kbd>razmaknica</kbd> potvrđuje ili poništava polje za potvrdu, <kbd>Enter</kbd> vodi na sledeću stranicu, <kbd>Alt</kbd>+<kbd>N</kbd> vraća na prethodnu, a <kbd>Esc</kbd> otkazuje instalaciju. Čitači ekrana pročitaju naslov i tekst svake stranice kada se otvori. Instalacioni program koristi jezik prikaza sistema Windows; ako Dodavo nije dostupan na tom jeziku, prvo traži da izaberete jezik.</p>
+<p>Dodavo se instalira instalacionim programom pod nazivom <code>Dodavo-<var>verzija</var>-setup.exe</code>. Instalacioni program je standardni čarobnjak sistema Windows: <kbd>Tab</kbd> premešta fokus između kontrola na stranici, <kbd>razmaknica</kbd> potvrđuje ili opoziva izbor u polju za potvrdu, <kbd>Enter</kbd> vodi na sledeću stranicu, <kbd>Alt</kbd>+<kbd>N</kbd> vraća na prethodnu, a <kbd>Esc</kbd> otkazuje instalaciju. Čitači ekrana pročitaju naslov i tekst svake stranice kada se otvori. Instalacioni program koristi jezik prikaza sistema Windows; ako Dodavo nije dostupan na tom jeziku, prvo traži da izaberete jezik.</p>
 <h3 id="requirements">Sistemski zahtevi</h3>
 <p>Dodavo radi u sistemima Windows 7 sa servisnim paketom 1, Windows 8.1, Windows 10 i Windows 11, u 32-bitnim i 64-bitnim izdanjima (na računarima sa ARM procesorom putem emulacije ugrađene u Windows). Instalacioni program sam instalira verziju koja odgovara vašem sistemu Windows. Microsoft više ne podržava sisteme Windows 7 i 8.1; Dodavo se testira u sistemima Windows 10 i 11, a u starijim verzijama se isporučuje takav kakav jeste. U sistemu Windows 7 bez ispravki sistema Windows iz 2019. za SHA-2 potpise Windows ne može da proveri potpis instalacionog programa i prijavljuje nepoznatog izdavača.</p>
 <p>Ako instalacioni program koji ste dobili nije digitalno potpisan, na primer probna verzija, Windows vas upozorava pre pokretanja. Windows 8.1, 10 i 11 prikazuju SmartScreen poruku da je Windows zaštitio vaš računar: izaberite vezu sa više informacija, a zatim dugme kojim se program ipak pokreće. Windows 7 pita da li želite da pokrenete softver čiji izdavač ne može da se proveri: izaberite <span class="ui">Pokreni</span>. Učinite to samo ako ste datoteku dobili od nekoga kome verujete, a njen kontrolni zbir SHA-256 uporedite sa onim objavljenim uz nju: otvorite komandnu liniju i pokrenite <code>certutil -hashfile Dodavo-<var>verzija</var>-setup.exe SHA256</code>.</p>
-<p>Dodavo ima sopstvenu listu pouzdanih izdavalaca sertifikata za šifrovane veze sa posredničkim serverima i serverima za pronalaženje adresa, pa ne zavisi od sertifikata instaliranih u sistemu Windows. Povezuje se i u sistemu Windows 7 čiji osnovni sertifikati nikada nisu ažurirani.</p>
+<p>Dodavo ima sopstvenu listu pouzdanih izdavalaca sertifikata za šifrovane veze sa posredničkim serverima i serverima za pronalaženje adresa, pa ne zavisi od sertifikata instaliranih u sistemu Windows. Povezuje se i u sistemu Windows 7 čiji vrhovni sertifikati nikada nisu ažurirani.</p>
 <h3 id="install">Instaliranje programa Dodavo</h3>
 <ol>
 <li>Pokrenite instalacioni program, na primer tako što ćete ga otvoriti iz fascikle Preuzimanja.</li>
-<li>Instalacioni program pita kako želite da instalirate program. <span class="ui">Instaliraj samo za mene (preporučeno)</span> instalira Dodavo samo za vas i ne zahteva administratorske privilegije. <span class="ui">Instaliraj za sve korisnike</span> ga instalira za sve koji koriste računar; Windows tada traži administratorsku dozvolu. Izaberite jednu opciju tasterima sa strelicama i pritisnite <kbd>Enter</kbd>.</li>
+<li>Instalacioni program pita kako želite da instalirate program. <span class="ui">Instaliraj samo za mene (preporučeno)</span> instalira Dodavo samo za vas i ne zahteva administratorske privilegije. <span class="ui">Instaliraj za sve korisnike</span> ga instalira za sve koji koriste računar; Windows tada traži dozvolu administratora. Izaberite jednu opciju tasterima sa strelicama i pritisnite <kbd>Enter</kbd>.</li>
 <li>Na stranici <span class="ui">Odabir odredišne fascikle</span> možete da promenite fasciklu u koju se Dodavo instalira. Predložena fascikla odgovara većini korisnika; pritisnite <kbd>Enter</kbd>.</li>
 <li>Na stranici <span class="ui">Odabir dodatnih zadataka</span> pritisnite <kbd>razmaknicu</kbd> ako želite i opciju <span class="ui">Postavi prečicu na radnu površinu</span>, a zatim pritisnite <kbd>Enter</kbd>.</li>
 <li>Na stranici <span class="ui">Instalacija je spremna</span> pritisnite <kbd>Enter</kbd> da biste izabrali <span class="ui">Instaliraj</span>. Instaliranje traje samo nekoliko sekundi.</li>
@@ -81,7 +82,7 @@
 <p>Dodavo se ažurira sam. Jednom dnevno, otprilike 15 sekundi nakon što se pokrene i poveže sa mrežom, na stranici programa Dodavo na GitHub-u proverava da li je objavljena novija verzija. Kada jeste, pojavljuje se obaveštenje <span class="ui">Dostupno je ažuriranje</span>, a u pozadini se otvara prozor <span class="ui">Dostupno ažuriranje</span>; izborom obaveštenja ili tasterima <kbd>Alt</kbd>+<kbd>Tab</kbd> dolazi u prvi plan. U prozoru piše koja je verzija dostupna i koju imate; čitači ekrana obično pročitaju tu rečenicu kada prozor dođe u prvi plan. Zatim slede, redosledom tastera Tab:</p>
 <dl>
 <dt><span class="ui">Napomene uz izdanje</span> (<kbd>Alt</kbd>+<kbd>N</kbd>)</dt>
-<dd>Tekstualno polje samo za čitanje sa opisom novina. Fokus je najpre ovde, da biste mogli da ga pročitate pre nego što se odlučite. Čitajte ga tasterima sa strelicama; tasterima <kbd>Tab</kbd> i <kbd>Shift</kbd>+<kbd>Tab</kbd> prelazite između teksta i dugmadi, a sa poslednjeg dugmeta ponovo na tekst.</dd>
+<dd>Tekstualno polje samo za čitanje sa opisom novosti. Fokus je najpre ovde, da biste mogli da ga pročitate pre nego što se odlučite. Čitajte ga tasterima sa strelicama; tasterima <kbd>Tab</kbd> i <kbd>Shift</kbd>+<kbd>Tab</kbd> prelazite između teksta i dugmadi, a sa poslednjeg dugmeta ponovo na tekst.</dd>
 <dt><span class="ui">Instaliraj ažuriranje</span> (<kbd>Alt</kbd>+<kbd>I</kbd>; to je podrazumevano dugme, pa ga bira i <kbd>Enter</kbd>)</dt>
 <dd>Preuzima novi instalacioni program i instalira ga, kao što je opisano u nastavku.</dd>
 <dt><span class="ui">Podseti me kasnije</span> (<kbd>Alt</kbd>+<kbd>K</kbd> ili <kbd>Esc</kbd>)</dt>
@@ -93,7 +94,7 @@
 <ol>
 <li>Zatvorite Dodavo.</li>
 <li>Otvorite Postavke sistema Windows (<kbd>Windows</kbd>+<kbd>I</kbd>) i idite na <span class="ui">Aplikacije</span>, a zatim na <span class="ui">Instalirane aplikacije</span> (u sistemu Windows 10: <span class="ui">Aplikacije i funkcije</span>). U sistemima Windows 7 i 8.1 otvorite stavku <span class="ui">Kontrolna tabla</span> i izaberite <span class="ui">Programi i funkcije</span>.</li>
-<li>Otkucajte <kbd>Dodavo</kbd> u polje za pretragu da biste ga pronašli na listi. U sistemu Windows 11 pritisnite <kbd>Tab</kbd> da biste došli do dugmeta sa tri tačke pored njega, pritisnite <kbd>Enter</kbd> i izaberite <span class="ui">Deinstaliraj</span>. U sistemima Windows 10, 8.1 i 7 izaberite Dodavo na listi i izaberite <span class="ui">Deinstaliraj</span>.</li>
+<li>Otkucajte <kbd>Dodavo</kbd> u polje za pretragu da biste ga pronašli na listi. U sistemu Windows 11 pritisnite <kbd>Tab</kbd> da biste došli do dugmeta za dodatne opcije pored njega, pritisnite <kbd>Enter</kbd> i izaberite <span class="ui">Deinstaliraj</span>. U sistemima Windows 10, 8.1 i 7 izaberite Dodavo na listi i izaberite <span class="ui">Deinstaliraj</span>.</li>
 <li>Potvrdite izborom opcije <span class="ui">Deinstaliraj</span>, a zatim <span class="ui">Da</span>.</li>
 </ol>
 <p>Deinstalacija uklanja program, njegove prečice i unos za opciju <span class="ui">Pokreni pri prijavljivanju u Windows</span>. Vaše postavke, lista primalaca i ID kontakta ostaju u fascikli opisanoj u odeljku <a href="#your-data">Vaše postavke i identitet</a>, pa je posle ponovne instalacije sve kao pre. Ako želite da ih uklonite, posle deinstalacije izbrišite tu fasciklu; vaš ID kontakta je tada trajno izgubljen.</p>
@@ -104,7 +105,7 @@
 <ol>
 <li>Pokrenite Dodavo. Otvara se glavni prozor sa vašom listom primalaca, koja je na početku prazna.</li>
 <li>Proverite svoje ime: otvorite meni <span class="ui">Datoteka</span> (<kbd>Alt</kbd>+<kbd>D</kbd>) i izaberite <span class="ui">Postavke…</span>. U prvom polju, <span class="ui">Vaše ime (prikazuje se osobama kojima šaljete datoteke)</span>, upisano je vaše korisničko ime u sistemu Windows. Po želji ga promenite, a zatim pritisnite <kbd>Enter</kbd> da biste sačuvali promenu.</li>
-<li>Podelite svoj ID kontakta: u meniju <span class="ui">Datoteka</span> izaberite <span class="ui">Kopiraj moj ID kontakta</span>, aktivirajte dugme <span class="ui">Kopiraj moj ID kontakta</span> ili pritisnite <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>C</kbd>. Dodavo kopira ID u ostavu i prikazuje ga u poruci. Nalepite ga u e-poruku ili poruku ćaskanja osobama koje treba da mogu da vam šalju datoteke.</li>
+<li>Podelite svoj ID kontakta: u meniju <span class="ui">Datoteka</span> izaberite <span class="ui">Kopiraj moj ID kontakta</span>, aktivirajte dugme <span class="ui">Kopiraj moj ID kontakta</span> ili pritisnite <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>C</kbd>. Dodavo kopira ID u međuspremnik i prikazuje ga u poruci. Nalepite ga u e-poruku ili poruku ćaskanja osobama koje treba da mogu da vam šalju datoteke.</li>
 <li>Dodajte osobe kojima želite da šaljete datoteke, kao što je opisano u odeljku <a href="#add-recipient">Dodavanje primaoca</a>.</li>
 </ol>
 <p class="note"><strong>Napomena:</strong> Vaš ID kontakta nije tajna. Svako ko ga ima može da vam ponudi datoteke, ali prenos bez pitanja mogu da pokrenu samo osobe sa vaše liste primalaca, jer je uključena opcija <span class="ui">Prenose pokreći automatski, bez pitanja</span> (možete da je isključite u postavkama). Ponuda bilo koga drugog uvek prvo otvara prozor Dolazni prenos i ništa se ne čuva dok je ne prihvatite.</p>
@@ -115,13 +116,13 @@
 <p>Glavni prozor sadrži, redosledom tastera Tab:</p>
 <dl>
 <dt>Lista primalaca (<kbd>Alt</kbd>+<kbd>M</kbd>)</dt>
-<dd>Osobe kojima možete da šaljete datoteke. Lista ima tri kolone: <span class="ui">Ime</span>, <span class="ui">ID kontakta</span> i <span class="ui">Prenos</span>. ID kontakta je skraćen na prvih osam i poslednjih šest znakova. Dok sa nekom osobom traje prenos, u koloni <span class="ui">Prenos</span> piše šta se dešava, na primer <span class="ui">Slanje – „izveštaj.pdf“ (45 %)</span> ili <span class="ui">Čeka se veza – „izveštaj.pdf“ (45 %)</span>; osvežava se otprilike svake sekunde, a kada ima više prenosa, piše koliko ih je u toku. Inače je prazna. Po listi se krećete tasterima sa strelicama. Taster <kbd>Enter</kbd> ili dvostruki klik otvara meni radnji za izabranu osobu (pogledajte u nastavku). Kada je lista prazna, to piše na njoj, zajedno sa uputstvom kako da nekoga dodate.</dd>
+<dd>Osobe kojima možete da šaljete datoteke. Lista ima tri kolone: <span class="ui">Ime</span>, <span class="ui">ID kontakta</span> i <span class="ui">Prenos</span>. ID kontakta je skraćen na prvih osam i poslednjih šest znakova. Dok sa nekom osobom traje prenos, u koloni <span class="ui">Prenos</span> piše šta se dešava, na primer <span class="ui">Slanje – „izveštaj.pdf“ (45%)</span> ili <span class="ui">Čeka se veza – „izveštaj.pdf“ (45%)</span>; osvežava se otprilike svake sekunde, a kada ima više prenosa, piše koliko ih je u toku. Inače je prazna. Po listi se krećete tasterima sa strelicama. Taster <kbd>Enter</kbd> ili dvostruki klik otvara meni radnji za izabranu osobu (pogledajte u nastavku). Kada je lista prazna, to piše na njoj, zajedno sa uputstvom kako da nekoga dodate.</dd>
 <dt>Dugmad <span class="ui">Pošalji datoteku…</span> i <span class="ui">Pošalji fasciklu…</span> (<kbd>Ctrl</kbd>+<kbd>O</kbd> i <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>O</kbd>)</dt>
 <dd>Šalju nešto izabranoj osobi.</dd>
 <dt>Dugme <span class="ui">Dodaj primaoca…</span> (<kbd>Ctrl</kbd>+<kbd>N</kbd>)</dt>
 <dd>Dodaje novu osobu na listu.</dd>
 <dt>Dugme <span class="ui">Kopiraj moj ID kontakta</span> (<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>C</kbd>)</dt>
-<dd>Kopira vaš ID kontakta u ostavu.</dd>
+<dd>Kopira vaš ID kontakta u međuspremnik.</dd>
 </dl>
 <p>Dugmad nemaju podvučena slova jer u glavnom prozoru <kbd>Alt</kbd> + slovo otvara meni. Umesto toga upotrebite tasterske prečice navedene u zagradama: rade bez obzira na to gde se u glavnom prozoru nalazi fokus, a meni <span class="ui">Datoteka</span> ih prikazuje pored svojih opcija.</p>
 <p>Na dnu prozora red statusa pokazuje da li je Dodavo povezan:</p>
@@ -131,7 +132,7 @@
 <li><span class="ui">Van mreže – proverite internet vezu. Prenosi unutar lokalne mreže i dalje rade.</span></li>
 </ul>
 <p>Red statusa ne može da dobije fokus tastature. Da biste ga čuli, upotrebite komandu čitača ekrana za čitanje celog prozora: <kbd>NVDA</kbd>+<kbd>B</kbd> u čitaču NVDA, <kbd>Insert</kbd>+<kbd>B</kbd> u čitaču JAWS ili <kbd>Narator</kbd>+<kbd>W</kbd> u Naratoru.</p>
-<p>Traka menija ima tri menija. Meni <span class="ui">Datoteka</span> (<kbd>Alt</kbd>+<kbd>D</kbd>) sadrži opcije <span class="ui">Pošalji datoteku…</span>, <span class="ui">Pošalji fasciklu…</span>, <span class="ui">Dodaj primaoca…</span>, <span class="ui">Uredi primaoca…</span>, <span class="ui">Ukloni primaoca</span>, <span class="ui">Kopiraj moj ID kontakta</span>, <span class="ui">Postavke…</span> i <span class="ui">Izlaz</span>. Meni <span class="ui">Prenosi</span> (<kbd>Alt</kbd>+<kbd>R</kbd>) navodi sve prenose u toku, sa osobom, stavkom i stanjem, a na kraju sadrži opciju <span class="ui">Prikaži sve prenose</span> (<kbd>Ctrl</kbd>+<kbd>T</kbd>); kada ništa nije u toku, u njemu piše <span class="ui">Nema prenosa u toku</span>. Pogledajte <a href="#finding-transfers">Pronalaženje prenosa koji se odvija u pozadini</a>. Meni <span class="ui">Pomoć</span> (<kbd>Alt</kbd>+<kbd>P</kbd>) sadrži opcije <span class="ui">Prikaži pomoć</span>, <span class="ui">Kako funkcioniše</span> (kratak pregled), <span class="ui">Proveri da li ima ažuriranja…</span> (pogledajte <a href="#update">Ažuriranje programa Dodavo</a>), <span class="ui">Licenca</span> i <span class="ui">O programu</span> (verzija, autor, veb lokacija i licenca; pogledajte <a href="#license">Licenca</a>).</p>
+<p>Traka sa menijima ima tri menija. Meni <span class="ui">Datoteka</span> (<kbd>Alt</kbd>+<kbd>D</kbd>) sadrži opcije <span class="ui">Pošalji datoteku…</span>, <span class="ui">Pošalji fasciklu…</span>, <span class="ui">Dodaj primaoca…</span>, <span class="ui">Uredi primaoca…</span>, <span class="ui">Ukloni primaoca</span>, <span class="ui">Kopiraj moj ID kontakta</span>, <span class="ui">Postavke…</span> i <span class="ui">Izlaz</span>. Meni <span class="ui">Prenosi</span> (<kbd>Alt</kbd>+<kbd>R</kbd>) navodi sve prenose u toku, sa osobom, stavkom i stanjem, a na kraju sadrži opciju <span class="ui">Prikaži sve prenose</span> (<kbd>Ctrl</kbd>+<kbd>T</kbd>); kada ništa nije u toku, u njemu piše <span class="ui">Nema prenosa u toku</span>. Pogledajte <a href="#finding-transfers">Pronalaženje prenosa koji se odvija u pozadini</a>. Meni <span class="ui">Pomoć</span> (<kbd>Alt</kbd>+<kbd>P</kbd>) sadrži opcije <span class="ui">Prikaži pomoć</span>, <span class="ui">Kako funkcioniše</span> (kratak pregled), <span class="ui">Licenca</span> (pogledajte <a href="#license">Licenca</a>), <span class="ui">Doniraj</span> (pogledajte <a href="#donate">Donacije</a>), <span class="ui">Proveri da li ima ažuriranja…</span> (pogledajte <a href="#update">Ažuriranje programa Dodavo</a>) i <span class="ui">O programu</span> (verzija, autor, veb lokacija i licenca; pogledajte <a href="#about">O programu Dodavo</a>).</p>
 <p>Kada je na listi izabrana osoba, meni radnji (<kbd>Enter</kbd>, dvostruki klik, <kbd>Shift</kbd>+<kbd>F10</kbd>, taster kontekstualnog menija ili desni klik) nudi opcije <span class="ui">Pošalji datoteku…</span>, <span class="ui">Pošalji fasciklu…</span>, <span class="ui">Prikaži prenos</span> (samo dok sa tom osobom traje prenos; <span class="ui">Prikaži prenose</span> kada ih ima više), <span class="ui">Uredi…</span> i <span class="ui">Ukloni</span>.</p>
 </section>
 
@@ -140,17 +141,17 @@
 
 <h3 id="add-recipient">Dodavanje primaoca</h3>
 <ol>
-<li>Zamolite osobu da u svom programu Dodavo izabere <span class="ui">Kopiraj moj ID kontakta</span> i pošalje vam kod.</li>
+<li>Zamolite osobu da u svom programu Dodavo izabere <span class="ui">Kopiraj moj ID kontakta</span> i pošalje vam kôd.</li>
 <li>Pritisnite <kbd>Ctrl</kbd>+<kbd>N</kbd> ili aktivirajte dugme <span class="ui">Dodaj primaoca…</span>. Otvara se dijalog <span class="ui">Dodaj primaoca</span>.</li>
 <li>U polje <span class="ui">Ime (služi samo da biste prepoznali osobu)</span> upišite ime. To ime vidite samo vi.</li>
-<li>Pritisnite <kbd>Tab</kbd> i nalepite kod u polje <span class="ui">ID kontakta</span> tasterima <kbd>Ctrl</kbd>+<kbd>V</kbd>.</li>
+<li>Pritisnite <kbd>Tab</kbd> i nalepite kôd u polje <span class="ui">ID kontakta</span> tasterima <kbd>Ctrl</kbd>+<kbd>V</kbd>.</li>
 <li>Pritisnite <kbd>Enter</kbd> ili aktivirajte dugme <span class="ui">U redu</span>.</li>
 </ol>
 <p>Dodavo proverava ono što ste uneli. Ako nešto nije u redu, poruka objašnjava problem i ostajete u dijalogu da biste ga ispravili:</p>
 <ul>
 <li>Ime je prazno ili već postoji primalac sa tim imenom.</li>
-<li>Kod nije važeći ID kontakta (mora da ima tačno 64 znaka, cifre 0–9 i slova a–f). Proverite da li ste kopirali ceo kod.</li>
-<li>Kod je vaš sopstveni ID kontakta.</li>
+<li>Kôd nije važeći ID kontakta (mora da ima tačno 64 znaka, cifre 0–9 i slova a–f). Proverite da li ste kopirali ceo kôd.</li>
+<li>Kôd je vaš sopstveni ID kontakta.</li>
 <li>ID kontakta već pripada drugom primaocu.</li>
 </ul>
 <p>Lista je sortirana abecedno po imenu, a nova osoba ostaje izabrana.</p>
@@ -174,13 +175,13 @@
 <li>Izaberite datoteku i pritisnite <kbd>Enter</kbd>.</li>
 </ol>
 <p>Otvara se prozor napretka i prenos počinje. Pogledajte <a href="#progress">Praćenje prenosa</a>.</p>
-<p>Možete i da pritisnete <kbd>Enter</kbd> na osobi ili da je dvaput kliknete, pa u meniju koji se otvori izaberete <span class="ui">Pošalji datoteku…</span>.</p>
+<p>Možete i da pritisnete <kbd>Enter</kbd> na osobi ili da dvaput kliknete na nju, pa u meniju koji se otvori izaberete <span class="ui">Pošalji datoteku…</span>.</p>
 
 <h3 id="send-folder">Slanje fascikle</h3>
 <ol>
 <li>Na listi primalaca izaberite osobu.</li>
 <li>Pritisnite <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>O</kbd> ili aktivirajte dugme <span class="ui">Pošalji fasciklu…</span>.</li>
-<li>Izaberite fasciklu i aktivirajte dugme <span class="ui">Izaberi fasciklu</span>.</li>
+<li>Izaberite fasciklu i aktivirajte dugme <span class="ui">Izaberite fasciklu</span>.</li>
 </ol>
 <p>Dodavo prvo pakuje fasciklu, sa svim potfasciklama, a zatim je šalje. Drugi računar je ponovo raspakuje, pa osoba prima običnu fasciklu, osim ako je u svojim postavkama izabrala da je zadrži kao ZIP datoteku.</p>
 
@@ -190,7 +191,7 @@
 
 <h3 id="after-sending">Kada poslata stavka stigne</h3>
 <p>Kada druga osoba primi sve, kontrolni zbir bude potvrđen i stavka bude sačuvana na drugom računaru, Dodavo prikazuje poruku, na primer <span class="ui">Gotovo! Datoteka je isporučena primaocu (Ana).</span>, a ispod nje naziv stavke. Čitači ekrana je čitaju. Pritisnite <kbd>Enter</kbd> ili <kbd>Esc</kbd> ili izaberite <span class="ui">Zatvori</span>; zatvara se i prozor napretka.</p>
-<p>Ako izaberete <span class="ui">Ne prikazuj ponovo</span>, prozor napretka će se sledeći put zatvoriti sam, a obaveštenje će vam javiti da je prenos završen. Poruku možete ponovo da uključite u postavkama opcijom <span class="ui">Posle slanja prikaži poruku kada datoteka ili fascikla stigne</span>. Ako je prozor napretka skriven ili minimizovan kada se prenos završi, prikazuje se samo obaveštenje. Kada prenos ne uspe, bude odbijen ili otkazan, prozor napretka ostaje otvoren da biste mogli da pročitate šta se dogodilo.</p>
+<p>Ako izaberete <span class="ui">Ne prikazuj ponovo</span>, prozor napretka će se sledeći put zatvoriti sam, a obaveštenje će vam javiti da je prenos završen. Poruku možete ponovo da uključite u postavkama opcijom <span class="ui">Posle slanja prikaži poruku kada datoteka ili fascikla stigne</span>. Ako je prozor napretka skriven ili umanjen kada se prenos završi, prikazuje se samo obaveštenje. Kada prenos ne uspe, bude odbijen ili otkazan, prozor napretka ostaje otvoren da biste mogli da pročitate šta se dogodilo.</p>
 </section>
 
 <section aria-labelledby="receiving">
@@ -268,7 +269,7 @@
 <h3 id="finding-transfers">Pronalaženje prenosa koji se odvija u pozadini</h3>
 <p>Prenos čiji je prozor skriven nastavlja se kao i pre. Njegov prozor možete da vratite u bilo kom trenutku:</p>
 <ul>
-<li>U glavnom prozoru otvorite meni <span class="ui">Prenosi</span> (<kbd>Alt</kbd>+<kbd>R</kbd>). U njemu su navedeni svi prenosi u toku, na primer <span class="ui">Ana: Slanje – „izveštaj.pdf“ (45 %)</span>; izaberite jedan da biste prikazali njegov prozor. Opcija <span class="ui">Prikaži sve prenose</span> (<kbd>Ctrl</kbd>+<kbd>T</kbd>) prikazuje sve. Kada ništa nije u toku, u meniju piše <span class="ui">Nema prenosa u toku</span>, a isto vam javlja i <kbd>Ctrl</kbd>+<kbd>T</kbd>.</li>
+<li>U glavnom prozoru otvorite meni <span class="ui">Prenosi</span> (<kbd>Alt</kbd>+<kbd>R</kbd>). U njemu su navedeni svi prenosi u toku, na primer <span class="ui">Ana: Slanje – „izveštaj.pdf“ (45%)</span>; izaberite jedan da biste prikazali njegov prozor. Opcija <span class="ui">Prikaži sve prenose</span> (<kbd>Ctrl</kbd>+<kbd>T</kbd>) prikazuje sve. Kada ništa nije u toku, u meniju piše <span class="ui">Nema prenosa u toku</span>, a isto vam javlja i <kbd>Ctrl</kbd>+<kbd>T</kbd>.</li>
 <li>Na listi primalaca kolona <span class="ui">Prenos</span> prikazuje stanje pored osobe. Otvorite meni radnji za osobu (<kbd>Enter</kbd>) i izaberite <span class="ui">Prikaži prenos</span> (ili <span class="ui">Prikaži prenose</span> kada ih ima više).</li>
 <li>Meni ikone u oblasti za obaveštenja ima isti podmeni <span class="ui">Prenosi</span>, pa do prenosa možete da dođete i dok je glavni prozor zatvoren.</li>
 <li>Prozor vraća i izbor obaveštenja sistema Windows o tom prenosu.</li>
@@ -280,13 +281,13 @@
 <h2 id="background">Rad u oblasti za obaveštenja</h2>
 <p>Kada zatvorite glavni prozor, Dodavo nastavlja da radi u oblasti za obaveštenja na kraju trake zadataka da bi mogao da prima datoteke. Kada se to desi prvi put, obaveštenje vas o tome izveštava.</p>
 <ul>
-<li>Da biste ponovo prikazali glavni prozor, ponovo pokrenite Dodavo (na primer, iz menija Start) ili izaberite njegovu ikonu u oblasti za obaveštenja. Ponovno pokretanje ne otvara drugi primerak programa: onaj koji već radi dovodi svoj prozor u prednji plan.</li>
+<li>Da biste ponovo prikazali glavni prozor, ponovo pokrenite Dodavo (na primer, iz menija Start) ili izaberite njegovu ikonu u oblasti za obaveštenja. Ponovno pokretanje ne otvara drugi primerak programa: onaj koji već radi dovodi svoj prozor u prvi plan.</li>
 <li>Da biste do ikone došli tastaturom, pritisnite <kbd>Windows</kbd>+<kbd>B</kbd>, a zatim se tasterima sa strelicama pomerite do ikone <span class="ui">Dodavo</span>. Ako je nema, možda je među skrivenim ikonama: prvo izaberite dugme <span class="ui">Prikaži skrivene ikone</span>. Pritisnite <kbd>Enter</kbd> da biste otvorili prozor ili <kbd>Shift</kbd>+<kbd>F10</kbd>, odnosno taster kontekstualnog menija, da biste otvorili meni ikone.</li>
 <li>Meni ikone sadrži opciju <span class="ui">Otvori</span>, podmeni <span class="ui">Prenosi</span> (prenosi u toku, pogledajte <a href="#finding-transfers">Pronalaženje prenosa koji se odvija u pozadini</a>) i opcije <span class="ui">Kopiraj moj ID kontakta</span> i <span class="ui">Izlaz</span>.</li>
-<li>Dok prenosi traju, ikona u maloj znački prikazuje njihov broj, a njen opis alatke (ono što čitač ekrana pročita kada dođete do ikone) govori šta se dešava, osvežen otprilike svake sekunde: na primer <span class="ui">Dodavo – Slanje – „izveštaj.pdf“ (45 %), 12,3 MB/s</span> ili, kada ih ima više, <span class="ui">Dodavo – 2 prenosa u toku, 45 %, 12,3 MB/s</span>.</li>
+<li>Dok prenosi traju, ikona u maloj znački prikazuje njihov broj, a njen opis alatke (ono što čitač ekrana pročita kada dođete do ikone) govori šta se dešava, osvežen otprilike svake sekunde: na primer <span class="ui">Dodavo – Slanje – „izveštaj.pdf“ (45%), 12,3 MB/s</span> ili, kada ih ima više, <span class="ui">Dodavo – 2 prenosa u toku, 45%, 12,3 MB/s</span>.</li>
 </ul>
 <p>Da biste potpuno zatvorili Dodavo, izaberite <span class="ui">Izlaz</span> u meniju <span class="ui">Datoteka</span> ili u meniju ikone. Ako su prenosi još u toku, Dodavo prvo pita i nudi tri opcije: <span class="ui">Ne izlazi</span> (podrazumevana opcija, pa <kbd>Enter</kbd> ili <kbd>Esc</kbd> ostavlja Dodavo pokrenutim), <span class="ui">Izađi i nastavi prenose kasnije</span> (prenosi se prekidaju i nastavljaju kada Dodavo ponovo bude pokrenut na oba računara) i <span class="ui">Otkaži prenose i izađi</span>. Pri odjavljivanju ili isključivanju sistema Windows Dodavo ne pita; prenosi se nastavljaju sledeći put. Posle izlaza ne možete da primate datoteke dok ponovo ne pokrenete Dodavo.</p>
-<p>Dodavo o završenim prenosima, dolaznim prenosima, pauziranju na drugoj strani, prekinutim i ponovo uspostavljenim vezama, dostupnim ažuriranjima i drugim događajima izveštava obaveštenjima sistema Windows, i dok je prozor napretka umanjen u pozadinu. Čitači ekrana ih obično najavljuju. Izbor obaveštenja o prenosu dovodi njegov prozor u prednji plan. Ako neko propustite ili je uključena opcija Ne uznemiravaj, pronaći ćete ga u centru za obaveštenja sistema Windows (<kbd>Windows</kbd>+<kbd>N</kbd> u sistemu Windows 11).</p>
+<p>Dodavo o završenim prenosima, dolaznim prenosima, pauziranju na drugoj strani, prekinutim i ponovo uspostavljenim vezama, dostupnim ažuriranjima i drugim događajima izveštava obaveštenjima sistema Windows, i dok je prozor napretka umanjen u pozadinu. Čitači ekrana ih obično najavljuju. Izbor obaveštenja o prenosu dovodi njegov prozor u prvi plan. Ako neko propustite ili je uključena opcija Ne uznemiravaj, pronaći ćete ga u centru za obaveštenja sistema Windows (<kbd>Windows</kbd>+<kbd>N</kbd> u sistemu Windows 11).</p>
 </section>
 
 <section aria-labelledby="settings">
@@ -316,7 +317,7 @@
 <dl>
 <dt><span class="ui">Pokreni pri prijavljivanju u Windows</span></dt>
 <dd>Pokreće Dodavo u oblasti za obaveštenja kada se prijavite u Windows, pa uvek možete da primate datoteke.</dd>
-<dt><span class="ui">Uvek pokreni minimizovano u oblast za obaveštenja</span></dt>
+<dt><span class="ui">Uvek pokreni umanjeno u oblast za obaveštenja</span></dt>
 <dd>Dodavo se pokreće bez prikazivanja glavnog prozora.</dd>
 <dt><span class="ui">Nastavi rad u oblasti za obaveštenja kada se prozor zatvori</span></dt>
 <dd>Kada nije izabrano, zatvaranjem glavnog prozora izlazite iz programa Dodavo.</dd>
@@ -344,7 +345,7 @@
 <tr><td><kbd>Ctrl</kbd>+<kbd>O</kbd></td><td>Slanje datoteke izabranoj osobi</td></tr>
 <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>O</kbd></td><td>Slanje fascikle izabranoj osobi</td></tr>
 <tr><td><kbd>Ctrl</kbd>+<kbd>N</kbd></td><td>Dodavanje primaoca</td></tr>
-<tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>C</kbd></td><td>Kopiranje vašeg ID-a kontakta u ostavu</td></tr>
+<tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>C</kbd></td><td>Kopiranje vašeg ID-a kontakta u međuspremnik</td></tr>
 <tr><td><kbd>F2</kbd></td><td>Uređivanje izabranog primaoca</td></tr>
 <tr><td><kbd>Delete</kbd></td><td>Uklanjanje izabranog primaoca</td></tr>
 <tr><td><kbd>Ctrl</kbd>+<kbd>T</kbd></td><td>Prikaz prozora svih prenosa u toku</td></tr>
@@ -446,21 +447,21 @@
 
 <h3 id="faq-advantage">Koja je prednost programa Dodavo u odnosu na društvene mreže, aplikacije za razmenu poruka i usluge u oblaku?</h3>
 <p>Sa programom Dodavo datoteka putuje sa vašeg računara direktno na računar druge osobe. Ništa se ne otprema na server, pa treća strana ništa ne skladišti, ne pregleda i ne zadržava, a nema ni naloga koji biste morali da otvorite, ni ograničenja prostora za skladištenje, ni veze koja ističe. Datoteke stižu tačno onakve kakve jesu: fotografije i video zapisi se ne smanjuju niti ponovo komprimuju, a veličina nije ograničena. Svaki prenos je potpuno šifrovan, a računari u istoj mreži razmenjuju datoteke i bez internet veze.</p>
-<p>Zauzvrat, Dodavo mora da bude pokrenut na oba računara kada prenos počinje. Ako jedna strana kasnije nestane, prenos čeka i nastavlja se kasnije; pogledajte <a href="#faq-offline">Šta se dešava ako se internet veza prekine ili ako se Dodavo zatvori na bilo kojoj strani?</a></p>
+<p>Zauzvrat, Dodavo mora da bude pokrenut na oba računara kada prenos počinje. Ako jedna strana kasnije nestane, prenos čeka i nastavlja se kasnije; pogledajte <a href="#faq-offline">Šta se dešava sa prenosom ako ga nešto prekine?</a></p>
 
 <h3 id="faq-how">Kako funkcioniše prenos?</h3>
-<p>Izaberete osobu na listi primalaca i izaberete datoteku ili fasciklu. Dodavo pronalazi drugi računar prema njegovom ID-u kontakta i povezuje se sa njim, direktno ako je moguće, a inače preko posredničkog servera. Druga osoba vidi naziv i veličinu stavke i bira <span class="ui">Prihvati</span> i fasciklu u koju će je sačuvati, ili <span class="ui">Odbij</span>. Podaci zatim šifrovani teku sa vašeg računara na njen, a obe strane prikazuju prozor napretka. Na kraju se primljeni podaci proveravaju kontrolnim zbirom; tek tada datoteka dobija svoj pravi naziv. Pogledajte <a href="#how-it-works">Kako Dodavo funkcioniše</a> i <a href="#progress">Praćenje prenosa</a>.</p>
+<p>Izaberete osobu na listi primalaca i izaberete datoteku ili fasciklu. Dodavo pronalazi drugi računar prema njegovom ID-u kontakta i povezuje se sa njim, direktno ako je moguće, a inače preko posredničkog servera. Druga osoba vidi naziv i veličinu stavke i bira <span class="ui">Prihvati</span> i fasciklu u kojoj će je sačuvati, ili <span class="ui">Odbij</span>. Podaci zatim šifrovani teku sa vašeg računara na njen, a obe strane prikazuju prozor napretka. Na kraju se primljeni podaci proveravaju kontrolnim zbirom; tek tada datoteka dobija svoj pravi naziv. Pogledajte <a href="#how-it-works">Kako Dodavo funkcioniše</a> i <a href="#progress">Praćenje prenosa</a>.</p>
 
 <h3 id="faq-folders">Kako se šalju i primaju fascikle?</h3>
-<p>Fascikla se šalje kao jedna stavka. Dodavo je najpre, sa svim potfasciklama, pakuje u privremenu ZIP arhivu u privremenoj fascikli sistema Windows (<code>%TEMP%\Dodavo</code>); prozor napretka kaže <span class="ui">Pakovanje fascikle…</span>. Arhiva se šalje, a drugi računar je čuva u svojoj privremenoj fascikli i zatim raspakuje u izabranu fasciklu (<span class="ui">Raspakivanje fascikle…</span>). Osoba prima običnu fasciklu istog naziva; ako fascikla tog naziva već postoji, dodaje se broj. Privremene arhive se posle brišu. Računar koji prima zato treba slobodan prostor i za arhivu i za raspakovanu fasciklu. Ako osoba zadrži ZIP datoteku (<span class="ui">Posle prijema fascikle</span> u postavkama), arhiva stiže direktno u izabranu fasciklu, prvo kao <code><var>naziv</var>.zip.part</code>, a na kraju kao <code><var>naziv</var>.zip</code>; uz <span class="ui">Zadrži raspakovanu fasciklu i ZIP datoteku</span> ZIP datoteka dobija svoj naziv čim stigne i prođe proveru, a Dodavo je zatim raspakuje u fasciklu pored nje sa odgovarajućim nazivom (na primer <code>Fotografije (2)</code> pored <code>Fotografije (2).zip</code>). Ako raspakivanje ne uspe ili se otkaže, Dodavo uklanja delimično raspakovanu fasciklu (a kada se zadržava oboje, i ZIP datoteku). Ako se Dodavo zatvori dok raspakuje fasciklu, pri sledećem pokretanju ponovo raspakuje fasciklu: najpre briše nedovršenu fasciklu, a nova dobija isti naziv. Dodavo odbija primljenu arhivu koja sadrži nebezbedne putanje, na primer putanje koje vode izvan odredišne fascikle. Pogledajte <a href="#send-folder">Slanje fascikle</a>.</p>
+<p>Fascikla se šalje kao jedna stavka. Dodavo je najpre, sa svim potfasciklama, pakuje u privremenu ZIP arhivu u privremenoj fascikli sistema Windows (<code>%TEMP%\Dodavo</code>); prozor napretka kaže <span class="ui">Pakovanje fascikle…</span>. Arhiva se šalje, a drugi računar je čuva u svojoj privremenoj fascikli i zatim raspakuje u izabranu fasciklu (<span class="ui">Raspakivanje fascikle…</span>). Osoba prima običnu fasciklu istog naziva; ako fascikla tog naziva već postoji, dodaje se broj. Privremene arhive se posle brišu. Računaru koji prima zato je potreban slobodan prostor i za arhivu i za raspakovanu fasciklu. Ako osoba zadrži ZIP datoteku (<span class="ui">Posle prijema fascikle</span> u postavkama), arhiva stiže direktno u izabranu fasciklu, prvo kao <code><var>naziv</var>.zip.part</code>, a na kraju kao <code><var>naziv</var>.zip</code>; uz <span class="ui">Zadrži raspakovanu fasciklu i ZIP datoteku</span> ZIP datoteka dobija svoj naziv čim stigne i prođe proveru, a Dodavo je zatim raspakuje u fasciklu pored nje sa odgovarajućim nazivom (na primer <code>Fotografije (2)</code> pored <code>Fotografije (2).zip</code>). Ako raspakivanje ne uspe ili se otkaže, Dodavo uklanja delimično raspakovanu fasciklu (a kada se zadržava oboje, i ZIP datoteku). Ako se Dodavo zatvori dok raspakuje fasciklu, pri sledećem pokretanju ponovo raspakuje fasciklu: najpre briše nedovršenu fasciklu, a nova dobija isti naziv. Dodavo odbija primljenu arhivu koja sadrži nebezbedne putanje, na primer putanje koje vode izvan odredišne fascikle. Pogledajte <a href="#send-folder">Slanje fascikle</a>.</p>
 
 <h3 id="faq-dates">Da li datoteke i fascikle zadržavaju svoje datume?</h3>
-<p>Da. Primljena datoteka, kao i svaka datoteka i fascikla u primljenoj fascikli, dobija datum izmene i datum kreiranja koje je imala na računaru pošiljaoca. Nov je samo datum poslednjeg pristupa.</p>
+<p>Da. Primljena datoteka, kao i svaka datoteka i fascikla u primljenoj fascikli, dobija <span class="ui">Datum izmene</span> i <span class="ui">Datum kreiranja</span> koje je imala na računaru pošiljaoca. Nov je samo datum poslednjeg otvaranja (<span class="ui">Poslednji pristup</span>).</p>
 <p>Skrivene datoteke i fascikle u primljenoj fascikli ostaju skrivene. Ostali atributi, na primer atribut samo za čitanje, ne zadržavaju se.</p>
-<p>ZIP datoteka obično čuva samo jedan datum po stavci, u lokalnom vremenu računara koji ju je napravio i tačno samo na dve sekunde; druga vremenska zona ili prelazak na letnje računanje vremena mogu da ga pomere za sat ili više. Zato Dodavo u svoje ZIP datoteke upisuje i tačne datume, u istom dodatnom polju koje upisuje 7-Zip, i koristi ih kada raspakuje fasciklu. Ako zadržite ZIP datoteku i kasnije je raspakujete drugim programom, taj program odlučuje koje će datume vratiti. Istraživač datoteka, na primer, raspakovanim datotekama može da da nov datum izmene kada je ZIP datoteka označena kao datoteka sa drugog računara, kao što su primljene datoteke (pogledajte <a href="#connections">Veze i bezbednost</a>); program kao što je 7-Zip zadržava datume.</p>
+<p>ZIP datoteka obično čuva samo jedan datum po stavci, u lokalnom vremenu računara koji ju je napravio i tačno samo na dve sekunde; druga vremenska zona ili prelazak na letnje računanje vremena mogu da ga pomere za sat ili više. Zato Dodavo u svoje ZIP datoteke upisuje i tačne datume, u istom dodatnom polju koje upisuje 7-Zip, i koristi ih kada raspakuje fasciklu. Ako zadržite ZIP datoteku i kasnije je raspakujete drugim programom, taj program odlučuje koje će datume vratiti. Istraživač datoteka, na primer, raspakovanim datotekama može da da nov <span class="ui">Datum izmene</span> kada je ZIP datoteka označena kao datoteka sa drugog računara, kao što su primljene datoteke (pogledajte <a href="#connections">Veze i bezbednost</a>); program kao što je 7-Zip zadržava datume.</p>
 
 <h3 id="faq-offline">Šta se dešava sa prenosom ako ga nešto prekine?</h3>
-<p>Kada je prenos jednom prihvaćen, Dodavo ga pamti na oba računara i nastavlja ga tamo gde je stao čim su oba ponovo pokrenuta i mogu da se međusobno dosegnu. Ništa se ne šalje dvaput, a kontrolni zbir na kraju i dalje pokriva celu stavku. Šta se dešava u pojedinim slučajevima:</p>
+<p>Kada je prenos jednom prihvaćen, Dodavo ga pamti na oba računara i nastavlja ga tamo gde je stao čim su oba ponovo pokrenuta i mogu da se povežu. Ništa se ne šalje dvaput, a kontrolni zbir na kraju i dalje pokriva celu stavku. Šta se dešava u pojedinim slučajevima:</p>
 <dl>
 <dt>Zatvorite Dodavo greškom ili izaberete Izlaz</dt>
 <dd>Dodavo prvo pita. Podrazumevana opcija je <span class="ui">Ne izlazi</span>, pa ga pritisak na <kbd>Enter</kbd> ili <kbd>Esc</kbd> ostavlja pokrenutim. <span class="ui">Izađi i nastavi prenose kasnije</span> za sada zaustavlja prenos; on se nastavlja sledeći put kada Dodavo bude pokrenut na oba računara.</dd>
@@ -485,7 +486,7 @@
 <p>Za pokretanje prenosa da: Dodavo mora da bude pokrenut na oba računara, inače vidite <span class="ui">Povezivanje sa računarom (…) nije uspelo.</span> Kada je prenos jednom prihvaćen, bilo koja strana može da ode van mreže, pređe u stanje spavanja ili izađe iz programa Dodavo; prenos se nastavlja kada su obe ponovo tu, kako je opisano u prethodnom odgovoru.</p>
 
 <h3 id="faq-size">Da li postoji ograničenje veličine?</h3>
-<p>Ne. Dodavo ne ograničava veličinu datoteke ni fascikle; jedina ograničenja su slobodan prostor na disku koji prima i, na disku sa sistemom datoteka FAT32 (mnogi USB fleš diskovi i memorijske kartice), to da nijedna datoteka ne može biti od 4 GB ili veća. Za fasciklu računar koji prima treba mesta i za arhivu i za raspakovanu fasciklu, dakle otprilike dvostruku veličinu fascikle dok traje raspakivanje (osim ako zadržava samo ZIP datoteku). Prozor Dolazni prenos kaže da li ima dovoljno prostora pre nego što prihvatite.</p>
+<p>Ne. Dodavo ne ograničava veličinu datoteke ni fascikle; jedina ograničenja su slobodan prostor na disku koji prima i, na disku sa sistemom datoteka FAT32 (mnogi USB fleš diskovi i memorijske kartice), to da nijedna datoteka ne može biti od 4 GB ili veća. Za fasciklu je računaru koji prima potrebno mesta i za arhivu i za raspakovanu fasciklu, dakle otprilike dvostruka veličina fascikle dok traje raspakivanje (osim ako zadržava samo ZIP datoteku). Prozor Dolazni prenos kaže da li ima dovoljno prostora pre nego što prihvatite.</p>
 
 <h3 id="faq-several">Da li mogu da pošaljem više stavki odjednom ili većem broju osoba?</h3>
 <p>Da. Možete da pokrenete koliko god prenosa želite, istoj osobi ili različitim osobama, a svaki ima sopstveni prozor napretka. Da biste poslali više datoteka ili fascikli u jednom potezu, prevucite ih iz Istraživača datoteka na osobu na listi primalaca; nakon što potvrdite, svaka stavka se šalje kao zaseban prenos. Pogledajte <a href="#drag-and-drop">Prevlačenje stavki na osobu</a>. Kolona <span class="ui">Prenos</span> na listi primalaca i meni <span class="ui">Prenosi</span> prate ih sve.</p>
@@ -515,14 +516,14 @@
 <p>Dodavo uvek pokušava da direktno poveže dva računara. Kada to nije moguće, na primer iza strogog zaštitnog zida preduzeća ili u nekim mobilnim mrežama, podaci umesto toga idu preko posredničkog servera. Prenos ostaje potpuno šifrovan, ali je obično sporiji jer se propusni opseg servera deli. Ne morate ništa da preduzimate: Dodavo tokom prenosa i dalje traži direktan put i prelazi na njega čim se pojavi. Ako su vam prenosi preko posredničkog servera česti, pokušajte sa drugom mrežom ili računar povežite kablom.</p>
 
 <h3 id="faq-slow">Zašto je prenos spor i zašto postaje sporiji kada Dodavo koristi mnogo ljudi, ako nema servera?</h3>
-<p>Prenos je brz samo onoliko koliko i najsporiji deo puta između dva računara. Kod većine kućnih priključaka to je brzina slanja (upload) pošiljaoca, koja je znatno manja od brzine preuzimanja iz reklama: slanje od 20 megabita u sekundi prenosi oko 2 megabajta u sekundi, pa datoteka od 2 GB traje oko četvrt sata. Kvalitet Wi-Fi mreže, druga preuzimanja i video-pozivi, kao i slanje većem broju osoba odjednom (one dele vašu brzinu slanja) dodatno ga usporavaju. Dodavo sam ne postavlja nikakvo ograničenje.</p>
+<p>Prenos je brz samo onoliko koliko i najsporiji deo puta između dva računara. Kod većine kućnih priključaka to je brzina slanja (upload) pošiljaoca, koja je znatno manja od brzine preuzimanja iz reklama: slanje od 20 megabita u sekundi prenosi oko 2 megabajta u sekundi, pa prenos datoteke od 2 GB traje oko četvrt sata. Kvalitet Wi-Fi mreže, druga preuzimanja i video pozivi, kao i slanje većem broju osoba odjednom (one dele vašu brzinu slanja) dodatno ga usporavaju. Dodavo sam ne postavlja nikakvo ograničenje.</p>
 <p>„Nema servera“ važi za podatke kada su računari povezani direktno, a tada drugi korisnici programa Dodavo uopšte ne utiču na vašu brzinu. Kada direktna veza nije moguća, na primer iza strogog zaštitnog zida ili u nekim mobilnim mrežama, podaci umesto toga idu preko besplatnog javnog posredničkog servera. Taj server dele svi koji koriste Dodavo i drugi programi izgrađeni na istoj mreži, a njegov kapacitet je ograničen, pa su u prometnim satima prenosi preko njega sporiji. Red o vezi u prozoru napretka govori vam o kom je slučaju reč: <span class="ui">Veza: direktna (sa računara na računar)</span> ili <span class="ui">Veza: preko posredničkog servera (potpuno šifrovana)</span>. Mrežni kabl umesto Wi-Fi mreže, ista lokalna mreža ili jednostavno pokušaj kasnije obično pomažu. Pogledajte <a href="#faq-relay">Zašto prozor napretka kaže da veza ide preko posredničkog servera i da li je to sporije?</a></p>
 
-<h3 id="faq-firewall">Da li moram da otvorim portove ili da menjam podešavanja rutera ili zaštitnog zida?</h3>
-<p>Ne. Dodavo se sam povezuje kroz kućne rutere i zaštitne zidove, bez prosleđivanja portova. Ako vas zaštitni zid sistema Windows pri prvom pokretanju pita da li želite da dozvolite Dodavo, dozvolite; inače direktne veze možda neće biti moguće, pa prenosi idu preko posredničkog servera.</p>
+<h3 id="faq-firewall">Da li moram da otvorim portove ili da menjam postavke rutera ili zaštitnog zida?</h3>
+<p>Ne. Dodavo se sam povezuje kroz kućne rutere i zaštitne zidove, bez prosleđivanja portova. Ako vas Zaštitni zid Windows zaštitnika pri prvom pokretanju pita da li želite da dozvolite pristup programu Dodavo, dozvolite ga; inače direktne veze možda neće biti moguće, pa prenosi idu preko posredničkog servera.</p>
 
 <h3 id="faq-windows7">Da li Dodavo radi u sistemu Windows 7?</h3>
-<p>Da. Dodavo radi u sistemu Windows 7 sa servisnim paketom 1 i u sistemu Windows 8.1, u 32-bitnoj i 64-bitnoj verziji; instalacioni program sam instalira odgovarajuću verziju. Microsoft te sisteme više ne ažurira, pa se Dodavo testira u sistemima Windows 10 i 11, a na starijima se isporučuje takav kakav jeste. Nekoliko stvari tamo izgleda drugačije: obaveštenja se pojavljuju kao mali oblačići pored sata i ne postoji centar za obaveštenja, pa propušteno obaveštenje nestaje (meni <span class="ui">Prenosi</span> i kolona <span class="ui">Prenos</span> i dalje pokazuju šta se dešava); a bez ažuriranja sistema Windows iz 2019. Windows prijavljuje da instalacioni program dolazi od nepoznatog izdavača. Šifrovane veze rade i u sistemu Windows 7 koji nikada nije ažuriran, a prenosi se posle prekida nastavljaju isto kao u novijim sistemima Windows. Pogledajte <a href="#requirements">Sistemski zahtevi</a>.</p>
+<p>Da. Dodavo radi u sistemu Windows 7 sa servisnim paketom 1 i u sistemu Windows 8.1, u 32-bitnoj i 64-bitnoj verziji; instalacioni program sam instalira odgovarajuću verziju. Microsoft te sisteme više ne ažurira, pa se Dodavo testira u sistemima Windows 10 i 11, a u starijima se isporučuje takav kakav jeste. Nekoliko stvari tamo izgleda drugačije: obaveštenja se pojavljuju kao mali oblačići pored sata i ne postoji centar za obaveštenja, pa propušteno obaveštenje nestaje (meni <span class="ui">Prenosi</span> i kolona <span class="ui">Prenos</span> i dalje pokazuju šta se dešava); a bez ažuriranja sistema Windows iz 2019. Windows prijavljuje da instalacioni program dolazi od nepoznatog izdavača. Šifrovane veze rade i u sistemu Windows 7 koji nikada nije ažuriran, a prenosi se posle prekida nastavljaju isto kao u novijim sistemima Windows. Pogledajte <a href="#requirements">Sistemski zahtevi</a>.</p>
 
 <h3 id="faq-wrong">Nešto je pošlo naopako. Šta treba da proverim?</h3>
 <p>Najpre proverite da li je Dodavo pokrenut na oba računara, da li u redu statusa u oba glavna prozora piše <span class="ui">Na mreži – spremno za slanje i primanje datoteka.</span> i da li imate ispravan ID kontakta druge osobe. Ako se prenos završio greškom, red ispod reda koraka u njegovom prozoru napretka navodi razlog, a tema <a href="#troubleshooting">Rešavanje problema</a> objašnjava poruke. Prenos uvek može da se otkaže i pokrene iznova.</p>
@@ -542,16 +543,16 @@
 <dt>Red statusa kaže Van mreže</dt>
 <dd>Proverite internet vezu. Prenosi na računare u vašoj lokalnoj mreži i dalje rade.</dd>
 <dt>„Ovo nije važeći ID kontakta.“</dt>
-<dd>Deo koda nedostaje ili ima suvišnih znakova. Zamolite osobu da izabere <span class="ui">Kopiraj moj ID kontakta</span> i ponovo vam pošalje kod, a zatim nalepite ceo kod.</dd>
+<dd>Deo koda nedostaje ili ima suvišnih znakova. Zamolite osobu da izabere <span class="ui">Kopiraj moj ID kontakta</span> i ponovo vam pošalje kôd, a zatim nalepite ceo kôd.</dd>
 <dt>Druga osoba ne vidi moj prenos</dt>
 <dd>Proverite da li je Dodavo pokrenut na njenom računaru; možda je u oblasti za obaveštenja. Njen prozor Dolazni prenos je možda iza drugih prozora; do njega može da dođe tasterima <kbd>Alt</kbd>+<kbd>Tab</kbd>.</dd>
 <dt>„Nema dovoljno slobodnog prostora“</dt>
 <dd>Dugmetom <span class="ui">Pregledaj…</span> izaberite fasciklu na drugom disku ili oslobodite prostor i pokušajte ponovo. Imajte na umu da je za fascikle potreban prostor za preuzimanje i za raspakivanje.</dd>
 <dt>Windows ili Microsoft Office upozorava kada otvorim primljenu datoteku</dt>
-<dd>Dodavo primljene datoteke označava kao datoteke sa drugog računara, kao što veb pregledači označavaju preuzimanja (pogledajte <a href="#connections">Veze i bezbednost</a>). Ako verujete pošiljaocu, u Officeu izaberite <span class="ui">Omogući uređivanje</span> ili u Istraživaču datoteka otvorite svojstva datoteke (<kbd>Alt</kbd>+<kbd>Enter</kbd>) i na kartici <span class="ui">Opšte</span> izaberite <span class="ui">Deblokiraj</span>.</dd>
+<dd>Dodavo primljene datoteke označava kao datoteke sa drugog računara, kao što veb pregledači označavaju preuzimanja (pogledajte <a href="#connections">Veze i bezbednost</a>). Ako verujete pošiljaocu, u Office-u izaberite <span class="ui">Omogući uređivanje</span> ili u Istraživaču datoteka otvorite svojstva datoteke (<kbd>Alt</kbd>+<kbd>Enter</kbd>) i na kartici <span class="ui">Opšte</span> izaberite <span class="ui">Deblokiraj</span>.</dd>
 <dt>„Primljeni podaci su oštećeni (kontrolni zbir se ne podudara)“</dt>
 <dd>Podaci su se promenili na putu i stavka nije sačuvana. Zamolite pošiljaoca da je ponovo pošalje.</dd>
-<dt>„Ostavu trenutno koristi drugi program.“</dt>
+<dt>„Međuspremnik trenutno koristi drugi program.“</dt>
 <dd>Sačekajte trenutak i ponovo pokušajte da kopirate svoj ID kontakta.</dd>
 <dt>„Podatke o ažuriranju nisu potpisali autori programa Dodavo, pa se zanemaruju.“</dt>
 <dd>Datoteka koja opisuje najnoviju verziju promenjena je na putu do vas ili je nisu napravili autori programa Dodavo. Ništa se ne instalira. Pokušajte ponovo kasnije; ako se to ponavlja, ručno preuzmite instalacioni program sa stranice programa Dodavo na GitHub-u i uporedite njegov kontrolni zbir sa objavljenim.</dd>
@@ -560,21 +561,21 @@
 <dt>Dodavo se posle ažuriranja nije ponovo pokrenuo</dt>
 <dd>Pokrenite ga iz menija Start. Ako se pojavi poruka „Ažuriranje na Dodavo … nije instalirano“, instalacioni program nije završio; ponovo pokrenite <span class="ui">Proveri da li ima ažuriranja…</span> ili ručno instalirajte novu verziju.</dd>
 <dt>Ažuriranje je zatvorilo ostale profile programa Dodavo</dt>
-<dd>Ažuriranje zatvara svaku pokrenutu instancu programa Dodavo, a ponovo pokreće samo onu koja ga je instalirala. Ostale profile pokrenite ručno; njihovi prenosi se nastavljaju.</dd>
+<dd>Ažuriranje zatvara svaki pokrenuti primerak programa Dodavo, a ponovo pokreće samo onaj koji ga je instalirao. Ostale profile pokrenite ručno; njihovi prenosi se nastavljaju.</dd>
 <dt>Dodavo se ne pokreće drugi put</dt>
-<dd>Istovremeno može da radi samo jedna instanca programa Dodavo. Ponovnim pokretanjem postojeći prozor dolazi u prvi plan.</dd>
+<dd>Istovremeno može da radi samo jedan primerak programa Dodavo. Ponovnim pokretanjem postojeći prozor dolazi u prvi plan.</dd>
 </dl>
 </section>
 
 <section aria-labelledby="license">
 <h2 id="license">Licenca</h2>
-<p>Dodavo je slobodan softver, a napravio ga je Hrvoje Katić. Možete da ga koristite u bilo koje svrhe, da ga delite sa drugima i da ga menjate pod uslovima licence GNU General Public License (GPL), verzije 3 ili bilo koje novije verzije. Ako Dodavo prosleđujete drugima, izmenjen ili ne, morate pod istom licencom da prosledite i njegov izvorni kod. Dodavo dolazi bez ikakve garancije. Ovo je samo kratak pregled; merodavan je tekst licence.</p>
-<p>Izvorni kod se nalazi na <a href="https://github.com/hkatic/dodavo">stranici programa Dodavo na GitHub-u</a>. Dodavo sadrži i komponente otvorenog koda drugih autora (Rust pakete kao što je iroh), svaku pod njenom sopstvenom licencom, na primer pod licencom MIT ili Apache License 2.0.</p>
+<p>Dodavo je slobodan softver, a napravio ga je Hrvoje Katić. Možete da ga koristite u bilo koje svrhe, da ga delite sa drugima i da ga menjate pod uslovima licence GNU General Public License (GPL), verzije 3 ili bilo koje novije verzije. Ako Dodavo prosleđujete drugima, izmenjen ili ne, morate pod istom licencom da prosledite i njegov izvorni kôd. Dodavo dolazi bez ikakve garancije. Ovo je samo kratak pregled; merodavan je tekst licence.</p>
+<p>Izvorni kôd se nalazi na <a href="https://github.com/hkatic/dodavo">stranici programa Dodavo na GitHub-u</a>. Dodavo sadrži i komponente otvorenog koda drugih autora (Rust pakete kao što je iroh), svaku pod njenom sopstvenom licencom, na primer pod licencom MIT ili Apache License 2.0.</p>
 <h3 id="license-window">Čitanje licence</h3>
 <p>U meniju <span class="ui">Pomoć</span> izaberite <span class="ui">Licenca</span> (<kbd>Alt</kbd>+<kbd>P</kbd>, zatim <kbd>L</kbd>). Otvara se prozor <span class="ui">Licenca</span>; čitači ekrana prvo pročitaju njegov uvod. Prozor sadrži, redosledom tastera Tab:</p>
 <dl>
 <dt><span class="ui">Prikaži</span> (<kbd>Alt</kbd>+<kbd>P</kbd>)</dt>
-<dd>Padajuća lista kojom birate šta prikazuje tekst ispod nje: <span class="ui">Dodavo (GNU General Public License, verzija 3)</span> ili <span class="ui">Komponente drugih autora</span>, odnosno licence komponenti, a posle svake licence komponente koje je koriste, njihove verzije i mesto na kom se nalazi njihov izvorni kod. Birajte tasterima sa strelicama; tekst se odmah menja.</dd>
+<dd>Padajuća lista kojom birate šta prikazuje tekst ispod nje: <span class="ui">Dodavo (GNU General Public License, verzija 3)</span> ili <span class="ui">Komponente drugih autora</span>, odnosno licence komponenti, a posle svake licence komponente koje je koriste, njihove verzije i mesto na kom se nalazi njihov izvorni kôd. Birajte tasterima sa strelicama; tekst se odmah menja.</dd>
 <dt><span class="ui">Tekst licence</span> (<kbd>Alt</kbd>+<kbd>T</kbd>)</dt>
 <dd>Tekstualno polje samo za čitanje. Fokus je najpre ovde, na početku licence GNU General Public License. Čitajte ga tasterima sa strelicama; <kbd>Ctrl</kbd>+<kbd>Home</kbd> i <kbd>Ctrl</kbd>+<kbd>End</kbd> vode na početak i na kraj. Tekstovi su na engleskom jeziku; pravno su obavezujući samo originalni tekstovi.</dd>
 <dt><span class="ui">Zatvori</span></dt>
@@ -583,6 +584,11 @@
 <p>Instalacioni program instalira oba teksta i u fasciklu u kojoj je instaliran Dodavo, kao <code>LICENSE.txt</code> i <code>THIRD-PARTY-LICENSES.txt</code>.</p>
 <h3 id="about">O programu Dodavo</h3>
 <p>Opcija <span class="ui">O programu</span> u meniju <span class="ui">Pomoć</span> (<kbd>Alt</kbd>+<kbd>P</kbd>, zatim <kbd>O</kbd>) prikazuje verziju programa Dodavo, njegovog autora, adresu veb lokacije i kratku napomenu o licenci. Čitači ekrana pročitaju ceo tekst kada se prozor otvori. Fokus je na dugmetu <span class="ui">Zatvori</span>; tasterom <kbd>Tab</kbd> prelazite između veze ka veb lokaciji (taster <kbd>Enter</kbd> je otvara u veb pregledaču), dugmeta <span class="ui">Licenca</span>, koje otvara prozor Licenca, i dugmeta <span class="ui">Zatvori</span>. Ako veb lokaciju nije moguće otvoriti, na primer zato što nije podešen veb pregledač, poruka navodi razlog. Taster <kbd>Esc</kbd> zatvara prozor.</p>
+</section>
+
+<section aria-labelledby="donate">
+<h2 id="donate">Donacije</h2>
+<p>Dodavo je besplatan i sve u njemu radi i bez donacije. Ako vam je koristan i želite da podržite njegov razvoj, u meniju <span class="ui">Pomoć</span> izaberite <span class="ui">Doniraj</span> (<kbd>Alt</kbd>+<kbd>P</kbd>, zatim <kbd>D</kbd>). U veb pregledaču se otvara autorova stranica na PayPal-u, <a href="https://paypal.me/hrvix">paypal.me/hrvix</a>, na kojoj birate iznos i obavljate uplatu. Dodavo ne učestvuje u plaćanju i ništa ne šalje PayPal-u. Ako stranicu nije moguće otvoriti, na primer zato što nije podešen veb pregledač, poruka navodi razlog.</p>
 </section>
 
 </main>
