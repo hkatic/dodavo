@@ -139,22 +139,75 @@ impl Outcome {
 /// the error is known (tokio's files keep only that of a failed write), and
 /// a general one for a panic, whose details the panic hook has shown.
 pub(crate) fn failure_text(error: &anyhow::Error) -> String {
-    let causes: Vec<String> = error
-        .chain()
-        .map(|cause| {
-            if cause
-                .downcast_ref::<tokio::task::JoinError>()
-                .is_some_and(|e| e.is_panic())
-            {
-                return crate::i18n::tr!(error_unexpected).into();
-            }
-            match cause.downcast_ref::<std::io::Error>() {
-                Some(e) => io_error_text(e),
-                None => cause.to_string(),
-            }
-        })
-        .collect();
+    let mut causes = Vec::new();
+    for cause in error.chain() {
+        if cause
+            .downcast_ref::<tokio::task::JoinError>()
+            .is_some_and(|e| e.is_panic())
+        {
+            causes.push(crate::i18n::tr!(error_unexpected).to_string());
+            continue;
+        }
+        // The connection ended (the other computer went away): what follows
+        // are the library's details, in English.
+        if ends_connection(cause) {
+            causes.push(crate::i18n::tr!(error_connection_lost).to_string());
+            break;
+        }
+        causes.push(match cause.downcast_ref::<std::io::Error>() {
+            Some(e) => io_error_text(e),
+            None => cause.to_string(),
+        });
+    }
     causes.join(": ")
+}
+
+/// Whether `error`, one cause of a failure (see [`failure_text`]), is the
+/// end of a connection, or the error of a read or a write on a connection
+/// that ended, which an `io::Error` carries (its own source skips it).
+fn ends_connection(error: &(dyn std::error::Error + 'static)) -> bool {
+    use iroh::endpoint::ConnectionError;
+    if error.is::<ConnectionError>() {
+        return true;
+    }
+    let mut next = error
+        .downcast_ref::<std::io::Error>()
+        .and_then(|e| e.get_ref())
+        .map(|inner| inner as &(dyn std::error::Error + 'static));
+    while let Some(e) = next {
+        if e.is::<ConnectionError>() {
+            return true;
+        }
+        next = e.source();
+    }
+    false
+}
+
+/// The text of a dial that failed (see `send::dial`): ours where the other
+/// computer cannot be found or does not answer, which is what users meet
+/// (Dodavo is not running there, or one of them is offline), and the
+/// library's, in English, for anything else.
+pub(crate) fn connect_error_text(error: &iroh::endpoint::ConnectError) -> String {
+    use iroh::endpoint::{ConnectError, ConnectWithOptsError, ConnectingError, ConnectionError};
+    match error {
+        ConnectError::Connect {
+            source: ConnectWithOptsError::NoAddress { .. },
+            ..
+        } => crate::i18n::tr!(error_peer_not_found).into(),
+        ConnectError::Connection {
+            source: ConnectionError::TimedOut,
+            ..
+        }
+        | ConnectError::Connecting {
+            source:
+                ConnectingError::ConnectionError {
+                    source: ConnectionError::TimedOut,
+                    ..
+                },
+            ..
+        } => crate::i18n::tr!(error_timeout).into(),
+        _ => error.to_string(),
+    }
 }
 
 /// See [`failure_text`].
@@ -220,9 +273,12 @@ pub enum Event {
         done: u64,
         total: u64,
     },
+    /// How the transfer's connection goes: `Some(true)` directly,
+    /// `Some(false)` through a relay server; `None` once it has none (it
+    /// waits for the next one).
     Path {
         id: u64,
-        direct: bool,
+        direct: Option<bool>,
     },
     Finished {
         id: u64,
@@ -436,11 +492,12 @@ pub(crate) fn spawn_path_watch(
         loop {
             let paths = conn.paths();
             let selected = paths.iter().find(|p| p.is_selected()).map(|p| p.is_ip());
-            if let Some(direct) = selected
-                && selected != last
-            {
+            if selected.is_some() && selected != last {
                 last = selected;
-                shared.emit(Event::Path { id, direct });
+                shared.emit(Event::Path {
+                    id,
+                    direct: selected,
+                });
             }
             tokio::time::sleep(Duration::from_millis(500)).await;
         }
@@ -1628,6 +1685,7 @@ mod tests {
                 source_len: 3,
                 source_mtime: None,
                 data_path: source.clone(),
+                sent: 0,
             },
         );
         sent.done_sent = true;
@@ -1783,6 +1841,13 @@ mod tests {
             .unwrap_err();
         let text = failure_text(&anyhow::Error::from(panicked).context("x"));
         assert_eq!(text, format!("x: {}", crate::i18n::tr!(error_unexpected)));
+        // A connection that ended, also as the error of a read on it: ours,
+        // not the library's "connection lost: timed out".
+        let lost = crate::i18n::tr!(error_connection_lost);
+        let ended = iroh::endpoint::ConnectionError::TimedOut;
+        assert_eq!(failure_text(&ended.clone().into()), lost);
+        let read = std::io::Error::from(iroh::endpoint::ReadError::ConnectionLost(ended));
+        assert_eq!(failure_text(&anyhow::Error::from(read).context("x")), format!("x: {lost}"));
     }
 
     /// A panic in a transfer's task ends the transfer as failed, rather than
@@ -1825,6 +1890,7 @@ mod tests {
             source_len: 3,
             source_mtime: None,
             data_path: source.clone(),
+            sent: 0,
         };
         let record = file_record(1, &peer, 3, side);
         assert_eq!(
@@ -1864,6 +1930,7 @@ mod tests {
                 source_len: 3,
                 source_mtime: None,
                 data_path: zip,
+                sent: 0,
             },
         );
         record.done_sent = true;
@@ -1929,6 +1996,7 @@ mod tests {
                 source_len: 3,
                 source_mtime: None,
                 data_path: dir.join("a.bin"),
+                sent: 0,
             },
         );
         record.done_sent = true;
@@ -1987,6 +2055,7 @@ mod tests {
                 source_len: 3,
                 source_mtime: None,
                 data_path: dir.join("a.bin"),
+                sent: 0,
             },
         );
         let (send, _rx) = Session::new(1, record.token, peer, Role::Send);
@@ -2028,6 +2097,7 @@ mod tests {
                 source_len: 3,
                 source_mtime: None,
                 data_path: dir.join("a.bin"),
+                sent: 0,
             },
         );
         record.done_sent = true;
@@ -2067,6 +2137,7 @@ mod tests {
             source_len: 3,
             source_mtime: None,
             data_path: dir.join("gone.bin"),
+            sent: 0,
         };
         let mut record = file_record(3, &peer, 3, side);
         assert!(!record.can_go_on());

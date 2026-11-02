@@ -938,7 +938,13 @@ impl<'a> Receiver<'a> {
         }))
     }
 
+    /// The status while disconnected, after saying that there is no
+    /// connection now (a paused transfer can be without one too).
     fn emit_waiting(&self) {
+        self.shared.emit(Event::Path {
+            id: self.id,
+            direct: None,
+        });
         self.status.set(if self.ctl.is_paused() {
             Phase::Paused
         } else {

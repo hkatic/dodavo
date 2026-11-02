@@ -336,6 +336,7 @@ pub const SL: Strings = Strings {
     untitled: "Neimenovano",
     error_cannot_read: "Ni mogoče prebrati: {path}",
     error_timeout: "Poskus povezave je potekel",
+    error_peer_not_found: "Drugega računalnika ni bilo mogoče najti v omrežju",
     error_unexpected_answer: "Nepričakovan odgovor prejemnika: {answer}",
     error_file_shorter: "Datoteka se je med pošiljanjem skrajšala",
     error_peer_reported: "Prejemnik je sporočil napako: {message}",

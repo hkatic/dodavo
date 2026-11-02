@@ -468,6 +468,7 @@ strings! {
         untitled,
         error_cannot_read,
         error_timeout,
+        error_peer_not_found,
         error_unexpected_answer,
         error_file_shorter,
         error_peer_reported,

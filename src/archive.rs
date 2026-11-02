@@ -22,16 +22,18 @@ use windows_sys::Win32::{
         INVALID_HANDLE_VALUE, MAX_PATH, SYSTEMTIME,
     },
     Storage::FileSystem::{
-        BY_HANDLE_FILE_INFORMATION, DELETE, FILE_DISPOSITION_INFO, FILE_FLAG_BACKUP_SEMANTICS,
-        FILE_FLAG_OPEN_REPARSE_POINT, FILE_ID_INFO, FILE_INFO_BY_HANDLE_CLASS, FILE_RENAME_INFO,
-        FILE_WRITE_ATTRIBUTES, FileDispositionInfo, FileIdInfo, FileRenameInfo, FindClose,
-        FindFirstFileW, GetFileInformationByHandle, GetFileInformationByHandleEx,
-        GetVolumeInformationByHandleW, MoveFileExW, SetFileInformationByHandle, WIN32_FIND_DATAW,
+        BY_HANDLE_FILE_INFORMATION, DELETE, FILE_ATTRIBUTE_DIRECTORY, FILE_ATTRIBUTE_HIDDEN,
+        FILE_BASIC_INFO, FILE_DISPOSITION_INFO, FILE_FLAG_BACKUP_SEMANTICS,
+        FILE_FLAG_OPEN_REPARSE_POINT, FILE_ID_INFO, FILE_INFO_BY_HANDLE_CLASS,
+        FILE_READ_ATTRIBUTES, FILE_RENAME_INFO, FILE_WRITE_ATTRIBUTES, FileBasicInfo,
+        FileDispositionInfo, FileIdInfo, FileRenameInfo, FindClose, FindFirstFileW,
+        GetFileInformationByHandle, GetFileInformationByHandleEx, GetVolumeInformationByHandleW,
+        MoveFileExW, SetFileInformationByHandle, WIN32_FIND_DATAW,
     },
     System::Time::{FileTimeToSystemTime, SystemTimeToTzSpecificLocalTime},
 };
 use zip::{
-    CompressionMethod, DateTime, ExtraField, ZipArchive, ZipWriter,
+    CompressionMethod, DateTime, ExtraField, System, ZipArchive, ZipWriter,
     write::{FullFileOptions, SimpleFileOptions},
 };
 
@@ -282,19 +284,35 @@ struct Entry {
     /// Relative name inside the archive, '/' separated.
     name: String,
     is_dir: bool,
+    /// The file or folder is hidden (see [`unzip`]).
+    hidden: bool,
     size: u64,
     times: ItemTimes,
 }
 
 impl Entry {
     /// The entry's dates go both into the standard MS-DOS field and, exactly,
-    /// into the NTFS extra field.
+    /// into the NTFS extra field; its MS-DOS attributes say whether it is a
+    /// folder and whether it is hidden, under the Unix mode that the zip
+    /// crate would write by itself.
     fn options(
         &self,
         base: SimpleFileOptions,
     ) -> anyhow::Result<FullFileOptions<'static, 'static>> {
+        let (mode, folder) = if self.is_dir {
+            (0o040755, FILE_ATTRIBUTE_DIRECTORY)
+        } else {
+            (0o100644, 0)
+        };
+        let hidden = if self.hidden {
+            FILE_ATTRIBUTE_HIDDEN
+        } else {
+            0
+        };
         let mut options = base
             .last_modified_time(dos_time(self.times.modified))
+            .system(System::Dos)
+            .external_attributes(mode << 16 | folder | hidden)
             .into_full_options();
         options.add_extra_field(NTFS_EXTRA_FIELD, self.times.ntfs_extra(), false)?;
         Ok(options)
@@ -316,11 +334,13 @@ fn collect(root: &Path) -> anyhow::Result<Vec<Entry>> {
             }
             let name = format!("{prefix}{}", item.file_name().to_string_lossy());
             let times = ItemTimes::of(&meta);
+            let hidden = meta.file_attributes() & FILE_ATTRIBUTE_HIDDEN != 0;
             if meta.is_dir() {
                 out.push(Entry {
                     path: item.path(),
                     name: format!("{name}/"),
                     is_dir: true,
+                    hidden,
                     size: 0,
                     times,
                 });
@@ -330,6 +350,7 @@ fn collect(root: &Path) -> anyhow::Result<Vec<Entry>> {
                     path: item.path(),
                     name,
                     is_dir: false,
+                    hidden,
                     size: meta.len(),
                     times,
                 });
@@ -415,9 +436,10 @@ pub fn zip_folder(
 /// (see [`create_unique_dir`]): what is created in it follows links, so
 /// nothing but this extraction may have put anything there. Entries trying
 /// to escape the destination ("../", absolute paths) are rejected. Files and
-/// folders get the dates stored with them; with `mark`, files also get the
-/// mark of the web. The dates of `dest` itself are the caller's business: an
-/// entry for it ("./") is skipped.
+/// folders get the dates stored with them, and stay hidden if they were (see
+/// [`is_hidden`]); with `mark`, files also get the mark of the web. The dates
+/// of `dest` itself are the caller's business: an entry for it ("./") is
+/// skipped.
 pub fn unzip(
     zip: File,
     dest: &Path,
@@ -452,9 +474,10 @@ pub fn unzip(
         }
         let target = dest.join(rel);
         let times = ItemTimes::of_entry(&entry);
+        let hidden = is_hidden(&entry);
         if entry.is_dir() {
             std::fs::create_dir_all(&target)?;
-            folders.push((target, times));
+            folders.push((target, times, hidden));
             continue;
         }
         if let Some(parent) = target.parent() {
@@ -484,14 +507,51 @@ pub fn unzip(
         out.flush()?;
         // All written: the dates go on through the same handle.
         times.apply_to(out.get_ref());
+        drop(out);
+        if hidden {
+            let _ = hide(&target);
+        }
     }
     // Children before their parents, so that nothing touches a folder after
     // its date has been set.
-    folders.sort_by_key(|(path, _)| std::cmp::Reverse(path.components().count()));
-    for (path, times) in &folders {
+    folders.sort_by_key(|(path, ..)| std::cmp::Reverse(path.components().count()));
+    for (path, times, hidden) in &folders {
         times.apply(path);
+        if *hidden {
+            let _ = hide(path);
+        }
     }
     Ok(())
+}
+
+/// Whether a zip entry is a hidden file or folder, as [`zip_folder`] notes
+/// it (MS-DOS attributes). That is all that is kept of the attributes. A
+/// sender's read-only file would hold up the deletion of a folder that is
+/// unpacked only in part, on FAT drives and before Windows 10; a folder
+/// that is read-only or a system folder makes File Explorer follow the
+/// `desktop.ini` in it, which can point anywhere; and a system file is
+/// hidden even from those who show hidden files.
+fn is_hidden<R: Read>(entry: &zip::read::ZipFile<'_, R>) -> bool {
+    entry.system() == System::Dos && entry.external_attributes() & FILE_ATTRIBUTE_HIDDEN != 0
+}
+
+/// Makes the file or folder at `path` hidden, keeping its other attributes
+/// and its dates (the zero dates of the change leave them as they are).
+fn hide(path: &Path) -> io::Result<()> {
+    let item = OpenOptions::new()
+        .access_mode(FILE_READ_ATTRIBUTES | FILE_WRITE_ATTRIBUTES)
+        .custom_flags(FILE_FLAG_BACKUP_SEMANTICS)
+        .open(path)?;
+    let info = FILE_BASIC_INFO {
+        FileAttributes: item.metadata()?.file_attributes() | FILE_ATTRIBUTE_HIDDEN,
+        ..FILE_BASIC_INFO::default()
+    };
+    set_file_info(
+        &item,
+        FileBasicInfo,
+        std::slice::from_ref(&info),
+        size_of::<FILE_BASIC_INFO>(),
+    )
 }
 
 /// The path of a zip entry named `name` inside the folder it is unpacked
@@ -1440,6 +1500,72 @@ mod tests {
         std::fs::remove_dir_all(&base).ok();
     }
 
+    /// Hidden files and folders of a sent folder arrive hidden, with their
+    /// dates and the mark of the web; nothing else of the attributes is kept.
+    #[test]
+    fn zip_keeps_hidden_items_hidden() {
+        let base = scratch("zip-hidden");
+        let src = base.join("src");
+        std::fs::create_dir_all(src.join("secret")).unwrap();
+        std::fs::write(src.join("secret/in.txt"), b"in").unwrap();
+        std::fs::write(src.join("desktop.ini"), b"[x]").unwrap();
+        std::fs::write(src.join("plain.txt"), b"plain").unwrap();
+        std::fs::write(src.join("locked.txt"), b"ro").unwrap();
+        let attribute = |path: &Path| path.symlink_metadata().unwrap().file_attributes();
+        for name in ["secret", "desktop.ini"] {
+            hide(&src.join(name)).unwrap();
+        }
+        let mut readonly = src.join("locked.txt").metadata().unwrap().permissions();
+        readonly.set_readonly(true);
+        std::fs::set_permissions(src.join("locked.txt"), readonly).unwrap();
+        let created = at(1_400_000_000);
+        set_times(
+            &src.join("desktop.ini"),
+            Some(at(1_500_000_000)),
+            Some(created),
+        )
+        .unwrap();
+        set_times(&src.join("secret"), Some(at(1_600_000_000)), Some(created)).unwrap();
+
+        let zip = base.join("x.zip");
+        let cancel = AtomicBool::new(false);
+        zip_folder(&src, &zip, &cancel, &mut |_, _| {}).unwrap();
+        let out = base.join("out");
+        unzip(
+            File::open(&zip).unwrap(),
+            &out,
+            true,
+            &cancel,
+            &mut |_, _| {},
+        )
+        .unwrap();
+
+        let hidden = |name: &str| attribute(&out.join(name)) & FILE_ATTRIBUTE_HIDDEN != 0;
+        assert!(hidden("secret") && hidden("desktop.ini"));
+        assert!(!hidden("plain.txt") && !hidden("secret/in.txt") && !hidden("locked.txt"));
+        assert!(out.join("secret").is_dir());
+        assert!(
+            !out.join("locked.txt")
+                .metadata()
+                .unwrap()
+                .permissions()
+                .readonly()
+        );
+        assert_eq!(
+            dates(&out.join("desktop.ini")),
+            (at(1_500_000_000), created)
+        );
+        assert_eq!(dates(&out.join("secret")), (at(1_600_000_000), created));
+        let mark = std::fs::read_to_string(out.join("desktop.ini:Zone.Identifier")).unwrap();
+        assert_eq!(mark, "[ZoneTransfer]\r\nZoneId=3\r\n");
+
+        let mut writable = src.join("locked.txt").metadata().unwrap().permissions();
+        #[allow(clippy::permissions_set_readonly_false)]
+        writable.set_readonly(false);
+        std::fs::set_permissions(src.join("locked.txt"), writable).unwrap();
+        std::fs::remove_dir_all(&base).ok();
+    }
+
     #[test]
     fn file_times() {
         assert_eq!(
@@ -1508,6 +1634,7 @@ mod tests {
             path: base.clone(),
             name: "./".into(),
             is_dir: true,
+            hidden: false,
             size: 0,
             times: ItemTimes {
                 modified: Some(long_ago),

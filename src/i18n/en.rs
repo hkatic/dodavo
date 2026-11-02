@@ -333,6 +333,7 @@ pub const EN: Strings = Strings {
     untitled: "Untitled",
     error_cannot_read: "Cannot read {path}",
     error_timeout: "Connection attempt timed out",
+    error_peer_not_found: "The other computer could not be found on the network",
     error_unexpected_answer: "Unexpected answer from the recipient: {answer}",
     error_file_shorter: "The file got shorter while it was being sent",
     error_peer_reported: "The recipient reported an error: {message}",

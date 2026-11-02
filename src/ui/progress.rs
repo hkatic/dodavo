@@ -56,6 +56,14 @@ const CHOICE_OPEN_FOLDER: i32 = 103;
 const CHOICE_WAIT: i32 = 104;
 /// How often the speed and the remaining time change, so they can be read.
 const RATE_INTERVAL: Duration = Duration::from_secs(1);
+/// Shows the speed and the remaining time again, also when no data comes
+/// (see `Progress::show_rate`).
+const TIMER_RATE: usize = 3;
+/// How long no data may come while it should before the speed says so and
+/// the connection line no longer says how the data goes: a computer that is
+/// switched off or loses its network is noticed only after half a minute,
+/// and the connection may switch to a relay server meanwhile.
+const STALLED_AFTER: Duration = Duration::from_secs(5);
 const MIN_WIDTH: i32 = 460;
 const HEIGHT: i32 = 238;
 
@@ -117,7 +125,19 @@ struct Progress {
     /// connection asks nothing: the receiver finishes without it.
     handed_over: bool,
     samples: VecDeque<(Instant, u64)>,
+    /// When the speed was last worked out (see `RATE_INTERVAL`).
     rate_shown: Option<Instant>,
+    /// What the speed and remaining time rows show.
+    rate_text: Rate,
+    /// The amount done and the total, as last reported.
+    progress: (u64, u64),
+    /// When the amount done last changed, or the phase began.
+    last_data: Instant,
+    /// No data has come for a while in a transfer (see `STALLED_AFTER`).
+    stalled: bool,
+    /// How the connection goes, as the network last said: directly, through
+    /// a relay server, or not at all (see `Event::Path`).
+    route: Option<bool>,
     /// For a completed receive: where the item was saved.
     result_path: Option<PathBuf>,
     /// What to do once the transfer has ended.
@@ -266,16 +286,11 @@ pub fn set_progress(hwnd: HWND, done: u64, total: u64) -> bool {
     window::with_handler::<Progress, _>(hwnd, |p, _| p.set_progress(done, total)).is_some()
 }
 
-pub fn set_path(hwnd: HWND, direct: bool) -> bool {
+/// How the connection goes (see `Event::Path`); `None` when there is none.
+pub fn set_path(hwnd: HWND, direct: Option<bool>) -> bool {
     window::with_handler::<Progress, _>(hwnd, |p, _| {
-        set_text(
-            p.connection,
-            if direct {
-                tr!(connection_direct)
-            } else {
-                tr!(connection_relay)
-            },
-        );
+        p.route = direct;
+        p.show_connection();
     })
     .is_some()
 }
@@ -310,6 +325,29 @@ fn can_pause(phase: Phase) -> bool {
     keeps_progress(phase) && phase != Phase::PartInUse { finishing: true }
 }
 
+/// Phases in which data moves on this side, so that it has a speed.
+fn moves_data(phase: Option<Phase>) -> bool {
+    matches!(
+        phase,
+        Some(Phase::Preparing | Phase::Transferring | Phase::Verifying | Phase::Unpacking)
+    )
+}
+
+/// What the speed and remaining time rows show (see `Progress::rate`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Rate {
+    /// As they are: worked out less than `RATE_INTERVAL` ago.
+    Unchanged,
+    /// Nothing: no data moves now, or all of it is there.
+    Nothing,
+    /// Not known yet.
+    Calculating,
+    /// Bytes per second, and seconds left.
+    Known { rate: u64, left: u64 },
+    /// No data has come for `STALLED_AFTER`.
+    Stalled,
+}
+
 impl Progress {
     /// The state of a new window, whose controls are made when it is
     /// created.
@@ -334,6 +372,11 @@ impl Progress {
             handed_over: false,
             samples: VecDeque::new(),
             rate_shown: None,
+            rate_text: Rate::Nothing,
+            progress: (0, 0),
+            last_data: Instant::now(),
+            stalled: false,
+            route: None,
             result_path: None,
             after: AfterFinish::Stay,
             title: std::ptr::null_mut(),
@@ -377,6 +420,99 @@ impl Progress {
         }
         self.samples.clear();
         self.rate_shown = None;
+        self.rate_text = Rate::Nothing;
+        // A new phase waits for its data afresh.
+        self.last_data = Instant::now();
+        if std::mem::take(&mut self.stalled) {
+            self.show_connection();
+        }
+    }
+
+    /// The speed and the remaining time at `now`, from the data of the last
+    /// few seconds (`samples`): only while data moves and some is still to
+    /// come, and a speed of zero once none has come for a while.
+    fn rate(&self, now: Instant) -> Rate {
+        let (done, total) = self.progress;
+        if !moves_data(self.phase) || done >= total {
+            return Rate::Nothing;
+        }
+        if now.duration_since(self.last_data) >= STALLED_AFTER {
+            return Rate::Stalled;
+        }
+        if self
+            .rate_shown
+            .is_some_and(|t| now.duration_since(t) < RATE_INTERVAL)
+        {
+            return Rate::Unchanged;
+        }
+        match self.samples.front() {
+            Some(&(t0, d0)) if done > d0 && now.duration_since(t0) > Duration::from_millis(500) => {
+                let rate = (done - d0) as f64 / now.duration_since(t0).as_secs_f64();
+                Rate::Known {
+                    rate: rate as u64,
+                    left: ((total - done) as f64 / rate) as u64,
+                }
+            }
+            _ if self.rate_shown.is_none() => Rate::Calculating,
+            _ => Rate::Unchanged,
+        }
+    }
+
+    /// Shows the speed and the remaining time (see `rate`), on each report
+    /// and every second, so that they also show when data stops coming.
+    fn show_rate(&mut self, now: Instant) {
+        let rate = self.rate(now);
+        // Data that stops coming in a transfer: the connection may be gone
+        // without a word yet, so the connection line says nothing either.
+        let stalled = rate == Rate::Stalled && self.phase == Some(Phase::Transferring);
+        if stalled != self.stalled {
+            self.stalled = stalled;
+            self.show_connection();
+        }
+        if rate == Rate::Unchanged || rate == self.rate_text {
+            return;
+        }
+        self.rate_text = rate;
+        let (speed, remaining) = match rate {
+            Rate::Unchanged => return,
+            Rate::Nothing => (String::new(), String::new()),
+            Rate::Calculating => (tr!(calculating).to_string(), tr!(calculating).to_string()),
+            Rate::Known { rate, left } => {
+                self.rate_shown = Some(now);
+                (
+                    tr!(speed_value, rate = format_size(rate)),
+                    tr!(remaining_value, left = format_duration(left)),
+                )
+            }
+            Rate::Stalled => {
+                // Data that comes again starts a new measurement.
+                self.samples.clear();
+                self.rate_shown = None;
+                (tr!(speed_value, rate = format_size(0)), String::new())
+            }
+        };
+        set_text(self.speed, &speed);
+        set_text(self.remaining, &remaining);
+    }
+
+    /// The connection line: how the data goes, as the network last said
+    /// (`route`); nothing while there is no connection, nor while data has
+    /// stopped coming in a transfer (see `show_rate`).
+    fn connection_text(&self) -> &'static str {
+        match self.route {
+            _ if self.stalled => "",
+            Some(true) => tr!(connection_direct),
+            Some(false) => tr!(connection_relay),
+            None => "",
+        }
+    }
+
+    /// Shows `connection_text`, until the transfer ends: then the line says
+    /// where the item went or what failed.
+    fn show_connection(&self) {
+        if self.active {
+            set_text(self.connection, self.connection_text());
+        }
     }
 
     /// The status line in `phase`.
@@ -636,36 +772,17 @@ impl Progress {
 
         // Speed over the last few seconds.
         let now = Instant::now();
+        if done != self.progress.0 {
+            self.last_data = now;
+        }
+        self.progress = (done, total);
         self.samples.push_back((now, done));
         while self.samples.len() > 2
             && now.duration_since(self.samples[0].0) > Duration::from_secs(4)
         {
             self.samples.pop_front();
         }
-        if self
-            .rate_shown
-            .is_some_and(|t| now.duration_since(t) < RATE_INTERVAL)
-        {
-            return;
-        }
-        let (t0, d0) = self.samples[0];
-        let secs = now.duration_since(t0).as_secs_f64();
-        if secs > 0.5 && done > d0 {
-            let rate = (done - d0) as f64 / secs;
-            let left = (total.saturating_sub(done) as f64 / rate) as u64;
-            set_text(
-                self.speed,
-                &tr!(speed_value, rate = format_size(rate as u64)),
-            );
-            set_text(
-                self.remaining,
-                &tr!(remaining_value, left = format_duration(left)),
-            );
-            self.rate_shown = Some(now);
-        } else if self.rate_shown.is_none() && done < total {
-            set_text(self.speed, tr!(calculating));
-            set_text(self.remaining, tr!(calculating));
-        }
+        self.show_rate(now);
     }
 
     fn finish(&mut self, w: &Window, outcome: &Outcome) -> Finished {
@@ -674,6 +791,7 @@ impl Progress {
         unsafe {
             KillTimer(w.hwnd, TIMER_LOST);
             KillTimer(w.hwnd, TIMER_HANDED_OVER);
+            KillTimer(w.hwnd, TIMER_RATE);
         }
         let file = self.kind == Kind::File;
         let mut completed = false;
@@ -1153,6 +1271,7 @@ impl Handler for Progress {
         // Pause is enabled only once data flows, so the focus starts on the
         // first button that can be used.
         window::focus(self.background_button);
+        unsafe { SetTimer(w.hwnd, TIMER_RATE, RATE_INTERVAL.as_millis() as u32, None) };
     }
 
     fn on_command(&mut self, w: &Window, id: u16, _code: u16) -> bool {
@@ -1197,6 +1316,12 @@ impl Handler for Progress {
                 self.connection_lost(w);
                 Some(0)
             }
+            WM_TIMER if wp == TIMER_RATE => {
+                if self.active {
+                    self.show_rate(Instant::now());
+                }
+                Some(0)
+            }
             WM_TIMER if wp == TIMER_HANDED_OVER => {
                 unsafe { KillTimer(w.hwnd, TIMER_HANDED_OVER) };
                 if self.active {
@@ -1237,6 +1362,40 @@ mod tests {
 
     const IN_USE: Phase = Phase::PartInUse { finishing: false };
     const IN_USE_FINISHING: Phase = Phase::PartInUse { finishing: true };
+
+    /// The speed shows while data moves and some is still to come, zero
+    /// once none has come for a while; the connection line then says
+    /// nothing, as it does while there is no connection.
+    #[test]
+    fn the_speed_and_the_connection_follow_the_data() {
+        let mut p = Progress::new(1, Direction::Receive, "Ana", "a.bin", Kind::File);
+        let start = Instant::now();
+        p.phase = Some(Phase::Transferring);
+        p.progress = (0, 1000);
+        p.last_data = start;
+        assert_eq!(p.rate(start), Rate::Calculating);
+        let later = start + Duration::from_secs(1);
+        p.samples.extend([(start, 0), (later, 100)]);
+        p.progress = (100, 1000);
+        p.last_data = later;
+        assert_eq!(p.rate(later), Rate::Known { rate: 100, left: 9 });
+        assert_eq!(p.rate(later + STALLED_AFTER), Rate::Stalled);
+        p.phase = Some(Phase::WaitingForConnection { lost: true });
+        assert_eq!(p.rate(later), Rate::Nothing);
+        p.phase = None;
+        assert_eq!(p.rate(later), Rate::Nothing, "restored, before its phase");
+        p.phase = Some(Phase::Transferring);
+        p.progress = (1000, 1000);
+        assert_eq!(p.rate(later), Rate::Nothing, "all of it is there");
+
+        p.route = Some(false);
+        assert_eq!(p.connection_text(), tr!(connection_relay));
+        p.stalled = true;
+        assert_eq!(p.connection_text(), "");
+        p.stalled = false;
+        p.route = None;
+        assert_eq!(p.connection_text(), "");
+    }
 
     /// Another program that keeps the partly received file out is told
     /// once, also when the status comes back to it after a pause; that the

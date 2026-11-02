@@ -58,6 +58,12 @@ pub enum Side {
         source_mtime: Option<SystemTime>,
         /// What is streamed: the file itself, or the zip of the folder.
         data_path: PathBuf,
+        /// How much of the data had gone out when the record was last saved
+        /// (every `send::SAVE_SENT_EVERY` bytes while it flows): what a
+        /// restored send shows until the receiver says how much it has,
+        /// which can be less. 0 in records of earlier versions.
+        #[serde(default)]
+        sent: u64,
     },
     Receive {
         dest_dir: PathBuf,
@@ -359,8 +365,9 @@ impl TransferRecord {
 
     /// The bytes this side already has (receiver: what is on disk of the part
     /// file, if it is still the part, at most what is known to be flushed;
-    /// sender: all of them once the receiver confirmed them, otherwise none
-    /// known).
+    /// sender: all of them once the receiver confirmed them, otherwise what
+    /// had gone out by the last save, which the receiver may not all have,
+    /// see `Side::Send::sent`).
     pub fn have(&self) -> u64 {
         match &self.side {
             Side::Receive { synced, .. } => {
@@ -368,7 +375,7 @@ impl TransferRecord {
                 synced.map_or(len, |s| s.min(len))
             }
             Side::Send { .. } if self.done_hash.is_some() => self.offer.size,
-            Side::Send { .. } => 0,
+            Side::Send { sent, .. } => (*sent).min(self.offer.size),
         }
     }
 
@@ -1604,6 +1611,16 @@ impl Session {
         });
     }
 
+    /// Sending side: remembers how much of the data has gone out (see
+    /// `Side::Send::sent`).
+    pub fn save_sent(&self, data_dir: &Path, gone_out: u64) {
+        self.save_with(data_dir, |record| {
+            if let Side::Send { sent, .. } = &mut record.side {
+                *sent = gone_out;
+            }
+        });
+    }
+
     /// Remembers the sender's final hash (see `TransferRecord::done_hash`).
     pub fn save_done_hash(&self, data_dir: &Path, hash: [u8; 32]) {
         self.save_with(data_dir, |record| record.done_hash = Some(hash));
@@ -2101,6 +2118,7 @@ mod tests {
                 source_len: 0,
                 source_mtime: None,
                 data_path: zip.clone(),
+                sent: 0,
             },
         );
         s.save(&dir).unwrap();
@@ -2527,6 +2545,7 @@ mod tests {
                 source_len: 3,
                 source_mtime: None,
                 data_path: zip.clone(),
+                sent: 0,
             },
         ));
         assert!(!session.handed_over());
@@ -2549,10 +2568,30 @@ mod tests {
                 source_len: 3,
                 source_mtime: None,
                 data_path: zip.clone(),
+                sent: 0,
             },
         );
         record.save(dir).unwrap();
         (record, zip)
+    }
+
+    /// A send notes how much has gone out, which a restart shows until the
+    /// receiver says how much it has; all of it once the receiver has
+    /// confirmed the item.
+    #[test]
+    fn a_restored_send_has_what_had_gone_out() {
+        let dir = scratch("gone-out");
+        let peer = iroh::SecretKey::generate().public();
+        let (session, _rx) = Session::new(1, [21; 16], peer, Role::Send);
+        let (r, _zip) = send_record(&dir, 21);
+        assert_eq!(r.have(), 0);
+        session.set_record(r);
+        session.save_sent(&dir, 7);
+        let mut stored = records(&dir).remove(0);
+        assert_eq!(stored.have(), 7);
+        stored.done_hash = Some([0; 32]);
+        assert_eq!(stored.have(), 10);
+        fs::remove_dir_all(&dir).ok();
     }
 
     /// From `Done` on, a cancel on the sending side waits for the receiver's
@@ -3343,6 +3382,7 @@ mod tests {
                 source_len: 0,
                 source_mtime: None,
                 data_path: zip.clone(),
+                sent: 0,
             },
         );
         s.ended = true;
@@ -3575,6 +3615,7 @@ mod tests {
                 source_len: meta.len(),
                 source_mtime: meta.modified().ok(),
                 data_path: file.clone(),
+                sent: 0,
             },
         );
         assert!(r.source_unchanged());
@@ -3595,6 +3636,7 @@ mod tests {
                 source_len: meta.len(),
                 source_mtime: meta.modified().ok(),
                 data_path: zip.clone(),
+                sent: 0,
             },
         );
         fs::write(folder.join("new.txt"), b"later").unwrap();

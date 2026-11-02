@@ -28,6 +28,9 @@ use super::{
 use crate::{archive, i18n::tr};
 
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(40);
+/// How often the record notes how much has gone out (see
+/// `Side::Send::sent`), as the receiver notes what is on its disk.
+pub(crate) const SAVE_SENT_EVERY: u64 = 64 * 1024 * 1024;
 /// How long the receiver may take to answer `Continue`.
 const ANSWER_TIMEOUT: Duration = Duration::from_secs(30);
 const RETRY_MIN: Duration = Duration::from_secs(2);
@@ -114,7 +117,7 @@ pub(super) async fn resume(
 async fn dial(endpoint: &Endpoint, to: EndpointId) -> Result<Connection, String> {
     match tokio::time::timeout(CONNECT_TIMEOUT, endpoint.connect(to, protocol::ALPN)).await {
         Ok(Ok(conn)) => Ok(conn),
-        Ok(Err(e)) => Err(e.to_string()),
+        Ok(Err(e)) => Err(super::connect_error_text(&e)),
         Err(_) => Err(tr!(error_timeout).into()),
     }
 }
@@ -253,6 +256,7 @@ async fn start(
             source_len,
             source_mtime,
             data_path: data_path.clone(),
+            sent: 0,
         },
         done_hash: None,
         done_sent: false,
@@ -428,8 +432,13 @@ impl Sender<'_> {
         });
     }
 
-    /// The status while disconnected.
+    /// The status while disconnected, after saying that there is no
+    /// connection now (a paused transfer can be without one too).
     fn emit_waiting(&self) {
+        self.shared.emit(Event::Path {
+            id: self.id,
+            direct: None,
+        });
         self.emit(if self.ctl.is_paused() {
             Phase::Paused
         } else {
@@ -733,6 +742,8 @@ impl Sender<'_> {
         }
 
         let mut done = have;
+        // What the record says has gone out (see `Side::Send::sent`).
+        let mut noted = have;
         let mut buf = vec![0u8; CHUNK];
         // The frame being written: header and payload, and how much of it went out.
         let mut pending: Vec<u8> = Vec::new();
@@ -772,6 +783,12 @@ impl Sender<'_> {
                         off = 0;
                         if throttle.ready() || done == self.size {
                             self.shared.emit(Event::Progress { id: self.id, done, total: self.size });
+                        }
+                        if done - noted >= SAVE_SENT_EVERY {
+                            noted = done;
+                            self.session
+                                .update(&self.shared.data_dir, move |s, d| s.save_sent(d, done))
+                                .await;
                         }
                         if let Some(paused) = announce.take() {
                             let msg = if paused { Msg::Paused } else { Msg::Resumed };
