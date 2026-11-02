@@ -14,6 +14,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var transfersWindow: TransfersWindowController?
     private var settingsWindow: SettingsWindowController?
     private var licenseWindow: LicenseWindowController?
+    private var updateWindow: UpdateWindowController?
     private var statusItem: StatusItem?
     private var notifier: Notifier?
     private var incoming: [UInt64: IncomingWindowController] = [:]
@@ -95,6 +96,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             showAlert(warning, on: main.window)
         }
         takeMessages()
+        #if DODAVO_UI_TEST
+            openEverythingForTesting()
+        #endif
+        if CommandLine.arguments.contains("--updated") {
+            notifier?.post(
+                Notice(
+                    title: L[.updated_balloon_title],
+                    text: L.f(.updated_balloon, ["version": started.version])),
+                action: .none)
+        }
+        if !started.startHidden {
+            Relocation.offerIfNeeded(on: main.window)
+        }
         let paths = pendingPaths
         pendingPaths = []
         if !paths.isEmpty {
@@ -194,6 +208,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             showAlert(text, on: mainWindow?.window)
         case .fatal(let text):
             fatal(text)
+        case .updateAvailable(let headline, let notes, let manual):
+            showUpdate(headline: headline, notes: notes, manual: manual)
+        case .updateAnswer(let text):
+            mainWindow?.setCheckingStatus(false)
+            showAlert(text, on: mainWindow?.window?.isVisible == true ? mainWindow?.window : nil)
+        case .updateProgress(let text, let fraction):
+            updateWindow?.setProgress(text, fraction: fraction)
+        case .updateReady(let path):
+            updateWindow?.install(from: path)
+        case .updateFailed(let text):
+            updateWindow?.fail(text)
+        }
+    }
+
+    private func showUpdate(headline: String, notes: String, manual: Bool) {
+        mainWindow?.setCheckingStatus(false)
+        if updateWindow == nil {
+            updateWindow = UpdateWindowController(headline: headline, notes: notes) { [weak self] in
+                self?.updateWindow = nil
+            }
+        }
+        if manual {
+            updateWindow?.showWindow(nil)
+            updateWindow?.window?.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+        } else {
+            // A check that nobody asked for takes no focus away.
+            updateWindow?.window?.orderFrontRegardless()
+            notifier?.post(
+                Notice(title: L[.update_title], text: headline), action: .none)
         }
     }
 
@@ -552,6 +596,111 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     @objc func checkForUpdates(_: Any?) {
-        // Comes with the updater.
+        mainWindow?.setCheckingStatus(true)
+        Core.perform("check_for_updates")
     }
 }
+
+#if DODAVO_UI_TEST
+    // A build for looking at the windows without a peer (see macos/tests/ui-preview.sh):
+    // opens them all with made-up transfers, and reports controls without a name
+    // from inside the program, which works with the screen locked as well.
+    extension AppDelegate {
+        private func sampleRow(
+            _ id: UInt64, _ item: String, sending: Bool, status: String, fraction: Double?,
+            active: Bool = true, succeeded: Bool = false, path: String? = nil, paused: Bool = false,
+            amount: String = "", speed: String = "", remaining: String = "", detail: String = ""
+        ) -> Row {
+            let json: [String: Any?] = [
+                "id": id, "peer_id": "abc", "peer": "Ana", "sending": sending, "item": item,
+                "active": active, "succeeded": succeeded, "status": status, "state": status,
+                "fraction": fraction, "amount": amount, "speed": speed, "remaining": remaining,
+                "detail": detail, "can_pause": active, "paused": paused, "can_cancel": active,
+                "path": path, "moving_data": active,
+            ]
+            let data = try! JSONSerialization.data(withJSONObject: json.compactMapValues { $0 })
+            let decoder = JSONDecoder()
+            decoder.keyDecodingStrategy = .convertFromSnakeCase
+            return try! decoder.decode(Row.self, from: data)
+        }
+
+        func openEverythingForTesting() {
+            let samples = [
+                sampleRow(
+                    1, "Report 2026.pdf", sending: true, status: "Sending…", fraction: 0.45,
+                    amount: "45 MB of 100 MB (45%)", speed: "12 MB/s", remaining: "5 seconds left",
+                    detail: "Connected directly"),
+                sampleRow(
+                    2, "Holiday photos", sending: false, status: "Paused", fraction: 0.2,
+                    paused: true, amount: "200 MB of 1 GB (20%)"),
+                sampleRow(3, "Kuća.jpg", sending: true, status: "Connecting to Ana…", fraction: nil),
+                sampleRow(
+                    4, "Račun.pdf", sending: false, status: "The file has been saved.", fraction: 1,
+                    active: false, succeeded: true, path: NSHomeDirectory() + "/Downloads/Račun.pdf",
+                    amount: "1 MB of 1 MB (100%)", detail: NSHomeDirectory() + "/Downloads/Račun.pdf"),
+                sampleRow(
+                    5, "Too big.mov", sending: true, status: "The transfer failed.", fraction: 0.1,
+                    active: false, detail: "There is not enough free disk space."),
+            ]
+            for row in samples { handle(.row(row, announce: nil)) }
+            showTransfers(nil)
+            showSettings(nil)
+            showLicense(nil)
+            showAbout(nil)
+            updateWindow = UpdateWindowController(
+                headline: "Dodavo 1.1.0 is available (you have 1.0.0).",
+                notes: "What is new:\n\n- The Mac version.\n- Fixes.", closed: {})
+            updateWindow?.showWindow(nil)
+            let offer = OfferInfo(
+                id: 9, fromId: "abcdef", fromName: "Marko", known: false,
+                headline: "Marko wants to send you a folder",
+                description: "“Holiday photos”  (12 files, 2 GB)",
+                unknownWarning: "This sender is not in your recipient list (Contact ID abcdef).",
+                addLabel: "Add “Marko” to my recipients", dir: NSHomeDirectory() + "/Downloads",
+                space: SpaceInfo(
+                    text: "There is enough free space: 2 GB needed, 90 GB available on “Macintosh HD”.",
+                    fits: true, enough: true))
+            let incomingWindow = IncomingWindowController(offer: offer) {}
+            incoming[9] = incomingWindow
+            incomingWindow.present()
+            mainWindow?.setRows(samples)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1) { self.auditForTesting() }
+        }
+
+        /// Controls that VoiceOver would have no name for.
+        private func auditForTesting() {
+            var report = ""
+            var controls = 0
+            var window: NSWindow?
+            func look(_ view: NSView, _ path: String) {
+                let kind = String(describing: type(of: view))
+                let here = "\(path)/\(kind)"
+                var isControl =
+                    view is NSButton || view is NSProgressIndicator || view is NSTableView
+                if let field = view as? NSTextField, field.isEditable { isControl = true }
+                // A field being edited, and the About panel, are the system's.
+                if let text = view as? NSTextView, !text.isFieldEditor, window?.title != "" {
+                    isControl = true
+                }
+                if isControl {
+                    controls += 1
+                    let label = view.accessibilityLabel() ?? ""
+                    let title = (view as? NSButton)?.title ?? view.accessibilityTitle() ?? ""
+                    let linked = view.accessibilityTitleUIElement() != nil
+                    if label.isEmpty && title.isEmpty && !linked {
+                        report += "NO NAME: \(here)\n"
+                    }
+                }
+                for child in view.subviews { look(child, here) }
+            }
+            for each in NSApp.windows where each.isVisible {
+                window = each
+                report += "Window: \(each.title)\n"
+                if let content = each.contentView { look(content, "") }
+            }
+            report += "\(controls) controls looked at\n"
+            let file = ProcessInfo.processInfo.environment["DODAVO_AUDIT_FILE"] ?? "/tmp/dodavo-audit.txt"
+            try? report.write(toFile: file, atomically: true, encoding: .utf8)
+        }
+    }
+#endif

@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="sr-Latn">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pomoć za Dodavo</title>
+<link rel="stylesheet" href="help.css">
+</head>
+<body>
+<a class="skip-link" href="#main">Pređi na glavni sadržaj</a>
+
+<header>
+<h1>Pomoć za Dodavo</h1>
+<p class="intro">Dodavo šalje datoteke i fascikle direktno sa jednog računara na drugi. Ne treba vam nalog, usluga u oblaku ni veza: svako od vas ima ID kontakta, a datoteke idu direktno sa računara na računar, potpuno šifrovane. Radi između Mac računara i između Maca i računara sa Windowsom.</p>
+</header>
+
+<nav aria-labelledby="contents">
+<h2 id="contents">Sadržaj</h2>
+<ol>
+<li><a href="#using-help">Korišćenje ove pomoći</a></li>
+<li><a href="#how-it-works">Kako Dodavo radi</a></li>
+<li><a href="#installing">Instalacija i deinstalacija</a></li>
+<li><a href="#getting-started">Prvi koraci</a></li>
+<li><a href="#main-window">Glavni prozor</a></li>
+<li><a href="#recipients">Upravljanje primaocima</a></li>
+<li><a href="#sending">Slanje datoteka i fascikli</a></li>
+<li><a href="#receiving">Primanje datoteka i fascikli</a></li>
+<li><a href="#progress">Praćenje prenosa</a></li>
+<li><a href="#background">Rad u pozadini</a></li>
+<li><a href="#settings">Podešavanja</a></li>
+<li><a href="#shortcuts">Tasterske prečice</a></li>
+<li><a href="#connections">Veze i bezbednost</a></li>
+<li><a href="#faq">Česta pitanja</a></li>
+<li><a href="#troubleshooting">Rešavanje problema</a></li>
+<li><a href="#license">Licenca</a></li>
+<li><a href="#donate">Doniranje</a></li>
+</ol>
+</nav>
+
+<main id="main" tabindex="-1">
+
+<section aria-labelledby="using-help">
+<h2 id="using-help">Korišćenje ove pomoći</h2>
+<p>Ova pomoć se otvara u veb pregledaču, na jeziku koji Dodavo koristi. Da biste je ponovo otvorili, izaberite Pomoć > Pomoć za Dodavo ili pritisnite <kbd>⌘?</kbd>.</p>
+<p>Svaka tema je naslov nivoa 2. Sa VoiceOverom pritisnite <kbd>VO</kbd>-<kbd>⌘</kbd>-<kbd>H</kbd> za prelazak na sledeći naslov ili otvorite rotor pomoću <kbd>VO</kbd>-<kbd>U</kbd> i izaberite sa liste.</p>
+<p>Nazivi menija, dugmadi i drugih kontrola napisani su tačno kako se prikazuju u Dodavu. Sve može da se uradi samo tastaturom i sa VoiceOverom; gde se to razlikuje od korišćenja pokazivača, tema to navodi.</p>
+</section>
+
+<section aria-labelledby="how-it-works">
+<h2 id="how-it-works">Kako Dodavo radi</h2>
+<p>Svaki računar na kome radi Dodavo ima trajni <strong>ID kontakta</strong>: kôd od 64 znaka koji zamenjuje adresu. Podelite ga jednom; ne menja se, gde god računar bio.</p>
+<ol>
+<li>Kopirate svoj ID kontakta i pošaljete ga drugoj osobi, na primer e-poštom ili u poruci.</li>
+<li>Druga osoba doda vas među svoje primaoce, a vi nju među svoje.</li>
+<li>Da biste nešto poslali, izaberete osobu i izaberete šta ćete poslati.</li>
+<li>Dodavo druge osobe pita da li to želi da prihvati i gde da sačuva, ili počinje sam ako ste među njenim primaocima.</li>
+<li>Stavka ide direktno na njen računar, šifrovana celim putem.</li>
+</ol>
+<p>Dodavo mora da bude pokrenut na oba računara. Zatvaranje prozora ne zatvara aplikaciju, tako da može da prima datoteke u pozadini; to radi Zatvori Dodavo (<kbd>⌘Q</kbd>).</p>
+</section>
+
+<section aria-labelledby="installing">
+<h2 id="installing">Instalacija i deinstalacija</h2>
+<p>Dodavo zahteva macOS 11 Big Sur ili noviji na Macu sa Apple čipom. Razvija se i testira na aktuelnim verzijama macOS-a; na macOS-u 11 isporučuje se takav kakav je, jer takav sistem nije bio dostupan za testiranje.</p>
+<p>Otvorite sliku diska <code>Dodavo-&lt;version&gt;-macos.dmg</code> i otvorite Dodavo iz nje. On zatim nudi da sam pređe u fasciklu Aplikacije: izaberite Premesti u fasciklu Aplikacije. To možete da uradite i u Finderu bez prevlačenja: izaberite Dodavo, pritisnite <kbd>⌘C</kbd>, pritisnite <kbd>⇧⌘A</kbd> za prelazak u fasciklu Aplikacije i pritisnite <kbd>⌘V</kbd>.</p>
+<p>Pokrenut sa slike diska ili iz fascikle Preuzimanja, Dodavo ne može sam da se ažurira; zato se pojavljuje pitanje Premestiti Dodavo u fasciklu Aplikacije?</p>
+<p>Kada zatrebaju prvi put, macOS pita da li Dodavo sme da koristi lokalnu mrežu, šalje obaveštenja i koristi fascikle kao što su Preuzimanja. Dozvolite to: u odeljku <a href="#troubleshooting">Rešavanje problema</a> piše šta se inače dešava i kako kasnije da promenite odgovor.</p>
+<p>Za deinstalaciju zatvorite Dodavo i premestite ga u Smeće. Vaša podešavanja i ID kontakta ostaju u fascikli <code>~/Library/Application Support/Dodavo</code>, tako da nova instalacija zadržava isti ID kontakta; izbrišite i tu fasciklu ako želite da nestanu.</p>
+</section>
+
+<section aria-labelledby="getting-started">
+<h2 id="getting-started">Prvi koraci</h2>
+<ol>
+<li>Izaberite Datoteka > Kopiraj moj ID kontakta (<kbd>⇧⌘C</kbd>) i pošaljite svoj ID kontakta drugoj osobi.</li>
+<li>Zamolite je da uradi isto, a zatim izaberite Datoteka > Dodaj primaoca… (<kbd>⌘N</kbd>) i unesite ime i njen ID kontakta.</li>
+<li>Dok je osoba izabrana na listi, izaberite Datoteka > Pošalji… (<kbd>⌘O</kbd>) i izaberite šta želite da pošaljete.</li>
+<li>Pratite to u prozoru Prenosi: Prenosi > Prikaži prenose (<kbd>⌘T</kbd>).</li>
+</ol>
+</section>
+
+<section aria-labelledby="main-window">
+<h2 id="main-window">Glavni prozor</h2>
+<p>Glavni prozor prikazuje vaše primaoce u tabeli sa kolonama Ime, ID kontakta i Prenos. Poslednja govori šta se dešava sa tom osobom. Ispod tabele red stanja govori da li je Dodavo na mreži; VoiceOver najavljuje kada se to promeni.</p>
+<p>Traka sa alatkama ima komande Pošalji, Dodaj primaoca, Kopiraj moj ID kontakta i Prenosi. Komanda Pošalji nije dostupna dok nije izabran primalac.</p>
+<p>Sa VoiceOverom pređite na tabelu i pritisnite <kbd>VO</kbd>-<kbd>⇧</kbd>-<kbd>↓</kbd> za rad sa njom, a zatim se tasterima sa strelicama krećite među primaocima. Pritisnite <kbd>Return</kbd> za slanje izabranom primaocu ili <kbd>VO</kbd>-<kbd>⇧</kbd>-<kbd>M</kbd> za otvaranje menija sa komandama Pošalji…, Prikaži prenos, Uredi primaoca… i Ukloni primaoca.</p>
+<p>Bez VoiceOvera uključite navigaciju tastaturom u: Sistemska podešavanja > Tastatura, da biste se tasterom <kbd>Tab</kbd> kretali među svim kontrolama; macOS je podrazumevano ima isključenu, pa <kbd>Tab</kbd> dolazi samo do tekstualnih polja i lista.</p>
+</section>
+
+<section aria-labelledby="recipients">
+<h2 id="recipients">Upravljanje primaocima</h2>
+<p>Dodaj primaoca… (<kbd>⌘N</kbd>) traži ime, koje vidite samo vi, i ID kontakta osobe. Zamolite osobu da u svom Dodavu izabere Kopiraj moj ID kontakta i pošalje vam ga.</p>
+<p>Uredi primaoca… (<kbd>⌘I</kbd>) ih menja, a Ukloni primaoca (<kbd>⌘⌫</kbd> ili <kbd>Delete</kbd> u tabeli) uklanja osobu, posle pitanja. Prenosi u toku se nastavljaju.</p>
+<p>Kopiraj moj ID kontakta (<kbd>⇧⌘C</kbd>) stavlja vaš ID kontakta u međuspremnik. Nalazi se i na kartici Opšte u podešavanjima.</p>
+</section>
+
+<section aria-labelledby="sending">
+<h2 id="sending">Slanje datoteka i fascikli</h2>
+<p>Izaberite primaoca, a zatim Datoteka > Pošalji… (<kbd>⌘O</kbd>). U panelu možete da izaberete datoteke i fascikle, i više njih odjednom; svaka postaje zaseban prenos. Aplikacije i dokumenti koji su paketi ovde se računaju kao fascikle i tako i stižu.</p>
+<p>Postoje i drugi načini:</p>
+<ul>
+<li>Prevucite stavke na primaoca u tabeli; ako ih je više, prvo sledi pitanje.</li>
+<li>Otpustite stavke na ikonu Dodava u Docku i izaberite primaoca.</li>
+<li>U Finderu izaberite stavke i izaberite Usluge > Pošalji pomoću Dodava iz menija Finder ili iz kontekstualnog menija (<kbd>VO</kbd>-<kbd>⇧</kbd>-<kbd>M</kbd>).</li>
+</ul>
+<p>Fascikla se automatski pakuje i ponovo raspakuje na drugoj strani. Stavke koje nešto znače samo macOS-u, kao što je <code>.DS_Store</code>, izostavljaju se. Veze unutar fascikle stižu na drugi Mac; veze koje vode izvan nje ne šalju se. Finderove oznake i drugi prošireni atributi ne putuju.</p>
+<p>Windows u nazivima ne dozvoljava neke znakove, kao što su <code>:</code> i <code>?</code>. Pošto pošiljalac ne može da zna koji sistem ima druga strana, fascikla nosi nazive koje svaki sistem prihvata, sa donjom crtom umesto takvog znaka. Drugi Mac vraća originalne nazive; računar sa Windowsom zadržava promenjene.</p>
+</section>
+
+<section aria-labelledby="receiving">
+<h2 id="receiving">Primanje datoteka i fascikli</h2>
+<p>Kada vam neko nešto šalje, pojavljuje se prozor Dolazni prenos, obaveštenje to javlja, a ikona Dodava poskakuje u Docku. Ne oduzima fokus onome što radite: kliknite na obaveštenje ili ikonu da biste došli do njega.</p>
+<p>Prozor govori ko šalje šta i da li ima dovoljno slobodnog prostora. Sačuvaj u: prikazuje kuda ide, a Izaberi… to menja. Prihvati prihvata (<kbd>Return</kbd>), Odbij odbija (<kbd>Esc</kbd>). VoiceOver čita prozor kada dođete do njega.</p>
+<p>Od osoba među vašim primaocima prenos može da počne sam: pogledajte Prenose pokreći automatski, bez pitanja u odeljku <a href="#settings">Podešavanja</a>. Od svih ostalih Dodavo uvek najpre pita i kaže da pošiljalac nije među vašim primaocima.</p>
+<p>Primljene stavke dobijaju istu oznaku kao preuzimanja sa interneta, pa macOS pita pre otvaranja aplikacije koja je stigla na ovaj način.</p>
+<p>Diskovi u formatu MS-DOS (FAT) ne mogu da sačuvaju datoteke od 4 GB ili veće; Dodavo to kaže pre prihvatanja.</p>
+</section>
+
+<section aria-labelledby="progress">
+<h2 id="progress">Praćenje prenosa</h2>
+<p>Prenosi (<kbd>⌘T</kbd>) prikazuje sve prenose. Svaki red prikazuje stavku, drugu osobu, šta se radi, koliko je gotovo, brzinu i preostalo vreme. Zatvaranje ovog prozora ne utiče na njih.</p>
+<p>Sa VoiceOverom se svaki red čita kao jedna rečenica. Pritisnite <kbd>VO</kbd>-<kbd>⌘</kbd>-<kbd>Space</kbd> na redu za njegove radnje ili <kbd>VO</kbd>-<kbd>⇧</kbd>-<kbd>↓</kbd> da biste došli do njegove dugmadi: Pauziraj i Nastavi, Otkaži prenos, a kada se završi Otvori, Prikaži u Finderu i Ukloni sa liste. Promene se najavljuju dok je Dodavo u prvom planu, a inače stižu kao obaveštenja.</p>
+<p>Ako se veza izgubi ili računar ode u stanje mirovanja ili se ponovo pokrene, prenos čeka i nastavlja se gde je stao čim su oba računara pokrenuta i na mreži, koliko god to trajalo. Na kraju se cela stavka proverava.</p>
+<p>Dok se podaci prenose, Dodavo sprečava da Mac sam ode u stanje mirovanja. Zatvaranje poklopca prenosnog računara i dalje ga uspavljuje; prenos se nastavlja posle buđenja.</p>
+<p>Kada cela stavka stigne, ona je primaočeva, pa pošiljalac više ne može da otkaže prenos. Ukloni završene uklanja redove završenih prenosa.</p>
+</section>
+
+<section aria-labelledby="background">
+<h2 id="background">Rad u pozadini</h2>
+<p>Zatvaranje glavnog prozora ostavlja Dodavo pokrenutim, da biste mogli da primate datoteke. Kliknite na njegovu ikonu u Docku da biste ponovo otvorili prozor.</p>
+<p>Kada je uključeno Prikaži u traci sa menijima, ikona Dodava u traci sa menijima prikazuje koliko je prenosa u toku, a njen meni ima Otvori Dodavo, prenose u toku, Kopiraj moj ID kontakta i Zatvori Dodavo. Sa VoiceOverom pritisnite <kbd>VO</kbd>-<kbd>M</kbd>-<kbd>M</kbd> da biste došli do nje.</p>
+<p>Kada je uključeno Otvori pri prijavljivanju, Dodavo se pokreće pri prijavljivanju; uz Sakrij kada se otvori pri prijavljivanju, bez prikazivanja prozora.</p>
+</section>
+
+<section aria-labelledby="settings">
+<h2 id="settings">Podešavanja</h2>
+<p>Otvorite ih komandom Podešavanja… (<kbd>⌘,</kbd>) u meniju Dodavo; pre macOS-a 13 to je Podešavanja…. Promene se primenjuju odmah.</p>
+<p>Opšte:</p>
+<ul>
+<li>Vaše ime: Prikazuje se osobama kojima šaljete datoteke.</li>
+<li>Vaš ID kontakta: uz Kopiraj.</li>
+<li>Otvori pri prijavljivanju i Sakrij kada se otvori pri prijavljivanju.</li>
+<li>Prikaži u traci sa menijima.</li>
+<li>Automatski proveravaj ažuriranja: jednom dnevno Dodavo traži noviju verziju i prikazuje njene napomene kada je ima. Proveri ažuriranja… to radi u bilo kom trenutku.</li>
+<li>Jezik: Podrazumevani jezik sistema prati macOS. Novi jezik će se koristiti kada sledeći put otvorite Dodavo.</li>
+</ul>
+<p>Prijem:</p>
+<ul>
+<li>Uvek čuvaj primljene stavke u ovoj fascikli, uz Izaberi….</li>
+<li>Prenose pokreći automatski, bez pitanja. Samo od osoba među vašim primaocima. Ako iznad nije izabrana fascikla, stavke se čuvaju u fascikli Preuzimanja.</li>
+<li>Kada stigne fascikla: Zadrži samo raspakovanu fasciklu, Zadrži samo ZIP arhivu ili Zadrži raspakovanu fasciklu i ZIP datoteku.</li>
+</ul>
+</section>
+
+<section aria-labelledby="shortcuts">
+<h2 id="shortcuts">Tasterske prečice</h2>
+<table>
+<thead><tr><th scope="col">Tasteri</th><th scope="col">Komanda</th></tr></thead>
+<tbody>
+<tr><td><kbd>⌘O</kbd></td><td>Pošalji…</td></tr>
+<tr><td><kbd>⌘N</kbd></td><td>Dodaj primaoca…</td></tr>
+<tr><td><kbd>⌘I</kbd></td><td>Uredi primaoca…</td></tr>
+<tr><td><kbd>⌘⌫</kbd></td><td>Ukloni primaoca</td></tr>
+<tr><td><kbd>⇧⌘C</kbd></td><td>Kopiraj moj ID kontakta</td></tr>
+<tr><td><kbd>⌘T</kbd></td><td>Prikaži prenose</td></tr>
+<tr><td><kbd>⌘,</kbd></td><td>Podešavanja…</td></tr>
+<tr><td><kbd>⌘?</kbd></td><td>Pomoć za Dodavo</td></tr>
+<tr><td><kbd>⌘W</kbd></td><td>Zatvori</td></tr>
+<tr><td><kbd>⌘M</kbd></td><td>Umanji</td></tr>
+<tr><td><kbd>⌘H</kbd></td><td>Sakrij Dodavo</td></tr>
+<tr><td><kbd>⌘Q</kbd></td><td>Zatvori Dodavo</td></tr>
+</tbody>
+</table>
+<p>U dijalozima <kbd>Return</kbd> bira podrazumevano dugme, a <kbd>Esc</kbd> otkazuje. U tabeli primalaca <kbd>Return</kbd> šalje izabranoj osobi, a <kbd>Delete</kbd> je uklanja.</p>
+</section>
+
+<section aria-labelledby="connections">
+<h2 id="connections">Veze i bezbednost</h2>
+<p>Dodavo povezuje računare pomoću tehnologije iroh (iroh.computer):</p>
+<ul>
+<li>Direktno, kroz rutere i zaštitne zidove, bez prosleđivanja portova.</li>
+<li>Unutar lokalne mreže, gde se računari sami pronalaze.</li>
+<li>Preko relejnog servera kada direktan put nije moguć. Podaci ostaju šifrovani, pa ih relej ne može čitati, ali je sporije.</li>
+</ul>
+<p>Sve je potpuno šifrovano i mogu ga čitati samo dva računara. Svaka stavka se na kraju proverava kontrolnim zbirom BLAKE3. Red prenosa govori da li ide direktno ili preko releja.</p>
+<p>Vaš ID kontakta je po prirodi javan; da je vaš dokazuje tajni ključ u fascikli <code>~/Library/Application Support/Dodavo</code>, koji može da čita samo vaš korisnik.</p>
+</section>
+
+<section aria-labelledby="faq">
+<h2 id="faq">Česta pitanja</h2>
+<p><strong>Mogu li da pošaljem nekome ko ima Windows?</strong> Da. Radi jednako u oba smera.</p>
+<p><strong>Može li druga osoba da bude van mreže?</strong> Prenos tada čeka dok oba računara ne budu pokrenuta i na mreži.</p>
+<p><strong>Da li datoteka ide preko servera?</strong> Samo preko releja, šifrovana, ako ne može da se pronađe direktan put.</p>
+<p><strong>Postoji li ograničenje veličine?</strong> Samo slobodan prostor na drugoj strani i 4 GB po datoteci na diskovima MS-DOS (FAT).</p>
+</section>
+
+<section aria-labelledby="troubleshooting">
+<h2 id="troubleshooting">Rešavanje problema</h2>
+<p><strong>macOS ne želi da otvori Dodavo.</strong> Preuzmite ga sa stranice izdanja. Overena kopija se otvara posle jedne potvrde.</p>
+<p><strong>Dodavo kaže da je van mreže.</strong> Proverite internet vezu. Prenosi unutar lokalne mreže i dalje rade.</p>
+<p><strong>Prenosi među računarima u istoj mreži su veoma spori.</strong> Dodavo možda ne sme da koristi lokalnu mrežu: proverite Sistemska podešavanja > Privatnost i bezbednost > Lokalna mreža. Bez toga podaci idu preko releja.</p>
+<p><strong>Prenos kaže da Dodavo ne sme da koristi stavku.</strong> Dozvolite to u: Sistemska podešavanja > Privatnost i bezbednost > Datoteke i fascikle, i prenos se nastavlja.</p>
+<p><strong>Nema obaveštenja.</strong> Proverite Sistemska podešavanja > Obaveštenja > Dodavo i da li je uključen fokus. Prenosi uvek prikazuje stanje prenosa.</p>
+</section>
+
+<section aria-labelledby="license">
+<h2 id="license">Licenca</h2>
+<p>Dodavo je slobodan softver pod licencom GNU General Public License, verzije 3 ili novije, i dolazi bez ikakve garancije. Pomoć > Licenca prikazuje licencu i licence komponenata ugrađenih u njega.</p>
+</section>
+
+<section aria-labelledby="donate">
+<h2 id="donate">Doniranje</h2>
+<p>Dodavo je besplatan. Ako želite da podržite njegov razvoj, Pomoć > Doniraj… otvara <a href="https://paypal.me/hrvix">autorovu stranicu na PayPalu</a>.</p>
+</section>
+
+</main>
+</body>
+</html>

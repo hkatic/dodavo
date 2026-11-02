@@ -58,6 +58,49 @@ pub fn temp_base() -> PathBuf {
     data_base().join("tmp")
 }
 
+/// What Apple calls its settings app on this macOS.
+pub fn settings_app_name() -> &'static str {
+    let mut version = [0 as c_char; 32];
+    let mut length = version.len();
+    // SAFETY: a C string for the name, and a buffer with its length to fill.
+    let status = unsafe {
+        libc::sysctlbyname(
+            c"kern.osproductversion".as_ptr(),
+            version.as_mut_ptr().cast(),
+            &mut length,
+            std::ptr::null_mut(),
+            0,
+        )
+    };
+    let major: u32 = if status == 0 {
+        let text = c_text(&version);
+        text.split('.')
+            .next()
+            .and_then(|major| major.parse().ok())
+            .unwrap_or(13)
+    } else {
+        13
+    };
+    if major >= 13 {
+        crate::i18n::mac_tr!(system_settings)
+    } else {
+        crate::i18n::mac_tr!(system_preferences)
+    }
+}
+
+/// The text of a system error, in the user's language.
+pub fn error_text(code: i32) -> Option<String> {
+    use crate::i18n::{mac_tr, tr};
+    Some(match code {
+        libc::ENOSPC | libc::EDQUOT => tr!(error_disk_full).to_string(),
+        libc::EACCES | libc::EPERM => mac_tr!(error_no_access, settings = settings_app_name()),
+        libc::ENAMETOOLONG => mac_tr!(error_name_too_long).to_string(),
+        libc::EROFS => mac_tr!(error_read_only).to_string(),
+        libc::ENOENT | libc::ENOTDIR => crate::i18n::tr!(error_part_missing).to_string(),
+        code => mac_tr!(error_system, code = code),
+    })
+}
+
 /// The name to send under until the user chooses one: the full name of the
 /// account, or else its short name.
 pub fn user_name() -> Option<String> {

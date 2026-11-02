@@ -49,6 +49,11 @@ struct Row: Decodable, Equatable {
 struct Notice: Decodable {
     let title: String
     let text: String
+
+    init(title: String, text: String) {
+        self.title = title
+        self.text = text
+    }
 }
 
 struct SpaceInfo: Decodable {
@@ -94,9 +99,15 @@ enum Message: Decodable {
     case busy(Bool)
     case error(String)
     case fatal(String)
+    case updateAvailable(headline: String, notes: String, manual: Bool)
+    case updateAnswer(String)
+    case updateProgress(String, fraction: Double?)
+    case updateReady(String)
+    case updateFailed(String)
 
     private enum Keys: String, CodingKey {
         case type, online, text, row, announce, id, notice, path, offer, busy
+        case headline, notes, manual, fraction
     }
 
     init(from decoder: Decoder) throws {
@@ -131,6 +142,21 @@ enum Message: Decodable {
             self = .error(try c.decode(String.self, forKey: .text))
         case "fatal":
             self = .fatal(try c.decode(String.self, forKey: .text))
+        case "update_available":
+            self = .updateAvailable(
+                headline: try c.decode(String.self, forKey: .headline),
+                notes: try c.decode(String.self, forKey: .notes),
+                manual: try c.decode(Bool.self, forKey: .manual))
+        case "update_answer":
+            self = .updateAnswer(try c.decode(String.self, forKey: .text))
+        case "update_progress":
+            self = .updateProgress(
+                try c.decode(String.self, forKey: .text),
+                fraction: try c.decodeIfPresent(Double.self, forKey: .fraction))
+        case "update_ready":
+            self = .updateReady(try c.decode(String.self, forKey: .path))
+        case "update_failed":
+            self = .updateFailed(try c.decode(String.self, forKey: .text))
         default:
             throw DecodingError.dataCorruptedError(
                 forKey: .type, in: c, debugDescription: "an unknown message")

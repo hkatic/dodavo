@@ -86,13 +86,10 @@
             <key>NSPortName</key>
             <string>Dodavo</string>
             <key>NSRequiredContext</key>
-            <dict>
-                <key>NSTextContent</key>
-                <string>FilePath</string>
-            </dict>
-            <key>NSSendTypes</key>
+            <dict/>
+            <key>NSSendFileTypes</key>
             <array>
-                <string>public.file-url</string>
+                <string>public.item</string>
             </array>
         </dict>
     </array>

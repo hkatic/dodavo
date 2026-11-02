@@ -16,6 +16,8 @@ use std::{
 };
 
 mod core;
+#[cfg(test)]
+mod help;
 
 use core::Core;
 

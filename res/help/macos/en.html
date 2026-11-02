@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dodavo Help</title>
+<link rel="stylesheet" href="help.css">
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to main content</a>
+
+<header>
+<h1>Dodavo Help</h1>
+<p class="intro">Dodavo sends files and folders directly from one computer to another. You don't need an account, a cloud service or a link: each of you has a Contact ID, and files go straight from one computer to the other, end-to-end encrypted. It works between Macs, and between a Mac and a Windows PC.</p>
+</header>
+
+<nav aria-labelledby="contents">
+<h2 id="contents">Contents</h2>
+<ol>
+<li><a href="#using-help">Using this help</a></li>
+<li><a href="#how-it-works">How Dodavo works</a></li>
+<li><a href="#installing">Installing and uninstalling</a></li>
+<li><a href="#getting-started">Getting started</a></li>
+<li><a href="#main-window">The main window</a></li>
+<li><a href="#recipients">Managing recipients</a></li>
+<li><a href="#sending">Sending files and folders</a></li>
+<li><a href="#receiving">Receiving files and folders</a></li>
+<li><a href="#progress">Following a transfer</a></li>
+<li><a href="#background">Running in the background</a></li>
+<li><a href="#settings">Settings</a></li>
+<li><a href="#shortcuts">Keyboard shortcuts</a></li>
+<li><a href="#connections">Connections and security</a></li>
+<li><a href="#faq">Frequently asked questions</a></li>
+<li><a href="#troubleshooting">Troubleshooting</a></li>
+<li><a href="#license">License</a></li>
+<li><a href="#donate">Donating</a></li>
+</ol>
+</nav>
+
+<main id="main" tabindex="-1">
+
+<section aria-labelledby="using-help">
+<h2 id="using-help">Using this help</h2>
+<p>This help opens in your web browser, in the language Dodavo is using. To open it again, choose Help > Dodavo Help, or press <kbd>⌘?</kbd>.</p>
+<p>Each topic is a level 2 heading. With VoiceOver, press <kbd>VO</kbd>-<kbd>⌘</kbd>-<kbd>H</kbd> to go to the next heading, or open the rotor with <kbd>VO</kbd>-<kbd>U</kbd> to choose from a list of them.</p>
+<p>Names of menus, buttons and other controls are written exactly as they appear in Dodavo. Everything can be done with the keyboard alone and with VoiceOver; where that differs from using a pointer, the topic says how.</p>
+</section>
+
+<section aria-labelledby="how-it-works">
+<h2 id="how-it-works">How Dodavo works</h2>
+<p>Every computer running Dodavo has a permanent <strong>Contact ID</strong>: a code of 64 characters that takes the place of an address. You share it once; it does not change, wherever the computer goes.</p>
+<ol>
+<li>You copy your Contact ID and send it to the other person, for example by email or in a message.</li>
+<li>The other person adds you to their recipients, and you add them to yours.</li>
+<li>To send something, you select the person and choose what to send.</li>
+<li>The other person's Dodavo asks whether to accept it and where to save it, or starts by itself if you are one of their recipients.</li>
+<li>The item goes directly to their computer, encrypted all the way.</li>
+</ol>
+<p>Dodavo has to be running on both computers. Closing its window does not quit it, so that it can receive files in the background; Quit Dodavo (<kbd>⌘Q</kbd>) does.</p>
+</section>
+
+<section aria-labelledby="installing">
+<h2 id="installing">Installing and uninstalling</h2>
+<p>Dodavo needs macOS 11 Big Sur or later on a Mac with Apple silicon. It is developed and tested on current versions of macOS; on macOS 11 it is provided as is, since no such system was available for testing.</p>
+<p>Open the disk image <code>Dodavo-&lt;version&gt;-macos.dmg</code> and open Dodavo from it. It then offers to move itself to the Applications folder: choose Move to Applications Folder. You can also do that in the Finder without dragging: select Dodavo, press <kbd>⌘C</kbd>, press <kbd>⇧⌘A</kbd> to go to the Applications folder, and press <kbd>⌘V</kbd>.</p>
+<p>Run from the disk image or from Downloads, Dodavo cannot update itself; Move Dodavo to the Applications Folder? is asked for that reason.</p>
+<p>The first time they are needed, macOS asks whether Dodavo may use the local network, send notifications, and use folders such as Downloads. Allow them: see <a href="#troubleshooting">Troubleshooting</a> for what happens otherwise, and how to change your answer later.</p>
+<p>To uninstall, quit Dodavo and move it to the Trash. Your settings and Contact ID stay in the folder <code>~/Library/Application Support/Dodavo</code>, so that a new installation keeps the same Contact ID; delete that folder as well if you want them gone.</p>
+</section>
+
+<section aria-labelledby="getting-started">
+<h2 id="getting-started">Getting started</h2>
+<ol>
+<li>Choose File > Copy My Contact ID (<kbd>⇧⌘C</kbd>) and send your Contact ID to the other person.</li>
+<li>Ask them to do the same, then choose File > Add Recipient… (<kbd>⌘N</kbd>) and enter a name and their Contact ID.</li>
+<li>With the person selected in the list, choose File > Send… (<kbd>⌘O</kbd>) and pick what to send.</li>
+<li>Follow it in Transfers: Transfers > Show Transfers (<kbd>⌘T</kbd>).</li>
+</ol>
+</section>
+
+<section aria-labelledby="main-window">
+<h2 id="main-window">The main window</h2>
+<p>The main window lists your recipients in a table with the columns Name, Contact ID and Transfer. The last one says what is going on with that person. Below the table, a status line says whether Dodavo is online; VoiceOver announces when that changes.</p>
+<p>The toolbar has the commands Send, Add Recipient, Copy My Contact ID and Transfers. Send is unavailable until a recipient is selected.</p>
+<p>With VoiceOver, move to the table and press <kbd>VO</kbd>-<kbd>⇧</kbd>-<kbd>↓</kbd> to interact with it, then use the arrow keys to move between recipients. Press <kbd>Return</kbd> to send to the selected recipient, or <kbd>VO</kbd>-<kbd>⇧</kbd>-<kbd>M</kbd> to open its menu, with Send…, Show Transfer, Edit Recipient… and Remove Recipient.</p>
+<p>Without VoiceOver, turn on Keyboard navigation in System Settings > Keyboard to move between all controls with <kbd>Tab</kbd>; macOS has it off by default, and <kbd>Tab</kbd> then reaches only text fields and lists.</p>
+</section>
+
+<section aria-labelledby="recipients">
+<h2 id="recipients">Managing recipients</h2>
+<p>Add Recipient… (<kbd>⌘N</kbd>) asks for a name, which only you see, and the person's Contact ID. Ask the person to choose Copy My Contact ID in their copy of Dodavo and send it to you.</p>
+<p>Edit Recipient… (<kbd>⌘I</kbd>) changes them, and Remove Recipient (<kbd>⌘⌫</kbd>, or <kbd>Delete</kbd> in the table) removes the person, after asking. Transfers that are running go on.</p>
+<p>Copy My Contact ID (<kbd>⇧⌘C</kbd>) puts your own Contact ID on the clipboard. You also find it in General in Settings.</p>
+</section>
+
+<section aria-labelledby="sending">
+<h2 id="sending">Sending files and folders</h2>
+<p>Select a recipient and choose File > Send… (<kbd>⌘O</kbd>). In the panel you can choose files and folders, also several at once; each becomes a transfer of its own. Apps and documents that are packages count as folders here, and arrive as such.</p>
+<p>There are other ways too:</p>
+<ul>
+<li>Drag items onto a recipient in the table; a question comes first if there are several.</li>
+<li>Drop items on Dodavo's icon in the Dock, and choose the recipient.</li>
+<li>In the Finder, select items and choose Services > Send with Dodavo from the Finder menu, or from the context menu (<kbd>VO</kbd>-<kbd>⇧</kbd>-<kbd>M</kbd>).</li>
+</ul>
+<p>A folder is packed automatically and unpacked again on the other side. Items that only mean something to macOS, such as <code>.DS_Store</code>, are left out. Links inside the folder arrive on another Mac; links that lead out of it are not sent. Finder tags and other extended attributes do not travel.</p>
+<p>Windows does not allow some characters in names, such as <code>:</code> and <code>?</code>. Since a sender cannot tell what system the other side runs, the folder carries names that any system takes, with an underscore in place of such a character. Another Mac restores the original names; a Windows PC keeps the changed ones.</p>
+</section>
+
+<section aria-labelledby="receiving">
+<h2 id="receiving">Receiving files and folders</h2>
+<p>When someone sends you something, the Incoming Transfer window appears, a notification says so, and Dodavo's icon bounces in the Dock. It does not take the focus from what you are doing: click the notification, or the icon, to go to it.</p>
+<p>The window says who sends what, and whether there is enough free space. Save to: shows where it goes, and Choose… changes that. Accept takes it (<kbd>Return</kbd>), Decline refuses it (<kbd>Esc</kbd>). VoiceOver reads the window when you go to it.</p>
+<p>From people in your recipients, a transfer can start by itself: see Start transfers automatically, without asking in <a href="#settings">Settings</a>. From anyone else, Dodavo always asks first, and says that the sender is not one of your recipients.</p>
+<p>Received items get the same mark as downloads from the internet, so macOS asks before opening an app that came this way.</p>
+<p>Volumes in MS-DOS (FAT) format cannot hold files of 4 GB or more; Dodavo says so before it accepts.</p>
+</section>
+
+<section aria-labelledby="progress">
+<h2 id="progress">Following a transfer</h2>
+<p>Transfers (<kbd>⌘T</kbd>) lists all transfers. Each row shows the item, the other person, what it is doing, how much is done, the speed and the time remaining. Closing this window does nothing to them.</p>
+<p>With VoiceOver, each row reads as one sentence. Press <kbd>VO</kbd>-<kbd>⌘</kbd>-<kbd>Space</kbd> on a row for its actions, or <kbd>VO</kbd>-<kbd>⇧</kbd>-<kbd>↓</kbd> to reach its buttons: Pause and Resume, Cancel Transfer, and when it has finished Open, Show in Finder and Remove from List. Changes in what a transfer is doing are announced while Dodavo is in front, and otherwise come as notifications.</p>
+<p>If the connection is lost, or a computer goes to sleep or restarts, the transfer waits and continues where it stopped once both are running and online, however long that takes. At the end, the whole item is checked.</p>
+<p>While data moves, Dodavo keeps the Mac from going to sleep by itself. Closing a laptop's lid still puts it to sleep; the transfer goes on after it wakes.</p>
+<p>Once all of an item has arrived, it is the receiver's, so the sender can no longer cancel the transfer. Clear Finished removes the rows of transfers that have ended.</p>
+</section>
+
+<section aria-labelledby="background">
+<h2 id="background">Running in the background</h2>
+<p>Closing the main window leaves Dodavo running, so that you can receive files. Click its icon in the Dock to open the window again.</p>
+<p>With Show in menu bar on, Dodavo's icon in the menu bar shows how many transfers are running, and its menu has Open Dodavo, the running transfers, Copy My Contact ID and Quit Dodavo. With VoiceOver, press <kbd>VO</kbd>-<kbd>M</kbd>-<kbd>M</kbd> to reach it.</p>
+<p>With Open at Login on, Dodavo starts when you log in; with Hide when opened at login, without showing its window.</p>
+</section>
+
+<section aria-labelledby="settings">
+<h2 id="settings">Settings</h2>
+<p>Open them with Settings… (<kbd>⌘,</kbd>) in the Dodavo menu; before macOS 13 it is Preferences…. Changes apply at once.</p>
+<p>General:</p>
+<ul>
+<li>Your name: Shown to the people you send files to.</li>
+<li>Your Contact ID: with Copy.</li>
+<li>Open at Login and Hide when opened at login.</li>
+<li>Show in menu bar.</li>
+<li>Check for updates automatically: once a day, Dodavo looks for a newer version, and shows its release notes when there is one. Check for Updates… does it at any time.</li>
+<li>Language: System Default follows macOS. The new language is used the next time you open Dodavo.</li>
+</ul>
+<p>Receiving:</p>
+<ul>
+<li>Always save received items to this folder, with Choose….</li>
+<li>Start transfers automatically, without asking. Only from people in your recipients. Without the folder above, items are saved to Downloads.</li>
+<li>When a folder arrives: Keep only the unpacked folder, Keep only the ZIP archive, or Keep both the unpacked folder and the ZIP file.</li>
+</ul>
+</section>
+
+<section aria-labelledby="shortcuts">
+<h2 id="shortcuts">Keyboard shortcuts</h2>
+<table>
+<thead><tr><th scope="col">Keys</th><th scope="col">Command</th></tr></thead>
+<tbody>
+<tr><td><kbd>⌘O</kbd></td><td>Send…</td></tr>
+<tr><td><kbd>⌘N</kbd></td><td>Add Recipient…</td></tr>
+<tr><td><kbd>⌘I</kbd></td><td>Edit Recipient…</td></tr>
+<tr><td><kbd>⌘⌫</kbd></td><td>Remove Recipient</td></tr>
+<tr><td><kbd>⇧⌘C</kbd></td><td>Copy My Contact ID</td></tr>
+<tr><td><kbd>⌘T</kbd></td><td>Show Transfers</td></tr>
+<tr><td><kbd>⌘,</kbd></td><td>Settings…</td></tr>
+<tr><td><kbd>⌘?</kbd></td><td>Dodavo Help</td></tr>
+<tr><td><kbd>⌘W</kbd></td><td>Close</td></tr>
+<tr><td><kbd>⌘M</kbd></td><td>Minimize</td></tr>
+<tr><td><kbd>⌘H</kbd></td><td>Hide Dodavo</td></tr>
+<tr><td><kbd>⌘Q</kbd></td><td>Quit Dodavo</td></tr>
+</tbody>
+</table>
+<p>In dialogs, <kbd>Return</kbd> chooses the default button and <kbd>Esc</kbd> cancels. In the table of recipients, <kbd>Return</kbd> sends to the selected person and <kbd>Delete</kbd> removes them.</p>
+</section>
+
+<section aria-labelledby="connections">
+<h2 id="connections">Connections and security</h2>
+<p>Dodavo connects computers with iroh (iroh.computer):</p>
+<ul>
+<li>Directly, through routers and firewalls, without any port forwarding.</li>
+<li>Within your local network, where computers find each other by themselves.</li>
+<li>Through a relay server where a direct path is impossible. Data stays encrypted, so the relay cannot read it, but it is slower.</li>
+</ul>
+<p>Everything is end-to-end encrypted, and only the two computers can read it. Each item is checked with a BLAKE3 checksum at the end. The row of a transfer says whether it goes directly or through a relay.</p>
+<p>Your Contact ID is public by nature; what proves it is yours is a secret key in <code>~/Library/Application Support/Dodavo</code>, readable by your user only.</p>
+</section>
+
+<section aria-labelledby="faq">
+<h2 id="faq">Frequently asked questions</h2>
+<p><strong>Can I send to someone on Windows?</strong> Yes. It works the same way in both directions.</p>
+<p><strong>Can the other person be offline?</strong> The transfer then waits until both are running and online.</p>
+<p><strong>Does a file go through a server?</strong> Only through a relay, encrypted, if no direct path can be found.</p>
+<p><strong>Is there a limit to the size?</strong> Only the free space on the other side, and 4 GB per file on MS-DOS (FAT) volumes.</p>
+</section>
+
+<section aria-labelledby="troubleshooting">
+<h2 id="troubleshooting">Troubleshooting</h2>
+<p><strong>macOS will not open Dodavo.</strong> Download it from the release page. A notarized copy opens after one confirmation.</p>
+<p><strong>Dodavo says that it is offline.</strong> Check the internet connection. Transfers within the local network still work.</p>
+<p><strong>Transfers are very slow between computers on the same network.</strong> Dodavo may not be allowed to use the local network: check System Settings > Privacy &amp; Security > Local Network. Without it, data goes through a relay.</p>
+<p><strong>A transfer says that Dodavo may not use an item.</strong> Allow it in System Settings > Privacy &amp; Security > Files and Folders, and the transfer goes on.</p>
+<p><strong>There are no notifications.</strong> Check System Settings > Notifications > Dodavo, and whether a Focus is on. Transfers always shows how transfers are doing.</p>
+</section>
+
+<section aria-labelledby="license">
+<h2 id="license">License</h2>
+<p>Dodavo is free software under the GNU General Public License, version 3 or later, and comes with absolutely no warranty. Help > License shows the license, and the licenses of the components built into it.</p>
+</section>
+
+<section aria-labelledby="donate">
+<h2 id="donate">Donating</h2>
+<p>Dodavo is free. If you want to support its development, Help > Donate… opens <a href="https://paypal.me/hrvix">the author's PayPal page</a>.</p>
+</section>
+
+</main>
+</body>
+</html>

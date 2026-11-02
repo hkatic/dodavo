@@ -216,6 +216,8 @@ enum K: String {
     case panic_message
     case language_restart
     case update_latest
+    case update_manual
+    case cancelled_text
 }
 
 /// The texts that depend on a number.

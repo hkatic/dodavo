@@ -4,7 +4,11 @@
 //! connections, so the update check works on a Windows 7 whose certificate
 //! store was never updated.
 
-use std::{path::Path, sync::Arc, time::Duration};
+use std::{
+    path::{Path, PathBuf},
+    sync::Arc,
+    time::Duration,
+};
 
 use reqwest::Client;
 use sha2::{Digest, Sha256};
@@ -96,7 +100,9 @@ pub async fn download(
     progress: &mut dyn FnMut(u64, u64),
     cancel: &CancellationToken,
 ) -> Result<[u8; 32], Error> {
-    let part = dest.with_extension("exe.part");
+    let mut part = dest.as_os_str().to_owned();
+    part.push(".part");
+    let part = PathBuf::from(part);
     let result = download_to(client, url, &part, expected_size, progress, cancel).await;
     match result {
         Ok(hash) => {

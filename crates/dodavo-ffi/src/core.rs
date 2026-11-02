@@ -12,11 +12,13 @@ use std::{
 use dodavo_core::{
     archive,
     config::{self, Config, Contact, ReceivedFolder},
+    format::format_size,
     i18n::{self, Lang, mac, tr},
     identity,
     net::{self, Accept, Command, Event, Kind, NetHandle, Offer, Outcome, Role},
     space::{self, Space},
-    view::{Direction, Notice, Row, TransferView},
+    update,
+    view::{Direction, Notice, Row, TransferView, percent},
 };
 use serde::{Deserialize, Serialize};
 
@@ -26,7 +28,7 @@ use crate::Wake;
 const TICK: Duration = Duration::from_secs(1);
 /// Copyright years and website, from Cargo.toml through `build.rs`.
 const LICENSE: &str = include_str!("../../../LICENSE");
-const COMPONENTS: &str = include_str!("../../../res/third-party-licenses.txt");
+const COMPONENTS: &str = include_str!("../../../res/third-party-licenses-macos.txt");
 
 /// The command line.
 #[derive(Debug, Default, Deserialize)]
@@ -94,6 +96,27 @@ enum Out {
     /// Whether the computer must stay awake.
     Busy {
         busy: bool,
+    },
+    UpdateAvailable {
+        headline: String,
+        notes: String,
+        /// The user asked: comes to the front.
+        manual: bool,
+    },
+    /// What the user asked for has an answer that needs no window.
+    UpdateAnswer {
+        text: String,
+    },
+    UpdateProgress {
+        text: String,
+        fraction: Option<f64>,
+    },
+    /// The disk image is here and checked.
+    UpdateReady {
+        path: PathBuf,
+    },
+    UpdateFailed {
+        text: String,
     },
     Error {
         text: String,
@@ -207,6 +230,12 @@ enum Call {
     CancelAll,
     Licenses,
     Shutdown,
+    CheckForUpdates,
+    DownloadUpdate,
+    CancelUpdate,
+    RemindLater,
+    /// The update window was closed.
+    UpdateClosed,
 }
 
 /// The settings as the Settings window shows them.
@@ -242,6 +271,12 @@ struct State {
     /// What was last shown of each transfer, and when.
     shown: HashMap<u64, (Row, Instant)>,
     busy: bool,
+    /// The running update check or download, if any.
+    update_job: Option<update::Job>,
+    /// The update that the window shows, if it is open.
+    update: Option<update::UpdateInfo>,
+    /// When the update check is next looked at (see `update::tick`).
+    next_update_look: Instant,
 }
 
 pub struct Core {
@@ -430,6 +465,9 @@ impl Core {
                 offers: HashMap::new(),
                 shown: HashMap::new(),
                 busy: false,
+                update_job: None,
+                update: None,
+                next_update_look: Instant::now() + update::START_DELAY,
             }),
             my_id,
             outbox,
@@ -635,6 +673,30 @@ impl Core {
                 "dodavo": LICENSE,
                 "components": COMPONENTS,
             })),
+            Call::CheckForUpdates => {
+                self.check_now();
+                "null".into()
+            }
+            Call::DownloadUpdate => {
+                self.download_update();
+                "null".into()
+            }
+            Call::CancelUpdate => {
+                if let Some(job) = lock(&self.state).update_job.take() {
+                    job.cancel.cancel();
+                }
+                "null".into()
+            }
+            Call::RemindLater => {
+                let mut state = lock(&self.state);
+                state.cfg.update_remind_after = Some(now_secs() + update::SNOOZE.as_secs());
+                let _ = save(&state);
+                "null".into()
+            }
+            Call::UpdateClosed => {
+                lock(&self.state).update = None;
+                "null".into()
+            }
             Call::Shutdown => {
                 // Off the lock: closing takes a moment, and events still come.
                 let net = lock(&self.state).net.clone();
@@ -779,6 +841,10 @@ impl Core {
             }
             Event::Online(online) => {
                 state.online = Some(online);
+                if online {
+                    // A check that was waiting for the connection.
+                    self.look_for_update(&mut state);
+                }
                 let text = if online {
                     mac::s().status_online
                 } else {
@@ -972,10 +1038,142 @@ impl Core {
         self.outbox.push(Out::Offer { offer: out, notice });
     }
 
+    /// The daily check, when it is due: only when online, without a window
+    /// or a job already, not while "Remind Me Later" lasts.
+    fn tick_updates(&self, state: &mut State, now: Instant) {
+        if now < state.next_update_look {
+            return;
+        }
+        state.next_update_look = now + update::TICK;
+        self.look_for_update(state);
+    }
+
+    fn look_for_update(&self, state: &mut State) {
+        if !state.cfg.check_updates
+            || state.online != Some(true)
+            || state.update_job.is_some()
+            || state.update.is_some()
+        {
+            return;
+        }
+        let now = now_secs();
+        // A last check in the future means the clock was changed: check again.
+        let recent = state
+            .cfg
+            .update_last_check
+            .is_some_and(|t| t <= now && now < t + update::INTERVAL.as_secs());
+        let snoozed = state.cfg.update_remind_after.is_some_and(|t| now < t);
+        if !recent && !snoozed {
+            start_check(state, update::Trigger::Automatic);
+        }
+    }
+
+    /// Check for Updates…
+    fn check_now(&self) {
+        let mut state = lock(&self.state);
+        if let Some(info) = state.update.clone() {
+            self.outbox.push(update_available(&info, true));
+            return;
+        }
+        // The daily check is on its way: this one takes its result.
+        if let Some(job) = &mut state.update_job {
+            job.trigger = update::Trigger::Manual;
+            return;
+        }
+        start_check(&mut state, update::Trigger::Manual);
+    }
+
+    fn download_update(&self) {
+        let mut state = lock(&self.state);
+        let Some(info) = state.update.clone() else {
+            return;
+        };
+        let fail = |text: String| Out::UpdateFailed { text };
+        let dir = match update::update_dir() {
+            Ok(dir) => dir,
+            Err(e) => {
+                self.outbox
+                    .push(fail(update::Error::Io(e.to_string()).text()));
+                return;
+            }
+        };
+        // Room for the disk image and for what comes out of it.
+        if let Some((_, free)) = dodavo_core::platform::disk_free(&dir) {
+            let needed = info.size.saturating_mul(2).saturating_add(64 * 1024 * 1024);
+            if free < needed {
+                self.outbox
+                    .push(fail(update::Error::DiskSpace { needed, free }.text()));
+                return;
+            }
+        }
+        update::cleanup();
+        let job = update::Job::new(update::Trigger::Manual);
+        state.update_job = Some(job.clone());
+        let dest = dir.join(&info.file_name);
+        update::spawn_download(job, info, dest, update_sink);
+    }
+
+    fn on_update(&self, event: update::Event) {
+        let mut state = lock(&self.state);
+        // A job that was given up, by a cancel, say.
+        let Some(job) = state.update_job.clone().filter(|j| j.id == event.job()) else {
+            return;
+        };
+        match event {
+            update::Event::Checked { result, .. } => {
+                state.update_job = None;
+                let manual = job.trigger == update::Trigger::Manual;
+                match result {
+                    Ok(found) => {
+                        state.cfg.update_last_check = Some(now_secs());
+                        let _ = save(&state);
+                        match found {
+                            Some(info) => {
+                                self.outbox.push(update_available(&info, manual));
+                                state.update = Some(info);
+                            }
+                            None if manual => self.outbox.push(Out::UpdateAnswer {
+                                text: mac::s()
+                                    .update_latest
+                                    .replace("{version}", env!("CARGO_PKG_VERSION")),
+                            }),
+                            None => {}
+                        }
+                    }
+                    Err(e) if manual => self.outbox.push(Out::UpdateAnswer {
+                        text: mac::s().update_check_failed.replace("{error}", &e.text()),
+                    }),
+                    Err(_) => {}
+                }
+            }
+            update::Event::Progress { done, total, .. } => {
+                let fraction = (total > 0).then(|| done as f64 / total as f64);
+                let text = mac::s()
+                    .update_downloading
+                    .replace("{done}", &format_size(done))
+                    .replace("{total}", &format_size(total))
+                    .replace("{percent}", &percent(done, total).to_string());
+                self.outbox.push(Out::UpdateProgress { text, fraction });
+            }
+            update::Event::Verifying { .. } => self.outbox.push(Out::UpdateProgress {
+                text: mac::s().update_verifying.to_string(),
+                fraction: None,
+            }),
+            update::Event::Downloaded { result, .. } => {
+                state.update_job = None;
+                self.outbox.push(match result {
+                    Ok(path) => Out::UpdateReady { path },
+                    Err(e) => Out::UpdateFailed { text: e.text() },
+                });
+            }
+        }
+    }
+
     /// About once a second: what is due without a report.
     fn tick(&self) {
         let mut state = lock(&self.state);
         let now = Instant::now();
+        self.tick_updates(&mut state, now);
         let ids: Vec<u64> = state.transfers.keys().copied().collect();
         for id in ids {
             let Some(view) = state.transfers.get_mut(&id) else {
@@ -989,6 +1187,35 @@ impl Core {
             self.give(id, notice, None);
         }
     }
+}
+
+fn update_sink(event: update::Event) {
+    if let Some(core) = crate::CORE.get() {
+        core.on_update(event);
+    }
+}
+
+fn start_check(state: &mut State, trigger: update::Trigger) {
+    let job = update::Job::new(trigger);
+    state.update_job = Some(job.clone());
+    update::spawn_check(job, i18n::lang().code().to_string(), update_sink);
+}
+
+fn update_available(info: &update::UpdateInfo, manual: bool) -> Out {
+    Out::UpdateAvailable {
+        headline: mac::s()
+            .update_headline
+            .replace("{version}", &info.version)
+            .replace("{current}", env!("CARGO_PKG_VERSION")),
+        notes: info.notes.clone(),
+        manual,
+    }
+}
+
+fn now_secs() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_secs())
 }
 
 fn handle_events(events: mpsc::Receiver<Event>) {

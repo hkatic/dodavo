@@ -49,8 +49,14 @@ use tokio_util::sync::CancellationToken;
 use version::Version;
 
 /// The manifest of the latest published release.
+#[cfg(not(target_os = "macos"))]
 pub const MANIFEST_URL: &str =
     "https://github.com/hkatic/dodavo/releases/latest/download/update.json";
+/// The Mac's own, on the same releases: every release has to carry both, or
+/// the other system's check fails (see README.md).
+#[cfg(target_os = "macos")]
+pub const MANIFEST_URL: &str =
+    "https://github.com/hkatic/dodavo/releases/latest/download/update-macos.json";
 /// Delay after the start before the first automatic check.
 pub const START_DELAY: Duration = Duration::from_secs(15);
 /// How often the scheduler looks whether a check is due.
@@ -109,7 +115,7 @@ pub fn cleanup() {
     for entry in entries.flatten() {
         let path = entry.path();
         let name = entry.file_name().to_string_lossy().to_lowercase();
-        if name.ends_with(".exe") || name.ends_with(".part") {
+        if name.ends_with(".exe") || name.ends_with(".dmg") || name.ends_with(".part") {
             let _ = std::fs::remove_file(&path);
         }
     }
@@ -414,6 +420,7 @@ mod tests {
         let info = newer(&m, &current, "hr").expect("newer");
         assert_eq!(info.version, "1.1.0");
         assert_eq!(info.notes, "Što je novo\n\n- Automatska ažuriranja");
+        #[cfg(not(target_os = "macos"))]
         assert_eq!(info.file_name, "Dodavo-1.1.0-setup.exe");
         assert_eq!(info.size, m.installer.size);
         assert_eq!(manifest::to_hex(&info.sha256), m.installer.sha256);

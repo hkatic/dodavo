@@ -250,4 +250,6 @@ pub const SR_LATN: Strings = Strings {
     panic_message: "Došlo je do neočekivane greške i Dodavo mora da se zatvori.\n\n{info}",
     language_restart: "Novi jezik će se koristiti kada sledeći put otvorite Dodavo.",
     update_latest: "Imate najnoviju verziju aplikacije Dodavo ({version}).",
+    update_manual: "Dodavo ovde ne može sam sebe da zameni. Slika diska je otvorena: kopirajte Dodavo iz nje u fasciklu Aplikacije.",
+    cancelled_text: "Otkazano.",
 };

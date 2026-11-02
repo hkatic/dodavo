@@ -128,6 +128,12 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSToolba
         statusLine.stringValue = text
     }
 
+    /// While a check for updates that the user asked for is running.
+    func setCheckingStatus(_ checking: Bool) {
+        statusLine.stringValue = checking ? L[.update_checking] : status
+        if checking { announce(L[.update_checking]) }
+    }
+
     /// Says `text` for a moment in the status line.
     func flashStatus(_ text: String) {
         statusLine.stringValue = text

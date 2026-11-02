@@ -227,6 +227,8 @@ super::strings! {
         panic_message,
         language_restart,
         update_latest,
+        update_manual,
+        cancelled_text,
     }
     plurals {
         folder_description,

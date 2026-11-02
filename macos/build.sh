@@ -5,7 +5,7 @@
 #
 #   macos/build.sh [--debug]
 #
-# Writes target/macos/Dodavo.app. See installer/ for a disk image of it.
+# Writes target/macos/Dodavo.app. macos/make-dmg.sh makes the disk image of it.
 set -euo pipefail
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
@@ -43,6 +43,8 @@ program="$root/target/swift/$config/Dodavo"
 mkdir -p "$(dirname "$program")"
 swift_flags=(-Onone -g)
 [ "$config" = release ] && swift_flags=(-O -whole-module-optimization)
+# macos/tests/ui-preview.sh: a build that opens every window with made-up data.
+[ -n "${DODAVO_UI_TEST:-}" ] && swift_flags+=(-D DODAVO_UI_TEST)
 # shellcheck disable=SC2086
 xcrun swiftc -target arm64-apple-macos11.0 -swift-version 5 "${swift_flags[@]}" \
     -module-name Dodavo -I macos/Sources/CDodavo/include \
@@ -61,17 +63,20 @@ cp "$program" "$app/Contents/MacOS/Dodavo"
 [ "$config" = release ] && strip -x "$app/Contents/MacOS/Dodavo"
 sed -e "s/@VERSION@/$version/g" -e "s/@YEARS@/$years/g" macos/Resources/Info.plist > "$app/Contents/Info.plist"
 printf 'APPL????' > "$app/Contents/PkgInfo"
-[ -f macos/Resources/Dodavo.icns ] && cp macos/Resources/Dodavo.icns "$app/Contents/Resources/"
+cp macos/Resources/Dodavo.icns "$app/Contents/Resources/"
+# The licenses go with every copy.
+cp LICENSE "$app/Contents/Resources/LICENSE.txt"
+cp res/third-party-licenses-macos.txt "$app/Contents/Resources/THIRD-PARTY-LICENSES.txt"
 
 # Help pages, and what macOS shows in each language.
-if [ -d res/help/macos ]; then
-    mkdir -p "$app/Contents/Resources/help"
-    cp res/help/macos/* "$app/Contents/Resources/help/"
-fi
+mkdir -p "$app/Contents/Resources/help"
+cp res/help/macos/* "$app/Contents/Resources/help/"
 cargo run -q -p dodavo-ffi --example gen_lproj -- "$app/Contents/Resources"
 
 identity="${DODAVO_SIGN_IDENTITY:--}"
-codesign --force --options runtime --timestamp=none --sign "$identity" \
+timestamp=--timestamp=none
+[ "$identity" = "-" ] || timestamp=--timestamp
+codesign --force --options runtime "$timestamp" --sign "$identity" \
     --entitlements macos/Resources/Dodavo.entitlements "$app"
 
 "$root/macos/check-floor.sh" "$app/Contents/MacOS/Dodavo"

@@ -250,4 +250,6 @@ pub const EN: Strings = Strings {
     panic_message: "An unexpected error occurred and Dodavo has to quit.\n\n{info}",
     language_restart: "The new language is used the next time you open Dodavo.",
     update_latest: "You have the latest version of Dodavo ({version}).",
+    update_manual: "Dodavo cannot replace itself here. The disk image is open: copy Dodavo from it to the Applications folder.",
+    cancelled_text: "Cancelled.",
 };

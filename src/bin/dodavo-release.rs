@@ -17,6 +17,7 @@ mod keys;
 #[allow(dead_code)]
 #[path = "../update/manifest.rs"]
 mod manifest;
+#[allow(dead_code)]
 #[path = "../update/statement.rs"]
 mod statement;
 #[allow(dead_code)]
@@ -146,11 +147,23 @@ fn read_secret(path: &Path) -> Result<[u8; 32], String> {
         .ok_or_else(|| format!("{} does not hold 64 hex digits", path.display()))
 }
 
-/// `Dodavo-<version>-setup.exe` → `<version>`.
+/// `Dodavo-<version>-setup.exe` or `Dodavo-<version>-macos.dmg` → `<version>`.
 fn version_from_file_name(installer: &Path) -> Option<String> {
-    let name = installer.file_name()?.to_str()?;
-    let version = name.strip_prefix("Dodavo-")?.strip_suffix("-setup.exe")?;
+    let name = installer.file_name()?.to_str()?.strip_prefix("Dodavo-")?;
+    let version = name
+        .strip_suffix("-setup.exe")
+        .or_else(|| name.strip_suffix("-macos.dmg"))?;
     Version::parse(version).map(|_| version.to_string())
+}
+
+/// `--platform windows|macos`: which system the release is for. Windows unless
+/// it says otherwise, which is what `installer\\publish.ps1` expects.
+fn platform(options: &Options) -> Result<statement::Platform, String> {
+    match options.get("platform").map(String::as_str) {
+        None | Some("windows") => Ok(statement::Platform::Windows),
+        Some("macos") => Ok(statement::Platform::Macos),
+        Some(other) => Err(format!("--platform {other} is not known")),
+    }
 }
 
 fn read_notes(dir: &Path) -> Result<BTreeMap<String, String>, String> {
@@ -185,6 +198,7 @@ fn read_notes(dir: &Path) -> Result<BTreeMap<String, String>, String> {
 }
 
 fn make_manifest(options: &Options) -> Result<(), String> {
+    let platform = platform(options)?;
     let installer = PathBuf::from(required(options, "installer")?);
     let key = read_secret(Path::new(required(options, "key")?))?;
     let notes = read_notes(Path::new(required(options, "notes")?))?;
@@ -220,7 +234,7 @@ fn make_manifest(options: &Options) -> Result<(), String> {
     let sha256 = manifest::to_hex(
         &statement::sha256_file(&installer).map_err(|e| format!("{}: {e}", installer.display()))?,
     );
-    let text = statement::statement(manifest::FORMAT, &version, &sha256, size);
+    let text = statement::statement_for(platform, manifest::FORMAT, &version, &sha256, size);
     let manifest = Manifest {
         format: manifest::FORMAT,
         version: version.clone(),
@@ -231,7 +245,7 @@ fn make_manifest(options: &Options) -> Result<(), String> {
     };
     manifest.validate()?;
     let public = SigningKey::from_bytes(&key).verifying_key();
-    if !statement::verify(&[public], &manifest) {
+    if !statement::verify_for(platform, &[public], &manifest) {
         return Err("the fresh signature does not verify (this is a bug)".into());
     }
     let json = serde_json::to_string_pretty(&manifest).map_err(|e| e.to_string())?;
@@ -267,6 +281,7 @@ fn built_in_keys() -> Vec<VerifyingKey> {
 }
 
 fn verify(options: &Options) -> Result<(), String> {
+    let platform = platform(options)?;
     let manifest_path = PathBuf::from(required(options, "manifest")?);
     let installer = PathBuf::from(required(options, "installer")?);
     let bytes =
@@ -276,7 +291,7 @@ fn verify(options: &Options) -> Result<(), String> {
         Some(hex) => vec![statement::parse_public_key(hex).ok_or("--public is not a valid key")?],
         None => built_in_keys(),
     };
-    if !statement::verify(&keys, &manifest) {
+    if !statement::verify_for(platform, &keys, &manifest) {
         return Err("the signature does not verify against the trusted keys".into());
     }
     let size = std::fs::metadata(&installer)
@@ -325,7 +340,7 @@ fn print_statement(options: &Options) -> Result<(), String> {
     );
     print!(
         "{}",
-        statement::statement(manifest::FORMAT, version, &sha256, size)
+        statement::statement_for(platform(options)?, manifest::FORMAT, version, &sha256, size)
     );
     Ok(())
 }

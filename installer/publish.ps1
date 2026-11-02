@@ -122,18 +122,25 @@ if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
     throw 'The GitHub CLI (gh) is not installed. Upload the files by hand on the Releases page.'
 }
 
-$existing = Invoke-Quietly 'gh' @('release', 'view', $tag, '--repo', $Repo, '--json', 'isDraft')
+$existing = Invoke-Quietly 'gh' @('release', 'view', $tag, '--repo', $Repo, '--json', 'isDraft', '--jq', '.isDraft')
 if ($LASTEXITCODE -eq 0) {
-    throw "The release $tag exists already on GitHub. Delete it or upload the files by hand."
+    # A draft that macos/publish.sh has made: every release carries the files of
+    # both systems (see README.md). One that is public already is left alone.
+    if ("$existing".Trim() -ne 'true') {
+        throw "The release $tag is public already on GitHub. Delete it or upload the files by hand."
+    }
+    Write-Host "Adding the files to the draft release $tag..."
+    & gh release upload $tag --repo $Repo --clobber $setup $sha $manifest
+    if ($LASTEXITCODE -ne 0) { throw 'gh release upload failed.' }
+} else {
+    $releaseArgs = @('release', 'create', $tag, '--repo', $Repo, '--draft',
+        '--title', "Dodavo $Version", '--notes-file', (Join-Path $NotesDir 'en.txt'),
+        $setup, $sha, $manifest)
+    if ($PreRelease) { $releaseArgs += '--prerelease' }
+    Write-Host "Creating the draft release $tag..."
+    & gh @releaseArgs
+    if ($LASTEXITCODE -ne 0) { throw 'gh release create failed.' }
 }
-
-$releaseArgs = @('release', 'create', $tag, '--repo', $Repo, '--draft',
-    '--title', "Dodavo $Version", '--notes-file', (Join-Path $NotesDir 'en.txt'),
-    $setup, $sha, $manifest)
-if ($PreRelease) { $releaseArgs += '--prerelease' }
-Write-Host "Creating the draft release $tag..."
-& gh @releaseArgs
-if ($LASTEXITCODE -ne 0) { throw 'gh release create failed.' }
 
 Write-Host ''
 Write-Host "Draft created. Check it at https://github.com/$Repo/releases"

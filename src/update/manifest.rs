@@ -119,7 +119,11 @@ impl Manifest {
             .chars()
             .filter(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-'))
             .collect();
-        format!("Dodavo-{version}-setup.exe")
+        if cfg!(target_os = "macos") {
+            format!("Dodavo-{version}-macos.dmg")
+        } else {
+            format!("Dodavo-{version}-setup.exe")
+        }
     }
 }
 
@@ -189,7 +193,10 @@ mod tests {
             "Što je novo\n\n- Automatska ažuriranja"
         );
         assert_eq!(parsed.notes_for("sl"), "What's new\n\n- Automatic updates");
+        #[cfg(not(target_os = "macos"))]
         assert_eq!(parsed.installer_file_name(), "Dodavo-1.1.0-setup.exe");
+        #[cfg(target_os = "macos")]
+        assert_eq!(parsed.installer_file_name(), "Dodavo-1.1.0-macos.dmg");
         assert_eq!(parsed.parsed_version().unwrap().to_string(), "1.1.0");
         // `published` is optional.
         let json = br#"{"format":1,"version":"1.0.0","installer":{"url":"https://x/y","size":5,"sha256":"ab"},"signature":"cd","notes":{"en":"n"}}"#;

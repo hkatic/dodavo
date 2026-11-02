@@ -250,4 +250,6 @@ pub const HR: Strings = Strings {
     panic_message: "Došlo je do neočekivane pogreške i Dodavo se mora zatvoriti.\n\n{info}",
     language_restart: "Novi jezik koristit će se kada sljedeći put otvorite Dodavo.",
     update_latest: "Imate najnoviju verziju aplikacije Dodavo ({version}).",
+    update_manual: "Dodavo se ovdje ne može sam zamijeniti. Slika diska je otvorena: kopirajte Dodavo iz nje u mapu Aplikacije.",
+    cancelled_text: "Otkazano.",
 };

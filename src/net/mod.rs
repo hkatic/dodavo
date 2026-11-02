@@ -226,6 +226,11 @@ pub(crate) fn connect_error_text(error: &iroh::endpoint::ConnectError) -> String
 
 /// See [`failure_text`].
 fn io_error_text(error: &std::io::Error) -> String {
+    // The system's own texts are in English here, whatever the user's language.
+    #[cfg(target_os = "macos")]
+    if let Some(text) = error.raw_os_error().and_then(crate::platform::error_text) {
+        return text;
+    }
     if let Some(code) = error.raw_os_error() {
         let text = error.to_string();
         return text

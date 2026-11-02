@@ -39,7 +39,10 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSTe
         let receiving = page(L[.settings_receiving], "square.and.arrow.down", receivingPage())
         tabs.addTabViewItem(general)
         tabs.addTabViewItem(receiving)
+        tabs.title = general.label
+        window.title = general.label
         show()
+        window.setContentSize(tabs.view.fittingSize)
         window.center()
     }
 
@@ -47,6 +50,8 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSTe
 
     private func page(_ title: String, _ symbol: String, _ view: NSView) -> NSTabViewItem {
         let controller = NSViewController()
+        // The window takes its title from the page that shows.
+        controller.title = title
         let host = NSView()
         view.translatesAutoresizingMaskIntoConstraints = false
         host.addSubview(view)
@@ -54,7 +59,8 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSTe
             view.topAnchor.constraint(equalTo: host.topAnchor, constant: 20),
             view.leadingAnchor.constraint(equalTo: host.leadingAnchor, constant: 20),
             view.trailingAnchor.constraint(equalTo: host.trailingAnchor, constant: -20),
-            view.bottomAnchor.constraint(equalTo: host.bottomAnchor, constant: -20),
+            // At the top: the window fits the tallest page.
+            view.bottomAnchor.constraint(lessThanOrEqualTo: host.bottomAnchor, constant: -20),
             host.widthAnchor.constraint(greaterThanOrEqualToConstant: 480),
         ])
         controller.view = host

@@ -18,24 +18,74 @@ use sha2::{Digest, Sha256};
 
 use super::manifest::{self, Manifest};
 
-pub const STATEMENT_PREFIX: &str = "dodavo-update";
-
-/// The signed text: `dodavo-update\n<format>\n<version>\n<sha256 hex>\n<size>\n`.
-pub fn statement(format: u32, version: &str, sha256_hex: &str, size: u64) -> String {
-    format!("{STATEMENT_PREFIX}\n{format}\n{version}\n{sha256_hex}\n{size}\n")
+/// Which system a release is for. The statement says so, with one key for all
+/// of them, so that a manifest signed for one never verifies on another, whose
+/// program would save its installer and try to run it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Platform {
+    Windows,
+    Macos,
 }
 
-/// Whether the manifest's signature was made by one of the trusted keys.
-pub fn verify(keys: &[VerifyingKey], m: &Manifest) -> bool {
+impl Platform {
+    /// The system this is built for.
+    pub const THIS: Platform = if cfg!(target_os = "macos") {
+        Platform::Macos
+    } else {
+        Platform::Windows
+    };
+
+    /// What the signed text starts with. Windows' is what released copies expect.
+    fn prefix(self) -> &'static str {
+        match self {
+            Platform::Windows => "dodavo-update",
+            Platform::Macos => "dodavo-update-macos",
+        }
+    }
+}
+
+/// The text that is signed for `platform`:
+/// `<prefix>\n<format>\n<version>\n<sha256 hex>\n<size>\n`.
+pub fn statement_for(
+    platform: Platform,
+    format: u32,
+    version: &str,
+    sha256_hex: &str,
+    size: u64,
+) -> String {
+    let prefix = platform.prefix();
+    format!("{prefix}\n{format}\n{version}\n{sha256_hex}\n{size}\n")
+}
+
+/// The signed text, for this system.
+pub fn statement(format: u32, version: &str, sha256_hex: &str, size: u64) -> String {
+    statement_for(Platform::THIS, format, version, sha256_hex, size)
+}
+
+/// Whether the manifest's signature was made for `platform` by one of the
+/// trusted keys.
+pub fn verify_for(platform: Platform, keys: &[VerifyingKey], m: &Manifest) -> bool {
     let Some(bytes) = manifest::from_hex(&m.signature) else {
         return false;
     };
     let Ok(signature) = Signature::from_slice(&bytes) else {
         return false;
     };
-    let text = statement(m.format, &m.version, &m.installer.sha256, m.installer.size);
+    let text = statement_for(
+        platform,
+        m.format,
+        &m.version,
+        &m.installer.sha256,
+        m.installer.size,
+    );
     keys.iter()
         .any(|key| key.verify_strict(text.as_bytes(), &signature).is_ok())
+}
+
+/// Whether the manifest's signature was made for this system by one of the
+/// trusted keys.
+pub fn verify(keys: &[VerifyingKey], m: &Manifest) -> bool {
+    verify_for(Platform::THIS, keys, m)
 }
 
 /// A public key from its 64 hex digits.
@@ -71,6 +121,35 @@ pub fn sign(secret: &[u8; 32], text: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_signature_counts_for_one_system_only() {
+        let secret = [7u8; 32];
+        let key = ed25519_dalek::SigningKey::from_bytes(&secret).verifying_key();
+        let sha256 = "ab".repeat(32);
+        let sign_for =
+            |platform| sign(&secret, &statement_for(platform, 1, "1.1.0", &sha256, 1000));
+        let manifest = |signature| Manifest {
+            format: 1,
+            version: "1.1.0".into(),
+            published: None,
+            installer: manifest::Installer {
+                url: "https://example.com/x".into(),
+                size: 1000,
+                sha256: sha256.clone(),
+            },
+            signature,
+            notes: Default::default(),
+        };
+        let for_windows = manifest(sign_for(Platform::Windows));
+        let for_mac = manifest(sign_for(Platform::Macos));
+        assert!(verify_for(Platform::Windows, &[key], &for_windows));
+        assert!(verify_for(Platform::Macos, &[key], &for_mac));
+        assert!(!verify_for(Platform::Macos, &[key], &for_windows));
+        assert!(!verify_for(Platform::Windows, &[key], &for_mac));
+        // What released Windows copies check is unchanged.
+        assert!(statement_for(Platform::Windows, 1, "1", "2", 3).starts_with("dodavo-update\n"));
+    }
     use ed25519_dalek::SigningKey;
 
     fn signed(secret: &[u8; 32]) -> Manifest {
