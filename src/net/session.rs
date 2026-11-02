@@ -7,7 +7,6 @@
 use std::{
     fs,
     io::{self, Read, Seek, SeekFrom},
-    os::windows::fs::OpenOptionsExt,
     path::{Path, PathBuf},
     sync::{Arc, Mutex, MutexGuard, PoisonError, atomic::AtomicBool, atomic::Ordering},
     time::{Duration, SystemTime},
@@ -200,7 +199,11 @@ impl Owned {
 
     /// Whether the item at `path` is still this one.
     pub fn is_there(&self) -> bool {
-        archive::file_id(&self.path).is_ok_and(|now| self.id.same_item(&now))
+        match archive::file_id(&self.path) {
+            Ok(now) => self.id.same_item(&now),
+            // Not to be taken for gone: a later start would delete it.
+            Err(e) => archive::cannot_tell(&e),
+        }
     }
 
     /// Deletes the folder with all it holds (links in it, not what they point
@@ -402,7 +405,7 @@ impl TransferRecord {
     /// The length of the part file of a receive, if it is still the part
     /// (see [`open_part`](Self::open_part)).
     fn part_len(&self) -> io::Result<u64> {
-        let part = self.open_part(fs::OpenOptions::new().access_mode(0))?;
+        let part = self.open_part(&archive::length_options())?;
         Ok(part.metadata()?.len())
     }
 
@@ -2117,11 +2120,7 @@ mod tests {
         let part = dir.join("a.docx");
         fs::write(&part, b"12345").unwrap();
         let r = record(37, receive_side(&dir, &part, Some(5)));
-        let other = fs::OpenOptions::new()
-            .read(true)
-            .share_mode(windows_sys::Win32::Storage::FileSystem::FILE_SHARE_READ)
-            .open(&part)
-            .unwrap();
+        let other = archive::testing::hold_readable(&part);
         r.truncate_to_synced().unwrap();
         drop(other);
         fs::write(&part, b"1234567").unwrap();
@@ -2344,14 +2343,7 @@ mod tests {
 
         // A part that another program holds open cannot be deleted yet.
         fs::write(&part, b"zip").unwrap();
-        let held = {
-            use std::os::windows::fs::OpenOptionsExt;
-            fs::OpenOptions::new()
-                .read(true)
-                .share_mode(0)
-                .open(&part)
-                .unwrap()
-        };
+        let held = archive::testing::hold(&part);
         let r = record(12, receive_side(&dir, &part, None));
         r.save(&dir).unwrap();
         r.discard(&dir);
@@ -2538,7 +2530,6 @@ mod tests {
     /// one keeps its record until they are gone, a completed one tries once.
     #[test]
     fn leftover_folders_go_with_the_transfer() {
-        use std::os::windows::fs::OpenOptionsExt;
         let dir = scratch("leftovers");
         let part = dir.join("recv.zip");
         let old = dir.join("Photos");
@@ -2556,11 +2547,7 @@ mod tests {
         };
 
         let r = with_leftover(15);
-        let held = fs::OpenOptions::new()
-            .read(true)
-            .share_mode(0)
-            .open(old.join("half.jpg"))
-            .unwrap();
+        let held = archive::testing::hold(&old.join("half.jpg"));
         r.discard(&dir);
         assert!(records(&dir)[0].ended, "the next start tries again");
         drop(held);
@@ -3128,13 +3115,8 @@ mod tests {
 
     /// Opens `path` the way another program that holds it open does: it
     /// cannot be deleted until the handle is dropped.
-    fn hold(path: &Path) -> fs::File {
-        use std::os::windows::fs::OpenOptionsExt;
-        fs::OpenOptions::new()
-            .read(true)
-            .share_mode(0)
-            .open(path)
-            .unwrap()
+    fn hold(path: &Path) -> archive::testing::Held {
+        archive::testing::hold(path)
     }
 
     /// Sets the modification time of the record file of `r`.
@@ -3594,6 +3576,9 @@ mod tests {
     /// end stays the part.
     #[test]
     fn a_shorter_file_under_the_parts_name_on_fat_is_not_the_part() {
+        #[cfg(target_os = "macos")]
+        use std::os::macos::fs::FileTimesExt;
+        #[cfg(windows)]
         use std::os::windows::fs::FileTimesExt;
         let dir = scratch("shorter-fat");
         let part = dir.join("d.bin.part");

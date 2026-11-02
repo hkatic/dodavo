@@ -1235,20 +1235,20 @@ mod tests {
         let meta = std::fs::metadata(recv_dir.join("hello.bin")).unwrap();
         assert_eq!(meta.modified().unwrap(), file_modified);
         assert_eq!(meta.created().unwrap(), file_created);
-        let mark = std::fs::read_to_string(recv_dir.join("hello.bin:Zone.Identifier")).unwrap();
-        assert!(mark.contains("ZoneId=3"), "{mark}");
+        let marked = crate::archive::testing::has_mark;
+        assert!(marked(&recv_dir.join("hello.bin")));
         let modified = |p: PathBuf| std::fs::metadata(p).unwrap().modified().unwrap();
         let folder = recv_dir.join("My Folder");
         assert_eq!(modified(folder.join("a.txt")), inner_modified);
         assert_eq!(modified(folder.clone()), inner_modified);
-        assert!(folder.join("a.txt:Zone.Identifier").exists());
+        assert!(marked(&folder.join("a.txt")));
         // "Kept" is there twice: unpacked, and as its zip.
         assert_eq!(
             std::fs::read(recv_dir.join("Kept").join("c.txt")).unwrap(),
             b"gamma"
         );
         assert!(recv_dir.join("Kept.zip").is_file());
-        assert!(recv_dir.join("Kept.zip:Zone.Identifier").exists());
+        assert!(marked(&recv_dir.join("Kept.zip")));
         assert!(!recv_dir.join("decline.txt").exists());
         let left = leftovers(&recv_dir);
         assert_eq!(left.len(), 4, "unexpected files: {left:?}");
@@ -1662,14 +1662,7 @@ mod tests {
             };
             (file_record(token, &peer, 3, side), part)
         };
-        let hold = |path: &std::path::Path| {
-            use std::os::windows::fs::OpenOptionsExt;
-            std::fs::OpenOptions::new()
-                .read(true)
-                .share_mode(0)
-                .open(path)
-                .unwrap()
-        };
+        let hold = crate::archive::testing::hold;
         let month_ago = SystemTime::now() - Duration::from_secs(31 * 24 * 60 * 60);
         let make_old = |token: u8| {
             std::fs::File::options()

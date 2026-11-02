@@ -29,6 +29,30 @@ pub fn from_wide_ptr(p: *const u16) -> String {
     }
 }
 
+/// `%APPDATA%\Dodavo`.
+pub fn data_base() -> PathBuf {
+    let appdata = std::env::var_os("APPDATA")
+        .map(PathBuf::from)
+        .unwrap_or_else(std::env::temp_dir);
+    let base = appdata.join("Dodavo");
+    // Keep the identity and settings of versions released under the old name.
+    let legacy = appdata.join("QuickAndEasyFileTransfer");
+    if !base.exists() && legacy.is_dir() {
+        let _ = std::fs::rename(&legacy, &base);
+    }
+    base
+}
+
+/// The temporary archives of the transfers.
+pub fn temp_base() -> PathBuf {
+    std::env::temp_dir().join("Dodavo")
+}
+
+/// The name to send under until the user chooses one.
+pub fn user_name() -> Option<String> {
+    std::env::var("USERNAME").ok()
+}
+
 pub fn downloads_dir() -> PathBuf {
     unsafe {
         let mut p = std::ptr::null_mut();

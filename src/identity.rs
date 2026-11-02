@@ -23,11 +23,28 @@ pub fn load_or_create(dir: &Path) -> anyhow::Result<SecretKey> {
         Err(e) if e.kind() == ErrorKind::NotFound => {
             let key = SecretKey::generate();
             std::fs::create_dir_all(dir)?;
-            std::fs::write(&path, key.to_bytes())?;
+            write_secret(&path, &key.to_bytes())?;
             Ok(key)
         }
         Err(e) => Err(e).with_context(|| tr!(error_cannot_read, path = path.display())),
     }
+}
+
+#[cfg(windows)]
+fn write_secret(path: &Path, key: &[u8]) -> std::io::Result<()> {
+    std::fs::write(path, key)
+}
+
+/// Readable by this user only.
+#[cfg(unix)]
+fn write_secret(path: &Path, key: &[u8]) -> std::io::Result<()> {
+    use std::{io::Write, os::unix::fs::OpenOptionsExt};
+    std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .mode(0o600)
+        .open(path)?
+        .write_all(key)
 }
 
 /// Parses a Contact ID typed or pasted by the user (whitespace is ignored).

@@ -15,6 +15,13 @@ fn main() {
         println!("cargo:rerun-if-changed={file}");
     }
     let var = |name| env::var(name).unwrap();
+    let years = copyright_years(&fs::read_to_string("Cargo.toml").unwrap());
+    // ui::COPYRIGHT_YEARS.
+    println!("cargo:rustc-env=DODAVO_COPYRIGHT_YEARS={years}");
+    // Everything else here is for Windows' version resource.
+    if var("CARGO_CFG_TARGET_OS") != "windows" {
+        return;
+    }
     let out_dir = var("OUT_DIR");
     let out_dir = Path::new(&out_dir);
     let (major, minor, patch) = (
@@ -25,9 +32,6 @@ fn main() {
     // Several authors are separated by colons.
     let author = var("CARGO_PKG_AUTHORS").replace(':', ", ");
     let website = var("CARGO_PKG_REPOSITORY");
-    let years = copyright_years(&fs::read_to_string("Cargo.toml").unwrap());
-    // ui::COPYRIGHT_YEARS.
-    println!("cargo:rustc-env=DODAVO_COPYRIGHT_YEARS={years}");
 
     // The application manifest cannot take macros: res/app.manifest is a
     // template whose @VERSION@ is filled in here. rc.exe finds the result in

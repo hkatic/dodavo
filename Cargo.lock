@@ -580,10 +580,13 @@ version = "1.0.0"
 dependencies = [
  "anyhow",
  "blake3",
+ "core-foundation",
+ "core-foundation-sys",
  "ed25519-dalek",
  "embed-resource",
  "iroh",
  "iroh-mdns-address-lookup",
+ "libc",
  "postcard",
  "rand",
  "reqwest",

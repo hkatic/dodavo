@@ -54,6 +54,7 @@ impl Lang {
     }
 
     /// The Windows locale name, used to ask Windows for matching system texts.
+    #[cfg(windows)]
     fn locale_name(self) -> &'static str {
         match self {
             Lang::En => "en-US",
@@ -541,7 +542,22 @@ pub fn s() -> &'static Strings {
     lang().strings()
 }
 
+/// The first supported language among those the user prefers.
+#[cfg(target_os = "macos")]
+fn system_language() -> Lang {
+    crate::platform::preferred_languages()
+        .iter()
+        .find_map(|language| Lang::from_locale(language))
+        .unwrap_or(Lang::En)
+}
+
+/// The system decides the language of what it draws for an app from the
+/// app's own languages (see `macos/`).
+#[cfg(target_os = "macos")]
+fn prefer_for_system_texts(_lang: Lang) {}
+
 /// The first supported language in the user's Windows display languages.
+#[cfg(windows)]
 fn system_language() -> Lang {
     use windows_sys::Win32::Globalization::{GetUserPreferredUILanguages, MUI_LANGUAGE_NAME};
     let mut count = 0u32;
@@ -572,6 +588,7 @@ fn system_language() -> Lang {
         .unwrap_or(Lang::En)
 }
 
+#[cfg(windows)]
 /// Asks Windows to use `lang` for texts it draws for us (e.g. message box
 /// buttons), if that language is installed. Otherwise Windows keeps its own.
 fn prefer_for_system_texts(lang: Lang) {

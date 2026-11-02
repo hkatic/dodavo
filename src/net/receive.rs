@@ -5,7 +5,6 @@
 
 use std::{
     io,
-    os::windows::fs::OpenOptionsExt,
     path::{Path, PathBuf},
     sync::{
         Arc, Mutex,
@@ -23,10 +22,6 @@ use tokio::{
     io::AsyncWriteExt,
     sync::{mpsc, oneshot, watch},
     task::JoinHandle,
-};
-use windows_sys::Win32::Storage::FileSystem::{
-    DELETE, FILE_GENERIC_READ, FILE_GENERIC_WRITE, FILE_SHARE_READ, FILE_WRITE_ATTRIBUTES,
-    FILE_WRITE_DATA,
 };
 
 use super::{
@@ -700,7 +695,7 @@ fn open_own_part(
     session: &Arc<Session>,
     pauses: &[u64],
 ) -> anyhow::Result<(std::fs::File, KeptPart)> {
-    let (part, _) = open_checked(session, &connection_options(), pauses)?;
+    let (part, _) = open_checked(session, &archive::connection_options(), pauses)?;
     let kept = session.keep_part(&part)?;
     Ok((part, kept))
 }
@@ -713,18 +708,6 @@ fn cut_part(session: &Session, pauses: &[u64]) -> io::Result<()> {
         .with_record(TransferRecord::clone)
         .ok_or_else(|| io::Error::other(Cancelled))?;
     archive::while_busy(pauses, || record.truncate_to_synced())
-}
-
-/// How a connection opens the part file (see `open_own_part`): to append to
-/// it, as `append` would, and to delete it through a second handle at a
-/// cancel (see `Session::keep_part`); other programs can only read it
-/// meanwhile.
-fn connection_options() -> std::fs::OpenOptions {
-    let mut options = std::fs::OpenOptions::new();
-    options
-        .access_mode((FILE_GENERIC_WRITE & !FILE_WRITE_DATA) | DELETE)
-        .share_mode(FILE_SHARE_READ);
-    options
 }
 
 /// Opens the part file of the receive with `options` if it is still the
@@ -1522,14 +1505,7 @@ impl Transfer {
     /// the part is open, that it goes on. A cancel ends the wait (with
     /// `Cancelled`).
     fn open_part(&self, renames: bool) -> io::Result<(std::fs::File, FileId)> {
-        let mut options = std::fs::OpenOptions::new();
-        options
-            .access_mode(if renames {
-                FILE_GENERIC_READ | FILE_WRITE_ATTRIBUTES | DELETE
-            } else {
-                FILE_GENERIC_READ
-            })
-            .share_mode(FILE_SHARE_READ);
+        let options = archive::last_step_options(renames);
         let mut pauses = archive::HELD_RETRY_MS;
         let mut waiting = false;
         let opened = loop {
@@ -1857,8 +1833,9 @@ mod tests {
             .duration_since(meta.created().unwrap())
             .unwrap();
         assert!(age < Duration::from_secs(10 * 60), "{age:?}");
-        use std::os::windows::fs::MetadataExt;
-        assert_eq!(meta.creation_time() % 100_000, 0);
+        // A whole multiple of the 10 ms that FAT and exFAT keep.
+        #[cfg(windows)]
+        assert_eq!(archive::testing::created(&part) % 100_000, 0);
         std::fs::remove_dir_all(&base).ok();
     }
 
@@ -1874,12 +1851,16 @@ mod tests {
         std::fs::create_dir_all(part.parent().unwrap()).unwrap();
         std::fs::write(&part, b"abc").unwrap();
         let transfer = receiving(&base, &part, Kind::File, ReceivedFolder::Extract);
-        let open = open_own_part(&transfer.session, &[]).unwrap();
-        assert!(std::fs::remove_file(&part).is_err());
-        assert!(std::fs::rename(&part, base.join("elsewhere")).is_err());
-        assert!(std::fs::OpenOptions::new().write(true).open(&part).is_err());
-        assert_eq!(std::fs::read(&part).unwrap(), b"abc", "it can be read");
-        drop(open);
+        // macOS has no way of keeping others out (see `archive::macos`).
+        #[cfg(windows)]
+        {
+            let open = open_own_part(&transfer.session, &[]).unwrap();
+            assert!(std::fs::remove_file(&part).is_err());
+            assert!(std::fs::rename(&part, base.join("elsewhere")).is_err());
+            assert!(std::fs::OpenOptions::new().write(true).open(&part).is_err());
+            assert_eq!(std::fs::read(&part).unwrap(), b"abc", "it can be read");
+            drop(open);
+        }
         std::fs::remove_file(&part).unwrap();
         std::fs::write(&part, b"another").unwrap();
         let missing = open_own_part(&transfer.session, &[]).err().unwrap();
@@ -1924,6 +1905,8 @@ mod tests {
         assert!(session::records(&transfer.data_dir).is_empty());
         // The connection is gone, and its last write still holds the part.
         drop(kept);
+        // On macOS, deleting frees the name at once.
+        #[cfg(windows)]
         assert!(archive::name_taken(&part), "until the write is over");
         drop(writing);
         assert!(!archive::name_taken(&part));
@@ -1938,13 +1921,7 @@ mod tests {
     fn the_end_of_a_transfer_waits_a_moment_for_a_held_part() {
         let base = scratch("held-at-end");
         let part = base.join("a.txt.part");
-        let held = |part: &Path| {
-            std::fs::OpenOptions::new()
-                .read(true)
-                .share_mode(FILE_SHARE_READ)
-                .open(part)
-                .unwrap()
-        };
+        let held = archive::testing::hold_readable;
         std::fs::write(&part, b"abc").unwrap();
         let transfer = receiving(&base, &part, Kind::File, ReceivedFolder::Extract);
         let scanner = held(&part);
@@ -1978,7 +1955,7 @@ mod tests {
         let part = base.join("a.txt.part");
         std::fs::write(&part, b"abc").unwrap();
         let transfer = receiving(&base, &part, Kind::File, ReceivedFolder::Extract);
-        let (opened, _) = open_checked(&transfer.session, &connection_options(), &[]).unwrap();
+        let (opened, _) = open_checked(&transfer.session, &archive::connection_options(), &[]).unwrap();
         assert!(transfer.session.cancel_blocking(&transfer.data_dir));
         let e = transfer.session.keep_part(&opened).err().unwrap();
         assert!(archive::is_cancelled(&e.into()));
@@ -1998,7 +1975,7 @@ mod tests {
         let part = base.join("a.txt.part");
         std::fs::write(&part, b"abc").unwrap();
         let transfer = receiving(&base, &part, Kind::File, ReceivedFolder::Extract);
-        let other = std::fs::OpenOptions::new().write(true).open(&part).unwrap();
+        let other = archive::testing::hold_writing(&part);
         let e = open_own_part(&transfer.session, &[]).err().unwrap();
         assert!(
             e.downcast_ref::<io::Error>().is_some_and(archive::is_busy),
@@ -2035,11 +2012,7 @@ mod tests {
             *synced = Some(3);
         }
         transfer.session.set_record(record.clone());
-        let held = std::fs::OpenOptions::new()
-            .read(true)
-            .share_mode(FILE_SHARE_READ)
-            .open(&part)
-            .unwrap();
+        let held = archive::testing::hold_readable(&part);
         let Ok(checked) = check_restored(record, &transfer.data_dir) else {
             panic!("the restore failed");
         };
@@ -2094,7 +2067,7 @@ mod tests {
             }
         };
 
-        let other = std::fs::OpenOptions::new().write(true).open(&part).unwrap();
+        let other = archive::testing::hold_writing(&part);
         let (close, closed) = oneshot::channel::<()>();
         let waiting = tokio::spawn({
             let (session, status, msgs) = (session.clone(), status.clone(), msgs.clone());
@@ -2172,6 +2145,7 @@ mod tests {
     }
 
     /// Lets go of `other` once `noted` says that the last step waits for it.
+    #[cfg(windows)]
     fn let_go_when_waited_for(
         noted: &Arc<std::sync::Mutex<Vec<bool>>>,
         other: std::fs::File,
@@ -2200,11 +2174,7 @@ mod tests {
         let dest = part.parent().unwrap().to_path_buf();
         let mut transfer = receiving(&base, &part, Kind::Folder, ReceivedFolder::Extract);
         let noted = noting_waits(&mut transfer);
-        let other = std::fs::OpenOptions::new()
-            .read(true)
-            .share_mode(FILE_SHARE_READ)
-            .open(&part)
-            .unwrap();
+        let other = archive::testing::hold_readable(&part);
         let (t, _) = times(1_500_000_000);
         let folder = finish(&transfer, &dest, ReceivedFolder::Extract, t);
         assert_eq!(std::fs::read(folder.join("a.txt")).unwrap(), b"alpha");
@@ -2212,22 +2182,28 @@ mod tests {
         drop(other);
         std::fs::remove_dir_all(&base).ok();
 
-        let base = scratch("only-read-writer");
-        let part = received_zip(&base, "recv.zip");
-        let dest = part.parent().unwrap().to_path_buf();
-        let mut transfer = receiving(&base, &part, Kind::Folder, ReceivedFolder::Extract);
-        let noted = noting_waits(&mut transfer);
-        let writer = std::fs::OpenOptions::new().write(true).open(&part).unwrap();
-        let letting_go = let_go_when_waited_for(&noted, writer);
-        let folder = finish(&transfer, &dest, ReceivedFolder::Extract, t);
-        letting_go.join().unwrap();
-        assert_eq!(std::fs::read(folder.join("a.txt")).unwrap(), b"alpha");
-        assert_eq!(*noted.lock().unwrap(), [true, false]);
-        std::fs::remove_dir_all(&base).ok();
+        // A writer does not keep out one who reads on macOS, which checks the
+        // part on disk instead (see `Receiver::pump`).
+        #[cfg(windows)]
+        {
+            let base = scratch("only-read-writer");
+            let part = received_zip(&base, "recv.zip");
+            let dest = part.parent().unwrap().to_path_buf();
+            let mut transfer = receiving(&base, &part, Kind::Folder, ReceivedFolder::Extract);
+            let noted = noting_waits(&mut transfer);
+            let writer = std::fs::OpenOptions::new().write(true).open(&part).unwrap();
+            let letting_go = let_go_when_waited_for(&noted, writer);
+            let folder = finish(&transfer, &dest, ReceivedFolder::Extract, t);
+            letting_go.join().unwrap();
+            assert_eq!(std::fs::read(folder.join("a.txt")).unwrap(), b"alpha");
+            assert_eq!(*noted.lock().unwrap(), [true, false]);
+            std::fs::remove_dir_all(&base).ok();
+        }
     }
 
     /// A cancel while the last step waits for another program that keeps
     /// the part out ends the wait, and the step as cancelled.
+    #[cfg(windows)]
     #[test]
     fn a_cancel_ends_the_wait_of_the_last_step() {
         let base = scratch("wait-cancel");
@@ -2522,7 +2498,7 @@ mod tests {
         assert_eq!(path, dest.join("Photos"));
         assert_eq!(std::fs::read(path.join("a.txt")).unwrap(), b"alpha");
         assert_eq!(std::fs::metadata(&path).unwrap().modified().unwrap(), at);
-        assert!(path.join("a.txt:Zone.Identifier").exists());
+        assert!(archive::testing::has_mark(&path.join("a.txt")));
         assert!(!part.exists(), "the temporary zip goes when it ends");
 
         // Only the zip.
@@ -2665,7 +2641,6 @@ mod tests {
     /// forgotten.
     #[test]
     fn a_held_file_in_the_earlier_folder_does_not_stop_it() {
-        use std::os::windows::fs::OpenOptionsExt;
         let base = scratch("held");
         let dest = base.join("dest");
         let (t, _) = times(1_400_000_000);
@@ -2673,11 +2648,7 @@ mod tests {
         let partial = dest.join("Photos");
         std::fs::create_dir_all(&partial).unwrap();
         std::fs::write(partial.join("a.txt"), b"al").unwrap();
-        let held = std::fs::OpenOptions::new()
-            .read(true)
-            .share_mode(0)
-            .open(partial.join("a.txt"))
-            .unwrap();
+        let held = archive::testing::hold(&partial.join("a.txt"));
         let transfer = receiving(&base, &part, Kind::Folder, ReceivedFolder::Extract);
         was_unpacking_into(&transfer, &partial);
         let cancel = AtomicBool::new(false);
@@ -2721,13 +2692,7 @@ mod tests {
         std::fs::write(outside.join("keep.txt"), b"keep").unwrap();
         let partial = dest.join("Photos");
         std::fs::create_dir_all(&partial).unwrap();
-        let made = std::process::Command::new("cmd")
-            .args(["/C", "mklink", "/J"])
-            .arg(partial.join("sub"))
-            .arg(&outside)
-            .output()
-            .unwrap();
-        assert!(made.status.success(), "{made:?}");
+        archive::testing::link_folder(&partial.join("sub"), &outside);
         let transfer = receiving(&base, &part, Kind::Folder, ReceivedFolder::Extract);
         was_unpacking_into(&transfer, &partial);
         let path = finish(&transfer, &dest, ReceivedFolder::Extract, t);
