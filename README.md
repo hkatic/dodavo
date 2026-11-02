@@ -20,6 +20,12 @@ Send files and folders directly from one Windows computer to another. You don't 
 - Free software under the GNU General Public License, version 3 or later: Help → License shows the license and the licenses of the components built into Dodavo, and Help → About the version, author and website. Help → Donate opens the author's PayPal page (https://paypal.me/hrvix).
 - Available in English, Croatian, Serbian (Latin) and Slovenian. It follows the Windows display language, and you can choose another one in Settings.
 
+## Download
+
+Download the setup program, `Dodavo-<version>-setup.exe`, from the [latest release](https://github.com/hkatic/dodavo/releases/latest) and run it. By default it installs Dodavo for the current user, without administrator rights. Dodavo then checks for new versions by itself and installs them on request.
+
+The setup program is not code-signed yet, so Windows warns when you start it. [System requirements](#system-requirements) says what to do then, and how to verify the download first.
+
 ## System requirements
 
 Windows 7 with Service Pack 1, Windows 8.1, Windows 10 and Windows 11, 32-bit and 64-bit (Windows on ARM runs the x64 or x86 build through its emulation). One setup program installs the build that fits the Windows version and architecture.
