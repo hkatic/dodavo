@@ -431,10 +431,15 @@ impl Sender<'_> {
 
     /// Notes in the record how much has gone out (see `Side::Send::sent`),
     /// without holding up the data: while the last note is still being
-    /// written (it is synced to disk), this one is left out.
-    fn note_sent(&mut self, done: u64) {
-        if self.noting.as_ref().is_some_and(|w| !w.is_finished()) {
-            return;
+    /// written (it is synced to disk), this one is left out. A panic in the
+    /// last one goes on here, so that the transfer fails (see `net::guarded`).
+    async fn note_sent(&mut self, done: u64) {
+        if let Some(writing) = &mut self.noting {
+            if !writing.is_finished() {
+                return;
+            }
+            // Finished: this returns at once.
+            session::joined(writing).await;
         }
         self.noted = done;
         let (session, data_dir) = (self.session.clone(), self.shared.data_dir.clone());
@@ -753,10 +758,10 @@ impl Sender<'_> {
     ) -> anyhow::Result<Outcome> {
         // What the receiver has, which can be less than what had gone out:
         // after the last note is written, so that this one comes last.
-        if let Some(writing) = self.noting.take() {
-            let _ = writing.await;
+        if let Some(mut writing) = self.noting.take() {
+            session::joined(&mut writing).await;
         }
-        self.note_sent(have);
+        self.note_sent(have).await;
         let mut hasher = self.hasher_at(have).await?;
         self.emit_pause_phase();
         self.shared.emit(Event::Progress {
@@ -814,7 +819,7 @@ impl Sender<'_> {
                             self.shared.emit(Event::Progress { id: self.id, done, total: self.size });
                         }
                         if done - self.noted >= SAVE_SENT_EVERY {
-                            self.note_sent(done);
+                            self.note_sent(done).await;
                         }
                         if let Some(paused) = announce.take() {
                             let msg = if paused { Msg::Paused } else { Msg::Resumed };
