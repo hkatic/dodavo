@@ -144,6 +144,27 @@ mod tests {
         }
     }
 
+    /// A manual says what the program needs and does. What was tested, and how it
+    /// was made, belongs in `TODO.md`.
+    #[test]
+    fn pages_keep_to_what_the_program_does() {
+        for lang in Lang::ALL {
+            let page = page(lang).to_lowercase();
+            for word in [
+                "tested",
+                "as is",
+                "testira",
+                "kakav jest",
+                "probna verzija",
+                "preizkušen",
+                "kakršen je",
+                "preizkusna različica",
+            ] {
+                assert!(!page.contains(word), "{lang:?}: {word}");
+            }
+        }
+    }
+
     /// A link names the topic it leads to, so it cannot keep an old title.
     /// Links to the settings read "in Settings", in the case the sentence needs.
     #[test]
