@@ -183,7 +183,6 @@ pub const SL: Strings = Strings {
     remove_from_list: "Odstrani s seznama",
     sending_to: "Prejemnik: {name}",
     receiving_from: "Pošiljatelj: {name}",
-    progress_of_item: "Napredek: {item}",
     failed_marker: "Ni uspelo",
     succeeded_marker: "Končano",
     incoming_title: "Dohodni prenos",

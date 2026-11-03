@@ -80,6 +80,7 @@ final class UpdateWindowController: NSWindowController, NSWindowDelegate {
             statusLine.widthAnchor.constraint(equalTo: column.widthAnchor),
         ])
         window.initialFirstResponder = notesView
+        window.autorecalculatesKeyViewLoop = true
     }
 
     // MARK: Downloading
@@ -156,8 +157,14 @@ final class UpdateWindowController: NSWindowController, NSWindowDelegate {
     // MARK: Installing
 
     /// The disk image is here, and its size and signature are checked. Asks
-    /// about running transfers as quitting does, then replaces the app.
+    /// about running transfers as quitting does, then replaces the app: the
+    /// question comes first, so that "Don't Quit" leaves everything as it was.
     func install(from dmg: String) {
+        let app = NSApp.delegate as? AppDelegate
+        guard app?.mayQuit() ?? true else {
+            fail(L[.cancelled_text])
+            return
+        }
         installing = true
         cancelButton.isEnabled = false
         statusLine.stringValue = L[.update_installing]
@@ -170,8 +177,8 @@ final class UpdateWindowController: NSWindowController, NSWindowDelegate {
             DispatchQueue.main.async {
                 switch result {
                 case .success(.replaced):
-                    Installer.relaunch(running)
-                    NSApp.terminate(nil)
+                    Installer.relaunch(running, updated: true)
+                    app?.quitWithoutAsking()
                 case .success(.leftToTheUser):
                     self.fail(L[.update_manual])
                 case .failure(let error):
@@ -274,15 +281,21 @@ enum Installer {
     }
 
     /// Opens the new app once this one has gone: it holds the lock of the
-    /// profile until then, and a second copy would quit.
-    static func relaunch(_ app: URL) {
+    /// profile until then, and a second copy would quit. With the same profile,
+    /// and in a process of its own, as another profile's copy may be running.
+    static func relaunch(_ app: URL, updated: Bool) {
+        var arguments = updated ? ["--updated"] : []
+        let own = CommandLine.arguments
+        if let index = own.firstIndex(of: "--profile"), index + 1 < own.count {
+            arguments += ["--profile", own[index + 1]]
+        }
         let script = """
             while kill -0 \(ProcessInfo.processInfo.processIdentifier) 2>/dev/null; do sleep 0.2; done
-            exec /usr/bin/open "$0" --args --updated
+            exec /usr/bin/open -n "$0" --args "$@"
             """
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/bin/sh")
-        process.arguments = ["-c", script, app.path]
+        process.arguments = ["-c", script, app.path] + arguments
         try? process.run()
     }
 }
@@ -330,7 +343,7 @@ enum Relocation {
             }
             do {
                 let moved = try moveToApplications()
-                Installer.relaunch(moved)
+                Installer.relaunch(moved, updated: false)
                 NSApp.terminate(nil)
             } catch {
                 showAlert(L.f(.move_failed, ["error": error.localizedDescription]), on: window)

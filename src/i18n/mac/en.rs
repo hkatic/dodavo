@@ -183,7 +183,6 @@ pub const EN: Strings = Strings {
     remove_from_list: "Remove from List",
     sending_to: "To {name}",
     receiving_from: "From {name}",
-    progress_of_item: "Progress of {item}",
     failed_marker: "Failed",
     succeeded_marker: "Finished",
     incoming_title: "Incoming Transfer",

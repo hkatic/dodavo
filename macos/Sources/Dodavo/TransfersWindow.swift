@@ -3,10 +3,10 @@ import AppKit
 /// All transfers in one window, as in the Finder's copy window. Closing it does
 /// nothing to them.
 final class TransfersWindowController: NSWindowController, NSTableViewDataSource,
-    NSTableViewDelegate, NSWindowDelegate
+    NSTableViewDelegate, NSWindowDelegate, NSMenuDelegate
 {
     private var rows: [Row]
-    private let table = NSTableView()
+    private let table = TransfersTable()
     private let emptyLine = makeLabel(L[.transfers_empty])
     private let clearButton = NSButton()
 
@@ -39,6 +39,10 @@ final class TransfersWindowController: NSWindowController, NSTableViewDataSource
         table.delegate = self
         table.columnAutoresizingStyle = .uniformColumnAutoresizingStyle
         table.setAccessibilityLabel(L[.transfers_title])
+        table.onKey = { [weak self] key in self?.selectedCell?.press(key) ?? false }
+        let menu = NSMenu()
+        menu.delegate = self
+        table.menu = menu
 
         let scroll = NSScrollView()
         scroll.documentView = table
@@ -71,7 +75,35 @@ final class TransfersWindowController: NSWindowController, NSTableViewDataSource
         ])
         window.contentView = host
         window.initialFirstResponder = table
+        window.autorecalculatesKeyViewLoop = true
         refreshEmpty()
+        selectFirstIfNone()
+    }
+
+    /// With nothing selected, the keys and VoiceOver's actions have nothing to act on.
+    private func selectFirstIfNone() {
+        if table.selectedRow < 0, !rows.isEmpty {
+            table.selectRowIndexes(IndexSet(integer: 0), byExtendingSelection: false)
+        }
+    }
+
+    private func cell(at row: Int) -> TransferCell? {
+        guard rows.indices.contains(row) else { return nil }
+        return table.view(atColumn: 0, row: row, makeIfNecessary: true) as? TransferCell
+    }
+
+    private var selectedCell: TransferCell? {
+        cell(at: table.selectedRow)
+    }
+
+    /// What can be done with the row that was clicked, or the selected one.
+    func menuNeedsUpdate(_ menu: NSMenu) {
+        menu.removeAllItems()
+        let clicked = table.clickedRow
+        guard let cell = cell(at: clicked >= 0 ? clicked : table.selectedRow) else { return }
+        for (name, selector) in cell.commands {
+            menu.addItem(withTitle: name, action: selector, keyEquivalent: "").target = cell
+        }
     }
 
     private func refreshEmpty() {
@@ -103,7 +135,10 @@ final class TransfersWindowController: NSWindowController, NSTableViewDataSource
         } else {
             rows.append(row)
             rows.sort { $0.id < $1.id }
+            let selected = table.selectedRow
             table.reloadData()
+            table.selectRowIndexes(
+                IndexSet(integer: selected >= 0 ? selected : 0), byExtendingSelection: false)
         }
         refreshEmpty()
     }
@@ -115,6 +150,7 @@ final class TransfersWindowController: NSWindowController, NSTableViewDataSource
         rows.remove(at: index)
         table.removeRows(at: IndexSet(integer: index), withAnimation: .effectFade)
         if hadFocus { window?.makeFirstResponder(table) }
+        selectFirstIfNone()
         refreshEmpty()
     }
 
@@ -133,9 +169,38 @@ final class TransfersWindowController: NSWindowController, NSTableViewDataSource
         return cell
     }
 
-    /// Rows are not chosen by a click on what is in them.
-    func tableView(_: NSTableView, shouldSelectRow _: Int) -> Bool {
-        true
+    func tableView(_: NSTableView, rowViewForRow _: Int) -> NSTableRowView? {
+        PlainRowView()
+    }
+}
+
+/// Selected without the accent color, which is the color of its progress bar too.
+private final class PlainRowView: NSTableRowView {
+    override var isEmphasized: Bool {
+        get { false }
+        set {}
+    }
+}
+
+/// The buttons of a row are out of reach of Tab, which goes from the table to what
+/// comes after it. So its commands have keys too, on the selected row.
+final class TransfersTable: NSTableView {
+    enum Key { case open, pauseOrResume, cancelOrRemove }
+
+    /// Whether the key meant something there.
+    var onKey: ((Key) -> Bool)?
+
+    override func keyDown(with event: NSEvent) {
+        let plain = event.modifierFlags.intersection(.deviceIndependentFlagsMask).isEmpty
+        let key: Key?
+        switch event.keyCode {
+        case 36, 76: key = .open  // Return and Enter.
+        case 49 where plain: key = .pauseOrResume  // Space.
+        case 51 where plain: key = .cancelOrRemove  // Delete.
+        default: key = nil
+        }
+        if let key = key, onKey?(key) == true { return }
+        super.keyDown(with: event)
     }
 }
 
@@ -196,10 +261,13 @@ final class TransferCell: NSTableCellView {
         ])
         statusLine.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         details.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        // One element to VoiceOver, with its buttons a step further in, and as
-        // actions from the row itself.
-        setAccessibilityElement(true)
-        setAccessibilityRole(.group)
+        // To VoiceOver a row is one sentence (the cell's label), with its buttons
+        // one step in. What the sentence says is not read a second time.
+        bar.setAccessibilityElement(false)
+        mark.cell?.setAccessibilityElement(false)
+        for field in [title, party, statusLine, details] {
+            field.cell?.setAccessibilityElement(false)
+        }
     }
 
     required init?(coder _: NSCoder) { nil }
@@ -230,8 +298,6 @@ final class TransferCell: NSTableCellView {
             bar.startAnimation(nil)
         }
         bar.isHidden = !row.active && !row.succeeded
-        bar.setAccessibilityLabel(L.f(.progress_of_item, ["item": row.item]))
-        bar.setAccessibilityValue(row.amount)
         details.stringValue = [row.amount, row.speed, row.remaining, row.detail]
             .filter { !$0.isEmpty }.joined(separator: " – ")
         pauseButton.title = row.paused ? L[.resume] : L[.pause]
@@ -242,31 +308,54 @@ final class TransferCell: NSTableCellView {
         arrange(showButton, visible: saved, enabled: true)
         arrange(removeButton, visible: !row.active, enabled: true)
         setAccessibilityLabel(spoken(row))
-        setAccessibilityCustomActions(customActions(row))
+        setAccessibilityHelp(row.path)
     }
 
-    /// The row as one sentence.
+    /// The row as one sentence. Where a finished item is goes in the help, for
+    /// whoever waits for it: a whole path is too long for each time past the row.
     private func spoken(_ row: Row) -> String {
         [
             row.item,
             L.f(row.sending ? .sending_to : .receiving_from, ["name": row.peer]),
-            row.status, row.amount, row.speed, row.remaining, row.detail,
+            row.status, row.amount, row.speed, row.remaining,
+            row.detail == row.path ? "" : row.detail,
         ].filter { !$0.isEmpty }.joined(separator: ", ")
     }
 
-    private func customActions(_ row: Row) -> [NSAccessibilityCustomAction] {
-        var actions: [NSAccessibilityCustomAction] = []
-        func add(_ name: String, _ selector: Selector) {
-            actions.append(NSAccessibilityCustomAction(name: name, target: self, selector: selector))
+    /// What can be done with this transfer now: in the row's menu, and but for
+    /// Show in Finder by a key. VoiceOver's actions offer the row's buttons by
+    /// themselves; custom actions here would be listed twice.
+    var commands: [(String, Selector)] {
+        guard let row = row else { return [] }
+        var commands: [(String, Selector)] = []
+        if row.canPause {
+            commands.append((row.paused ? L[.resume] : L[.pause], #selector(togglePause)))
         }
-        if row.canPause { add(row.paused ? L[.resume] : L[.pause], #selector(togglePause)) }
-        if row.canCancel { add(L[.cancel_transfer], #selector(cancelTransfer)) }
+        if row.canCancel { commands.append((L[.cancel_transfer], #selector(cancelTransfer))) }
         if row.path != nil {
-            add(L[.open], #selector(openItem))
-            add(L[.show_in_finder], #selector(showItem))
+            commands.append((L[.open], #selector(openItem)))
+            commands.append((L[.show_in_finder], #selector(showItem)))
         }
-        if !row.active { add(L[.remove_from_list], #selector(removeItem)) }
-        return actions
+        if !row.active { commands.append((L[.remove_from_list], #selector(removeItem))) }
+        return commands
+    }
+
+    /// Whether this row does anything with the key.
+    func press(_ key: TransfersTable.Key) -> Bool {
+        guard let row = row else { return false }
+        switch key {
+        case .open where row.path != nil:
+            openItem()
+        case .pauseOrResume where row.canPause:
+            togglePause()
+        case .cancelOrRemove where row.canCancel:
+            cancelTransfer()
+        case .cancelOrRemove where !row.active:
+            removeItem()
+        default:
+            return false
+        }
+        return true
     }
 
     /// The focus moves on before a button that has it goes away.

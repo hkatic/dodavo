@@ -18,7 +18,8 @@ final class StatusItem: NSObject, NSMenuDelegate {
             image?.isTemplate = true
             button.image = image
             button.imagePosition = .imageLeading
-            button.setAccessibilityLabel("Dodavo")
+            // Not the number that shows beside the image, which would come instead.
+            button.setAccessibilityTitle("Dodavo")
         }
         menu.delegate = self
         item.menu = menu
@@ -41,7 +42,10 @@ final class StatusItem: NSObject, NSMenuDelegate {
         default: summary = L.plural(.transfers_in_progress, running.count)
         }
         button.toolTip = summary.isEmpty ? "Dodavo" : "Dodavo – \(summary)"
-        button.setAccessibilityValue(summary)
+        // A tooltip is also what VoiceOver gives as help, after the name and the
+        // value that say the same. Without a value it does not say the name either.
+        button.setAccessibilityHelp("")
+        button.setAccessibilityValue(summary.isEmpty ? L[.menu_no_transfers] : summary)
     }
 
     func menuNeedsUpdate(_ menu: NSMenu) {

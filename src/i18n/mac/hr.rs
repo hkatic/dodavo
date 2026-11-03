@@ -183,7 +183,6 @@ pub const HR: Strings = Strings {
     remove_from_list: "Ukloni s popisa",
     sending_to: "Prima: {name}",
     receiving_from: "Šalje: {name}",
-    progress_of_item: "Napredak: {item}",
     failed_marker: "Nije uspjelo",
     succeeded_marker: "Dovršeno",
     incoming_title: "Dolazni prijenos",

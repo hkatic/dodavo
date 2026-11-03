@@ -12,6 +12,15 @@ enum LoginItem {
                 == keyAELaunchedAsLogInItem
     }
 
+    /// What macOS says, where it says it: the user can change this in System
+    /// Settings as well. `nil` on older systems, where only the settings know.
+    static var isEnabled: Bool? {
+        if #available(macOS 13, *) {
+            return SMAppService.mainApp.status == .enabled
+        }
+        return nil
+    }
+
     /// Makes it so; an error text when that fails.
     static func set(_ enabled: Bool) -> String? {
         if #available(macOS 13, *) {

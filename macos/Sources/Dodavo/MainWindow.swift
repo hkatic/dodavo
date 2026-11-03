@@ -34,6 +34,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSToolba
         reload()
         if window.frame.origin == .zero { window.center() }
         window.initialFirstResponder = table
+        window.autorecalculatesKeyViewLoop = true
     }
 
     required init?(coder _: NSCoder) { nil }
@@ -123,7 +124,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSToolba
     }
 
     func setStatus(_ text: String) {
-        if text != status { announce(text) }
+        if text != status { announce(text, urgent: false) }
         status = text
         statusLine.stringValue = text
     }
@@ -343,7 +344,6 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSToolba
                 ? contact.id : "\(contact.id.prefix(8))…\(contact.id.suffix(6))"
             cell.textField?.stringValue = shortened
             cell.textField?.toolTip = contact.id
-            cell.textField?.setAccessibilityValue(contact.id)
         default:
             cell.textField?.stringValue = transferText(of: contact)
         }
@@ -478,8 +478,8 @@ final class RecipientSheet: NSWindowController {
         nameField.stringValue = editing?.name ?? ""
         idField.stringValue = editing?.id ?? ""
         nameField.placeholderString = L[.recipient_name_help]
-        nameField.setAccessibilityTitleUIElement(nameLabel)
-        idField.setAccessibilityTitleUIElement(idLabel)
+        name(nameField, by: nameLabel)
+        name(idField, by: idLabel)
         nameField.setAccessibilityHelp(L[.recipient_name_help])
         idField.setAccessibilityHelp(L[.recipient_hint])
         let grid = NSGridView(views: [[nameLabel, nameField], [idLabel, idField]])

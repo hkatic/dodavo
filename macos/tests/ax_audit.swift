@@ -33,7 +33,8 @@ let named: Set<String> = [
 func walk(_ element: AXUIElement, depth: Int, path: String) {
     let role = text(element, "AXRole")
     let parts = ["AXTitle", "AXDescription"].map { text(element, $0) }.filter { !$0.isEmpty }
-    let hasLabel = attribute(element, "AXTitleUIElement") != nil
+    // A linked title alone does not count, as VoiceOver does not say it.
+    let hasLabel = !text(element, "AXSubrole").isEmpty && text(element, "AXSubrole") != "AXSearchField"
     let here = "\(path)/\(role)"
     if printTree {
         let line = ([role] + parts + (hasLabel ? ["(labelled)"] : [])).joined(separator: " | ")

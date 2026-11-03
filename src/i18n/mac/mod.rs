@@ -160,7 +160,6 @@ super::strings! {
         remove_from_list,
         sending_to,
         receiving_from,
-        progress_of_item,
         failed_marker,
         succeeded_marker,
         incoming_title,

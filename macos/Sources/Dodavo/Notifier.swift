@@ -41,6 +41,14 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
             asked = true
             center.requestAuthorization(options: [.alert, .sound]) { _, _ in }
         }
+        // Turned off in System Settings: the Dock asks for attention instead, which
+        // VoiceOver says as well (an announcement from the background it does not).
+        center.getNotificationSettings { settings in
+            guard settings.authorizationStatus == .denied else { return }
+            DispatchQueue.main.async {
+                if !NSApp.isActive { NSApp.requestUserAttention(.informationalRequest) }
+            }
+        }
         let content = UNMutableNotificationContent()
         content.title = notice.title
         content.body = notice.text

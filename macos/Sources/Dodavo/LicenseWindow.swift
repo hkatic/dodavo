@@ -32,7 +32,7 @@ final class LicenseWindowController: NSWindowController {
         choice.addItems(withTitles: [L[.license_dodavo], L[.license_components]])
         choice.target = self
         choice.action = #selector(showChoice)
-        choice.setAccessibilityTitleUIElement(label)
+        name(choice, by: label)
         let top = NSStackView(views: [label, choice])
         top.translatesAutoresizingMaskIntoConstraints = false
 
@@ -61,6 +61,7 @@ final class LicenseWindowController: NSWindowController {
         ])
         window.contentView = host
         window.initialFirstResponder = textView
+        window.autorecalculatesKeyViewLoop = true
     }
 
     @objc private func showChoice() {

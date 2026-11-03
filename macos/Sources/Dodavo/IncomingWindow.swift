@@ -48,9 +48,9 @@ final class IncomingWindowController: NSWindowController, NSWindowDelegate {
         dirLabel.isSelectable = false
         dirLabel.stringValue = dir
         dirLabel.preferredMaxLayoutWidth = width - 190
-        dirLabel.setAccessibilityTitleUIElement(saveLabel)
         let choose = makeButton(L[.choose], self, #selector(chooseFolder))
-        choose.setAccessibilityHelp(saveLabel.stringValue)
+        choose.setAccessibilityTitle("\(saveLabel.stringValue) \(L[.choose])")
+        name(dirLabel, by: saveLabel)
         views.append(makeRow([saveLabel, dirLabel, choose]))
         spaceLine.stringValue = offer.space.text
         views.append(sized(spaceLine))
@@ -64,6 +64,7 @@ final class IncomingWindowController: NSWindowController, NSWindowDelegate {
         fill(window, with: column)
         buttons.widthAnchor.constraint(equalTo: column.widthAnchor).isActive = true
         window.initialFirstResponder = accept
+        window.autorecalculatesKeyViewLoop = true
     }
 
     /// In front of the other windows, leaving the focus where it is.
@@ -80,7 +81,8 @@ final class IncomingWindowController: NSWindowController, NSWindowDelegate {
         let space: SpaceInfo? = Core.call("space", ["id": offer.id, "dir": dir])
         if let space = space {
             spaceLine.stringValue = space.text
-            announce(space.text)
+            // After VoiceOver has told where the focus went with the panel gone.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { announce(space.text) }
         }
     }
 

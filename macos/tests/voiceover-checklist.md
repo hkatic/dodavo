@@ -37,8 +37,9 @@ names, not what is actually spoken. Write what fails into `ISSUES.md`.
 ## Transfers window
 
 - [ ] Each row reads as one sentence: item, other person, status, amount, speed, time remaining.
-- [ ] `VO-Command-Space` on a row lists Pause or Resume and Cancel Transfer; after the end Open, Show in Finder and Remove from List.
-- [ ] Interacting with a row reaches its buttons.
+- [ ] `VO-Shift-M` on a row opens a menu with Pause or Resume and Cancel Transfer; after the end Open, Show in Finder and Remove from List.
+- [ ] Interacting with a row reaches its buttons, and `VO-Command-Space` there lists each of them once.
+- [ ] Without VoiceOver: `Space` pauses or resumes the selected row, `Delete` cancels or removes it, `Return` opens what was saved.
 - [ ] While Dodavo is in front, each change of phase is announced; pausing on the other side is announced too.
 - [ ] Pause while the focus is on it stays on a usable button; Cancel Transfer asks first, and the focus does not get lost when the button goes away.
 - [ ] A failed transfer says so in words, not only with a mark.

@@ -418,8 +418,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     // MARK: Quitting
 
+    private var alreadyAsked = false
+
     func applicationShouldTerminate(_: NSApplication) -> NSApplication.TerminateReply {
-        guard isReady, !runningRows.isEmpty else { return .terminateNow }
+        guard isReady, !alreadyAsked else { return .terminateNow }
         // Logging out, restarting or shutting down is never held up: the
         // transfers stop, and go on at the next start.
         if let event = NSAppleEventManager.shared().currentAppleEvent,
@@ -429,6 +431,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         {
             return .terminateNow
         }
+        return mayQuit() ? .terminateNow : .terminateCancel
+    }
+
+    /// With transfers running, asks what becomes of them. Whether to go on and quit.
+    func mayQuit() -> Bool {
+        guard !runningRows.isEmpty else { return true }
         let alert = NSAlert()
         alert.messageText = L.plural(.quit_instruction, runningRows.count)
         alert.informativeText = L[.quit_text]
@@ -439,13 +447,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         NSApp.activate(ignoringOtherApps: true)
         switch alert.runModal() {
         case .alertFirstButtonReturn:
-            return .terminateNow
+            return true
         case .alertSecondButtonReturn:
             Core.perform("cancel_all")
-            return .terminateNow
+            return true
         default:
-            return .terminateCancel
+            return false
         }
+    }
+
+    /// For what asked with `mayQuit` already.
+    func quitWithoutAsking() {
+        alreadyAsked = true
+        NSApp.terminate(nil)
     }
 
     func applicationWillTerminate(_: Notification) {

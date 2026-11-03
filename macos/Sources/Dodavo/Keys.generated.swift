@@ -149,7 +149,6 @@ enum K: String {
     case remove_from_list
     case sending_to
     case receiving_from
-    case progress_of_item
     case failed_marker
     case succeeded_marker
     case incoming_title

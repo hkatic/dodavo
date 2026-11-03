@@ -27,6 +27,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSTe
                 myName: "", openAtLogin: false, hideAtLogin: false, showInMenuBar: true,
                 checkUpdates: true, language: nil, alwaysSave: false, alwaysSaveDir: nil,
                 autoAccept: true, receivedFolder: "extract")
+        settings.openAtLogin = LoginItem.isEnabled ?? settings.openAtLogin
         let tabs = NSTabViewController()
         tabs.tabStyle = .toolbar
         let window = NSWindow(contentViewController: tabs)
@@ -39,8 +40,6 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSTe
         let receiving = page(L[.settings_receiving], "square.and.arrow.down", receivingPage())
         tabs.addTabViewItem(general)
         tabs.addTabViewItem(receiving)
-        tabs.title = general.label
-        window.title = general.label
         show()
         window.setContentSize(tabs.view.fittingSize)
         window.center()
@@ -73,7 +72,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSTe
     private func generalPage() -> NSView {
         let nameLabel = NSTextField(labelWithString: L[.my_name_label])
         nameField.delegate = self
-        nameField.setAccessibilityTitleUIElement(nameLabel)
+        name(nameField, by: nameLabel)
         nameField.setAccessibilityHelp(L[.my_name_help])
         nameField.widthAnchor.constraint(greaterThanOrEqualToConstant: 280).isActive = true
         let nameHelp = makeLabel(L[.my_name_help], small: true)
@@ -85,7 +84,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSTe
         idText.lineBreakMode = .byCharWrapping
         idText.maximumNumberOfLines = 2
         idText.preferredMaxLayoutWidth = 300
-        idText.setAccessibilityTitleUIElement(idLabel)
+        name(idText, by: idLabel)
         let copy = makeButton(L[.copy], NSApp.delegate, #selector(AppDelegate.copyMyContactID(_:)))
 
         let languageLabel = NSTextField(labelWithString: L[.language_label])
@@ -97,7 +96,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSTe
         }
         language.target = self
         language.action = #selector(languageChanged)
-        language.setAccessibilityTitleUIElement(languageLabel)
+        name(language, by: languageLabel)
 
         for box in [openAtLogin, hideAtLogin, showInMenuBar, checkUpdates] {
             box.target = self
@@ -131,8 +130,8 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSTe
         chooseFolder.bezelStyle = .rounded
         chooseFolder.target = self
         chooseFolder.action = #selector(pickFolder)
-        chooseFolder.setAccessibilityHelp(L[.always_save])
-        folderLabel.setAccessibilityTitleUIElement(alwaysSave)
+        chooseFolder.setAccessibilityTitle("\(L[.always_save]): \(L[.choose])")
+        folderLabel.setAccessibilityLabel(L[.always_save])
         let note = makeLabel(L[.auto_accept_note], small: true)
         note.preferredMaxLayoutWidth = 400
 
@@ -146,7 +145,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSTe
         }
         keep.target = self
         keep.action = #selector(changed)
-        keep.setAccessibilityTitleUIElement(keepLabel)
+        name(keep, by: keepLabel)
 
         let grid = NSGridView(views: [
             [NSGridCell.emptyContentView, alwaysSave],

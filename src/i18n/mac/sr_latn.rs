@@ -183,7 +183,6 @@ pub const SR_LATN: Strings = Strings {
     remove_from_list: "Ukloni sa liste",
     sending_to: "Prima: {name}",
     receiving_from: "Šalje: {name}",
-    progress_of_item: "Napredak: {item}",
     failed_marker: "Nije uspelo",
     succeeded_marker: "Završeno",
     incoming_title: "Dolazni prenos",

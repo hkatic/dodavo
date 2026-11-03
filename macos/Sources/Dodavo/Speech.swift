@@ -1,8 +1,9 @@
 import AppKit
 
 /// Says something through VoiceOver, for what changes without moving the focus.
-/// Nothing happens while VoiceOver is off.
-func announce(_ text: String) {
+/// Nothing happens while VoiceOver is off. What is not urgent waits for what
+/// VoiceOver is saying, such as the question of a sheet that has just opened.
+func announce(_ text: String, urgent: Bool = true) {
     guard !text.isEmpty else { return }
     let element: Any = NSApp.keyWindow ?? NSApp.mainWindow ?? NSApp as Any
     NSAccessibility.post(
@@ -10,8 +11,19 @@ func announce(_ text: String) {
         notification: .announcementRequested,
         userInfo: [
             .announcement: text,
-            .priority: NSAccessibilityPriorityLevel.high.rawValue,
+            .priority: (urgent ? NSAccessibilityPriorityLevel.high : .medium).rawValue,
         ])
+}
+
+/// Names `control` by the label beside it. VoiceOver does not say a linked title
+/// (`setAccessibilityTitleUIElement`) by itself, so the name is set as well, and the
+/// label is left out for those who go through the window item by item: they hear it
+/// with the control, once.
+func name(_ control: NSView, by label: NSTextField) {
+    var text = label.stringValue
+    if text.hasSuffix(":") { text.removeLast() }
+    control.setAccessibilityLabel(text)
+    label.cell?.setAccessibilityElement(false)
 }
 
 /// Text that the user reads, in a window.
