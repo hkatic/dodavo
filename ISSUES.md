@@ -18,10 +18,6 @@ None known.
 
 `a_cancel_waits_for_the_verdict_across_a_restart`, `a_send_needs_its_data_again_when_the_receiver_lacks_it` and `finish_alone_after_restart_during_unpacking` reconnect after a restart, and wait more than 120 s there, while they pass on a Mac elsewhere and on the Windows runner. It may be that the runner keeps an unsigned test program from the local network (Local Network privacy), which would leave a slow way through a relay; that was not checked. If so, the same wait could be what a user who denies that permission sees. CI runs them without letting them fail the run.
 
-### The Mac version is not code-signed or notarized yet
-
-Without a Developer ID certificate, macOS 15 and later block a downloaded app until the user allows it in Privacy & Security, and permissions may be asked again after each update. `macos/build.sh` and `macos/make-dmg.sh` do it all once `DODAVO_SIGN_IDENTITY` and notary credentials are set. The certificate exists now, so only the credentials are missing.
-
 ### The setup program and the program are not code-signed
 
 Every new download gets SmartScreen's "Windows protected your PC", or the unknown publisher question on Windows 7. Automatic updates are not affected. `installer\build.ps1` signs everything once a certificate is configured (`DODAVO_SIGN_THUMBPRINT` or `DODAVO_SIGN_PFX`), so only the certificate is missing.

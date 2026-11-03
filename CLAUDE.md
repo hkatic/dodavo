@@ -57,6 +57,8 @@ Exchanging folders with Windows: a released Windows receiver stops at the first 
 
 Updates: `update-macos.json` next to `update.json` on each release, with a statement prefix of its own (`statement::Platform`), so that a manifest never verifies on the other system. Installed copies read the manifest of the latest published release, so every release has to carry both (see README). After the download, `Installer` (`UpdateWindow.swift`) mounts the image, checks the signature and the team, swaps the app with `RENAME_SWAP` and relaunches.
 
+Releases: `DODAVO_SIGN_IDENTITY="Developer ID Application: Hrvoje Katic (3GAM6Z3A2W)"` with `macos/build.sh` and `macos/make-dmg.sh`, on the Mac that has the certificate, with the notary profile `dodavo` in its keychain. A copy that has the mark of a download is translocated unless it runs from its disk image. `Relocation` removes that mark from the copy it makes in Applications, once its signature checks out, as macOS would otherwise ask the user a second time about what they just allowed, and ejects the disk image.
+
 ## Architecture
 
 Two threads that never share UI state:

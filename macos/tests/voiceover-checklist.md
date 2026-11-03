@@ -4,6 +4,11 @@ To go through with VoiceOver on, on the current macOS and the oldest one at hand
 before a release. Automated checks (`ax_audit.swift`) only see that controls have
 names, not what is actually spoken. Write what fails into `ISSUES.md`.
 
+## The first start
+
+- [ ] Opening a downloaded copy reads macOS's question, whether to open an app downloaded from the Internet.
+- [ ] A moment after the window opens, the question about moving to the Applications folder is read, not only the button that has the focus. Moving it does not make macOS ask again.
+
 ## Main window
 
 - [ ] Opening Dodavo puts the focus on the list, which is announced as Recipients.

@@ -204,7 +204,7 @@ enum Installer {
 
     /// Runs a program, and gives what it printed; fails if it fails.
     @discardableResult
-    private static func run(_ tool: String, _ arguments: [String]) throws -> String {
+    fileprivate static func run(_ tool: String, _ arguments: [String]) throws -> String {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: tool)
         process.arguments = arguments
@@ -285,19 +285,22 @@ enum Installer {
     /// Opens the new app once this one has gone: it holds the lock of the
     /// profile until then, and a second copy would quit. With the same profile,
     /// and in a process of its own, as another profile's copy may be running.
-    static func relaunch(_ app: URL, updated: Bool) {
+    /// `ejecting` is the disk image that this copy ran from, if that is done with.
+    static func relaunch(_ app: URL, updated: Bool, ejecting volume: String? = nil) {
         var arguments = updated ? ["--updated"] : []
         let own = CommandLine.arguments
         if let index = own.firstIndex(of: "--profile"), index + 1 < own.count {
             arguments += ["--profile", own[index + 1]]
         }
         let script = """
+            volume="$1"; shift
             while kill -0 \(ProcessInfo.processInfo.processIdentifier) 2>/dev/null; do sleep 0.2; done
+            [ -n "$volume" ] && /usr/bin/hdiutil detach "$volume" -quiet
             exec /usr/bin/open -n "$0" --args "$@"
             """
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/bin/sh")
-        process.arguments = ["-c", script, app.path] + arguments
+        process.arguments = ["-c", script, app.path, volume ?? ""] + arguments
         try? process.run()
     }
 }
@@ -327,11 +330,19 @@ enum Relocation {
     }
 
     /// The first time from elsewhere, offers to move to the Applications folder.
-    /// Also saves those who use VoiceOver a drag in the Finder.
+    /// Also saves those who use VoiceOver a drag in the Finder. A moment after the
+    /// start, as VoiceOver does not read a sheet that is there as the window opens:
+    /// it would only say which button has the focus.
     static func offerIfNeeded(on window: NSWindow?) {
         guard !inApplications, isTranslocated || onDiskImage || isInDownloads,
             !UserDefaults.standard.bool(forKey: declinedKey), let window = window
         else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+            if window.isVisible, window.attachedSheet == nil { offer(on: window) }
+        }
+    }
+
+    private static func offer(on window: NSWindow) {
         let alert = NSAlert()
         alert.messageText = L[.move_title]
         alert.informativeText = L[.move_text]
@@ -345,12 +356,18 @@ enum Relocation {
             }
             do {
                 let moved = try moveToApplications()
-                Installer.relaunch(moved, updated: false)
+                Installer.relaunch(moved, updated: false, ejecting: diskImageVolume)
                 NSApp.terminate(nil)
             } catch {
                 showAlert(L.f(.move_failed, ["error": error.localizedDescription]), on: window)
             }
         }
+    }
+
+    /// The volume of the disk image that this copy runs from.
+    private static var diskImageVolume: String? {
+        guard onDiskImage else { return nil }
+        return "/" + Bundle.main.bundleURL.pathComponents.dropFirst().prefix(2).joined(separator: "/")
     }
 
     private static var isInDownloads: Bool {
@@ -369,6 +386,13 @@ enum Relocation {
             try manager.trashItem(at: target, resultingItemURL: nil)
         }
         try manager.copyItem(at: Bundle.main.bundleURL, to: target)
+        // The user has just said yes to this very app, and macOS would ask once
+        // more about the copy, which keeps the mark of the download. If it is whole.
+        if (try? Installer.run(
+            "/usr/bin/codesign", ["--verify", "--deep", "--strict", target.path])) != nil
+        {
+            _ = try? Installer.run("/usr/bin/xattr", ["-dr", "com.apple.quarantine", target.path])
+        }
         // Copied, as a translocated or mounted copy cannot go: this one goes
         // where it can, and from the disk image it stays.
         if isInDownloads, !isTranslocated {
