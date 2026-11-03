@@ -185,6 +185,30 @@ fn pages_use_the_program_texts() {
 }
 
 /// Nothing of Windows in the pages, except where it is the other side.
+/// A manual says what the program needs and does. What was tested, and how it was
+/// made, belongs in `TODO.md`.
+#[test]
+fn the_pages_keep_to_what_the_program_does() {
+    for lang in Lang::ALL {
+        let page = visible(page(lang)).to_lowercase();
+        for word in [
+            "tested",
+            "testing",
+            "as is",
+            "testir",
+            "takav kakav",
+            "preizku",
+            "takšen, kot je",
+            "notariz",
+            "ovjeren",
+            "overen",
+            "overjen",
+        ] {
+            assert!(!page.contains(word), "{lang:?}: {word}");
+        }
+    }
+}
+
 #[test]
 fn the_pages_are_about_the_mac() {
     for lang in Lang::ALL {

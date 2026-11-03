@@ -61,9 +61,9 @@
 
 <section aria-labelledby="installing">
 <h2 id="installing">Installing and uninstalling</h2>
-<p>Dodavo needs macOS 11 Big Sur or later on a Mac with Apple silicon. It is developed and tested on current versions of macOS; on macOS 11 it is provided as is, since no such system was available for testing.</p>
+<p>Dodavo needs macOS 11 Big Sur or later on a Mac with Apple silicon.</p>
 <p>Open the disk image <code>Dodavo-&lt;version&gt;-macos.dmg</code> and open Dodavo from it. It then offers to move itself to the Applications folder: choose Move to Applications Folder. You can also do that in the Finder without dragging: select Dodavo, press <kbd>⌘C</kbd>, press <kbd>⇧⌘A</kbd> to go to the Applications folder, and press <kbd>⌘V</kbd>.</p>
-<p>Run from the disk image or from Downloads, Dodavo cannot update itself; Move Dodavo to the Applications Folder? is asked for that reason.</p>
+<p>Dodavo cannot update itself while it runs from the disk image, which is why it asks Move Dodavo to the Applications Folder?</p>
 <p>The first time they are needed, macOS asks whether Dodavo may use the local network, send notifications, and use folders such as Downloads. Allow them: see <a href="#troubleshooting">Troubleshooting</a> for what happens otherwise, and how to change your answer later.</p>
 <p>To uninstall, quit Dodavo and move it to the Trash. Your settings and Contact ID stay in the folder <code>~/Library/Application Support/Dodavo</code>, so that a new installation keeps the same Contact ID; delete that folder as well if you want them gone.</p>
 </section>
@@ -119,8 +119,8 @@
 <h2 id="progress">Following a transfer</h2>
 <p>Transfers (<kbd>⌘T</kbd>) lists all transfers. Each row shows the item, the other person, what it is doing, how much is done, the speed and the time remaining. Closing this window does nothing to them.</p>
 <p>With VoiceOver, each row reads as one sentence. Press <kbd>VO</kbd>-<kbd>⇧</kbd>-<kbd>M</kbd> on a row for a menu of what can be done with it, or <kbd>VO</kbd>-<kbd>⇧</kbd>-<kbd>↓</kbd> to reach its buttons: Pause and Resume, Cancel Transfer, and when it has finished Open, Show in Finder and Remove from List. Changes in what a transfer is doing are announced while Dodavo is in front, and otherwise come as notifications.</p>
-<p>On the keyboard alone, select a row with the arrow keys: <kbd>Space</kbd> pauses or resumes it, <kbd>Delete</kbd> cancels it, or removes a finished one from the list, and <kbd>Return</kbd> opens what was saved. <kbd>Tab</kbd> goes on to Clear Finished, past the buttons in the rows.</p>
-<p>If the connection is lost, or a computer goes to sleep or restarts, the transfer waits and continues where it stopped once both are running and online, however long that takes. At the end, the whole item is checked.</p>
+<p>On the keyboard alone, select a row with the arrow keys: <kbd>Space</kbd> pauses or resumes it, <kbd>Delete</kbd> cancels it, or removes a finished one from the list, and <kbd>Return</kbd> opens what was saved.</p>
+<p>If the connection is lost, or a computer goes to sleep or restarts, the transfer waits and continues where it stopped once both are running and online. After 30 days without progress, the transfer ends. At the end, the whole item is checked.</p>
 <p>While data moves, Dodavo keeps the Mac from going to sleep by itself. Closing a laptop's lid still puts it to sleep; the transfer goes on after it wakes.</p>
 <p>Once all of an item has arrived, it is the receiver's, so the sender can no longer cancel the transfer. Clear Finished removes the rows of transfers that have ended.</p>
 </section>
@@ -189,14 +189,14 @@
 <section aria-labelledby="faq">
 <h2 id="faq">Frequently asked questions</h2>
 <p><strong>Can I send to someone on Windows?</strong> Yes. It works the same way in both directions.</p>
-<p><strong>Can the other person be offline?</strong> The transfer then waits until both are running and online.</p>
+<p><strong>Can the other person be offline?</strong> Not when a transfer starts: Dodavo has to be running on both computers, otherwise it says that it could not connect. Once a transfer has been accepted, either side may go offline, and it continues when both are back.</p>
 <p><strong>Does a file go through a server?</strong> Only through a relay, encrypted, if no direct path can be found.</p>
 <p><strong>Is there a limit to the size?</strong> Only the free space on the other side, and 4 GB per file on MS-DOS (FAT) volumes.</p>
 </section>
 
 <section aria-labelledby="troubleshooting">
 <h2 id="troubleshooting">Troubleshooting</h2>
-<p><strong>macOS will not open Dodavo.</strong> Download it from the release page. A notarized copy opens after one confirmation.</p>
+<p><strong>macOS will not open Dodavo.</strong> Download the disk image again from the release page, and open Dodavo from it. The first time, macOS asks whether to open an app downloaded from the Internet: choose Open.</p>
 <p><strong>Dodavo says that it is offline.</strong> Check the internet connection. Transfers within the local network still work.</p>
 <p><strong>Transfers are very slow between computers on the same network.</strong> Dodavo may not be allowed to use the local network: check System Settings > Privacy &amp; Security > Local Network. Without it, data goes through a relay.</p>
 <p><strong>A transfer says that Dodavo may not use an item.</strong> Allow it in System Settings > Privacy &amp; Security > Files and Folders, and the transfer goes on.</p>

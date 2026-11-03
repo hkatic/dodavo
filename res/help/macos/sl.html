@@ -61,9 +61,9 @@
 
 <section aria-labelledby="installing">
 <h2 id="installing">Nameščanje in odstranjevanje</h2>
-<p>Dodavo zahteva macOS 11 Big Sur ali novejši v Macu s čipom Apple. Razvit in preizkušen je v aktualnih različicah macOS-a; v macOS-u 11 je na voljo takšen, kot je, ker takšen sistem ni bil na voljo za preizkušanje.</p>
+<p>Dodavo zahteva macOS 11 Big Sur ali novejši v Macu s čipom Apple.</p>
 <p>Odprite sliko diska <code>Dodavo-&lt;version&gt;-macos.dmg</code> in iz nje odprite Dodavo. Nato ponudi, da se sam premakne v mapo Aplikacije: izberite Premakni v mapo Aplikacije. To lahko naredite tudi v Finderju brez vlečenja: izberite Dodavo, pritisnite <kbd>⌘C</kbd>, pritisnite <kbd>⇧⌘A</kbd> za mapo Aplikacije in pritisnite <kbd>⌘V</kbd>.</p>
-<p>Če ga zaženete s slike diska ali iz mape Prenosi, se Dodavo ne more sam posodabljati; zato se pojavi vprašanje Želite premakniti Dodavo v mapo Aplikacije?</p>
+<p>Dokler teče s slike diska, se Dodavo ne more sam posodabljati, zato vpraša Želite premakniti Dodavo v mapo Aplikacije?</p>
 <p>Ko so prvič potrebni, macOS vpraša, ali sme Dodavo uporabljati lokalno omrežje, pošiljati obvestila in uporabljati mape, kot je Prenosi. Dovolite to: v razdelku <a href="#troubleshooting">Odpravljanje težav</a> piše, kaj se sicer zgodi in kako pozneje spremenite odgovor.</p>
 <p>Za odstranitev zaprite Dodavo in ga premaknite v Koš. Vaše nastavitve in ID stika ostanejo v mapi <code>~/Library/Application Support/Dodavo</code>, tako da nova namestitev obdrži isti ID stika; izbrišite tudi to mapo, če želite, da izginejo.</p>
 </section>
@@ -119,8 +119,8 @@
 <h2 id="progress">Spremljanje prenosa</h2>
 <p>Prenosi (<kbd>⌘T</kbd>) prikaže vse prenose. Vsaka vrstica prikaže element, drugo osebo, kaj se dogaja, koliko je končano, hitrost in preostali čas. Zapiranje tega okna nanje ne vpliva.</p>
 <p>Z VoiceOverjem se vsaka vrstica prebere kot en stavek. Pritisnite <kbd>VO</kbd>-<kbd>⇧</kbd>-<kbd>M</kbd> na vrstici za meni s tem, kar je mogoče narediti z njo, ali <kbd>VO</kbd>-<kbd>⇧</kbd>-<kbd>↓</kbd> za njene gumbe: Začasno ustavi in Nadaljuj, Prekliči prenos, po koncu pa Odpri, Prikaži v Finderju in Odstrani s seznama. Spremembe so sporočene, dokler je Dodavo v ospredju, sicer pa pridejo kot obvestila.</p>
-<p>Samo s tipkovnico izberite vrstico s puščičnimi tipkami: <kbd>Space</kbd> jo začasno ustavi ali nadaljuje, <kbd>Delete</kbd> jo prekliče, končano pa odstrani s seznama, <kbd>Return</kbd> pa odpre, kar je bilo shranjeno. <kbd>Tab</kbd> se premakne na Počisti končane, mimo gumbov v vrsticah.</p>
-<p>Če se povezava izgubi ali računalnik preide v stanje spanja ali se znova zažene, prenos počaka in se nadaljuje, kjer se je ustavil, takoj ko sta oba računalnika zagnana in povezana, ne glede na to, koliko časa to traja. Na koncu se preveri celoten element.</p>
+<p>Samo s tipkovnico izberite vrstico s puščičnimi tipkami: <kbd>Space</kbd> jo začasno ustavi ali nadaljuje, <kbd>Delete</kbd> jo prekliče, končano pa odstrani s seznama, <kbd>Return</kbd> pa odpre, kar je bilo shranjeno.</p>
+<p>Če se povezava izgubi ali računalnik preide v stanje spanja ali se znova zažene, prenos počaka in se nadaljuje, kjer se je ustavil, takoj ko sta oba računalnika zagnana in povezana. Po 30 dneh brez napredka se prenos konča. Na koncu se preveri celoten element.</p>
 <p>Medtem ko se podatki prenašajo, Dodavo preprečuje, da bi Mac sam prešel v stanje spanja. Zapiranje pokrova prenosnika ga še vedno uspava; prenos se nadaljuje po bujenju.</p>
 <p>Ko prispe celoten element, je prejemnikov, zato pošiljatelj prenosa ne more več preklicati. Počisti končane odstrani vrstice končanih prenosov.</p>
 </section>
@@ -189,14 +189,14 @@
 <section aria-labelledby="faq">
 <h2 id="faq">Pogosta vprašanja</h2>
 <p><strong>Ali lahko pošljem nekomu z Windows?</strong> Da. Deluje enako v obe smeri.</p>
-<p><strong>Ali je druga oseba lahko brez povezave?</strong> Prenos tedaj počaka, dokler nista oba računalnika zagnana in povezana.</p>
+<p><strong>Ali je druga oseba lahko brez povezave?</strong> Ne ob začetku prenosa: Dodavo mora biti zagnan v obeh računalnikih, sicer sporoči, da se ne more povezati. Ko je prenos sprejet, je lahko katera koli stran brez povezave, prenos pa se nadaljuje, ko sta obe spet povezani.</p>
 <p><strong>Ali datoteka gre prek strežnika?</strong> Samo prek posrednika, šifrirana, če ni mogoče najti neposredne poti.</p>
 <p><strong>Ali obstaja omejitev velikosti?</strong> Samo prosti prostor na drugi strani in 4 GB na datoteko na diskih MS-DOS (FAT).</p>
 </section>
 
 <section aria-labelledby="troubleshooting">
 <h2 id="troubleshooting">Odpravljanje težav</h2>
-<p><strong>macOS noče odpreti Dodava.</strong> Prenesite ga s strani izdaj. Overjena kopija se odpre po eni potrditvi.</p>
+<p><strong>macOS noče odpreti Dodava.</strong> Znova prenesite sliko diska s strani izdaj in odprite Dodavo iz nje. Prvič macOS vpraša, ali želite odpreti aplikacijo, preneseno iz interneta: izberite Odpri.</p>
 <p><strong>Dodavo pravi, da ni povezan.</strong> Preverite internetno povezavo. Prenosi v lokalnem omrežju še vedno delujejo.</p>
 <p><strong>Prenosi med računalniki v istem omrežju so zelo počasni.</strong> Dodavo morda ne sme uporabljati lokalnega omrežja: preverite Sistemske nastavitve > Zasebnost in varnost > Lokalno omrežje. Brez tega gredo podatki prek posrednika.</p>
 <p><strong>Prenos pravi, da Dodavo ne sme uporabljati elementa.</strong> Dovolite to v: Sistemske nastavitve > Zasebnost in varnost > Datoteke in mape, in prenos se nadaljuje.</p>

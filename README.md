@@ -40,7 +40,7 @@ An unsigned build (see [Code signing](#installer)) is flagged when it is started
 
 A native Mac app in Swift and AppKit, which follows Apple's terms and interface guidelines and is built for VoiceOver. It exchanges transfers with Windows copies in both directions.
 
-- macOS 11 Big Sur or later, on Apple silicon. It is developed and tested on current versions of macOS; on macOS 11 it is provided as is, as no such system was available for testing. Intel Macs may follow.
+- macOS 11 Big Sur or later, on Apple silicon. Intel Macs may follow.
 - **Send…** chooses files and folders, also several at once. Items can also be dragged onto a recipient, dropped on the Dock icon, or sent with the Finder's service **Send with Dodavo**.
 - All transfers are in one **Transfers** window, like the Finder's copy window: closing it does nothing to them, and each row has Pause or Resume, Cancel Transfer, and at the end Open and Show in Finder.
 - Closing the main window leaves Dodavo running, so that it can receive; ⌘Q quits. It can show in the menu bar, and open at login.

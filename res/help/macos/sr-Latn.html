@@ -61,9 +61,9 @@
 
 <section aria-labelledby="installing">
 <h2 id="installing">Instalacija i deinstalacija</h2>
-<p>Dodavo zahteva macOS 11 Big Sur ili noviji na Macu sa Apple čipom. Razvija se i testira na aktuelnim verzijama macOS-a; na macOS-u 11 isporučuje se takav kakav je, jer takav sistem nije bio dostupan za testiranje.</p>
+<p>Dodavo zahteva macOS 11 Big Sur ili noviji na Macu sa Apple čipom.</p>
 <p>Otvorite sliku diska <code>Dodavo-&lt;version&gt;-macos.dmg</code> i otvorite Dodavo iz nje. On zatim nudi da sam pređe u fasciklu Aplikacije: izaberite Premesti u fasciklu Aplikacije. To možete da uradite i u Finderu bez prevlačenja: izaberite Dodavo, pritisnite <kbd>⌘C</kbd>, pritisnite <kbd>⇧⌘A</kbd> za prelazak u fasciklu Aplikacije i pritisnite <kbd>⌘V</kbd>.</p>
-<p>Pokrenut sa slike diska ili iz fascikle Preuzimanja, Dodavo ne može sam da se ažurira; zato se pojavljuje pitanje Premestiti Dodavo u fasciklu Aplikacije?</p>
+<p>Dok radi sa slike diska, Dodavo ne može sam da se ažurira, pa zato pita Premestiti Dodavo u fasciklu Aplikacije?</p>
 <p>Kada zatrebaju prvi put, macOS pita da li Dodavo sme da koristi lokalnu mrežu, šalje obaveštenja i koristi fascikle kao što su Preuzimanja. Dozvolite to: u odeljku <a href="#troubleshooting">Rešavanje problema</a> piše šta se inače dešava i kako kasnije da promenite odgovor.</p>
 <p>Za deinstalaciju zatvorite Dodavo i premestite ga u Smeće. Vaša podešavanja i ID kontakta ostaju u fascikli <code>~/Library/Application Support/Dodavo</code>, tako da nova instalacija zadržava isti ID kontakta; izbrišite i tu fasciklu ako želite da nestanu.</p>
 </section>
@@ -119,8 +119,8 @@
 <h2 id="progress">Praćenje prenosa</h2>
 <p>Prenosi (<kbd>⌘T</kbd>) prikazuje sve prenose. Svaki red prikazuje stavku, drugu osobu, šta se radi, koliko je gotovo, brzinu i preostalo vreme. Zatvaranje ovog prozora ne utiče na njih.</p>
 <p>Sa VoiceOverom se svaki red čita kao jedna rečenica. Pritisnite <kbd>VO</kbd>-<kbd>⇧</kbd>-<kbd>M</kbd> na redu za meni sa onim što se s njim može uraditi ili <kbd>VO</kbd>-<kbd>⇧</kbd>-<kbd>↓</kbd> da biste došli do njegove dugmadi: Pauziraj i Nastavi, Otkaži prenos, a kada se završi Otvori, Prikaži u Finderu i Ukloni sa liste. Promene se najavljuju dok je Dodavo u prvom planu, a inače stižu kao obaveštenja.</p>
-<p>Samo pomoću tastature izaberite red tasterima sa strelicama: <kbd>Space</kbd> ga pauzira ili nastavlja, <kbd>Delete</kbd> ga otkazuje, a završeni uklanja sa liste, dok <kbd>Return</kbd> otvara ono što je sačuvano. <kbd>Tab</kbd> prelazi na Ukloni završene, preko dugmadi u redovima.</p>
-<p>Ako se veza izgubi ili računar ode u stanje mirovanja ili se ponovo pokrene, prenos čeka i nastavlja se gde je stao čim su oba računara pokrenuta i na mreži, koliko god to trajalo. Na kraju se cela stavka proverava.</p>
+<p>Samo pomoću tastature izaberite red tasterima sa strelicama: <kbd>Space</kbd> ga pauzira ili nastavlja, <kbd>Delete</kbd> ga otkazuje, a završeni uklanja sa liste, dok <kbd>Return</kbd> otvara ono što je sačuvano.</p>
+<p>Ako se veza izgubi ili računar ode u stanje mirovanja ili se ponovo pokrene, prenos čeka i nastavlja se gde je stao čim su oba računara pokrenuta i na mreži. Posle 30 dana bez napretka prenos se prekida. Na kraju se cela stavka proverava.</p>
 <p>Dok se podaci prenose, Dodavo sprečava da Mac sam ode u stanje mirovanja. Zatvaranje poklopca prenosnog računara i dalje ga uspavljuje; prenos se nastavlja posle buđenja.</p>
 <p>Kada cela stavka stigne, ona je primaočeva, pa pošiljalac više ne može da otkaže prenos. Ukloni završene uklanja redove završenih prenosa.</p>
 </section>
@@ -189,14 +189,14 @@
 <section aria-labelledby="faq">
 <h2 id="faq">Česta pitanja</h2>
 <p><strong>Mogu li da pošaljem nekome ko ima Windows?</strong> Da. Radi jednako u oba smera.</p>
-<p><strong>Može li druga osoba da bude van mreže?</strong> Prenos tada čeka dok oba računara ne budu pokrenuta i na mreži.</p>
+<p><strong>Može li druga osoba da bude van mreže?</strong> Ne kada prenos počinje: Dodavo mora da bude pokrenut na oba računara, inače javlja da ne može da se poveže. Kada je prenos prihvaćen, bilo koja strana može da bude van mreže, a prenos se nastavlja čim se obe strane vrate.</p>
 <p><strong>Da li datoteka ide preko servera?</strong> Samo preko releja, šifrovana, ako ne može da se pronađe direktan put.</p>
 <p><strong>Postoji li ograničenje veličine?</strong> Samo slobodan prostor na drugoj strani i 4 GB po datoteci na diskovima MS-DOS (FAT).</p>
 </section>
 
 <section aria-labelledby="troubleshooting">
 <h2 id="troubleshooting">Rešavanje problema</h2>
-<p><strong>macOS ne želi da otvori Dodavo.</strong> Preuzmite ga sa stranice izdanja. Overena kopija se otvara posle jedne potvrde.</p>
+<p><strong>macOS ne želi da otvori Dodavo.</strong> Ponovo preuzmite sliku diska sa stranice izdanja i otvorite Dodavo iz nje. Prvi put macOS pita da li želite da otvorite aplikaciju preuzetu sa interneta: izaberite Otvori.</p>
 <p><strong>Dodavo kaže da je van mreže.</strong> Proverite internet vezu. Prenosi unutar lokalne mreže i dalje rade.</p>
 <p><strong>Prenosi među računarima u istoj mreži su veoma spori.</strong> Dodavo možda ne sme da koristi lokalnu mrežu: proverite Sistemska podešavanja > Privatnost i bezbednost > Lokalna mreža. Bez toga podaci idu preko releja.</p>
 <p><strong>Prenos kaže da Dodavo ne sme da koristi stavku.</strong> Dozvolite to u: Sistemska podešavanja > Privatnost i bezbednost > Datoteke i fascikle, i prenos se nastavlja.</p>
