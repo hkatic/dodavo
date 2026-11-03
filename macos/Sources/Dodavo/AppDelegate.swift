@@ -26,6 +26,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var sendingAgain = false
     /// What the status line says.
     private(set) var statusText = ""
+    /// Until when a reopen comes from the notification that was just clicked.
+    private var quietUntil = Date.distantPast
     /// Items waiting for the program to be ready (dropped on the Dock icon).
     private var pendingPaths: [String] = []
 
@@ -159,8 +161,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         true
     }
 
-    func applicationShouldHandleReopen(_: NSApplication, hasVisibleWindows _: Bool) -> Bool {
-        showMainWindow(nil)
+    /// The Dock icon, and also a click on a notification, which has a place of its
+    /// own to lead to (see `perform`), and must not end up here instead.
+    func applicationShouldHandleReopen(_: NSApplication, hasVisibleWindows visible: Bool) -> Bool {
+        if !visible, Date() >= quietUntil { showMainWindow(nil) }
         return true
     }
 
@@ -180,7 +184,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             mainWindow?.setRows(Array(rows.values))
             transfersWindow?.update(row)
             refreshCounts()
-            if let announcement = announcement, NSApp.isActive {
+            let saidByNotification = !row.active && notifier?.showsEndOfTransfer == true
+            if let announcement = announcement, NSApp.isActive, !saidByNotification {
                 announce("\(row.item): \(announcement)")
             }
         case .rowGone(let id):
@@ -193,6 +198,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         case .offer(let offer, let notice):
             let window = IncomingWindowController(offer: offer) { [weak self] in
                 self?.incoming[offer.id] = nil
+                self?.notifier?.forgetOffer(offer.id)
             }
             incoming[offer.id] = window
             window.present()
@@ -264,6 +270,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     // MARK: What notifications lead to
 
     private func perform(_ action: Notifier.Action) {
+        quietUntil = Date().addingTimeInterval(1)
         switch action {
         case .none:
             showMainWindow(nil)
@@ -276,6 +283,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             NSWorkspace.shared.open(URL(fileURLWithPath: path))
         case .reveal(let path):
             NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)])
+            // It does not come to the front when asked by an app that is not there
+            // itself, as with the action of a notification.
+            let configuration = NSWorkspace.OpenConfiguration()
+            configuration.activates = true
+            NSWorkspace.shared.openApplication(
+                at: URL(fileURLWithPath: "/System/Library/CoreServices/Finder.app"),
+                configuration: configuration)
         }
     }
 
