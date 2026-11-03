@@ -177,6 +177,8 @@ final class UpdateWindowController: NSWindowController, NSWindowDelegate {
             DispatchQueue.main.async {
                 switch result {
                 case .success(.replaced):
+                    // This folder is not one that macOS empties.
+                    try? FileManager.default.removeItem(atPath: dmg)
                     Installer.relaunch(running, updated: true)
                     app?.quitWithoutAsking()
                 case .success(.leftToTheUser):
