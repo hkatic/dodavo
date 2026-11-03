@@ -170,7 +170,7 @@ fi
 
 echo
 echo "Done. Dodavo $version is signed, notarized and checked."
-echo "Disk image: $dmg ($(du -h "$dmg" | cut -f1 | tr -d ' '))"
+echo "Disk image: $dmg ($(stat -f %z "$dmg" | awk '{printf "%.1f MB", $1 / 1000000}'))"
 echo "SHA-256: $(cut -d' ' -f1 "$dmg.sha256")"
 echo
 echo "Nothing has been published."
