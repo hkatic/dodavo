@@ -13,7 +13,7 @@ Remove an item in the commit that settles it. This file is public, so keep secre
 - **Go through the Mac version with VoiceOver by hand.** `macos/tests/voiceover-checklist.md` is the list. Listen for what is awkward rather than wrong, and try it with braille, with the keys that VoiceOver takes itself, and through a change between online and offline.
 - **Exchange transfers between a Mac and released Windows 1.0.0.** Both directions, file and folder in all three ways of keeping one, names Windows cannot take, pause, cancel on each side, restart on each side and a lost connection. `examples/peer.rs` does it without the interface.
 - **Try what macOS decides at a login and on older systems.** Telling a start at login (`LoginItem.launchedAtLogin`), also with `SMAppService`; the Local Network and Files and Folders prompts during an automatic receive at login; opening a received app that has the quarantine mark; `LSSharedFileList` on macOS 11 and 12.
-- **Publish the first Mac release.** Write the release notes of 1.0.1 in all four languages, and run `macos/publish.sh`. Notarize with `DODAVO_SIGN_IDENTITY` and the notary profile `dodavo`, on the Mac that has the certificate. A release has to carry both manifests (see README).
+- **Publish the first Mac release.** Write the release notes of 1.0.1 in all four languages, build it with `macos/release.sh`, and publish it with `macos/publish.sh`. A release has to carry both manifests (see README).
 
 - **Install the published 1.0.0 from the release page.** Try a new installation for the current user and for all users, an installation over an older copy, and uninstalling.
 - **Send between two computers on different networks.** Check connecting through real NAT, and falling back to a relay there.

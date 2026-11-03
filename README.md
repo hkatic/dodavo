@@ -48,7 +48,7 @@ A native Mac app in Swift and AppKit, which follows Apple's terms and interface 
 - Received items get `com.apple.quarantine`, as downloads do. Settings and the Contact ID are in `~/Library/Application Support/Dodavo`.
 - Folder names that Windows cannot take (`:`, `?`, …) arrive changed on Windows and as they were on another Mac; items that only mean something to macOS are left out. Finder tags and other extended attributes do not travel.
 
-Building: `macos/build.sh`, which needs Xcode's command line tools and Rust (`rustup`), writes `target/macos/Dodavo.app`. `macos/make-dmg.sh` makes the disk image, and notarizes it with a Developer ID certificate. Two copies side by side: `open -n target/macos/Dodavo.app --args --profile alice`.
+Building: `macos/build.sh`, which needs Xcode's command line tools and Rust (`rustup`), writes `target/macos/Dodavo.app`. `macos/release.sh` makes the final release in one command: tests, build, signing with a Developer ID certificate, notarization and a check of the result. Two copies side by side: `open -n target/macos/Dodavo.app --args --profile alice`.
 
 ## How connections work
 
@@ -124,7 +124,7 @@ Installed copies look for new versions on GitHub: once a day they fetch `https:/
 
 A release therefore consists of three files on the GitHub release `v<version>`: `Dodavo-<version>-setup.exe`, its `.sha256`, and `update.json`. The Mac version adds three of its own, `Dodavo-<version>-macos.dmg`, its `.sha256`, and `update-macos.json`, made by `macos/make-dmg.sh` and `macos/publish.sh`, and looks for its own manifest in the same way, signed so that it never verifies on Windows. **Every release has to carry both manifests**, because each system reads the latest release: without its manifest, that system's check fails. A release for one system only carries the other's manifest of the version that system is on. Both scripts add their files to the same draft, which goes public when it has all of them. The steps:
 
-1. Set the new version in `Cargo.toml` and write the release notes as plain text in `release-notes\<version>\en.txt` (required), `hr.txt`, `sr-Latn.txt` and `sl.txt`; the program shows the user's language and falls back to English.
+1. Set the new version in `Cargo.toml` and `crates/dodavo-ffi/Cargo.toml`, and write the release notes as plain text in `release-notes\<version>\en.txt` (required), `hr.txt`, `sr-Latn.txt` and `sl.txt`; the program shows the user's language and falls back to English.
 2. Commit, tag `v<version>`, and build the installer with `installer\build.ps1`.
 3. Run `installer\publish.ps1` (with the signing key in `DODAVO_UPDATE_KEY_FILE` or `-KeyFile`). It builds the release tool (`cargo build --release --features release-tool --bin dodavo-release`), writes and verifies `target\installer\update.json`, and with `-Publish` creates the GitHub release as a draft with `gh` and publishes it after a confirmation. Without `gh`, upload the three files by hand.
 
