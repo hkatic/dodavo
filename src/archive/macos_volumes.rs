@@ -60,13 +60,23 @@ impl Volume {
         assert!(attached.status.success(), "{attached:?}");
     }
 
+    /// Something may still be looking at a new volume, such as Spotlight, and then
+    /// `hdiutil` says for a moment that it is busy.
     fn detach(&self) {
-        let detached = Command::new("hdiutil")
-            .args(["detach", "-quiet"])
-            .arg(&self.mount)
-            .output()
-            .unwrap();
-        assert!(detached.status.success(), "{detached:?}");
+        let mut tries = 0;
+        loop {
+            let detached = Command::new("hdiutil")
+                .args(["detach", "-quiet"])
+                .arg(&self.mount)
+                .output()
+                .unwrap();
+            if detached.status.success() {
+                return;
+            }
+            tries += 1;
+            assert!(tries < 30, "{detached:?}");
+            std::thread::sleep(std::time::Duration::from_secs(1));
+        }
     }
 }
 
