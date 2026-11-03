@@ -3,10 +3,10 @@
 What is wrong in Dodavo now, most important first. Work that is not a defect is in [TODO.md](TODO.md).
 
 - **High:** loses data, makes the two sides disagree about a transfer, or stops normal use.
-- **Medium:** many users will notice it, or it is not explained yet and could turn out to be worse.
+- **Medium:** many users will notice it, or its cause is not known yet.
 - **Low:** rare or cosmetic.
 
-Remove an item in the commit that fixes it. This file is public, so keep secrets and private addresses or paths out of it.
+Remove an item in the commit that fixes it. This file is public, so keep secrets and private addresses or paths out of it, and write plain tasks and facts.
 
 ## High
 
@@ -18,9 +18,9 @@ None known.
 
 `a_cancel_waits_for_the_verdict_across_a_restart`, `a_send_needs_its_data_again_when_the_receiver_lacks_it` and `finish_alone_after_restart_during_unpacking` reconnect after a restart, and wait more than 120 s there, while they pass on a Mac elsewhere and on the Windows runner. It may be that the runner keeps an unsigned test program from the local network (Local Network privacy), which would leave a slow way through a relay; that was not checked. If so, the same wait could be what a user who denies that permission sees. CI runs them without letting them fail the run.
 
-### The setup program and the program are not code-signed
+### Windows warns about a new download
 
-Every new download gets SmartScreen's "Windows protected your PC", or the unknown publisher question on Windows 7. Automatic updates are not affected. `installer\build.ps1` signs everything once a certificate is configured (`DODAVO_SIGN_THUMBPRINT` or `DODAVO_SIGN_PFX`), so only the certificate is missing.
+SmartScreen shows "Windows protected your PC" on a new download, and Windows 7 asks about an unknown publisher. Automatic updates are not affected. A code-signing certificate ends this: `installer\build.ps1` signs everything once one is configured (`DODAVO_SIGN_THUMBPRINT` or `DODAVO_SIGN_PFX`).
 
 ### Transfers through a relay are slow
 
