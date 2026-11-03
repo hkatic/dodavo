@@ -59,7 +59,7 @@ guard AXIsProcessTrusted() else {
 }
 guard
     let app = NSRunningApplication.runningApplications(
-        withBundleIdentifier: "io.github.hkatic.dodavo"
+        withBundleIdentifier: "com.hrvojekatic.dodavo"
     ).first
 else {
     print("Dodavo is not running.")

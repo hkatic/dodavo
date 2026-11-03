@@ -20,7 +20,7 @@ None known.
 
 ### The Mac version is not code-signed or notarized yet
 
-Without a Developer ID certificate, macOS 15 and later block a downloaded app until the user allows it in Privacy & Security, and permissions may be asked again after each update. `macos/build.sh` and `macos/make-dmg.sh` do it all once `DODAVO_SIGN_IDENTITY` and notary credentials are set, so only those are missing.
+Without a Developer ID certificate, macOS 15 and later block a downloaded app until the user allows it in Privacy & Security, and permissions may be asked again after each update. `macos/build.sh` and `macos/make-dmg.sh` do it all once `DODAVO_SIGN_IDENTITY` and notary credentials are set. The certificate exists now, so only the credentials are missing.
 
 ### The setup program and the program are not code-signed
 

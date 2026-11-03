@@ -3,7 +3,7 @@ members = ["crates/dodavo-ffi"]
 
 [package]
 name = "dodavo"
-version = "1.0.0"
+version = "1.0.1"
 edition = "2024"
 description = "Dodavo – send files and folders directly between computers"
 authors = ["Hrvoje Katić"]
