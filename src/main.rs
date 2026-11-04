@@ -15,13 +15,19 @@ pub(crate) use dodavo_core::{
 };
 
 #[cfg(windows)]
-use std::sync::atomic::{AtomicBool, AtomicIsize, Ordering};
+use std::{
+    ffi::OsString,
+    path::PathBuf,
+    sync::atomic::{AtomicBool, AtomicIsize, Ordering},
+    time::{Duration, Instant},
+};
 
 #[cfg(windows)]
 use windows_sys::Win32::{
     Foundation::{CloseHandle, ERROR_ALREADY_EXISTS, GetLastError, HANDLE},
     System::{
         Com::{COINIT_APARTMENTTHREADED, COINIT_DISABLE_OLE1DDE, CoInitializeEx},
+        DataExchange::COPYDATASTRUCT,
         Threading::CreateMutexW,
     },
     UI::{
@@ -31,7 +37,8 @@ use windows_sys::Win32::{
         },
         WindowsAndMessaging::{
             AllowSetForegroundWindow, DispatchMessageW, FindWindowW, GetMessageW,
-            GetWindowThreadProcessId, MSG, PostMessageW, TranslateMessage,
+            GetWindowThreadProcessId, MSG, PostMessageW, SMTO_NORMAL, SendMessageTimeoutW,
+            TranslateMessage, WM_COPYDATA,
         },
     },
 };
@@ -50,13 +57,22 @@ use i18n::tr;
 #[cfg(windows)]
 use ui::wide;
 
+/// How long a start with items looks for the instance that takes them, which
+/// may be starting itself: its window comes after the settings, the identity
+/// and the network, and a message about those can hold it up.
 #[cfg(windows)]
+const FORWARD_TIMEOUT: Duration = Duration::from_secs(30);
+
+#[cfg(windows)]
+#[derive(Debug, Default, PartialEq)]
 struct Args {
     minimized: bool,
     /// Separate settings and identity, e.g. to run two instances for testing.
     profile: Option<String>,
     /// Started by Setup right after an automatic update.
     updated: bool,
+    /// What to send, from File Explorer's menus (everything after `--send`).
+    send: Vec<PathBuf>,
 }
 
 #[cfg(windows)]
@@ -77,32 +93,93 @@ pub fn release_instance_mutexes() {
     }
 }
 
+/// `OsString`, because File Explorer passes names on as they are, and Windows
+/// allows names that are not valid Unicode.
 #[cfg(windows)]
-fn parse_args() -> Args {
-    let mut args = Args {
-        minimized: false,
-        profile: None,
-        updated: false,
-    };
-    let mut it = std::env::args().skip(1);
+fn parse_args(mut it: impl Iterator<Item = OsString>) -> Args {
+    let mut args = Args::default();
     while let Some(a) = it.next() {
-        match a.as_str() {
-            "--minimized" => args.minimized = true,
-            "--updated" => args.updated = true,
-            "--profile" => {
+        match a.to_str() {
+            Some("--minimized") => args.minimized = true,
+            Some("--updated") => args.updated = true,
+            Some("--profile") => {
                 args.profile = it
                     .next()
                     .map(|p| {
-                        p.chars()
+                        p.to_string_lossy()
+                            .chars()
                             .filter(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_')
                             .collect()
                     })
                     .filter(|p: &String| !p.is_empty())
             }
+            Some("--send") => args.send = it.by_ref().map(PathBuf::from).collect(),
             _ => {}
         }
     }
     args
+}
+
+/// Hands `paths` to the instance that is running or still starting, and has
+/// it offer them for sending. Returns `false` if it never took them.
+#[cfg(windows)]
+fn forward_to_running_instance(title: &str, paths: &[PathBuf]) -> bool {
+    let class = wide(ui::window::MAIN_CLASS);
+    let title = wide(title);
+    let payload = ui::send_to::encode(paths);
+    let data = COPYDATASTRUCT {
+        dwData: ui::send_to::COPY_DATA_ID,
+        cbData: payload.len() as u32,
+        lpData: payload.as_ptr() as *mut _,
+    };
+    let deadline = Instant::now() + FORWARD_TIMEOUT;
+    loop {
+        let window = unsafe { FindWindowW(class.as_ptr(), title.as_ptr()) };
+        if !window.is_null() {
+            let mut answer = 0;
+            let sent = unsafe {
+                // See `show_running_instance`.
+                let mut pid = 0;
+                GetWindowThreadProcessId(window, &mut pid);
+                AllowSetForegroundWindow(pid);
+                // A window that does not take messages yet is starting, so
+                // this waits instead of giving up on one that seems hung.
+                // Should a message arrive late, the window drops the repeat.
+                SendMessageTimeoutW(
+                    window,
+                    WM_COPYDATA,
+                    0,
+                    &data as *const _ as isize,
+                    SMTO_NORMAL,
+                    2000,
+                    &mut answer,
+                )
+            };
+            if sent != 0 && answer != 0 {
+                return true;
+            }
+        }
+        if Instant::now() >= deadline {
+            return false;
+        }
+        std::thread::sleep(Duration::from_millis(100));
+    }
+}
+
+/// Says that the items could not be handed over. The context menu starts a
+/// process per item, and one message is enough for all of them, so the first
+/// keeps this mutex until its message is closed.
+#[cfg(windows)]
+fn report_forward_failure(profile: Option<&str>) {
+    let name = wide("Local\\DodavoForwardFailed");
+    let first = unsafe {
+        CreateMutexW(std::ptr::null(), 1, name.as_ptr());
+        GetLastError() != ERROR_ALREADY_EXISTS
+    };
+    if first {
+        i18n::init(config::read_language(&config::data_dir(profile)).as_deref());
+        ui::error(std::ptr::null_mut(), tr!(send_to_failed));
+    }
 }
 
 #[cfg(windows)]
@@ -164,9 +241,15 @@ fn main() {
         }
     }));
 
-    let args = parse_args();
+    let args = parse_args(std::env::args_os().skip(1));
     let profile = args.profile.as_deref();
     let title = ui::main_window::window_title(profile);
+    // Relative paths would mean something else to the instance that takes them.
+    let send: Vec<PathBuf> = args
+        .send
+        .iter()
+        .map(|path| std::path::absolute(path).unwrap_or_else(|_| path.clone()))
+        .collect();
 
     // Only one instance per profile: a second start brings the first one to the front.
     // The mutex handle is deliberately kept open for the life of the process.
@@ -177,8 +260,16 @@ fn main() {
         GetLastError() == ERROR_ALREADY_EXISTS
     };
     if already_running {
-        // A start in the background (autostart) leaves the running instance alone.
-        if !args.minimized {
+        // While a handle is open the mutex stays, even after the instance has
+        // gone, and a new start would take itself for a second one. The wait
+        // below is long enough for that, for example during an update.
+        release_instance_mutexes();
+        if !send.is_empty() {
+            if !forward_to_running_instance(&title, &send) {
+                report_forward_failure(profile);
+            }
+        } else if !args.minimized {
+            // A start in the background (autostart) leaves the running instance alone.
             show_running_instance(&title);
         }
         return;
@@ -232,7 +323,14 @@ fn main() {
     if cfg.start_with_windows {
         ui::shell::set_start_with_windows(true);
     }
-    let start_hidden = args.minimized || cfg.start_minimized;
+    // The same for File Explorer's menus, whose text also follows the language.
+    if ui::shell::explorer_menu_available(profile) {
+        ui::shell::set_explorer_menu(cfg.explorer_menu);
+    }
+    // Started only to send something, Dodavo stays out of the way, unless
+    // nothing but its main window would then show that it is running.
+    let start_hidden =
+        args.minimized || cfg.start_minimized || (!send.is_empty() && cfg.minimize_to_tray);
     let net = net::start(
         secret,
         data_dir.clone(),
@@ -257,6 +355,9 @@ fn main() {
 
     ui::main_window::create(profile, start_hidden);
     ui::update::on_start(args.updated);
+    if !send.is_empty() {
+        ui::send_to::add(send);
+    }
 
     let mut msg: MSG = unsafe { std::mem::zeroed() };
     while unsafe { GetMessageW(&mut msg, std::ptr::null_mut(), 0, 0) } > 0 {
@@ -278,4 +379,59 @@ fn main() {
 fn main() {
     eprintln!("This program is the Windows user interface. See macos/ for the Mac one.");
     std::process::exit(1);
+}
+
+#[cfg(all(test, windows))]
+mod tests {
+    use std::os::windows::ffi::OsStringExt;
+
+    use super::*;
+
+    fn parse(args: &[&str]) -> Args {
+        parse_args(args.iter().map(OsString::from))
+    }
+
+    #[test]
+    fn options_are_read_as_before() {
+        assert_eq!(parse(&[]), Args::default());
+        let args = parse(&["--minimized", "--updated", "--profile", "al-ice_2!", "other"]);
+        assert!(args.minimized);
+        assert!(args.updated);
+        assert_eq!(args.profile.as_deref(), Some("al-ice_2"));
+        assert!(args.send.is_empty());
+        assert_eq!(parse(&["--profile", "!!!"]).profile, None);
+        assert_eq!(parse(&["--profile"]).profile, None);
+    }
+
+    /// What File Explorer starts for its two menus. The arguments end with
+    /// the paths, so a file named like an option is a file.
+    #[test]
+    fn everything_after_send_is_a_path() {
+        let args = parse(&["--profile", "a", "--send", r"C:\one.txt", "--minimized", r"D:\two"]);
+        assert_eq!(args.profile.as_deref(), Some("a"));
+        assert!(!args.minimized);
+        assert_eq!(
+            args.send,
+            [
+                PathBuf::from(r"C:\one.txt"),
+                PathBuf::from("--minimized"),
+                PathBuf::from(r"D:\two"),
+            ]
+        );
+    }
+
+    /// The shortcut in the Send to folder, started by itself.
+    #[test]
+    fn send_without_paths_is_a_plain_start() {
+        assert_eq!(parse(&["--send"]), Args::default());
+    }
+
+    #[test]
+    fn a_name_that_is_not_unicode_is_kept() {
+        let mut units: Vec<u16> = r"C:\Temp\".encode_utf16().collect();
+        units.push(0xD800);
+        let name = OsString::from_wide(&units);
+        let args = parse_args([OsString::from("--send"), name.clone()].into_iter());
+        assert_eq!(args.send, [PathBuf::from(name)]);
+    }
 }

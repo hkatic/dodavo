@@ -97,7 +97,7 @@
 <li>Type <kbd>Dodavo</kbd> in the search box to find it in the list. In Windows 11, press <kbd>Tab</kbd> to reach its <span class="ui">More options</span> button, press <kbd>Enter</kbd> and choose <span class="ui">Uninstall</span>. In Windows 10, 8.1 and 7, select Dodavo in the list and choose <span class="ui">Uninstall</span>.</li>
 <li>Confirm with <span class="ui">Uninstall</span> and then <span class="ui">Yes</span>.</li>
 </ol>
-<p>Uninstalling removes the program, its shortcuts and the <span class="ui">Start with Windows</span> entry. Your settings, your recipient list and your Contact ID stay in the folder described in <a href="#your-data">Your settings and identity</a>, so if you install Dodavo again, everything is as before. If you want to remove them as well, delete that folder after uninstalling; your Contact ID is then lost for good.</p>
+<p>Uninstalling removes the program, its shortcuts, its entries in File Explorer's menus and the <span class="ui">Start with Windows</span> entry. Your settings, your recipient list and your Contact ID stay in the folder described in <a href="#your-data">Your settings and identity</a>, so if you install Dodavo again, everything is as before. If you want to remove them as well, delete that folder after uninstalling; your Contact ID is then lost for good.</p>
 </section>
 
 <section aria-labelledby="getting-started">
@@ -189,6 +189,17 @@
 <p>You can drag files and folders from File Explorer and drop them onto a person in the recipient list. If you drop several items at once, Dodavo asks you to confirm; each item is then sent as a separate transfer with its own progress window.</p>
 <p>You can start as many transfers as you like at the same time, to the same person or to different people.</p>
 
+<h3 id="send-from-explorer">Sending from File Explorer</h3>
+<p>You can send files and folders directly from File Explorer, also when Dodavo is not running:</p>
+<ol>
+<li>Select one or more files or folders in File Explorer.</li>
+<li>Press <kbd>Shift</kbd>+<kbd>F10</kbd> to open the context menu, or right-click the selection. On Windows 11, right-clicking first shows a shorter menu: choose <span class="ui">Show more options</span> there. <kbd>Shift</kbd>+<kbd>F10</kbd> opens the full menu right away.</li>
+<li>Choose <span class="ui">Send with Dodavo</span> (<kbd>W</kbd>), or choose <span class="ui">Send to</span> and then <span class="ui">Dodavo</span>.</li>
+<li>The <span class="ui">Send with Dodavo</span> window opens. It says how many items you selected, and the focus is on the <span class="ui">Recipient</span> list. Choose the person with the arrow keys and press <kbd>Enter</kbd>, or activate <span class="ui">Send</span>.</li>
+</ol>
+<p>Each item is sent as a separate transfer with its own progress window. Nothing is sent before you choose <span class="ui">Send</span>; <kbd>Esc</kbd> or <span class="ui">Cancel</span> closes the window without sending anything. To read what you selected, press <kbd>Alt</kbd>+<kbd>I</kbd> and use the arrow keys in the <span class="ui">Items</span> field. If you have no recipients yet, the window says so and the focus is on <span class="ui">Add Recipient…</span> (<kbd>Alt</kbd>+<kbd>A</kbd>). Items you send to Dodavo while the window is open are added to it.</p>
+<p>The context menu offers <span class="ui">Send with Dodavo</span> for up to 100 selected items. For more, use <span class="ui">Send to</span>, or send the folder they are in. You can remove both entries with <span class="ui">Add Dodavo to File Explorer's menus</span> in <a href="#settings">Settings</a>.</p>
+
 <h3 id="after-sending">When a sent item has arrived</h3>
 <p>When the other person has received everything, the checksum has been confirmed and the item has been saved on the other computer, Dodavo shows a message, for example <span class="ui">Done! Ana has received the file.</span>, followed by the name of the item. Screen readers read it. Press <kbd>Enter</kbd> or <kbd>Esc</kbd>, or choose <span class="ui">Close</span>; the progress window closes too.</p>
 <p>If you select <span class="ui">Don't show this again</span>, the progress window closes by itself next time, and a notification tells you that the transfer is complete. You can turn the message back on in Settings with <span class="ui">After sending, show a message once the item has arrived</span>. If the progress window is hidden or minimized when the transfer ends, there is only the notification. A transfer that fails, is declined or is cancelled keeps its progress window open, so that you can read what happened.</p>
@@ -204,7 +215,7 @@
 <dt>Unknown sender warning</dt>
 <dd>Only shown when the sender is not in your recipient list. It shows the sender's shortened Contact ID and reminds you to accept files only from people you know. The name in the window is the name the sender gave themselves, so it cannot prove who they are. A check box, <span class="ui">Add “…” to my recipients</span>, lets you add the sender to your list when you accept.</dd>
 <dt><span class="ui">Save to:</span> (<kbd>Alt</kbd>+<kbd>S</kbd>)</dt>
-<dd>The folder the item will be saved in. It is the folder from <span class="ui">Always save received files to this folder</span> if you set one in Settings, otherwise the folder you used last time, or your Downloads folder. You can type a different folder, or use <span class="ui">Browse…</span> (<kbd>Alt</kbd>+<kbd>B</kbd>) to choose one.</dd>
+<dd>The folder the item will be saved in. With <span class="ui">Always save received files to this folder</span> on in Settings, it is the folder from that option, which is your Downloads folder unless you chose another one. With that option off, it is the folder you used last time, or your Downloads folder. You can type a different folder, or use <span class="ui">Browse…</span> (<kbd>Alt</kbd>+<kbd>B</kbd>) to choose one.</dd>
 <dt>Free disk space</dt>
 <dd>A sentence below the folder says whether there is enough free space on that drive, how much is needed and how much is available. A folder that is unpacked needs room both for the download and for unpacking; a folder that you keep only as a ZIP file needs room for the ZIP file (see <span class="ui">After receiving a folder</span> in <a href="#settings-receiving">Settings</a>). The sentence is updated when you choose a folder with Browse or leave the folder field. On a drive with the FAT32 file system, such as many USB sticks and memory cards, no file can be 4 GB or larger: if the transfer would save such a file there, the sentence says so, and you need to choose a folder on another drive.</dd>
 <dt><span class="ui">Accept</span> (<kbd>Alt</kbd>+<kbd>A</kbd>) and <span class="ui">Decline</span> (<kbd>Alt</kbd>+<kbd>D</kbd>)</dt>
@@ -225,7 +236,8 @@
 <p>If you select <span class="ui">Don't ask me again</span>, Dodavo shows a notification instead next time. Selecting the notification shows the item in File Explorer. You can turn the question back on in Settings with <span class="ui">After receiving, ask whether to open the file or folder</span>.</p>
 
 <h3 id="auto-accept">Receiving without being asked</h3>
-<p>Transfers from people in your recipient list start immediately, without the Incoming Transfer window, because <span class="ui">Start transfers automatically, without asking</span> is on in Settings. Dodavo shows a notification, <span class="ui">Receiving</span>, and saves the item in the folder from <span class="ui">Always save received files to this folder</span>, or in Downloads if that option is off. Transfers from unknown senders, and transfers that would not fit on the disk, are still asked about. Only the people you added yourself can start a transfer this way: their Contact ID cannot be forged. If you prefer to decide about every transfer, clear the check box.</p>
+<p>Transfers from people in your recipient list start immediately, without the Incoming Transfer window, as long as <span class="ui">Always save received files to this folder</span> and <span class="ui">Start transfers automatically, without asking</span> are both on in Settings. They are on unless you clear them. Dodavo shows a notification, <span class="ui">Receiving</span>, and saves the item in the folder from the first option, which is your Downloads folder unless you chose another one. Transfers from unknown senders, and transfers that would not fit on the disk, are still asked about. Only the people you added yourself can start a transfer this way: their Contact ID cannot be forged.</p>
+<p>To choose where to save each item, clear <span class="ui">Always save received files to this folder</span>: every transfer then opens the Incoming Transfer window. To decide about every transfer but keep your folder as the suggestion, clear <span class="ui">Start transfers automatically, without asking</span> instead.</p>
 </section>
 
 <section aria-labelledby="progress">
@@ -250,12 +262,12 @@
 
 <h3 id="connection-lost">When the connection is lost</h3>
 <p>If the internet connection drops, one of the computers goes to sleep, or Dodavo is closed on either side, the transfer is not lost. The step line says <span class="ui">The connection was lost. The transfer continues as soon as you are both online again, even after a restart.</span> Dodavo keeps what has already arrived and continues from that point when the two computers can reach each other again – after a few seconds, or days later.</p>
-<p>If the connection stays lost for a few seconds, Dodavo asks what to do:</p>
+<p>If the connection stays lost for a few seconds, Dodavo shows a notification, <span class="ui">Connection lost</span>, and the transfer waits. It continues by itself, so you don't need to do anything. You can change this in Settings, under <span class="ui">If the connection is lost during a transfer</span>:</p>
 <ul>
-<li><span class="ui">Wait for the connection</span> leaves the transfer waiting. It continues by itself.</li>
-<li><span class="ui">Cancel the transfer</span> ends it. Partly received data is deleted.</li>
+<li><span class="ui">Wait for the connection and continue</span> does what is described above. It is the default.</li>
+<li><span class="ui">Ask every time</span> makes Dodavo ask after a few seconds. <span class="ui">Wait for the connection</span> leaves the transfer waiting, and <span class="ui">Cancel the transfer</span> ends it. Select <span class="ui">Don't ask me again</span> to always do the same.</li>
+<li><span class="ui">Cancel the transfer</span> cancels the transfer after a few seconds, without asking. Partly received data is deleted.</li>
 </ul>
-<p>Select <span class="ui">Don't ask me again</span> to always do the same. You can change the choice later in Settings, under <span class="ui">If the connection is lost during a transfer</span>. With <span class="ui">Wait for the connection and continue</span>, Dodavo shows a notification instead of the question; with <span class="ui">Cancel the transfer</span>, it cancels the transfer without asking.</p>
 <p>When Dodavo starts, it picks up the transfers that were interrupted last time: a notification, <span class="ui">Unfinished transfer</span>, appears for each of them, and its progress window opens without taking the focus. A transfer that cannot continue gets the notification <span class="ui">Transfer not completed</span> instead, and its progress window says why, for example <span class="ui">Nothing happened in the transfer for more than 30 days</span>. Before the data continues to flow, the step line says <span class="ui">Checking the data already transferred…</span> while Dodavo verifies what it already has. A transfer picked up this way simply waits for the other side; it does not ask whether to wait or to cancel. While data is flowing, Dodavo also keeps the computer from going to sleep by itself.</p>
 
 <h3 id="closing-progress">Closing a progress window during a transfer</h3>
@@ -305,9 +317,9 @@
 <h3 id="settings-receiving">Receiving files</h3>
 <dl>
 <dt><span class="ui">Always save received files to this folder</span></dt>
-<dd>When selected, the folder in the <span class="ui">Folder</span> field below (which you can choose with <span class="ui">Browse…</span>) is always suggested for received items and used for automatic transfers. When cleared, Dodavo suggests the folder you used last, or Downloads.</dd>
+<dd>When selected, received items are saved in the folder in the <span class="ui">Folder</span> field below, which you can choose with <span class="ui">Browse…</span>. It is your Downloads folder unless you choose another one. When cleared, Dodavo always asks where to save: every transfer opens the Incoming Transfer window, which suggests the folder you used last, or Downloads. It is on unless you clear it.</dd>
 <dt><span class="ui">Start transfers automatically, without asking</span></dt>
-<dd>Accepts transfers from people in your recipient list without asking. It is on unless you clear it. See <a href="#auto-accept">Receiving without being asked</a>.</dd>
+<dd>Accepts transfers from people in your recipient list without asking, and saves them in the folder above. It is on unless you clear it, and unavailable while <span class="ui">Always save received files to this folder</span> is cleared. See <a href="#auto-accept">Receiving without being asked</a>.</dd>
 <dt><span class="ui">After receiving a folder</span></dt>
 <dd>A list with <span class="ui">Keep only the unpacked folder</span>, <span class="ui">Keep only the ZIP file (don't unpack)</span> and <span class="ui">Keep both the unpacked folder and the ZIP file</span>. A received folder arrives as a ZIP file; this decides whether Dodavo unpacks it and whether it keeps the ZIP file. Keeping the ZIP file is useful if you want to store or pass on the folder exactly as it arrived. The choice applies to transfers you accept after changing it. See <a href="#after-receiving">When the transfer is complete</a> and <a href="#faq-dates">Are the dates of files and folders kept?</a></dd>
 <dt><span class="ui">After receiving, ask whether to open the file or folder</span></dt>
@@ -323,6 +335,8 @@
 <dd>When cleared, closing the main window exits Dodavo.</dd>
 <dt><span class="ui">Check for updates automatically (once a day)</span></dt>
 <dd>Dodavo asks the Dodavo page on GitHub once a day whether a newer version is available and offers to install it. See <a href="#update">Updating Dodavo</a>.</dd>
+<dt><span class="ui">Add Dodavo to File Explorer's menus</span></dt>
+<dd>Adds <span class="ui">Send with Dodavo</span> to the context menu of files and folders, and Dodavo to their <span class="ui">Send to</span> menu. It is on unless you clear it, and available when Dodavo was installed with its setup program. See <a href="#send-from-explorer">Sending from File Explorer</a>.</dd>
 <dt><span class="ui">When closing the window of a running transfer</span></dt>
 <dd>A list with <span class="ui">Ask every time</span>, <span class="ui">Continue in the background</span> and <span class="ui">Cancel the transfer</span>. See <a href="#closing-progress">Closing a progress window during a transfer</a>.</dd>
 <dt><span class="ui">If the connection is lost during a transfer</span></dt>
@@ -381,6 +395,19 @@
 <tr><td><kbd>Alt</kbd>+<kbd>S</kbd></td><td>Move to the Save to field</td></tr>
 <tr><td><kbd>Alt</kbd>+<kbd>B</kbd></td><td>Browse for a folder</td></tr>
 <tr><td><kbd>Alt</kbd>+<kbd>M</kbd></td><td>Add the unknown sender to my recipients</td></tr>
+</tbody>
+</table>
+<table>
+<caption>Send with Dodavo window</caption>
+<thead>
+<tr><th scope="col">Keys</th><th scope="col">Action</th></tr>
+</thead>
+<tbody>
+<tr><td><kbd>Alt</kbd>+<kbd>I</kbd></td><td>Move to the list of selected items</td></tr>
+<tr><td><kbd>Alt</kbd>+<kbd>R</kbd></td><td>Move to the list of recipients</td></tr>
+<tr><td><kbd>Alt</kbd>+<kbd>A</kbd></td><td>Add a recipient</td></tr>
+<tr><td><kbd>Alt</kbd>+<kbd>S</kbd> or <kbd>Enter</kbd></td><td>Send the items to the selected person</td></tr>
+<tr><td><kbd>Esc</kbd></td><td>Close the window without sending anything</td></tr>
 </tbody>
 </table>
 <table>
@@ -472,7 +499,7 @@
 <dt>The computer goes to sleep</dt>
 <dd>While data is flowing, Dodavo keeps the computer from going to sleep by itself, as a download does (the screen may still turn off). If the computer is put to sleep anyway, or the lid is closed, the transfer stops and continues when the computer wakes up.</dd>
 <dt>The internet connection drops</dt>
-<dd>The progress window says <span class="ui">The connection was lost. The transfer continues as soon as you are both online again, even after a restart.</span> After a few seconds, Dodavo asks whether to <span class="ui">Wait for the connection</span> or <span class="ui">Cancel the transfer</span>, unless you have chosen an answer for good in Settings. Computers on the same home or office network keep transferring without the internet.</dd>
+<dd>The progress window says <span class="ui">The connection was lost. The transfer continues as soon as you are both online again, even after a restart.</span> After a few seconds, Dodavo shows a notification and the transfer waits, unless you chose something else in Settings. Computers on the same home or office network keep transferring without the internet.</dd>
 <dt>Any of this happens on the other person's computer</dt>
 <dd>Your window says that the connection was lost, or that the transfer was paused on the other side, and the <span class="ui">Transfer</span> column of your recipient list shows the same. You don't need to do anything: the transfer continues when the other side is back.</dd>
 <dt>Another program is using the partly received file</dt>
@@ -489,10 +516,10 @@
 <p>No. Dodavo has no limit on the size of a file or folder; the only limits are the free space on the receiving drive and, on a drive with the FAT32 file system (many USB sticks and memory cards), that no single file can be 4 GB or larger. For a folder, the receiving computer needs room for the archive and for the unpacked folder, so roughly twice the folder's size while unpacking (unless it keeps only the ZIP file). The Incoming Transfer window says whether there is enough space before you accept.</p>
 
 <h3 id="faq-several">Can I send several items at once, or to several people?</h3>
-<p>Yes. You can start as many transfers as you like, to the same person or to different people, and each has its own progress window. To send several files or folders in one go, drag them from File Explorer onto the person in your recipient list; after you confirm, each item is sent as a separate transfer. See <a href="#drag-and-drop">Dragging items onto a person</a>. The <span class="ui">Transfer</span> column of the recipient list and the <span class="ui">Transfers</span> menu keep track of all of them.</p>
+<p>Yes. You can start as many transfers as you like, to the same person or to different people, and each has its own progress window. To send several files or folders in one go, drag them from File Explorer onto the person in your recipient list; after you confirm, each item is sent as a separate transfer. See <a href="#drag-and-drop">Dragging items onto a person</a>. You can also select them in File Explorer and send them from there: see <a href="#send-from-explorer">Sending from File Explorer</a>. The <span class="ui">Transfer</span> column of the recipient list and the <span class="ui">Transfers</span> menu keep track of all of them.</p>
 
 <h3 id="faq-where">Where are received files saved?</h3>
-<p>In the folder shown under <span class="ui">Save to:</span> in the Incoming Transfer window, which you can change for each transfer. Dodavo suggests your Downloads folder, the folder you used last time, or the fixed folder you set in Settings under <span class="ui">Always save received files to this folder</span>. If an item with the same name already exists there, the new one gets a number added to its name; nothing is ever overwritten. See <a href="#incoming-window">The Incoming Transfer window</a> and <a href="#settings-receiving">Receiving files</a>.</p>
+<p>In your Downloads folder, unless you chose another one in Settings under <span class="ui">Always save received files to this folder</span>. If you clear that option, Dodavo asks every time. Whenever the Incoming Transfer window opens, you can change the folder under <span class="ui">Save to:</span> for that transfer. If an item with the same name already exists there, the new one gets a number added to its name; nothing is ever overwritten. See <a href="#incoming-window">The Incoming Transfer window</a> and <a href="#settings-receiving">Receiving files</a>.</p>
 
 <h3 id="faq-lan">Does Dodavo work without an internet connection?</h3>
 <p>Yes, between computers on the same local network, for example at home or in an office. They find each other on the network directly. The status line then says <span class="ui">Offline – check your internet connection. Transfers within your local network still work.</span>, and transfers to computers elsewhere wait until you are online again.</p>

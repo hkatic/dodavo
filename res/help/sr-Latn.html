@@ -97,7 +97,7 @@
 <li>Otkucajte <kbd>Dodavo</kbd> u polje za pretragu da biste ga pronašli na listi. U sistemu Windows 11 pritisnite <kbd>Tab</kbd> da biste došli do dugmeta za dodatne opcije pored njega, pritisnite <kbd>Enter</kbd> i izaberite <span class="ui">Deinstaliraj</span>. U sistemima Windows 10, 8.1 i 7 izaberite Dodavo na listi i izaberite <span class="ui">Deinstaliraj</span>.</li>
 <li>Potvrdite izborom opcije <span class="ui">Deinstaliraj</span>, a zatim <span class="ui">Da</span>.</li>
 </ol>
-<p>Deinstalacija uklanja program, njegove prečice i unos za opciju <span class="ui">Pokreni pri prijavljivanju u Windows</span>. Vaše postavke, lista primalaca i ID kontakta ostaju u fascikli opisanoj u odeljku <a href="#your-data">Vaše postavke i identitet</a>, pa je posle ponovne instalacije sve kao pre. Ako želite da ih uklonite, posle deinstalacije izbrišite tu fasciklu; vaš ID kontakta je tada trajno izgubljen.</p>
+<p>Deinstalacija uklanja program, njegove prečice, njegove stavke u menijima Istraživača datoteka i unos za opciju <span class="ui">Pokreni pri prijavljivanju u Windows</span>. Vaše postavke, lista primalaca i ID kontakta ostaju u fascikli opisanoj u odeljku <a href="#your-data">Vaše postavke i identitet</a>, pa je posle ponovne instalacije sve kao pre. Ako želite da ih uklonite, posle deinstalacije izbrišite tu fasciklu; vaš ID kontakta je tada trajno izgubljen.</p>
 </section>
 
 <section aria-labelledby="getting-started">
@@ -189,6 +189,17 @@
 <p>Datoteke i fascikle možete da prevučete iz Istraživača datoteka i otpustite ih na osobu na listi primalaca. Ako odjednom otpustite više stavki, Dodavo traži potvrdu; svaka stavka se zatim šalje kao zaseban prenos sa sopstvenim prozorom napretka.</p>
 <p>Istovremeno možete da pokrenete koliko god želite prenosa, istoj osobi ili različitim osobama.</p>
 
+<h3 id="send-from-explorer">Slanje iz Istraživača datoteka</h3>
+<p>Datoteke i fascikle možete da šaljete direktno iz Istraživača datoteka, čak i kada Dodavo nije pokrenut:</p>
+<ol>
+<li>U Istraživaču datoteka izaberite jednu ili više datoteka ili fascikli.</li>
+<li>Pritisnite <kbd>Shift</kbd>+<kbd>F10</kbd> da biste otvorili kontekstualni meni ili kliknite desnim tasterom miša na izabrano. U operativnom sistemu Windows 11 desni klik prvo prikazuje kraći meni: tamo izaberite <span class="ui">Prikaži još opcija</span>. <kbd>Shift</kbd>+<kbd>F10</kbd> odmah otvara ceo meni.</li>
+<li>Izaberite <span class="ui">Pošalji programom Dodavo</span> (<kbd>D</kbd>) ili izaberite <span class="ui">Pošalji u</span>, pa <span class="ui">Dodavo</span>.</li>
+<li>Otvara se prozor <span class="ui">Slanje programom Dodavo</span>. Kaže koliko ste stavki izabrali, a fokus je na listi <span class="ui">Primalac</span>. Tasterima sa strelicama izaberite osobu i pritisnite <kbd>Enter</kbd> ili aktivirajte dugme <span class="ui">Pošalji</span>.</li>
+</ol>
+<p>Svaka stavka se šalje kao zaseban prenos sa sopstvenim prozorom napretka. Ništa se ne šalje pre nego što izaberete <span class="ui">Pošalji</span>; <kbd>Esc</kbd> ili <span class="ui">Otkaži</span> zatvara prozor bez slanja. Da biste pročitali šta ste izabrali, pritisnite <kbd>Alt</kbd>+<kbd>S</kbd> i koristite tastere sa strelicama u polju <span class="ui">Stavke</span>. Ako još nemate primaoce, prozor to kaže, a fokus je na dugmetu <span class="ui">Dodaj primaoca…</span> (<kbd>Alt</kbd>+<kbd>A</kbd>). Stavke koje pošaljete Dodavu dok je prozor otvoren dodaju se u njega.</p>
+<p>Kontekstualni meni nudi <span class="ui">Pošalji programom Dodavo</span> za najviše 100 izabranih stavki. Za više stavki koristite <span class="ui">Pošalji u</span> ili pošaljite fasciklu u kojoj se nalaze. Obe stavke možete da uklonite opcijom <span class="ui">Dodaj Dodavo u menije Istraživača datoteka</span> u <a href="#settings">postavkama</a>.</p>
+
 <h3 id="after-sending">Kada poslata stavka stigne</h3>
 <p>Kada druga osoba primi sve, kontrolni zbir bude potvrđen i stavka bude sačuvana na drugom računaru, Dodavo prikazuje poruku, na primer <span class="ui">Gotovo! Datoteka je isporučena primaocu (Ana).</span>, a ispod nje naziv stavke. Čitači ekrana je čitaju. Pritisnite <kbd>Enter</kbd> ili <kbd>Esc</kbd> ili izaberite <span class="ui">Zatvori</span>; zatvara se i prozor napretka.</p>
 <p>Ako izaberete <span class="ui">Ne prikazuj ponovo</span>, prozor napretka će se sledeći put zatvoriti sam, a obaveštenje će vam javiti da je prenos završen. Poruku možete ponovo da uključite u postavkama opcijom <span class="ui">Posle slanja prikaži poruku kada datoteka ili fascikla stigne</span>. Ako je prozor napretka skriven ili umanjen kada se prenos završi, prikazuje se samo obaveštenje. Kada prenos ne uspe, bude odbijen ili otkazan, prozor napretka ostaje otvoren da biste mogli da pročitate šta se dogodilo.</p>
@@ -204,7 +215,7 @@
 <dt>Upozorenje o nepoznatom pošiljaocu</dt>
 <dd>Prikazuje se samo kada pošiljalac nije na vašoj listi primalaca. Prikazuje skraćeni ID kontakta pošiljaoca i podseća vas da datoteke prihvatate samo od osoba koje poznajete. Ime u prozoru je ime koje je pošiljalac sam sebi dao, pa ne dokazuje ko je on. Polje za potvrdu <span class="ui">Dodaj „…“ u moje primaoce</span> omogućava da pošiljaoca dodate na svoju listu kada prihvatite prenos.</dd>
 <dt><span class="ui">Sačuvaj u:</span> (<kbd>Alt</kbd>+<kbd>S</kbd>)</dt>
-<dd>Fascikla u kojoj će se stavka sačuvati. To je fascikla iz opcije <span class="ui">Uvek čuvaj primljene datoteke u ovoj fascikli</span> ako ste je podesili u postavkama, inače fascikla koju ste koristili prošli put ili vaša fascikla Preuzimanja. Možete da upišete drugu fasciklu ili da je izaberete dugmetom <span class="ui">Pregledaj…</span> (<kbd>Alt</kbd>+<kbd>P</kbd>).</dd>
+<dd>Fascikla u kojoj će se stavka sačuvati. Ako je u postavkama uključena opcija <span class="ui">Uvek čuvaj primljene datoteke u ovoj fascikli</span>, to je fascikla iz te opcije, a to je vaša fascikla Preuzimanja ako niste izabrali drugu. Ako ta opcija nije uključena, to je fascikla koju ste koristili prošli put ili vaša fascikla Preuzimanja. Možete da upišete drugu fasciklu ili da je izaberete dugmetom <span class="ui">Pregledaj…</span> (<kbd>Alt</kbd>+<kbd>P</kbd>).</dd>
 <dt>Slobodan prostor na disku</dt>
 <dd>Rečenica ispod fascikle kaže da li na tom disku ima dovoljno slobodnog prostora, koliko je potrebno i koliko je dostupno. Fascikli koja se raspakuje potreban je prostor i za preuzimanje i za raspakivanje; fascikli koju zadržavate samo kao ZIP datoteku potreban je prostor za ZIP datoteku (pogledajte <span class="ui">Posle prijema fascikle</span> u <a href="#settings-receiving">postavkama</a>). Rečenica se ažurira kada fasciklu izaberete dugmetom Pregledaj ili napustite polje sa fasciklom. Na disku sa sistemom datoteka FAT32, kakav imaju mnogi USB fleš diskovi i memorijske kartice, nijedna datoteka ne može biti od 4 GB ili veća: ako bi prenos tamo sačuvao takvu datoteku, rečenica to kaže i treba da izaberete fasciklu na drugom disku.</dd>
 <dt><span class="ui">Prihvati</span> (<kbd>Alt</kbd>+<kbd>I</kbd>) i <span class="ui">Odbij</span> (<kbd>Alt</kbd>+<kbd>O</kbd>)</dt>
@@ -225,7 +236,8 @@
 <p>Ako izaberete <span class="ui">Ne pitaj me ponovo</span>, Dodavo će sledeći put umesto pitanja prikazati obaveštenje. Izborom obaveštenja stavka se prikazuje u Istraživaču datoteka. Pitanje možete ponovo da uključite u postavkama opcijom <span class="ui">Posle prijema pitaj da li da se otvori datoteka ili fascikla</span>.</p>
 
 <h3 id="auto-accept">Primanje bez pitanja</h3>
-<p>Prenosi od osoba sa vaše liste primalaca počinju odmah, bez prozora Dolazni prenos, jer je u postavkama uključena opcija <span class="ui">Prenose pokreći automatski, bez pitanja</span>. Dodavo prikazuje obaveštenje <span class="ui">Primanje</span> i čuva stavku u fascikli iz opcije <span class="ui">Uvek čuvaj primljene datoteke u ovoj fascikli</span> ili u fascikli Preuzimanja ako ta opcija nije uključena. Za prenose od nepoznatih pošiljalaca i prenose koji ne bi stali na disk Dodavo i dalje pita. Na ovaj način prenos mogu da pokrenu samo osobe koje ste sami dodali: njihov ID kontakta ne može da se falsifikuje. Ako želite sami da odlučujete o svakom prenosu, opozovite izbor tog polja za potvrdu.</p>
+<p>Prenosi od osoba sa vaše liste primalaca počinju odmah, bez prozora Dolazni prenos, ako su u postavkama uključene obe opcije: <span class="ui">Uvek čuvaj primljene datoteke u ovoj fascikli</span> i <span class="ui">Prenose pokreći automatski, bez pitanja</span>. Uključene su dok ih ne isključite. Dodavo prikazuje obaveštenje <span class="ui">Primanje</span> i čuva stavku u fascikli iz prve opcije, a to je vaša fascikla Preuzimanja ako niste izabrali drugu. Za prenose od nepoznatih pošiljalaca i prenose koji ne bi stali na disk Dodavo i dalje pita. Na ovaj način prenos mogu da pokrenu samo osobe koje ste sami dodali: njihov ID kontakta ne može da se falsifikuje.</p>
+<p>Ako želite da birate gde se čuva svaka stavka, opozovite izbor opcije <span class="ui">Uvek čuvaj primljene datoteke u ovoj fascikli</span>: svaki prenos tada otvara prozor Dolazni prenos. Ako želite da odlučujete o svakom prenosu, a da se vaša fascikla i dalje predlaže, umesto toga opozovite izbor opcije <span class="ui">Prenose pokreći automatski, bez pitanja</span>.</p>
 </section>
 
 <section aria-labelledby="progress">
@@ -250,12 +262,12 @@
 
 <h3 id="connection-lost">Kada se veza prekine</h3>
 <p>Ako internet veza nestane, jedan od računara pređe u stanje spavanja ili se Dodavo zatvori na bilo kojoj strani, prenos nije izgubljen. Red koraka kaže <span class="ui">Veza je prekinuta. Prenos se nastavlja čim oboje ponovo budete na mreži, čak i posle ponovnog pokretanja.</span> Dodavo zadržava ono što je već stiglo i nastavlja od tog mesta čim računari ponovo mogu da se povežu – posle nekoliko sekundi ili danima kasnije.</p>
-<p>Ako veza ostane prekinuta nekoliko sekundi, Dodavo pita šta da uradi:</p>
+<p>Ako veza ostane prekinuta nekoliko sekundi, Dodavo prikazuje obaveštenje <span class="ui">Veza je prekinuta</span>, a prenos čeka. Nastavlja se sam, pa ne morate ništa da preduzimate. To možete da promenite u postavkama, pod <span class="ui">Ako se veza prekine tokom prenosa</span>:</p>
 <ul>
-<li><span class="ui">Sačekaj vezu</span> ostavlja prenos da čeka. Nastavlja se sam.</li>
-<li><span class="ui">Otkaži prenos</span> ga završava. Delimično primljeni podaci se brišu.</li>
+<li><span class="ui">Sačekaj vezu i nastavi</span> čini ono što je gore opisano. To je podrazumevana opcija.</li>
+<li>Uz <span class="ui">Pitaj svaki put</span> Dodavo pita posle nekoliko sekundi. <span class="ui">Sačekaj vezu</span> ostavlja prenos da čeka, a <span class="ui">Otkaži prenos</span> ga završava. Izaberite <span class="ui">Ne pitaj me ponovo</span> da bi se uvek desilo isto.</li>
+<li><span class="ui">Otkaži prenos</span> otkazuje prenos posle nekoliko sekundi, bez pitanja. Delimično primljeni podaci se brišu.</li>
 </ul>
-<p>Izaberite <span class="ui">Ne pitaj me ponovo</span> da bi se uvek desilo isto. Izbor kasnije možete da promenite u postavkama, pod <span class="ui">Ako se veza prekine tokom prenosa</span>. Uz opciju <span class="ui">Sačekaj vezu i nastavi</span> Dodavo umesto pitanja prikazuje obaveštenje, a uz opciju <span class="ui">Otkaži prenos</span> otkazuje prenos bez pitanja.</p>
 <p>Pri pokretanju Dodavo preuzima prenose koji su prošli put prekinuti: za svaki od njih pojavljuje se obaveštenje <span class="ui">Nezavršeni prenos</span>, a njegov prozor napretka se otvara bez preuzimanja fokusa. Za prenos koji ne može da se nastavi umesto toga se pojavljuje obaveštenje <span class="ui">Prenos nije završen</span>, a njegov prozor napretka kaže zašto, na primer <span class="ui">U prenosu se više od 30 dana ništa nije desilo</span>. Pre nego što podaci nastave da teku, red koraka kaže <span class="ui">Provera već prenetih podataka…</span> dok Dodavo proverava ono što već ima. Tako preuzeti prenos jednostavno čeka drugu stranu; ne pita da li želite da sačekate ili da otkažete. Dok podaci teku, Dodavo ujedno sprečava da računar sam pređe u stanje spavanja.</p>
 
 <h3 id="closing-progress">Zatvaranje prozora napretka tokom prenosa</h3>
@@ -305,9 +317,9 @@
 <h3 id="settings-receiving">Primanje datoteka</h3>
 <dl>
 <dt><span class="ui">Uvek čuvaj primljene datoteke u ovoj fascikli</span></dt>
-<dd>Kada je izabrano, fascikla iz polja <span class="ui">Fascikla za čuvanje</span> ispod (koju možete da izaberete dugmetom <span class="ui">Pregledaj…</span>) uvek se predlaže za primljene stavke i koristi za automatske prenose. Kada nije izabrano, Dodavo predlaže fasciklu koju ste koristili prošli put ili fasciklu Preuzimanja.</dd>
+<dd>Kada je izabrano, primljene stavke se čuvaju u fascikli iz polja <span class="ui">Fascikla za čuvanje</span> ispod, koju možete da izaberete dugmetom <span class="ui">Pregledaj…</span>. To je vaša fascikla Preuzimanja ako ne izaberete drugu. Kada nije izabrano, Dodavo uvek pita gde da sačuva: svaki prenos otvara prozor Dolazni prenos, koji predlaže fasciklu koju ste koristili prošli put ili fasciklu Preuzimanja. Ova opcija je uključena dok je ne isključite.</dd>
 <dt><span class="ui">Prenose pokreći automatski, bez pitanja</span></dt>
-<dd>Prihvata prenose od osoba sa vaše liste primalaca bez pitanja. Ova opcija je uključena dok je ne isključite. Pogledajte <a href="#auto-accept">Primanje bez pitanja</a>.</dd>
+<dd>Prihvata prenose od osoba sa vaše liste primalaca bez pitanja i čuva ih u fascikli iznad. Ova opcija je uključena dok je ne isključite, a nije dostupna dok nije izabrana opcija <span class="ui">Uvek čuvaj primljene datoteke u ovoj fascikli</span>. Pogledajte <a href="#auto-accept">Primanje bez pitanja</a>.</dd>
 <dt><span class="ui">Posle prijema fascikle</span></dt>
 <dd>Lista sa opcijama <span class="ui">Zadrži samo raspakovanu fasciklu</span>, <span class="ui">Zadrži samo ZIP datoteku (bez raspakivanja)</span> i <span class="ui">Zadrži raspakovanu fasciklu i ZIP datoteku</span>. Primljena fascikla stiže kao ZIP datoteka; ova postavka određuje da li će je Dodavo raspakovati i da li će zadržati ZIP datoteku. Zadržavanje ZIP datoteke je korisno ako fasciklu želite da sačuvate ili prosledite tačno onakvu kakva je stigla. Izbor važi za prenose koje prihvatite posle promene. Pogledajte <a href="#after-receiving">Kada je prenos završen</a> i <a href="#faq-dates">Da li datoteke i fascikle zadržavaju svoje datume?</a></dd>
 <dt><span class="ui">Posle prijema pitaj da li da se otvori datoteka ili fascikla</span></dt>
@@ -323,6 +335,8 @@
 <dd>Kada nije izabrano, zatvaranjem glavnog prozora izlazite iz programa Dodavo.</dd>
 <dt><span class="ui">Automatski proveravaj da li ima ažuriranja (jednom dnevno)</span></dt>
 <dd>Dodavo jednom dnevno na stranici programa Dodavo na GitHub-u proverava da li je dostupna novija verzija i nudi da je instalira. Pogledajte <a href="#update">Ažuriranje programa Dodavo</a>.</dd>
+<dt><span class="ui">Dodaj Dodavo u menije Istraživača datoteka</span></dt>
+<dd>Dodaje <span class="ui">Pošalji programom Dodavo</span> u kontekstualni meni datoteka i fascikli, a Dodavo u njihov meni <span class="ui">Pošalji u</span>. Ova opcija je uključena dok je ne isključite, a dostupna je ako je Dodavo instaliran svojim instalacionim programom. Pogledajte <a href="#send-from-explorer">Slanje iz Istraživača datoteka</a>.</dd>
 <dt><span class="ui">Pri zatvaranju prozora prenosa koji je u toku</span></dt>
 <dd>Lista sa opcijama <span class="ui">Pitaj svaki put</span>, <span class="ui">Nastavi u pozadini</span> i <span class="ui">Otkaži prenos</span>. Pogledajte <a href="#closing-progress">Zatvaranje prozora napretka tokom prenosa</a>.</dd>
 <dt><span class="ui">Ako se veza prekine tokom prenosa</span></dt>
@@ -381,6 +395,19 @@
 <tr><td><kbd>Alt</kbd>+<kbd>S</kbd></td><td>Prelazak na polje Sačuvaj u</td></tr>
 <tr><td><kbd>Alt</kbd>+<kbd>P</kbd></td><td>Izbor fascikle</td></tr>
 <tr><td><kbd>Alt</kbd>+<kbd>D</kbd></td><td>Dodavanje nepoznatog pošiljaoca u moje primaoce</td></tr>
+</tbody>
+</table>
+<table>
+<caption>Prozor Slanje programom Dodavo</caption>
+<thead>
+<tr><th scope="col">Tasteri</th><th scope="col">Radnja</th></tr>
+</thead>
+<tbody>
+<tr><td><kbd>Alt</kbd>+<kbd>S</kbd></td><td>Prelazak na listu izabranih stavki</td></tr>
+<tr><td><kbd>Alt</kbd>+<kbd>P</kbd></td><td>Prelazak na listu primalaca</td></tr>
+<tr><td><kbd>Alt</kbd>+<kbd>A</kbd></td><td>Dodavanje primaoca</td></tr>
+<tr><td><kbd>Alt</kbd>+<kbd>O</kbd> ili <kbd>Enter</kbd></td><td>Slanje stavki izabranoj osobi</td></tr>
+<tr><td><kbd>Esc</kbd></td><td>Zatvaranje prozora bez slanja</td></tr>
 </tbody>
 </table>
 <table>
@@ -472,7 +499,7 @@
 <dt>Računar pređe u stanje spavanja</dt>
 <dd>Dok podaci teku, Dodavo sprečava da računar sam pređe u stanje spavanja, kao što to čini i preuzimanje (ekran se svejedno može isključiti). Ako računar ipak stavite u stanje spavanja ili zatvorite poklopac laptopa, prenos se zaustavlja i nastavlja kada se računar probudi.</dd>
 <dt>Internet veza se prekine</dt>
-<dd>Prozor napretka kaže <span class="ui">Veza je prekinuta. Prenos se nastavlja čim oboje ponovo budete na mreži, čak i posle ponovnog pokretanja.</span> Posle nekoliko sekundi Dodavo pita da li želite <span class="ui">Sačekaj vezu</span> ili <span class="ui">Otkaži prenos</span>, osim ako ste odgovor trajno izabrali u postavkama. Računari u istoj kućnoj ili kancelarijskoj mreži nastavljaju prenos i bez interneta.</dd>
+<dd>Prozor napretka kaže <span class="ui">Veza je prekinuta. Prenos se nastavlja čim oboje ponovo budete na mreži, čak i posle ponovnog pokretanja.</span> Posle nekoliko sekundi Dodavo prikazuje obaveštenje, a prenos čeka, osim ako ste u postavkama izabrali nešto drugo. Računari u istoj kućnoj ili kancelarijskoj mreži nastavljaju prenos i bez interneta.</dd>
 <dt>Bilo šta od toga desi se na računaru druge osobe</dt>
 <dd>Vaš prozor kaže da je veza prekinuta ili da je prenos pauziran na drugoj strani, a isto pokazuje i kolona <span class="ui">Prenos</span> na listi primalaca. Ne morate ništa da uradite: prenos se nastavlja kada se druga strana vrati.</dd>
 <dt>Drugi program koristi delimično primljenu datoteku</dt>
@@ -489,10 +516,10 @@
 <p>Ne. Dodavo ne ograničava veličinu datoteke ni fascikle; jedina ograničenja su slobodan prostor na disku koji prima i, na disku sa sistemom datoteka FAT32 (mnogi USB fleš diskovi i memorijske kartice), to da nijedna datoteka ne može biti od 4 GB ili veća. Za fasciklu je računaru koji prima potrebno mesta i za arhivu i za raspakovanu fasciklu, dakle otprilike dvostruka veličina fascikle dok traje raspakivanje (osim ako zadržava samo ZIP datoteku). Prozor Dolazni prenos kaže da li ima dovoljno prostora pre nego što prihvatite.</p>
 
 <h3 id="faq-several">Da li mogu da pošaljem više stavki odjednom ili većem broju osoba?</h3>
-<p>Da. Možete da pokrenete koliko god prenosa želite, istoj osobi ili različitim osobama, a svaki ima sopstveni prozor napretka. Da biste poslali više datoteka ili fascikli u jednom potezu, prevucite ih iz Istraživača datoteka na osobu na listi primalaca; nakon što potvrdite, svaka stavka se šalje kao zaseban prenos. Pogledajte <a href="#drag-and-drop">Prevlačenje stavki na osobu</a>. Kolona <span class="ui">Prenos</span> na listi primalaca i meni <span class="ui">Prenosi</span> prate ih sve.</p>
+<p>Da. Možete da pokrenete koliko god prenosa želite, istoj osobi ili različitim osobama, a svaki ima sopstveni prozor napretka. Da biste poslali više datoteka ili fascikli u jednom potezu, prevucite ih iz Istraživača datoteka na osobu na listi primalaca; nakon što potvrdite, svaka stavka se šalje kao zaseban prenos. Pogledajte <a href="#drag-and-drop">Prevlačenje stavki na osobu</a>. Možete i da ih izaberete u Istraživaču datoteka i pošaljete odatle: pogledajte <a href="#send-from-explorer">Slanje iz Istraživača datoteka</a>. Kolona <span class="ui">Prenos</span> na listi primalaca i meni <span class="ui">Prenosi</span> prate ih sve.</p>
 
 <h3 id="faq-where">Gde se čuvaju primljene datoteke?</h3>
-<p>U fascikli prikazanoj pod <span class="ui">Sačuvaj u:</span> u prozoru Dolazni prenos, koju možete da promenite za svaki prenos. Dodavo predlaže vašu fasciklu Preuzimanja, fasciklu koju ste upotrebili prošli put ili stalnu fasciklu koju ste podesili u postavkama pod <span class="ui">Uvek čuvaj primljene datoteke u ovoj fascikli</span>. Ako stavka istog naziva tamo već postoji, nova dobija broj dodat nazivu; ništa se nikada ne zamenjuje. Pogledajte <a href="#incoming-window">Prozor Dolazni prenos</a> i <a href="#settings-receiving">Primanje datoteka</a>.</p>
+<p>U vašoj fascikli Preuzimanja, osim ako ste u postavkama pod <span class="ui">Uvek čuvaj primljene datoteke u ovoj fascikli</span> izabrali drugu. Ako opozovete izbor te opcije, Dodavo pita svaki put. Kad god se otvori prozor Dolazni prenos, fasciklu za taj prenos možete da promenite pod <span class="ui">Sačuvaj u:</span>. Ako stavka istog naziva tamo već postoji, nova dobija broj dodat nazivu; ništa se nikada ne zamenjuje. Pogledajte <a href="#incoming-window">Prozor Dolazni prenos</a> i <a href="#settings-receiving">Primanje datoteka</a>.</p>
 
 <h3 id="faq-lan">Da li Dodavo radi bez internet veze?</h3>
 <p>Da, između računara u istoj lokalnoj mreži, na primer kod kuće ili u kancelariji. Oni se u mreži pronalaze direktno. Red statusa tada kaže <span class="ui">Van mreže – proverite internet vezu. Prenosi unutar lokalne mreže i dalje rade.</span>, a prenosi na računare na drugim mestima čekaju dok ponovo ne budete na mreži.</p>

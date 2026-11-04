@@ -34,6 +34,7 @@ const ID_CONNECTION_LOST: u16 = 22;
 const ID_CHECK_UPDATES: u16 = 23;
 const ID_SHOW_AFTER_SEND: u16 = 24;
 const ID_RECEIVED_FOLDER: u16 = 25;
+const ID_EXPLORER_MENU: u16 = 26;
 
 /// The two columns (96-DPI units): headings start at their `x`, the
 /// settings under them are indented.
@@ -56,6 +57,9 @@ struct SettingsDialog {
     minimized: HWND,
     tray: HWND,
     check_updates: HWND,
+    explorer_menu: HWND,
+    /// Whether this copy of Dodavo can have the entries that box is about.
+    explorer_menu_available: bool,
     close_running: HWND,
     connection_lost: HWND,
     language: HWND,
@@ -76,6 +80,8 @@ pub fn show(owner: HWND) {
         minimized: std::ptr::null_mut(),
         tray: std::ptr::null_mut(),
         check_updates: std::ptr::null_mut(),
+        explorer_menu: std::ptr::null_mut(),
+        explorer_menu_available: false,
         close_running: std::ptr::null_mut(),
         connection_lost: std::ptr::null_mut(),
         language: std::ptr::null_mut(),
@@ -132,6 +138,10 @@ impl SettingsDialog {
         let minimized = window::is_checked(self.minimized);
         let tray = window::is_checked(self.tray);
         let check_updates = window::is_checked(self.check_updates);
+        // A box that cannot be used says nothing about the setting.
+        let explorer_menu = self
+            .explorer_menu_available
+            .then(|| window::is_checked(self.explorer_menu));
         let close_running = window::combo_selection(self.close_running)
             .and_then(|i| CloseAction::ALL.get(i).copied())
             .unwrap_or_default();
@@ -158,11 +168,17 @@ impl SettingsDialog {
             c.start_minimized = minimized;
             c.minimize_to_tray = tray;
             c.check_updates = check_updates;
+            if let Some(on) = explorer_menu {
+                c.explorer_menu = on;
+            }
             c.close_running_transfer = close_running;
             c.connection_lost = connection_lost;
             c.language = language;
         });
         shell::set_start_with_windows(autostart);
+        if let Some(on) = explorer_menu {
+            shell::set_explorer_menu(on);
+        }
         if language_changed {
             info(w.hwnd, tr!(language_restart));
         }
@@ -278,7 +294,16 @@ impl Handler for SettingsDialog {
             cfg.check_updates,
             (inner_x, 108, inner_w, 20),
         );
-        w.caption(tr!(close_running_label), (inner_x, 140, inner_w, 18));
+        self.explorer_menu_available =
+            shell::explorer_menu_available(app::with(|a| a.profile.clone()).as_deref());
+        self.explorer_menu = w.checkbox(
+            tr!(explorer_menu),
+            ID_EXPLORER_MENU,
+            self.explorer_menu_available && cfg.explorer_menu,
+            (inner_x, 132, inner_w, 20),
+        );
+        window::enable(self.explorer_menu, self.explorer_menu_available);
+        w.caption(tr!(close_running_label), (inner_x, 164, inner_w, 18));
         let actions = [tr!(close_ask), tr!(close_background), tr!(close_cancel)];
         let selected = CloseAction::ALL
             .iter()
@@ -288,9 +313,9 @@ impl Handler for SettingsDialog {
             &actions,
             selected,
             ID_CLOSE_RUNNING,
-            (inner_x, 160, 300, 24),
+            (inner_x, 184, 300, 24),
         );
-        w.caption(tr!(connection_lost_label), (inner_x, 196, inner_w, 18));
+        w.caption(tr!(connection_lost_label), (inner_x, 220, inner_w, 18));
         let actions = [tr!(lost_ask), tr!(lost_wait), tr!(lost_cancel)];
         let selected = ConnectionLostAction::ALL
             .iter()
@@ -300,9 +325,9 @@ impl Handler for SettingsDialog {
             &actions,
             selected,
             ID_CONNECTION_LOST,
-            (inner_x, 216, 300, 24),
+            (inner_x, 240, 300, 24),
         );
-        w.caption(tr!(language_label), (inner_x, 252, inner_w, 18));
+        w.caption(tr!(language_label), (inner_x, 276, inner_w, 18));
         let mut languages = vec![tr!(language_default)];
         languages.extend(Lang::ALL.iter().map(|l| l.native_name()));
         let selected = cfg
@@ -311,19 +336,19 @@ impl Handler for SettingsDialog {
             .and_then(Lang::from_code)
             .and_then(|l| Lang::ALL.iter().position(|&x| x == l))
             .map_or(0, |i| i + 1);
-        self.language = w.combobox(&languages, selected, ID_LANGUAGE, (inner_x, 272, 300, 24));
+        self.language = w.combobox(&languages, selected, ID_LANGUAGE, (inner_x, 296, 300, 24));
 
         let my_id = app::with(|a| a.my_id.clone());
-        w.label(tr!(my_id_label), (x, 312, COLUMN_W, 18));
-        let id_edit = w.edit(&my_id, 0, (x, 332, COLUMN_W - 92, 24));
+        w.label(tr!(my_id_label), (x, 336, COLUMN_W, 18));
+        let id_edit = w.edit(&my_id, 0, (x, 356, COLUMN_W - 92, 24));
         super::send(
             id_edit,
             windows_sys::Win32::UI::Controls::EM_SETREADONLY,
             1,
             0,
         );
-        w.button(tr!(copy), ID_COPY, (x + COLUMN_W - 86, 331, 86, 26));
-        let right_bottom = 357;
+        w.button(tr!(copy), ID_COPY, (x + COLUMN_W - 86, 355, 86, 26));
+        let right_bottom = 381;
 
         let buttons_y = left_bottom.max(right_bottom) + 22;
         w.button(tr!(ok), ID_OK, (WIDTH - 14 - 186, buttons_y, 90, 30));

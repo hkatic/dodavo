@@ -400,6 +400,15 @@ strings! {
         copy,
         enter_my_name,
         invalid_save_folder,
+        // File Explorer's menus and the Send with Dodavo window.
+        explorer_verb,
+        explorer_menu,
+        send_to_title,
+        send_to_items_label,
+        send_to_recipient_label,
+        send_to_send,
+        send_to_waiting,
+        send_to_failed,
         // Exiting while transfers run.
         exit_text,
         exit_stay,
@@ -498,6 +507,7 @@ strings! {
         error_folder_missing,
     }
     plurals {
+        send_to_count,
         drop_confirm,
         exit_instruction,
         transfers_in_progress,
@@ -757,7 +767,7 @@ mod tests {
         }
         for lang in Lang::ALL {
             let s = lang.strings();
-            let groups: [(&str, Vec<&str>); 21] = [
+            let groups: [(&str, Vec<&str>); 22] = [
                 ("menu bar", vec![s.menu_file, s.menu_transfers, s.menu_help]),
                 (
                     "File menu",
@@ -828,10 +838,20 @@ mod tests {
                         s.start_minimized,
                         s.keep_in_tray,
                         s.check_updates,
+                        s.explorer_menu,
                         s.close_running_label,
                         s.connection_lost_label,
                         s.language_label,
                         s.copy,
+                    ],
+                ),
+                (
+                    "send with Dodavo",
+                    vec![
+                        s.send_to_items_label,
+                        s.send_to_recipient_label,
+                        s.ctx_add,
+                        s.send_to_send,
                     ],
                 ),
                 (

@@ -361,6 +361,21 @@ pub const SL: Strings = Strings {
     error_file_missing: "Datoteka, ki se pošilja, ne obstaja več: {path}",
     error_folder_missing: "Mapa, ki se pošilja, ne obstaja več: {path}",
 
+    explorer_verb: "Pošlji s programom Do&davo",
+    explorer_menu: "Dodaj Dodavo v menije Raziskova&lca",
+    send_to_title: "Pošiljanje s programom Dodavo",
+    send_to_items_label: "&Elementi:",
+    send_to_recipient_label: "&Prejemnik:",
+    send_to_send: "P&ošlji",
+    send_to_waiting: "Izberite prejemnika za to, kar ste izbrali v Raziskovalcu.",
+    send_to_failed: "Dodavo se ne odziva, zato mu izbranih elementov ni bilo mogoče predati. Poskusite znova.",
+
+    send_to_count: Plural {
+        one: "{n} element za pošiljanje",
+        two: "{n} elementa za pošiljanje",
+        few: "{n} elementi za pošiljanje",
+        other: "{n} elementov za pošiljanje",
+    },
     drop_confirm: Plural {
         one: "Ali želite poslati {n} element prejemniku ({name})? Vsak element se pošlje kot ločen prenos.",
         two: "Ali želite poslati {n} elementa prejemniku ({name})? Vsak element se pošlje kot ločen prenos.",

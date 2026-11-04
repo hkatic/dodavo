@@ -361,6 +361,21 @@ pub const HR: Strings = Strings {
     error_file_missing: "Datoteka koja se šalje više ne postoji: {path}",
     error_folder_missing: "Mapa koja se šalje više ne postoji: {path}",
 
+    explorer_verb: "Pošalji programom Do&davo",
+    explorer_menu: "Dodaj Dodavo u iz&bornike Eksplorera za datoteke",
+    send_to_title: "Slanje programom Dodavo",
+    send_to_items_label: "&Stavke:",
+    send_to_recipient_label: "&Primatelj:",
+    send_to_send: "P&ošalji",
+    send_to_waiting: "Odaberite primatelja za ono što ste odabrali u Eksploreru za datoteke.",
+    send_to_failed: "Dodavo ne reagira, pa mu odabrane stavke nije moguće predati. Pokušajte ponovno.",
+
+    send_to_count: Plural {
+        one: "{n} stavka za slanje",
+        two: "{n} stavki za slanje",
+        few: "{n} stavke za slanje",
+        other: "{n} stavki za slanje",
+    },
     drop_confirm: Plural {
         one: "Želite li poslati {n} stavku primatelju ({name})? Svaka se stavka šalje kao zaseban prijenos.",
         two: "Želite li poslati {n} stavki primatelju ({name})? Svaka se stavka šalje kao zaseban prijenos.",

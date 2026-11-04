@@ -49,6 +49,9 @@ pub enum BalloonAction {
     /// Brings the Update Available window to the front, or the main window
     /// once that has closed.
     Update,
+    /// Brings the Send with Dodavo window to the front, or the main window
+    /// once that has closed.
+    SendTo,
 }
 
 thread_local! {

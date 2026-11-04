@@ -361,6 +361,21 @@ pub const SR_LATN: Strings = Strings {
     error_file_missing: "Datoteka koja se šalje više ne postoji: {path}",
     error_folder_missing: "Fascikla koja se šalje više ne postoji: {path}",
 
+    explorer_verb: "Pošalji programom Do&davo",
+    explorer_menu: "Dodaj Dodavo u m&enije Istraživača datoteka",
+    send_to_title: "Slanje programom Dodavo",
+    send_to_items_label: "&Stavke:",
+    send_to_recipient_label: "&Primalac:",
+    send_to_send: "P&ošalji",
+    send_to_waiting: "Izaberite primaoca za ono što ste izabrali u Istraživaču datoteka.",
+    send_to_failed: "Dodavo ne reaguje, pa mu izabrane stavke nije moguće predati. Pokušajte ponovo.",
+
+    send_to_count: Plural {
+        one: "{n} stavka za slanje",
+        two: "{n} stavki za slanje",
+        few: "{n} stavke za slanje",
+        other: "{n} stavki za slanje",
+    },
     drop_confirm: Plural {
         one: "Želite li da pošaljete {n} stavku primaocu ({name})? Svaka stavka se šalje kao zaseban prenos.",
         two: "Želite li da pošaljete {n} stavki primaocu ({name})? Svaka stavka se šalje kao zaseban prenos.",

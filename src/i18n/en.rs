@@ -358,6 +358,21 @@ pub const EN: Strings = Strings {
     error_file_missing: "The file being sent is no longer there: {path}",
     error_folder_missing: "The folder being sent is no longer there: {path}",
 
+    explorer_verb: "Send &with Dodavo",
+    explorer_menu: "Add Dodavo to File E&xplorer's menus",
+    send_to_title: "Send with Dodavo",
+    send_to_items_label: "&Items:",
+    send_to_recipient_label: "&Recipient:",
+    send_to_send: "&Send",
+    send_to_waiting: "Choose who should receive what you selected in File Explorer.",
+    send_to_failed: "Dodavo is not responding, so the selected items could not be handed over to it. Please try again.",
+
+    send_to_count: Plural {
+        one: "{n} item to send",
+        two: "{n} items to send",
+        few: "{n} items to send",
+        other: "{n} items to send",
+    },
     drop_confirm: Plural {
         one: "Send {n} item to {name}?",
         two: "Send {n} items to {name}? Each item is sent as a separate transfer.",

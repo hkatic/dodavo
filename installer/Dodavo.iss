@@ -191,6 +191,14 @@ Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExeName}"; Tasks: deskto
 ; remove it on uninstall so Windows doesn't try to start a missing program.
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueName: "Dodavo"; ValueType: none; Flags: uninsdeletevalue
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueName: "QuickAndEasyFileTransfer"; ValueType: none; Flags: uninsdeletevalue
+; "Send with Dodavo" in File Explorer's context menu is written by the program
+; too. Setup only removes it: an empty verb must not appear before Dodavo runs.
+Root: HKCU; Subkey: "Software\Classes\*\shell\Dodavo.Send"; Flags: dontcreatekey uninsdeletekey
+Root: HKCU; Subkey: "Software\Classes\Directory\shell\Dodavo.Send"; Flags: dontcreatekey uninsdeletekey
+
+[UninstallDelete]
+; The same for the entry in File Explorer's Send to menu.
+Type: files; Name: "{usersendto}\Dodavo.lnk"
 
 [Run]
 Filename: "{app}\{#AppExeName}"; Description: "{cm:LaunchProgram,{#AppName}}"; Flags: nowait postinstall skipifsilent

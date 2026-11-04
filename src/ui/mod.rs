@@ -8,6 +8,7 @@ pub mod license;
 pub mod main_window;
 pub mod progress;
 pub mod recipient;
+pub mod send_to;
 pub mod settings;
 pub mod shell;
 pub mod theme;

@@ -116,6 +116,9 @@ pub struct Config {
     pub language: Option<String>,
     /// Look for a newer version once a day (see `update`).
     pub check_updates: bool,
+    /// "Send with Dodavo" in File Explorer's context menu, and Dodavo in its
+    /// Send to menu (Windows; see `ui::shell::set_explorer_menu`).
+    pub explorer_menu: bool,
     /// When the last check succeeded (Unix seconds).
     pub update_last_check: Option<u64>,
     /// "Remind Me Later": no update window before this time (Unix seconds).
@@ -144,6 +147,7 @@ impl Default for Config {
             tray_hint_shown: false,
             language: None,
             check_updates: true,
+            explorer_menu: true,
             update_last_check: None,
             update_remind_after: None,
         }
@@ -267,9 +271,34 @@ pub fn data_dir(profile: Option<&str>) -> PathBuf {
     }
 }
 
+/// Only the language setting, for a process that is about to end and has a
+/// message to show. It leaves the file alone: what `Config::load` does with
+/// a damaged one is for the instance that stays.
+pub fn read_language(dir: &Path) -> Option<String> {
+    let bytes = std::fs::read(dir.join("config.json")).ok()?;
+    let settings: serde_json::Value = serde_json::from_slice(&bytes).ok()?;
+    settings.get("language")?.as_str().map(str::to_string)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn reading_the_language_leaves_a_damaged_file_alone() {
+        let dir = std::env::temp_dir().join(format!("dodavo-cfg-lang-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("config.json");
+        assert_eq!(read_language(&dir), None);
+        std::fs::write(&path, br#"{"language":"hr"}"#).unwrap();
+        assert_eq!(read_language(&dir), Some("hr".to_string()));
+        std::fs::write(&path, br#"{"language":null}"#).unwrap();
+        assert_eq!(read_language(&dir), None);
+        std::fs::write(&path, b"{\"language\": [").unwrap();
+        assert_eq!(read_language(&dir), None);
+        assert!(path.exists());
+        std::fs::remove_dir_all(&dir).ok();
+    }
 
     #[test]
     fn roundtrip() {
@@ -288,6 +317,7 @@ mod tests {
         cfg.received_folder = ReceivedFolder::Both;
         cfg.auto_accept = false;
         cfg.check_updates = false;
+        cfg.explorer_menu = false;
         cfg.update_last_check = Some(1_700_000_000);
         cfg.update_remind_after = Some(1_700_086_400);
         cfg.save(&dir).unwrap();
@@ -335,6 +365,7 @@ mod tests {
         assert_eq!(cfg.connection_lost, ConnectionLostAction::Wait);
         assert_eq!(cfg.language, None);
         assert!(cfg.check_updates);
+        assert!(cfg.explorer_menu);
         assert_eq!(cfg.update_last_check, None);
         assert_eq!(cfg.update_remind_after, None);
     }

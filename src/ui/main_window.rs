@@ -5,6 +5,7 @@ use std::{cell::Cell, path::PathBuf};
 use windows_sys::Win32::{
     Foundation::{HWND, LPARAM, LRESULT, POINT, RECT, WPARAM},
     Graphics::Gdi::{MapWindowPoints, ScreenToClient, UpdateWindow},
+    System::DataExchange::COPYDATASTRUCT,
     UI::{
         Controls::*,
         Input::KeyboardAndMouse::{GetFocus, IsWindowEnabled, VK_DELETE, VK_F1, VK_F2},
@@ -14,8 +15,8 @@ use windows_sys::Win32::{
 };
 
 use super::{
-    APP_NAME, DONATE_URL, ask, confirm, info, progress, send, set_text, shell, short_id, tray,
-    wide,
+    APP_NAME, DONATE_URL, ask, confirm, info, progress, send, send_to, set_text, shell, short_id,
+    tray, wide,
     window::{self, CreateOptions, Handler, Window},
     without_shortcut,
 };
@@ -399,26 +400,26 @@ fn status_text(online: Option<bool>) -> &'static str {
 }
 
 fn selected_index() -> Option<usize> {
-    let i = send(
-        LIST.get(),
-        LVM_GETNEXTITEM,
-        usize::MAX,
-        LVNI_SELECTED as isize,
-    );
-    (i >= 0).then_some(i as usize)
+    list_selection(LIST.get())
 }
 
 fn select_index(index: usize) {
+    list_select(LIST.get(), index);
+}
+
+/// The selected row of a list view that allows one.
+pub fn list_selection(list: HWND) -> Option<usize> {
+    let i = send(list, LVM_GETNEXTITEM, usize::MAX, LVNI_SELECTED as isize);
+    (i >= 0).then_some(i as usize)
+}
+
+/// Selects a row of a list view and gives it the list's focus.
+pub fn list_select(list: HWND, index: usize) {
     let mut item: LVITEMW = unsafe { std::mem::zeroed() };
     item.stateMask = LVIS_SELECTED | LVIS_FOCUSED;
     item.state = LVIS_SELECTED | LVIS_FOCUSED;
-    send(
-        LIST.get(),
-        LVM_SETITEMSTATE,
-        index,
-        &item as *const _ as isize,
-    );
-    send(LIST.get(), LVM_ENSUREVISIBLE, index, 0);
+    send(list, LVM_SETITEMSTATE, index, &item as *const _ as isize);
+    send(list, LVM_ENSUREVISIBLE, index, 0);
 }
 
 fn set_cell(list: HWND, index: usize, column: usize, text: &str) {
@@ -452,6 +453,7 @@ pub fn refresh_list() {
     } else if !contacts.is_empty() {
         select_index(0);
     }
+    send_to::refresh_recipients();
 }
 
 /// Shows the state of a peer's transfers in the list. Only that cell changes,
@@ -513,7 +515,7 @@ impl MainWindow {
             }
         };
         if let Some(path) = path {
-            app::start_send(&contact, path, kind);
+            app::start_send(&contact, path, kind, true);
         }
     }
 
@@ -771,8 +773,24 @@ impl MainWindow {
             } else {
                 Kind::File
             };
-            app::start_send(&contact, path, kind);
+            app::start_send(&contact, path, kind, true);
         }
+    }
+}
+
+/// Says once that Dodavo goes on running in the notification area.
+fn tray_hint() {
+    let cfg = app::cfg();
+    if cfg.minimize_to_tray && !cfg.tray_hint_shown {
+        tray::balloon(app::main_window(), APP_NAME, tr!(tray_hint), None);
+        app::update_cfg(|c| c.tray_hint_shown = true);
+    }
+}
+
+/// The same for a window that closes while the main window does not show.
+pub fn tray_hint_when_hidden() {
+    if unsafe { IsWindowVisible(MAIN.get()) } == 0 {
+        tray_hint();
     }
 }
 
@@ -921,13 +939,9 @@ impl Handler for MainWindow {
     }
 
     fn on_close(&mut self, w: &Window) {
-        let cfg = app::cfg();
-        if cfg.minimize_to_tray {
+        if app::cfg().minimize_to_tray {
             unsafe { ShowWindow(w.hwnd, SW_HIDE) };
-            if !cfg.tray_hint_shown {
-                tray::balloon(w.hwnd, APP_NAME, tr!(tray_hint), None);
-                app::update_cfg(|c| c.tray_hint_shown = true);
-            }
+            tray_hint();
         } else {
             quit(w);
         }
@@ -948,6 +962,10 @@ impl Handler for MainWindow {
                         Some(tray::BalloonAction::Update) => match app::with(|a| a.update_window) {
                             h if h.is_null() => window::bring_to_front(w.hwnd),
                             h => window::bring_to_front(h),
+                        },
+                        Some(tray::BalloonAction::SendTo) => match send_to::open_window() {
+                            Some(h) => window::bring_to_front(h),
+                            None => window::bring_to_front(w.hwnd),
                         },
                         _ => window::bring_to_front(w.hwnd),
                     },
@@ -1017,8 +1035,25 @@ impl Handler for MainWindow {
 /// The main window's messages that must be handled even while one of its
 /// dialogs is open (`CreateOptions::urgent`): Setup and Windows send each of
 /// them once, and they need nothing of the handler.
-fn urgent_message(w: &Window, msg: u32, wp: WPARAM, _lp: LPARAM) -> Option<LRESULT> {
+fn urgent_message(w: &Window, msg: u32, wp: WPARAM, lp: LPARAM) -> Option<LRESULT> {
     match msg {
+        // Items for sending, from another start of Dodavo.
+        WM_COPYDATA => {
+            // SAFETY: for this message Windows passes a valid struct, and
+            // `cbData` bytes at `lpData`, which stay valid until it returns.
+            let data = unsafe { &*(lp as *const COPYDATASTRUCT) };
+            if data.dwData != send_to::COPY_DATA_ID || data.lpData.is_null() {
+                return Some(0);
+            }
+            let payload = unsafe {
+                std::slice::from_raw_parts(data.lpData as *const u8, data.cbData as usize)
+            };
+            Some(send_to::receive(w.hwnd, payload) as LRESULT)
+        }
+        send_to::WM_APP_SEND_TO => {
+            send_to::show_pending();
+            Some(0)
+        }
         // The Setup of an update is ready and asks every instance to leave
         // (see `update`). The instance that installs exits as the user chose
         // in the Update Available window; the other profiles leave with their

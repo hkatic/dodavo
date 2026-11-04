@@ -312,7 +312,8 @@ pub fn peer_name(id: &str, fallback: &str) -> (String, bool) {
     })
 }
 
-pub fn start_send(contact: &Contact, path: PathBuf, kind: Kind) {
+/// Starts sending `path`. Its progress window takes the focus if `activate`.
+pub fn start_send(contact: &Contact, path: PathBuf, kind: Kind, activate: bool) {
     let Some(to) = identity::parse_contact_id(&contact.id) else {
         ui::error(main_window(), &tr!(contact_invalid, name = contact.name));
         return;
@@ -329,7 +330,7 @@ pub fn start_send(contact: &Contact, path: PathBuf, kind: Kind) {
         &item,
         kind,
         None,
-        true,
+        activate,
     );
     let transfer = Transfer::new(
         hwnd,
