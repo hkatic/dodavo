@@ -511,6 +511,8 @@ pub fn unzip(
     if mark {
         os::mark_folder(dest);
     }
+    // Empty on Windows, but not on a Mac.
+    #[allow(clippy::default_constructed_unit_structs)]
     let mut unpacked_names = os::UnpackedNames::default();
     let mut done = 0u64;
     let mut buf = vec![0u8; BUF_SIZE];

@@ -1181,6 +1181,7 @@ pub fn cleanup_temp<'a>(dir: &Path, records: impl IntoIterator<Item = &'a Transf
 pub struct Snapshots(Vec<(u64, blake3::Hasher)>);
 
 impl Snapshots {
+    #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         Snapshots(Vec::new())
     }

@@ -180,6 +180,8 @@ pub fn launch_installer(
 }
 
 /// Whether the Setup process has ended already, and with which exit code.
+// A handle is not dereferenced here; Windows checks it.
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
 pub fn setup_exited(process: HANDLE) -> Option<u32> {
     unsafe {
         if WaitForSingleObject(process, 0) != WAIT_OBJECT_0 {
@@ -191,6 +193,7 @@ pub fn setup_exited(process: HANDLE) -> Option<u32> {
     }
 }
 
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
 pub fn close_handle(process: HANDLE) {
     unsafe { CloseHandle(process) };
 }

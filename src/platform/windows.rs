@@ -19,6 +19,8 @@ pub fn wide(s: &str) -> Vec<u16> {
 }
 
 /// Reads a NUL terminated UTF-16 string.
+// Public for the program's own interface; the library has no other users.
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
 pub fn from_wide_ptr(p: *const u16) -> String {
     if p.is_null() {
         return String::new();
