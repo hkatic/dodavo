@@ -1,5 +1,6 @@
 Send files and folders straight from File Explorer.
 
 - New: "Send with Dodavo" in the context menu of files and folders, and Dodavo in the Send to menu. On Windows 11 they are under "Show more options". You can remove them in Settings.
+- Send several files or folders at once: select them in the Send File and Send Folder dialogs too. On the receiving side, several items from one person now share one window and one answer.
 - Items from people in your recipient list now go to your Downloads folder, or the folder you chose, without asking. Clear "Always save received files to this folder" to be asked where to save each one. Offers from anyone else are still shown first.
 - If the connection is lost, Dodavo now waits, continues by itself and tells you in a notification. To be asked instead, choose "Ask every time" in Settings.

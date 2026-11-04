@@ -64,8 +64,8 @@ pub const SL: Strings = Strings {
     empty_list: "Ni še prejemnikov.\nKliknite »Dodaj prejemnika«, da dodate nekoga z njegovim ID-jem stika.",
     no_recipients_yet: "Dodali še niste nobenega prejemnika.\n\nKliknite »Dodaj prejemnika« in vnesite ime ter ID stika osebe, ki ji želite pošiljati datoteke.",
     select_recipient_first: "Najprej izberite prejemnika na seznamu.",
-    pick_file_title: "Izberite datoteko za pošiljanje – prejemnik: {name}",
-    pick_folder_title: "Izberite mapo za pošiljanje – prejemnik: {name}",
+    pick_file_title: "Izberite eno ali več datotek za pošiljanje – prejemnik: {name}",
+    pick_folder_title: "Izberite eno ali več map za pošiljanje – prejemnik: {name}",
     remove_confirm: "Ali želite odstraniti »{name}« s seznama prejemnikov?",
     id_copied: "Vaš ID stika je bil kopiran v odložišče:\n\n{id}\n\n\
         Prilepite ga v e-poštno sporočilo ali sporočilo v klepetu in ga pošljite vsem, ki vam želijo pošiljati datoteke. \
@@ -199,6 +199,8 @@ pub const SL: Strings = Strings {
     cancelled_balloon_title: "Prenos je bil preklican",
     wants_file: "{name} vam želi poslati datoteko",
     wants_folder: "{name} vam želi poslati mapo",
+    items_total: "skupaj {size}",
+    incoming_items_label: "&Elementi:",
     file_description: "»{name}«  ({size})",
     unknown_sender_warning: "Tega pošiljatelja ni na vašem seznamu prejemnikov (ID stika {id}). \
         Sprejemajte datoteke samo od oseb, ki jih poznate.",
@@ -370,6 +372,12 @@ pub const SL: Strings = Strings {
     send_to_waiting: "Izberite prejemnika za to, kar ste izbrali v Raziskovalcu.",
     send_to_failed: "Dodavo se ne odziva, zato mu izbranih elementov ni bilo mogoče predati. Poskusite znova.",
 
+    wants_items: Plural {
+        one: "{name} vam želi poslati {n} element",
+        two: "{name} vam želi poslati {n} elementa",
+        few: "{name} vam želi poslati {n} elemente",
+        other: "{name} vam želi poslati {n} elementov",
+    },
     send_to_count: Plural {
         one: "{n} element za pošiljanje",
         two: "{n} elementa za pošiljanje",

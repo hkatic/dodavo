@@ -2,15 +2,19 @@
 //! Explorer, the "Start with Windows" registry entry, and the entries in File
 //! Explorer's menus.
 
-use std::path::{Path, PathBuf};
+use std::{
+    ffi::OsString,
+    os::windows::ffi::OsStringExt,
+    path::{Path, PathBuf},
+};
 
 use windows::{
     Win32::{
         Foundation::HWND as WHWND,
         System::Com::{CLSCTX_INPROC_SERVER, CoCreateInstance, IPersistFile},
         UI::Shell::{
-            FOS_FILEMUSTEXIST, FOS_FORCEFILESYSTEM, FOS_PICKFOLDERS, FileOpenDialog,
-            IFileOpenDialog, IShellItem, IShellLinkW, SHCreateItemFromParsingName,
+            FOS_ALLOWMULTISELECT, FOS_FILEMUSTEXIST, FOS_FORCEFILESYSTEM, FOS_PICKFOLDERS,
+            FileOpenDialog, IFileOpenDialog, IShellItem, IShellLinkW, SHCreateItemFromParsingName,
             SIGDN_FILESYSPATH, ShellLink,
         },
     },
@@ -51,14 +55,49 @@ const VERB_KEYS: [&str; 2] = [
 /// menu lists, under its file name.
 const SEND_TO_LINK: &str = "Dodavo.lnk";
 
-fn pick(owner: HWND, title: &str, folder: bool, initial: Option<&Path>) -> Option<PathBuf> {
+/// The path of a chosen item, as it is: Windows allows names that are not
+/// valid Unicode.
+fn item_path(item: &IShellItem) -> Option<PathBuf> {
+    unsafe {
+        let name = item.GetDisplayName(SIGDN_FILESYSPATH).ok()?;
+        let path = PathBuf::from(OsString::from_wide(name.as_wide()));
+        CoTaskMemFree(name.0 as _);
+        Some(path)
+    }
+}
+
+/// Asks for one or more files, or folders. Nothing if the user cancelled.
+pub fn pick_many(owner: HWND, title: &str, folders: bool) -> Vec<PathBuf> {
+    let chosen = || -> Option<Vec<PathBuf>> {
+        unsafe {
+            let dlg: IFileOpenDialog =
+                CoCreateInstance(&FileOpenDialog, None, CLSCTX_INPROC_SERVER).ok()?;
+            let mut opts = dlg.GetOptions().ok()?
+                | FOS_FORCEFILESYSTEM
+                | FOS_FILEMUSTEXIST
+                | FOS_ALLOWMULTISELECT;
+            if folders {
+                opts |= FOS_PICKFOLDERS;
+            }
+            dlg.SetOptions(opts).ok()?;
+            dlg.SetTitle(&HSTRING::from(title)).ok()?;
+            dlg.Show(Some(WHWND(owner as _))).ok()?;
+            let items = dlg.GetResults().ok()?;
+            (0..items.GetCount().ok()?)
+                .map(|i| item_path(&items.GetItemAt(i).ok()?))
+                .collect()
+        }
+    };
+    chosen().unwrap_or_default()
+}
+
+/// Asks for one folder.
+pub fn pick_folder(owner: HWND, title: &str, initial: Option<&Path>) -> Option<PathBuf> {
     unsafe {
         let dlg: IFileOpenDialog =
             CoCreateInstance(&FileOpenDialog, None, CLSCTX_INPROC_SERVER).ok()?;
-        let mut opts = dlg.GetOptions().ok()? | FOS_FORCEFILESYSTEM | FOS_FILEMUSTEXIST;
-        if folder {
-            opts |= FOS_PICKFOLDERS;
-        }
+        let opts =
+            dlg.GetOptions().ok()? | FOS_FORCEFILESYSTEM | FOS_FILEMUSTEXIST | FOS_PICKFOLDERS;
         dlg.SetOptions(opts).ok()?;
         dlg.SetTitle(&HSTRING::from(title)).ok()?;
         if let Some(dir) = initial.filter(|d| d.is_dir())
@@ -70,20 +109,8 @@ fn pick(owner: HWND, title: &str, folder: bool, initial: Option<&Path>) -> Optio
             let _ = dlg.SetFolder(&item);
         }
         dlg.Show(Some(WHWND(owner as _))).ok()?;
-        let item = dlg.GetResult().ok()?;
-        let name = item.GetDisplayName(SIGDN_FILESYSPATH).ok()?;
-        let path = name.to_string().ok();
-        CoTaskMemFree(name.0 as _);
-        path.map(PathBuf::from)
+        item_path(&dlg.GetResult().ok()?)
     }
-}
-
-pub fn pick_file(owner: HWND, title: &str) -> Option<PathBuf> {
-    pick(owner, title, false, None)
-}
-
-pub fn pick_folder(owner: HWND, title: &str, initial: Option<&Path>) -> Option<PathBuf> {
-    pick(owner, title, true, initial)
 }
 
 pub fn copy_to_clipboard(owner: HWND, text: &str) -> bool {

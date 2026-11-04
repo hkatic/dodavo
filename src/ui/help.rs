@@ -286,6 +286,7 @@ mod tests {
                 s.explorer_verb,
                 s.explorer_menu,
                 s.send_to_title,
+                s.incoming_items_label,
                 s.send_to_items_label,
                 s.send_to_recipient_label,
                 s.send_to_send,

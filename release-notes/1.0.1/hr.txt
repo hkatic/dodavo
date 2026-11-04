@@ -1,5 +1,6 @@
 Slanje datoteka i mapa izravno iz Eksplorera za datoteke.
 
 - Novo: „Pošalji programom Dodavo” u kontekstnom izborniku datoteka i mapa te Dodavo u izborniku „Pošalji u”. U sustavu Windows 11 nalaze se pod „Prikaži još mogućnosti”. Možete ih ukloniti u postavkama.
+- Slanje više datoteka ili mapa odjednom: možete ih odabrati i u dijaloškim okvirima za slanje datoteke i mape. Na strani primatelja više stavki iste osobe sada dijeli jedan prozor i jedan odgovor.
 - Stavke od osoba s vašeg popisa primatelja sada se bez pitanja spremaju u mapu Preuzimanja ili u mapu koju ste odabrali. Poništite odabir mogućnosti „Uvijek spremaj primljene datoteke u ovu mapu” ako želite da Dodavo za svaku stavku pita gdje je spremiti. Ponude bilo koga drugog i dalje se najprije prikazuju.
 - Ako se veza prekine, Dodavo sada čeka, sam nastavlja i o tome vas obavještava obaviješću. Ako želite da umjesto toga pita, u postavkama odaberite „Pitaj svaki put”.

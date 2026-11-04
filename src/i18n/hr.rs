@@ -64,8 +64,8 @@ pub const HR: Strings = Strings {
     empty_list: "Još nema primatelja.\nKliknite „Dodaj primatelja” da biste nekoga dodali pomoću njegova ID-a kontakta.",
     no_recipients_yet: "Još niste dodali nijednog primatelja.\n\nKliknite „Dodaj primatelja” i unesite ime i ID kontakta osobe kojoj želite slati datoteke.",
     select_recipient_first: "Najprije odaberite primatelja na popisu.",
-    pick_file_title: "Odaberite datoteku za slanje – primatelj: {name}",
-    pick_folder_title: "Odaberite mapu za slanje – primatelj: {name}",
+    pick_file_title: "Odaberite jednu ili više datoteka za slanje – primatelj: {name}",
+    pick_folder_title: "Odaberite jednu ili više mapa za slanje – primatelj: {name}",
     remove_confirm: "Želite li ukloniti „{name}” s popisa primatelja?",
     id_copied: "Vaš ID kontakta kopiran je u međuspremnik:\n\n{id}\n\n\
         Zalijepite ga u poruku e-pošte ili čavrljanja i pošaljite svima koji vam žele slati datoteke. \
@@ -199,6 +199,8 @@ pub const HR: Strings = Strings {
     cancelled_balloon_title: "Prijenos je otkazan",
     wants_file: "{name} vam želi poslati datoteku",
     wants_folder: "{name} vam želi poslati mapu",
+    items_total: "ukupno {size}",
+    incoming_items_label: "S&tavke:",
     file_description: "„{name}”  ({size})",
     unknown_sender_warning: "Ovaj pošiljatelj nije na vašem popisu primatelja (ID kontakta {id}). \
         Prihvaćajte datoteke samo od osoba koje poznajete.",
@@ -370,6 +372,12 @@ pub const HR: Strings = Strings {
     send_to_waiting: "Odaberite primatelja za ono što ste odabrali u Eksploreru za datoteke.",
     send_to_failed: "Dodavo ne reagira, pa mu odabrane stavke nije moguće predati. Pokušajte ponovno.",
 
+    wants_items: Plural {
+        one: "{name} vam želi poslati {n} stavku",
+        two: "{name} vam želi poslati {n} stavki",
+        few: "{name} vam želi poslati {n} stavke",
+        other: "{name} vam želi poslati {n} stavki",
+    },
     send_to_count: Plural {
         one: "{n} stavka za slanje",
         two: "{n} stavki za slanje",

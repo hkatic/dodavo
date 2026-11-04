@@ -565,7 +565,7 @@ fn handle_net_event(event: Event) -> Option<Event> {
                     None,
                 );
             } else {
-                let hwnd = incoming::open(id, &from, &name, known, offer);
+                let hwnd = incoming::open_or_add(id, &from, &name, known, offer);
                 with(|a| a.offers.insert(id, hwnd));
             }
         }
@@ -682,7 +682,7 @@ fn handle_net_event(event: Event) -> Option<Event> {
         Event::Finished { id, outcome } => {
             // The sender gave up while we were still deciding.
             if let Some(h) = with(|a| a.offers.get(&id).copied()) {
-                if !incoming::close_by_peer(h) {
+                if !incoming::close_by_peer(h, id) {
                     return Some(Event::Finished { id, outcome });
                 }
                 with(|a| a.offers.remove(&id));

@@ -38,6 +38,14 @@ Seen once on 2026-11-01: an offer from a contact waited in the Incoming Transfer
 
 Seen once on 2026-11-01: after a 500 MB transfer failed on a 200 MB NTFS volume, the volume stayed at 204 KB free although no files were left on it. FAT32 and exFAT volumes got all their space back. It may be a deleted part that another program, such as Defender or the indexer, still held open; that was not checked.
 
+### A dialog in one transfer's window holds up the events of all of them
+
+`app::process_events` stops at the first event whose window is busy and tries again every 250 ms. So while a question is open in one progress window (closing it, or a lost connection with "Ask every time"), an event for that window holds back the offers and the progress of all the others. Only that transfer's events should wait, in their order.
+
+### On a Mac, several offers from one person open a window each, on top of each other
+
+Each offer gets its own `IncomingWindowController`, centred on the same spot, so the ones behind are easily missed and their transfers wait. Windows puts them in one window with one answer (`incoming::open_or_add`).
+
 ## Low
 
 ### A Mac says nothing when sending to a recipient who has just been removed

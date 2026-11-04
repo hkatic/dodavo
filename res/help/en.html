@@ -77,7 +77,7 @@
 <li>On the last page, <span class="ui">Launch Dodavo</span> is selected. Press <kbd>Enter</kbd> to choose <span class="ui">Finish</span>; Setup closes and Dodavo starts.</li>
 </ol>
 <p>Dodavo is then in the Start menu: press the <kbd>Windows</kbd> key, type <kbd>Dodavo</kbd> and press <kbd>Enter</kbd>.</p>
-<p>If Dodavo is running when you install, update or uninstall it, Setup says so and waits. Exit Dodavo (<span class="ui">File</span> menu, <span class="ui">Exit</span>, or <span class="ui">Exit</span> on the notification area icon's menu), then choose <span class="ui">OK</span>.</p>
+<p>If Dodavo is running when you install or uninstall it, you don't need to exit it first: Setup closes it when you choose <span class="ui">Install</span>, and the uninstaller after you confirm. Transfers that are running continue the next time Dodavo starts.</p>
 <h3 id="update">Updating Dodavo</h3>
 <p>Dodavo updates itself. Once a day, about 15 seconds after it has started and is online, it asks the Dodavo page on GitHub whether a newer version has been published. When there is one, a notification <span class="ui">Update available</span> appears and the <span class="ui">Update Available</span> window opens in the background; selecting the notification, or <kbd>Alt</kbd>+<kbd>Tab</kbd>, brings it to the front. The window says which version is available and which one you have; screen readers usually read this sentence when the window comes to the front. Then come, in Tab order:</p>
 <dl>
@@ -92,7 +92,6 @@
 <p>To check at any time, choose <span class="ui">Check for Updates…</span> from the <span class="ui">Help</span> menu. When there is nothing new, a message says that you have the latest version; when the check fails, for example without an internet connection, the message says why. To stop the daily check, clear <span class="ui">Check for updates automatically (once a day)</span> in the settings; checks you start from the <span class="ui">Help</span> menu still work. You can also update by hand at any time: run the setup program of the new version from the <a href="https://github.com/hkatic/dodavo/releases">Dodavo page on GitHub</a>. It replaces the program in the same place and keeps your settings, your recipient list and your Contact ID.</p>
 <h3 id="uninstall">Uninstalling Dodavo</h3>
 <ol>
-<li>Exit Dodavo.</li>
 <li>Open Windows Settings (<kbd>Windows</kbd>+<kbd>I</kbd>) and go to <span class="ui">Apps</span>, then <span class="ui">Installed apps</span> (on Windows 10: <span class="ui">Apps &amp; features</span>). On Windows 7 and 8.1, open <span class="ui">Control Panel</span> and choose <span class="ui">Programs and Features</span>.</li>
 <li>Type <kbd>Dodavo</kbd> in the search box to find it in the list. In Windows 11, press <kbd>Tab</kbd> to reach its <span class="ui">More options</span> button, press <kbd>Enter</kbd> and choose <span class="ui">Uninstall</span>. In Windows 10, 8.1 and 7, select Dodavo in the list and choose <span class="ui">Uninstall</span>.</li>
 <li>Confirm with <span class="ui">Uninstall</span> and then <span class="ui">Yes</span>.</li>
@@ -172,7 +171,7 @@
 <ol>
 <li>Select the person in the recipient list.</li>
 <li>Press <kbd>Ctrl</kbd>+<kbd>O</kbd>, or activate the <span class="ui">Send File…</span> button. A standard Windows Open dialog appears.</li>
-<li>Choose the file and press <kbd>Enter</kbd>.</li>
+<li>Choose the file and press <kbd>Enter</kbd>. To send several at once, select them first: <kbd>Shift</kbd> and the arrow keys for items next to each other, or <kbd>Ctrl</kbd> and the arrow keys to move and <kbd>Ctrl</kbd>+<kbd>Space</kbd> to select. Each one is sent as a separate transfer.</li>
 </ol>
 <p>A progress window opens and the transfer starts. See <a href="#progress">Following a transfer</a>.</p>
 <p>You can also press <kbd>Enter</kbd> on the person, or double-click them, and choose <span class="ui">Send File…</span> from the menu that opens.</p>
@@ -181,7 +180,7 @@
 <ol>
 <li>Select the person in the recipient list.</li>
 <li>Press <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>O</kbd>, or activate the <span class="ui">Send Folder…</span> button.</li>
-<li>Choose the folder and activate <span class="ui">Select Folder</span>.</li>
+<li>Choose the folder and activate <span class="ui">Select Folder</span>. You can select several in the same way as files.</li>
 </ol>
 <p>Dodavo first packs the folder, with all its subfolders, and then sends it. The other computer unpacks it again, so the person receives an ordinary folder, unless they chose in their settings to keep it as a ZIP file.</p>
 
@@ -202,7 +201,7 @@
 
 <h3 id="after-sending">When a sent item has arrived</h3>
 <p>When the other person has received everything, the checksum has been confirmed and the item has been saved on the other computer, Dodavo shows a message, for example <span class="ui">Done! Ana has received the file.</span>, followed by the name of the item. Screen readers read it. Press <kbd>Enter</kbd> or <kbd>Esc</kbd>, or choose <span class="ui">Close</span>; the progress window closes too.</p>
-<p>If you select <span class="ui">Don't show this again</span>, the progress window closes by itself next time, and a notification tells you that the transfer is complete. You can turn the message back on in Settings with <span class="ui">After sending, show a message once the item has arrived</span>. If the progress window is hidden or minimized when the transfer ends, there is only the notification. A transfer that fails, is declined or is cancelled keeps its progress window open, so that you can read what happened.</p>
+<p>If you select <span class="ui">Don't show this again</span>, the progress window closes by itself next time, and a notification tells you that the transfer is complete. You can turn the message back on in Settings with <span class="ui">After sending, show a message once the item has arrived</span>. If the progress window is hidden or minimized when the transfer ends, or other transfers are still running, there is only the notification. A transfer that fails, is declined or is cancelled keeps its progress window open, so that you can read what happened.</p>
 </section>
 
 <section aria-labelledby="receiving">
@@ -221,6 +220,7 @@
 <dt><span class="ui">Accept</span> (<kbd>Alt</kbd>+<kbd>A</kbd>) and <span class="ui">Decline</span> (<kbd>Alt</kbd>+<kbd>D</kbd>)</dt>
 <dd>When the window opens, the focus is on <span class="ui">Accept</span>, so pressing <kbd>Enter</kbd> accepts; screen readers usually read the text of the window first, from the bold line to the free disk space sentence. Pressing <kbd>Esc</kbd> or closing the window declines.</dd>
 </dl>
+<p>When one person sends several items at once, they share one window, and your answer applies to all of them. The bold line says how many there are, the next line gives their total size, and the <span class="ui">Items</span> field (<kbd>Alt</kbd>+<kbd>I</kbd>) lists them. Items that arrive while the window is open are added to it.</p>
 <p>If there is not enough free space, Dodavo asks whether you want to accept anyway. If the sender cancels before you answer, the window closes and a notification tells you so.</p>
 <p>After you accept, a progress window shows the transfer. If an item with the same name already exists in the folder, the new one is saved with a number added, for example <code>Report (2).pdf</code>; nothing is overwritten.</p>
 
@@ -233,7 +233,7 @@
 <li>For a folder kept only as a ZIP file, the message says <span class="ui">Done! The folder has been saved as a ZIP file.</span>, and you have the same choices as for a file.</li>
 <li><span class="ui">Close</span> does neither.</li>
 </ul>
-<p>If you select <span class="ui">Don't ask me again</span>, Dodavo shows a notification instead next time. Selecting the notification shows the item in File Explorer. You can turn the question back on in Settings with <span class="ui">After receiving, ask whether to open the file or folder</span>.</p>
+<p>If you select <span class="ui">Don't ask me again</span>, Dodavo shows a notification instead next time. Selecting the notification shows the item in File Explorer. You can turn the question back on in Settings with <span class="ui">After receiving, ask whether to open the file or folder</span>. While other transfers are still running, Dodavo does not ask, and shows the notification instead; the question comes after the last one.</p>
 
 <h3 id="auto-accept">Receiving without being asked</h3>
 <p>Transfers from people in your recipient list start immediately, without the Incoming Transfer window, as long as <span class="ui">Always save received files to this folder</span> and <span class="ui">Start transfers automatically, without asking</span> are both on in Settings. They are on unless you clear them. Dodavo shows a notification, <span class="ui">Receiving</span>, and saves the item in the folder from the first option, which is your Downloads folder unless you chose another one. Transfers from unknown senders, and transfers that would not fit on the disk, are still asked about. Only the people you added yourself can start a transfer this way: their Contact ID cannot be forged.</p>
@@ -391,6 +391,7 @@
 <tr><th scope="col">Keys</th><th scope="col">Action</th></tr>
 </thead>
 <tbody>
+<tr><td><kbd>Alt</kbd>+<kbd>I</kbd></td><td>Move to the list of items, when there are several</td></tr>
 <tr><td><kbd>Alt</kbd>+<kbd>A</kbd></td><td>Accept</td></tr>
 <tr><td><kbd>Alt</kbd>+<kbd>D</kbd></td><td>Decline</td></tr>
 <tr><td><kbd>Alt</kbd>+<kbd>S</kbd></td><td>Move to the Save to field</td></tr>

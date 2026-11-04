@@ -338,6 +338,8 @@ strings! {
         cancelled_balloon_title,
         wants_file,
         wants_folder,
+        items_total,
+        incoming_items_label,
         file_description,
         unknown_sender_warning,
         add_to_recipients,
@@ -507,6 +509,7 @@ strings! {
         error_folder_missing,
     }
     plurals {
+        wants_items,
         send_to_count,
         drop_confirm,
         exit_instruction,
@@ -887,6 +890,7 @@ mod tests {
                 (
                     "incoming",
                     vec![
+                        s.incoming_items_label,
                         s.add_to_recipients,
                         s.save_to,
                         s.browse,

@@ -77,7 +77,7 @@
 <li>Na posljednjoj stranici odabrana je mogućnost <span class="ui">Pokreni Dodavo</span>. Pritisnite <kbd>Enter</kbd> da biste odabrali <span class="ui">Završi</span>; instalacija se zatvara i Dodavo se pokreće.</li>
 </ol>
 <p>Dodavo se zatim nalazi na izborniku Start: pritisnite tipku <kbd>Windows</kbd>, upišite <kbd>Dodavo</kbd> i pritisnite <kbd>Enter</kbd>.</p>
-<p>Ako je Dodavo pokrenut dok ga instalirate, ažurirate ili deinstalirate, instalacija vas na to upozorava i čeka. Zatvorite Dodavo (izbornik <span class="ui">Datoteka</span>, <span class="ui">Izlaz</span> ili <span class="ui">Izlaz</span> na izborniku ikone u području obavijesti), a zatim odaberite <span class="ui">U redu</span>.</p>
+<p>Ako je Dodavo pokrenut dok ga instalirate ili deinstalirate, ne morate ga najprije zatvoriti: instalacija ga zatvara kada odaberete <span class="ui">Instaliraj</span>, a deinstalacija nakon što potvrdite. Prijenosi koji su u tijeku nastavljaju se pri sljedećem pokretanju programa Dodavo.</p>
 <h3 id="update">Ažuriranje programa Dodavo</h3>
 <p>Dodavo se ažurira sam. Jednom dnevno, otprilike 15 sekundi nakon što se pokrene i poveže s mrežom, na stranici programa Dodavo na GitHubu provjerava je li objavljena novija verzija. Kada jest, pojavljuje se obavijest <span class="ui">Dostupno je ažuriranje</span>, a u pozadini se otvara prozor <span class="ui">Dostupno ažuriranje</span>; odabirom obavijesti ili tipkama <kbd>Alt</kbd>+<kbd>Tab</kbd> dolazi u prvi plan. U prozoru piše koja je verzija dostupna i koju imate; čitači zaslona obično pročitaju tu rečenicu kada prozor dođe u prvi plan. Zatim slijede, redoslijedom tipke Tab:</p>
 <dl>
@@ -92,7 +92,6 @@
 <p>Da biste provjerili u bilo kojem trenutku, odaberite <span class="ui">Provjeri ima li ažuriranja…</span> na izborniku <span class="ui">Pomoć</span>. Kada nema ničega novog, poruka javlja da imate najnoviju verziju; kada provjera ne uspije, na primjer bez internetske veze, poruka objašnjava zašto. Da biste isključili dnevnu provjeru, u postavkama poništite <span class="ui">Automatski provjeravaj ima li ažuriranja (jednom dnevno)</span>; provjere koje pokrenete s izbornika <span class="ui">Pomoć</span> i dalje rade. Ažurirati možete i ručno u bilo kojem trenutku: pokrenite instalacijski program nove verzije sa <a href="https://github.com/hkatic/dodavo/releases">stranice programa Dodavo na GitHubu</a>. On zamjenjuje program na istom mjestu, a vaše postavke, popis primatelja i ID kontakta ostaju sačuvani.</p>
 <h3 id="uninstall">Deinstaliranje programa Dodavo</h3>
 <ol>
-<li>Zatvorite Dodavo.</li>
 <li>Otvorite Postavke sustava Windows (<kbd>Windows</kbd>+<kbd>I</kbd>) i idite na <span class="ui">Aplikacije</span>, a zatim na <span class="ui">Instalirane aplikacije</span> (u sustavu Windows 10: <span class="ui">Aplikacije i značajke</span>). U sustavima Windows 7 i 8.1 otvorite stavku <span class="ui">Upravljačka ploča</span> i odaberite <span class="ui">Programi i značajke</span>.</li>
 <li>Upišite <kbd>Dodavo</kbd> u okvir za pretraživanje da biste ga pronašli na popisu. U sustavu Windows 11 pritisnite <kbd>Tab</kbd> da biste došli do njegova gumba <span class="ui">Više mogućnosti</span>, pritisnite <kbd>Enter</kbd> i odaberite <span class="ui">Deinstaliraj</span>. U sustavima Windows 10, 8.1 i 7 odaberite Dodavo na popisu i odaberite <span class="ui">Deinstaliraj</span>.</li>
 <li>Potvrdite odabirom <span class="ui">Deinstaliraj</span>, a zatim <span class="ui">Da</span>.</li>
@@ -172,7 +171,7 @@
 <ol>
 <li>Na popisu primatelja odaberite osobu.</li>
 <li>Pritisnite <kbd>Ctrl</kbd>+<kbd>O</kbd> ili aktivirajte gumb <span class="ui">Pošalji datoteku…</span>. Pojavljuje se uobičajeni dijaloški okvir sustava Windows za otvaranje datoteke.</li>
-<li>Odaberite datoteku i pritisnite <kbd>Enter</kbd>.</li>
+<li>Odaberite datoteku i pritisnite <kbd>Enter</kbd>. Da biste poslali više njih odjednom, najprije ih odaberite: <kbd>Shift</kbd> i tipke sa strelicama za stavke jednu do druge ili <kbd>Ctrl</kbd> i tipke sa strelicama za kretanje te <kbd>Ctrl</kbd>+<kbd>razmaknica</kbd> za odabir. Svaka se šalje kao zaseban prijenos.</li>
 </ol>
 <p>Otvara se prozor napretka i prijenos počinje. Pogledajte <a href="#progress">Praćenje prijenosa</a>.</p>
 <p>Možete i pritisnuti <kbd>Enter</kbd> na osobi ili je dvaput kliknuti pa na izborniku koji se otvori odabrati <span class="ui">Pošalji datoteku…</span>.</p>
@@ -181,7 +180,7 @@
 <ol>
 <li>Na popisu primatelja odaberite osobu.</li>
 <li>Pritisnite <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>O</kbd> ili aktivirajte gumb <span class="ui">Pošalji mapu…</span>.</li>
-<li>Odaberite mapu i aktivirajte gumb <span class="ui">Odabir mape</span>.</li>
+<li>Odaberite mapu i aktivirajte gumb <span class="ui">Odabir mape</span>. Više njih možete odabrati na isti način kao i datoteke.</li>
 </ol>
 <p>Dodavo najprije pakira mapu, sa svim podmapama, a zatim je šalje. Drugo je računalo ponovno raspakirava, pa osoba prima običnu mapu, osim ako je u svojim postavkama odabrala da je zadrži kao ZIP datoteku.</p>
 
@@ -202,7 +201,7 @@
 
 <h3 id="after-sending">Kada poslana stavka stigne</h3>
 <p>Kada druga osoba primi sve, kontrolni zbroj bude potvrđen i stavka bude spremljena na drugom računalu, Dodavo prikazuje poruku, na primjer <span class="ui">Gotovo! Datoteka je isporučena primatelju (Ana).</span>, a ispod nje naziv stavke. Čitači zaslona je čitaju. Pritisnite <kbd>Enter</kbd> ili <kbd>Esc</kbd> ili odaberite <span class="ui">Zatvori</span>; zatvara se i prozor napretka.</p>
-<p>Ako odaberete <span class="ui">Ne prikazuj ponovno</span>, prozor napretka sljedeći će se put zatvoriti sam, a obavijest će vam javiti da je prijenos dovršen. Poruku možete ponovno uključiti u postavkama mogućnošću <span class="ui">Nakon slanja prikaži poruku kad datoteka ili mapa stigne</span>. Ako je prozor napretka skriven ili minimiziran kada prijenos završi, prikazuje se samo obavijest. Kada prijenos ne uspije, bude odbijen ili otkazan, prozor napretka ostaje otvoren da biste mogli pročitati što se dogodilo.</p>
+<p>Ako odaberete <span class="ui">Ne prikazuj ponovno</span>, prozor napretka sljedeći će se put zatvoriti sam, a obavijest će vam javiti da je prijenos dovršen. Poruku možete ponovno uključiti u postavkama mogućnošću <span class="ui">Nakon slanja prikaži poruku kad datoteka ili mapa stigne</span>. Ako je prozor napretka skriven ili minimiziran kada prijenos završi ili ako su još u tijeku drugi prijenosi, prikazuje se samo obavijest. Kada prijenos ne uspije, bude odbijen ili otkazan, prozor napretka ostaje otvoren da biste mogli pročitati što se dogodilo.</p>
 </section>
 
 <section aria-labelledby="receiving">
@@ -221,6 +220,7 @@
 <dt><span class="ui">Prihvati</span> (<kbd>Alt</kbd>+<kbd>I</kbd>) i <span class="ui">Odbij</span> (<kbd>Alt</kbd>+<kbd>O</kbd>)</dt>
 <dd>Kada se prozor otvori, fokus je na gumbu <span class="ui">Prihvati</span>, pa pritiskom tipke <kbd>Enter</kbd> prihvaćate prijenos; čitači zaslona obično najprije pročitaju tekst prozora, od podebljanog retka do rečenice o slobodnom prostoru na disku. Pritiskom tipke <kbd>Esc</kbd> ili zatvaranjem prozora odbijate ga.</dd>
 </dl>
+<p>Kada vam ista osoba šalje više stavki odjednom, one dijele jedan prozor, a vaš se odgovor odnosi na sve. Podebljani redak kaže koliko ih je, sljedeći redak navodi njihovu ukupnu veličinu, a polje <span class="ui">Stavke</span> (<kbd>Alt</kbd>+<kbd>T</kbd>) ih navodi. Stavke koje stignu dok je prozor otvoren dodaju se u njega.</p>
 <p>Ako nema dovoljno slobodnog prostora, Dodavo pita želite li ipak prihvatiti prijenos. Ako pošiljatelj otkaže prije nego što odgovorite, prozor se zatvara, a obavijest vas o tome izvješćuje.</p>
 <p>Kada prihvatite prijenos, prozor napretka prikazuje njegov tijek. Ako u mapi već postoji stavka istog naziva, nova se sprema s dodanim brojem, na primjer <code>Izvještaj (2).pdf</code>; ništa se ne prebrisuje.</p>
 
@@ -233,7 +233,7 @@
 <li>Za mapu zadržanu samo kao ZIP datoteku poruka glasi <span class="ui">Gotovo! Mapa je spremljena kao ZIP datoteka.</span>, a izbor je isti kao za datoteku.</li>
 <li><span class="ui">Zatvori</span> ne radi ništa od toga.</li>
 </ul>
-<p>Ako odaberete <span class="ui">Ne pitaj me ponovno</span>, Dodavo će sljedeći put umjesto pitanja prikazati obavijest. Odabirom obavijesti stavka se prikazuje u Eksploreru za datoteke. Pitanje možete ponovno uključiti u postavkama mogućnošću <span class="ui">Nakon primanja pitaj želim li otvoriti datoteku ili mapu</span>.</p>
+<p>Ako odaberete <span class="ui">Ne pitaj me ponovno</span>, Dodavo će sljedeći put umjesto pitanja prikazati obavijest. Odabirom obavijesti stavka se prikazuje u Eksploreru za datoteke. Pitanje možete ponovno uključiti u postavkama mogućnošću <span class="ui">Nakon primanja pitaj želim li otvoriti datoteku ili mapu</span>. Dok su u tijeku drugi prijenosi, Dodavo ne pita, nego prikazuje obavijest; pitanje dolazi nakon posljednjeg.</p>
 
 <h3 id="auto-accept">Primanje bez pitanja</h3>
 <p>Prijenosi od osoba s vašeg popisa primatelja počinju odmah, bez prozora Dolazni prijenos, ako su u postavkama uključene obje mogućnosti: <span class="ui">Uvijek spremaj primljene datoteke u ovu mapu</span> i <span class="ui">Prijenose pokreći automatski, bez pitanja</span>. Uključene su dok ih ne isključite. Dodavo prikazuje obavijest <span class="ui">Primanje</span> i sprema stavku u mapu iz prve mogućnosti, a to je vaša mapa Preuzimanja ako niste odabrali drugu. Za prijenose od nepoznatih pošiljatelja i prijenose koji ne bi stali na disk Dodavo i dalje pita. Na taj način prijenos mogu pokrenuti samo osobe koje ste sami dodali: njihov se ID kontakta ne može krivotvoriti.</p>
@@ -391,6 +391,7 @@
 <tr><th scope="col">Tipke</th><th scope="col">Radnja</th></tr>
 </thead>
 <tbody>
+<tr><td><kbd>Alt</kbd>+<kbd>T</kbd></td><td>Prelazak na popis stavki, kada ih je više</td></tr>
 <tr><td><kbd>Alt</kbd>+<kbd>I</kbd></td><td>Prihvati</td></tr>
 <tr><td><kbd>Alt</kbd>+<kbd>O</kbd></td><td>Odbij</td></tr>
 <tr><td><kbd>Alt</kbd>+<kbd>S</kbd></td><td>Prelazak na polje Spremi u</td></tr>

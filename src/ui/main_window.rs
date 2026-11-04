@@ -522,14 +522,15 @@ impl MainWindow {
         let Some(contact) = self.selected_contact(w) else {
             return;
         };
-        let path = match kind {
-            Kind::File => shell::pick_file(w.hwnd, &tr!(pick_file_title, name = contact.name)),
-            Kind::Folder => {
-                shell::pick_folder(w.hwnd, &tr!(pick_folder_title, name = contact.name), None)
-            }
+        let title = match kind {
+            Kind::File => tr!(pick_file_title, name = contact.name),
+            Kind::Folder => tr!(pick_folder_title, name = contact.name),
         };
-        if let Some(path) = path {
-            app::start_send(&contact, path, kind, true);
+        let paths = shell::pick_many(w.hwnd, &title, kind == Kind::Folder);
+        // Only the first window takes the focus, which then stays there while
+        // the others open.
+        for (i, path) in paths.into_iter().enumerate() {
+            app::start_send(&contact, path, kind, i == 0);
         }
     }
 
@@ -781,13 +782,13 @@ impl MainWindow {
         {
             return;
         }
-        for path in paths {
+        for (i, path) in paths.into_iter().enumerate() {
             let kind = if path.is_dir() {
                 Kind::Folder
             } else {
                 Kind::File
             };
-            app::start_send(&contact, path, kind, true);
+            app::start_send(&contact, path, kind, i == 0);
         }
     }
 }

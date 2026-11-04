@@ -24,6 +24,7 @@ use super::{
     ask, confirm, format_duration, format_size, send, set_text, shell, tray,
     window::{self, CreateOptions, Handler, Window},
 };
+pub use crate::view::{Direction, Speed};
 use crate::{
     app,
     config::{CloseAction, ConnectionLostAction, ReceivedFolder},
@@ -31,7 +32,6 @@ use crate::{
     net::{Command, Kind, Outcome, Phase},
     view::{can_pause, keeps_progress, moves_data, percent},
 };
-pub use crate::view::{Direction, Speed};
 
 const ID_CANCEL: u16 = 11;
 const ID_PAUSE: u16 = 12;
@@ -785,11 +785,14 @@ impl Progress {
         // A completed transfer's window closes by itself, after the question
         // or the message, if any; a failed one stays to show what happened.
         // A hidden or minimized window asks nothing: a question needs a
-        // window that is seen, and the notification reports instead.
+        // window that is seen, and the notification reports instead. Nor does
+        // one while others are running: several items of a selection would
+        // pile up a dialog each. The last to finish asks.
         let hidden = self.background || window::is_minimized(w.hwnd);
+        let others_running = app::active_transfer_count() > 0;
         self.after = if !completed && !self.background {
             AfterFinish::Stay
-        } else if hidden {
+        } else if hidden || others_running {
             AfterFinish::Close
         } else if received
             && ask_after_receive

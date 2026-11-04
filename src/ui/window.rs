@@ -680,10 +680,6 @@ impl Window {
         }
     }
 
-    pub fn item(&self, id: u16) -> HWND {
-        unsafe { GetDlgItem(self.hwnd, id as i32) }
-    }
-
     /// Resizes the window so that its client area has the given 96-DPI size.
     pub fn set_client_size(&self, cx: i32, cy: i32) {
         unsafe {

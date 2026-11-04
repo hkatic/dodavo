@@ -64,8 +64,8 @@ pub const SR_LATN: Strings = Strings {
     empty_list: "Još nema primalaca.\nKliknite na „Dodaj primaoca“ da biste nekoga dodali pomoću njegovog ID-a kontakta.",
     no_recipients_yet: "Još niste dodali nijednog primaoca.\n\nKliknite na „Dodaj primaoca“ i unesite ime i ID kontakta osobe kojoj želite da šaljete datoteke.",
     select_recipient_first: "Prvo izaberite primaoca na listi.",
-    pick_file_title: "Izaberite datoteku za slanje – primalac: {name}",
-    pick_folder_title: "Izaberite fasciklu za slanje – primalac: {name}",
+    pick_file_title: "Izaberite jednu ili više datoteka za slanje – primalac: {name}",
+    pick_folder_title: "Izaberite jednu ili više fascikli za slanje – primalac: {name}",
     remove_confirm: "Želite li da uklonite „{name}“ sa liste primalaca?",
     id_copied: "Vaš ID kontakta je kopiran u međuspremnik:\n\n{id}\n\n\
         Nalepite ga u e-poruku ili poruku ćaskanja i pošaljite ga svima koji žele da vam šalju datoteke. \
@@ -199,6 +199,8 @@ pub const SR_LATN: Strings = Strings {
     cancelled_balloon_title: "Prenos je otkazan",
     wants_file: "{name} želi da vam pošalje datoteku",
     wants_folder: "{name} želi da vam pošalje fasciklu",
+    items_total: "ukupno {size}",
+    incoming_items_label: "S&tavke:",
     file_description: "„{name}“  ({size})",
     unknown_sender_warning: "Ovaj pošiljalac nije na vašoj listi primalaca (ID kontakta {id}). \
         Prihvatajte datoteke samo od osoba koje poznajete.",
@@ -370,6 +372,12 @@ pub const SR_LATN: Strings = Strings {
     send_to_waiting: "Izaberite primaoca za ono što ste izabrali u Istraživaču datoteka.",
     send_to_failed: "Dodavo ne reaguje, pa mu izabrane stavke nije moguće predati. Pokušajte ponovo.",
 
+    wants_items: Plural {
+        one: "{name} želi da vam pošalje {n} stavku",
+        two: "{name} želi da vam pošalje {n} stavki",
+        few: "{name} želi da vam pošalje {n} stavke",
+        other: "{name} želi da vam pošalje {n} stavki",
+    },
     send_to_count: Plural {
         one: "{n} stavka za slanje",
         two: "{n} stavki za slanje",

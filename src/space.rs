@@ -72,6 +72,12 @@ fn drive_name(root: &Path) -> String {
 /// Whether `offer` fits into `dir`, with `folder` deciding what is kept of a
 /// folder and `temp` being the folder of the temporary archives.
 pub fn check_space(offer: &Offer, dir: &Path, temp: &Path, folder: ReceivedFolder) -> Space {
+    check_space_of(&[offer], dir, temp, folder)
+}
+
+/// The same for several offers that are answered together: all of them have
+/// to fit at the same time.
+pub fn check_space_of(offers: &[&Offer], dir: &Path, temp: &Path, folder: ReceivedFolder) -> Space {
     let unknown = || Space {
         enough: None,
         fits: true,
@@ -81,7 +87,8 @@ pub fn check_space(offer: &Offer, dir: &Path, temp: &Path, folder: ReceivedFolde
         return unknown();
     };
     let mut volumes = vec![(dest_root.clone(), dest_free)];
-    let uses_temp = offer.kind == Kind::Folder && folder == ReceivedFolder::Extract;
+    let any_folder = offers.iter().any(|offer| offer.kind == Kind::Folder);
+    let uses_temp = any_folder && folder == ReceivedFolder::Extract;
     if uses_temp {
         let Some(temp) = disk_free(temp) else {
             return unknown();
@@ -93,7 +100,11 @@ pub fn check_space(offer: &Offer, dir: &Path, temp: &Path, folder: ReceivedFolde
         .is_none_or(|(root, _)| root.as_os_str().eq_ignore_ascii_case(dest_root.as_os_str()));
     // A file system that limits the size of a file (FAT32, and FAT) fails
     // the transfer once a file reaches that size, however much room there is.
-    let largest = largest_saved_file(offer, folder);
+    let largest = offers
+        .iter()
+        .map(|offer| largest_saved_file(offer, folder))
+        .max()
+        .unwrap_or(0);
     if largest > FAT32_MAX_FILE
         && matches!(
             crate::archive::file_system(&dest_root).as_deref(),
@@ -110,7 +121,15 @@ pub fn check_space(offer: &Offer, dir: &Path, temp: &Path, folder: ReceivedFolde
             ),
         };
     }
-    let (dest_need, temp_need) = space_needed(offer, folder, same_volume);
+    let (dest_need, temp_need) = offers
+        .iter()
+        .map(|offer| space_needed(offer, folder, same_volume))
+        .fold((0u64, 0u64), |(dest, temp), (more_dest, more_temp)| {
+            (
+                dest.saturating_add(more_dest),
+                temp.saturating_add(more_temp),
+            )
+        });
     let mut checks = vec![(&volumes[0], dest_need)];
     if !same_volume {
         checks.push((&volumes[1], temp_need));
@@ -123,7 +142,7 @@ pub fn check_space(offer: &Offer, dir: &Path, temp: &Path, folder: ReceivedFolde
     } else {
         os_tr!(space_ok, needed = args.0, free = args.1, drive = args.2)
     };
-    if offer.kind == Kind::Folder && folder != ReceivedFolder::KeepZip {
+    if any_folder && folder != ReceivedFolder::KeepZip {
         text = format!("{text} {}", tr!(space_folder_note));
     }
     Space {
@@ -202,6 +221,28 @@ mod tests {
         assert!(!space.fits);
         assert!(space.text.contains("FAT"), "{}", space.text);
         assert!(check_space(&big, &dir, &dir, ReceivedFolder::Extract).fits);
+    }
+
+    /// Offers answered together have to fit together, and the largest file of
+    /// any of them has to fit on the file system.
+    #[test]
+    fn several_offers_count_together() {
+        let dir = std::env::temp_dir();
+        let free = disk_free(&dir).expect("free space").1;
+        let mut half = offer(Kind::File);
+        half.size = free / 2 + 1;
+        let one = check_space_of(&[&half], &dir, &dir, ReceivedFolder::Extract);
+        assert_eq!(one.enough, Some(true), "{}", one.text);
+        let two = check_space_of(&[&half, &half], &dir, &dir, ReceivedFolder::Extract);
+        assert_eq!(two.enough, Some(false), "{}", two.text);
+
+        let small = offer(Kind::File);
+        let mut big = offer(Kind::File);
+        big.size = FAT32_MAX_FILE + 1;
+        crate::archive::PRETEND_FAT.set(true);
+        let together = check_space_of(&[&small, &big], &dir, &dir, ReceivedFolder::Extract);
+        crate::archive::PRETEND_FAT.set(false);
+        assert!(!together.fits);
     }
 
     #[cfg(windows)]

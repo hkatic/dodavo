@@ -77,7 +77,7 @@
 <li>Na zadnji strani je izbrana možnost <span class="ui">Odpri Dodavo</span>. Pritisnite <kbd>Enter</kbd>, da izberete <span class="ui">Končaj</span>; namestitveni program se zapre in Dodavo se zažene.</li>
 </ol>
 <p>Dodavo je nato v meniju Start: pritisnite tipko <kbd>Windows</kbd>, vnesite <kbd>Dodavo</kbd> in pritisnite <kbd>Enter</kbd>.</p>
-<p>Če se Dodavo izvaja, ko ga nameščate, posodabljate ali odstranjujete, vas namestitveni program na to opozori in počaka. Zaprite Dodavo (meni <span class="ui">Datoteka</span>, <span class="ui">Izhod</span> ali <span class="ui">Izhod</span> v meniju ikone v območju za obvestila), nato izberite <span class="ui">V redu</span>.</p>
+<p>Če se Dodavo izvaja, ko ga nameščate ali odstranjujete, vam ga ni treba najprej zapreti: namestitveni program ga zapre, ko izberete <span class="ui">Namesti</span>, program za odstranjevanje pa, ko potrdite. Prenosi, ki potekajo, se nadaljujejo ob naslednjem zagonu programa Dodavo.</p>
 <h3 id="update">Posodabljanje programa Dodavo</h3>
 <p>Dodavo se posodablja sam. Enkrat na dan, približno 15 sekund po zagonu, ko je povezan z omrežjem, na strani programa Dodavo na GitHubu preveri, ali je bila objavljena novejša različica. Če je, se prikaže obvestilo <span class="ui">Na voljo je posodobitev</span>, v ozadju pa se odpre okno <span class="ui">Na voljo je posodobitev</span>; z izbiro obvestila ali s tipkama <kbd>Alt</kbd>+<kbd>Tab</kbd> ga postavite v ospredje. V oknu piše, katera različica je na voljo in katero imate; bralniki zaslona ta stavek običajno preberejo, ko okno pride v ospredje. Nato sledijo v vrstnem redu tipke Tab:</p>
 <dl>
@@ -92,7 +92,6 @@
 <p>Če želite preveriti kadar koli, v meniju <span class="ui">Pomoč</span> izberite <span class="ui">Preveri, ali so na voljo posodobitve…</span>. Ko ni nič novega, sporočilo pove, da imate najnovejšo različico; ko preverjanje ne uspe, na primer brez internetne povezave, sporočilo pove, zakaj. Če želite izklopiti dnevno preverjanje, v nastavitvah počistite <span class="ui">Samodejno preverjaj, ali so na voljo posodobitve (enkrat na dan)</span>; preverjanja, ki jih zaženete iz menija <span class="ui">Pomoč</span>, še vedno delujejo. Posodobite lahko tudi ročno kadar koli: zaženite namestitveni program nove različice s <a href="https://github.com/hkatic/dodavo/releases">strani programa Dodavo na GitHubu</a>. Ta zamenja program na istem mestu, vaše nastavitve, seznam prejemnikov in ID stika pa se ohranijo.</p>
 <h3 id="uninstall">Odstranjevanje programa Dodavo</h3>
 <ol>
-<li>Zaprite Dodavo.</li>
 <li>Odprite nastavitve sistema Windows (<kbd>Windows</kbd>+<kbd>I</kbd>) in pojdite na <span class="ui">Aplikacije</span>, nato na <span class="ui">Nameščene aplikacije</span> (v sistemu Windows 10: <span class="ui">Aplikacije in funkcije</span>). V sistemih Windows 7 in 8.1 odprite element <span class="ui">Nadzorna plošča</span> in izberite <span class="ui">Programi in funkcije</span>.</li>
 <li>V iskalno polje vnesite <kbd>Dodavo</kbd>, da ga najdete na seznamu. V sistemu Windows 11 pritisnite <kbd>Tab</kbd>, da pridete do gumba <span class="ui">Več</span> ob njem, pritisnite <kbd>Enter</kbd> in izberite <span class="ui">Odstrani</span>. V sistemih Windows 10, 8.1 in 7 izberite Dodavo na seznamu in izberite <span class="ui">Odstrani</span>.</li>
 <li>Potrdite z izbiro <span class="ui">Odstrani</span> in nato <span class="ui">Da</span>.</li>
@@ -172,7 +171,7 @@
 <ol>
 <li>Na seznamu prejemnikov izberite osebo.</li>
 <li>Pritisnite <kbd>Ctrl</kbd>+<kbd>O</kbd> ali aktivirajte gumb <span class="ui">Pošlji datoteko…</span>. Prikaže se običajno pogovorno okno sistema Windows za odpiranje datoteke.</li>
-<li>Izberite datoteko in pritisnite <kbd>Enter</kbd>.</li>
+<li>Izberite datoteko in pritisnite <kbd>Enter</kbd>. Če jih želite poslati več hkrati, jih najprej izberite: <kbd>Shift</kbd> in puščične tipke za elemente drug ob drugem ali <kbd>Ctrl</kbd> in puščične tipke za premikanje ter <kbd>Ctrl</kbd>+<kbd>preslednica</kbd> za izbor. Vsaka se pošlje kot ločen prenos.</li>
 </ol>
 <p>Odpre se okno napredka in prenos se začne. Glejte <a href="#progress">Spremljanje prenosa</a>.</p>
 <p>Lahko tudi pritisnete <kbd>Enter</kbd> na osebi ali jo dvokliknete in v meniju, ki se odpre, izberete <span class="ui">Pošlji datoteko…</span>.</p>
@@ -181,7 +180,7 @@
 <ol>
 <li>Na seznamu prejemnikov izberite osebo.</li>
 <li>Pritisnite <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>O</kbd> ali aktivirajte gumb <span class="ui">Pošlji mapo…</span>.</li>
-<li>Izberite mapo in aktivirajte gumb <span class="ui">Izberite mapo</span>.</li>
+<li>Izberite mapo in aktivirajte gumb <span class="ui">Izberite mapo</span>. Več map lahko izberete na enak način kot datoteke.</li>
 </ol>
 <p>Dodavo mapo z vsemi podmapami najprej zapakira in jo nato pošlje. Drugi računalnik jo znova razpakira, tako da oseba prejme navadno mapo, razen če je v svojih nastavitvah izbrala, da jo obdrži kot datoteko ZIP.</p>
 
@@ -202,7 +201,7 @@
 
 <h3 id="after-sending">Ko poslani element prispe</h3>
 <p>Ko druga oseba prejme vse in je kontrolna vsota potrjena ter je element shranjen v drugem računalniku, Dodavo prikaže sporočilo, na primer <span class="ui">Končano! Datoteka je bila dostavljena prejemniku (Ana).</span>, pod njim pa ime elementa. Bralniki zaslona ga preberejo. Pritisnite <kbd>Enter</kbd> ali <kbd>Esc</kbd> ali izberite <span class="ui">Zapri</span>; zapre se tudi okno napredka.</p>
-<p>Če izberete <span class="ui">Ne prikaži več</span>, se okno napredka naslednjič zapre samo, obvestilo pa vam sporoči, da je prenos končan. Sporočilo lahko znova vklopite v nastavitvah z možnostjo <span class="ui">Po pošiljanju pokaži sporočilo, ko datoteka ali mapa prispe</span>. Če je okno napredka ob koncu prenosa skrito ali pomanjšano, se prikaže le obvestilo. Ko prenos ne uspe, je zavrnjen ali preklican, okno napredka ostane odprto, da lahko preberete, kaj se je zgodilo.</p>
+<p>Če izberete <span class="ui">Ne prikaži več</span>, se okno napredka naslednjič zapre samo, obvestilo pa vam sporoči, da je prenos končan. Sporočilo lahko znova vklopite v nastavitvah z možnostjo <span class="ui">Po pošiljanju pokaži sporočilo, ko datoteka ali mapa prispe</span>. Če je okno napredka ob koncu prenosa skrito ali pomanjšano ali če še potekajo drugi prenosi, se prikaže le obvestilo. Ko prenos ne uspe, je zavrnjen ali preklican, okno napredka ostane odprto, da lahko preberete, kaj se je zgodilo.</p>
 </section>
 
 <section aria-labelledby="receiving">
@@ -221,6 +220,7 @@
 <dt><span class="ui">Sprejmi</span> (<kbd>Alt</kbd>+<kbd>J</kbd>) in <span class="ui">Zavrni</span> (<kbd>Alt</kbd>+<kbd>Z</kbd>)</dt>
 <dd>Ko se okno odpre, je fokus na gumbu <span class="ui">Sprejmi</span>, zato s tipko <kbd>Enter</kbd> prenos sprejmete; bralniki zaslona običajno najprej preberejo besedilo okna, od krepke vrstice do stavka o prostem prostoru na disku. S tipko <kbd>Esc</kbd> ali z zaprtjem okna ga zavrnete.</dd>
 </dl>
+<p>Ko vam ista oseba pošlje več elementov hkrati, si delijo eno okno, vaš odgovor pa velja za vse. Krepka vrstica pove, koliko jih je, naslednja vrstica navede njihovo skupno velikost, polje <span class="ui">Elementi</span> (<kbd>Alt</kbd>+<kbd>E</kbd>) pa jih našteje. Elementi, ki prispejo, medtem ko je okno odprto, se dodajo vanj.</p>
 <p>Če prostora ni dovolj, vas Dodavo vpraša, ali želite prenos vseeno sprejeti. Če pošiljatelj prenos prekliče, preden odgovorite, se okno zapre, obvestilo pa vas o tem obvesti.</p>
 <p>Ko prenos sprejmete, okno napredka prikazuje njegov potek. Če v mapi že obstaja element z enakim imenom, se novi shrani z dodano številko, na primer <code>Poročilo (2).pdf</code>; nič se ne prepiše.</p>
 
@@ -233,7 +233,7 @@
 <li>Za mapo, ki je obdržana le kot datoteka ZIP, se sporočilo glasi <span class="ui">Končano! Mapa je shranjena kot datoteka ZIP.</span>, izbira pa je enaka kot za datoteko.</li>
 <li><span class="ui">Zapri</span> ne naredi ničesar od tega.</li>
 </ul>
-<p>Če izberete <span class="ui">Ne sprašuj me več</span>, bo Dodavo naslednjič namesto vprašanja prikazal obvestilo. Če izberete obvestilo, se element prikaže v Raziskovalcu. Vprašanje lahko znova vklopite v nastavitvah z možnostjo <span class="ui">Po prejemu vprašaj, ali naj se datoteka ali mapa odpre</span>.</p>
+<p>Če izberete <span class="ui">Ne sprašuj me več</span>, bo Dodavo naslednjič namesto vprašanja prikazal obvestilo. Če izberete obvestilo, se element prikaže v Raziskovalcu. Vprašanje lahko znova vklopite v nastavitvah z možnostjo <span class="ui">Po prejemu vprašaj, ali naj se datoteka ali mapa odpre</span>. Dokler potekajo drugi prenosi, Dodavo ne vpraša, ampak prikaže obvestilo; vprašanje pride po zadnjem.</p>
 
 <h3 id="auto-accept">Prejemanje brez vprašanja</h3>
 <p>Prenosi od oseb z vašega seznama prejemnikov se začnejo takoj, brez okna Dohodni prenos, če sta v nastavitvah vklopljeni obe možnosti: <span class="ui">Vedno shrani prejete datoteke v to mapo</span> in <span class="ui">Prenose začni samodejno, brez vprašanja</span>. Vklopljeni sta, dokler ju ne izklopite. Dodavo prikaže obvestilo <span class="ui">Prejemanje</span> in shrani element v mapo iz prve možnosti, to pa je vaša mapa Prenosi, če niste izbrali druge. Za prenose od neznanih pošiljateljev in prenose, za katere na disku ne bi bilo dovolj prostora, Dodavo še vedno vpraša. Tako lahko prenos začnejo le osebe, ki ste jih dodali sami: njihovega ID-ja stika ni mogoče ponarediti.</p>
@@ -391,6 +391,7 @@
 <tr><th scope="col">Tipke</th><th scope="col">Dejanje</th></tr>
 </thead>
 <tbody>
+<tr><td><kbd>Alt</kbd>+<kbd>E</kbd></td><td>Premik na seznam elementov, kadar jih je več</td></tr>
 <tr><td><kbd>Alt</kbd>+<kbd>J</kbd></td><td>Sprejmi</td></tr>
 <tr><td><kbd>Alt</kbd>+<kbd>Z</kbd></td><td>Zavrni</td></tr>
 <tr><td><kbd>Alt</kbd>+<kbd>S</kbd></td><td>Premik v polje Shrani v</td></tr>

@@ -61,8 +61,8 @@ pub const EN: Strings = Strings {
     empty_list: "No recipients yet.\nClick “Add Recipient” to add someone using their Contact ID.",
     no_recipients_yet: "You have not added any recipients yet.\n\nClick “Add Recipient” and enter the name and Contact ID of the person you want to send files to.",
     select_recipient_first: "Please select a recipient in the list first.",
-    pick_file_title: "Choose a file to send to {name}",
-    pick_folder_title: "Choose a folder to send to {name}",
+    pick_file_title: "Choose one or more files to send to {name}",
+    pick_folder_title: "Choose one or more folders to send to {name}",
     remove_confirm: "Remove {name} from your recipients?",
     id_copied: "Your Contact ID has been copied to the clipboard:\n\n{id}\n\n\
         Paste it into an email or chat message and send it to anyone who wants to send you files. \
@@ -196,6 +196,8 @@ pub const EN: Strings = Strings {
     cancelled_balloon_title: "Transfer cancelled",
     wants_file: "{name} wants to send you a file",
     wants_folder: "{name} wants to send you a folder",
+    items_total: "{size} in total",
+    incoming_items_label: "&Items:",
     file_description: "“{name}”  ({size})",
     unknown_sender_warning: "This sender is not in your recipient list (Contact ID {id}). \
         Only accept files from people you know.",
@@ -367,6 +369,12 @@ pub const EN: Strings = Strings {
     send_to_waiting: "Choose who should receive what you selected in File Explorer.",
     send_to_failed: "Dodavo is not responding, so the selected items could not be handed over to it. Please try again.",
 
+    wants_items: Plural {
+        one: "{name} wants to send you {n} item",
+        two: "{name} wants to send you {n} items",
+        few: "{name} wants to send you {n} items",
+        other: "{name} wants to send you {n} items",
+    },
     send_to_count: Plural {
         one: "{n} item to send",
         two: "{n} items to send",
