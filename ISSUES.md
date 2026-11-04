@@ -56,9 +56,9 @@ Each offer from a recipient is checked by itself (`Event::Offer` in `src/app.rs`
 
 `Core::send` returns no error when `contact_by_id` finds nobody, so no transfer appears and no message says why. It takes a recipient removed or given another ID while the send is on its way, and a new text in the Mac table.
 
-### A Mac reports any failure of its instance lock as "already running"
+### A Mac shows the placeholders of a folder it cannot make when accepting an offer
 
-`take_instance_lock` returns `None` for a data folder it cannot create or write, and for a volume without `flock`, as well as for a lock that another copy holds. The app then acts as if a copy were running instead of naming the problem. Only `EWOULDBLOCK` means that.
+`Core::check_accept` passes the text `folder_unusable` on as it stands when `create_dir_all` fails on the chosen folder, so the alert says `{path}` and `{error}` instead of the folder and the reason.
 
 ### An all-users uninstall leaves other accounts' entries in File Explorer's menus
 

@@ -3,6 +3,7 @@
 use std::{
     collections::{BTreeMap, HashMap, VecDeque},
     fs::File,
+    io,
     os::fd::AsRawFd,
     path::{Path, PathBuf},
     sync::{Mutex, MutexGuard, mpsc},
@@ -331,12 +332,32 @@ fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
 }
 
 /// Holds the lock that says this profile runs, for as long as the program does.
-fn take_instance_lock(data_dir: &Path) -> Option<File> {
-    std::fs::create_dir_all(data_dir).ok()?;
-    let file = File::create(data_dir.join("running.lock")).ok()?;
+/// `None` when another copy holds it, which only `EWOULDBLOCK` says: a folder
+/// that cannot be written, or a volume without `flock`, is an error.
+fn take_instance_lock(data_dir: &Path) -> io::Result<Option<File>> {
+    std::fs::create_dir_all(data_dir)?;
+    let file = File::create(data_dir.join("running.lock"))?;
     // SAFETY: the descriptor is open during the call.
-    let held = unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) } == 0;
-    held.then_some(file)
+    if unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) } == 0 {
+        return Ok(Some(file));
+    }
+    let error = io::Error::last_os_error();
+    match error.raw_os_error() {
+        Some(libc::EWOULDBLOCK) => Ok(None),
+        _ => Err(error),
+    }
+}
+
+/// What kept the lock from being taken, in the user's language.
+fn lock_error_text(error: &io::Error) -> String {
+    match error.raw_os_error() {
+        // To `error_text`, these say that the part of a transfer has gone.
+        Some(code @ (libc::ENOENT | libc::ENOTDIR)) => {
+            mac::s().error_system.replace("{code}", &code.to_string())
+        }
+        Some(code) => dodavo_core::platform::error_text(code).unwrap_or_else(|| error.to_string()),
+        None => error.to_string(),
+    }
 }
 
 /// Whether the user can tell a file from a folder with a path.
@@ -395,12 +416,19 @@ impl Core {
             ..Started::default()
         };
 
-        let instance = take_instance_lock(&data_dir);
-        if instance.is_none() {
-            started.already_running = true;
+        match take_instance_lock(&data_dir) {
+            // Kept for the life of the program: it ends with the process.
+            Ok(Some(instance)) => std::mem::forget(instance),
+            Ok(None) => started.already_running = true,
+            Err(e) => {
+                started.fatal = Some(
+                    mac::s()
+                        .folder_unusable
+                        .replace("{path}", &data_dir.display().to_string())
+                        .replace("{error}", &lock_error_text(&e)),
+                );
+            }
         }
-        // Kept for the life of the program: it ends with the process.
-        std::mem::forget(instance);
 
         if let Some(e) = cfg_error {
             let mut text = mac::s()
@@ -418,7 +446,7 @@ impl Core {
             started.warning = Some(text);
         }
 
-        let secret = if started.already_running {
+        let secret = if started.already_running || started.fatal.is_some() {
             None
         } else {
             match identity::load_or_create(&data_dir) {
@@ -1403,4 +1431,45 @@ fn languages() -> Vec<(&'static str, &'static str)> {
         .iter()
         .map(|l| (l.code(), l.native_name()))
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// An empty folder of the test's own.
+    fn test_dir(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("dodavo-ffi-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn only_a_lock_held_by_another_copy_means_already_running() {
+        let dir = test_dir("lock-held");
+        let first = take_instance_lock(&dir).unwrap();
+        assert!(first.is_some());
+        // The lock belongs to the open file, so this meets it as another copy does.
+        assert!(take_instance_lock(&dir).unwrap().is_none());
+        drop(first);
+        assert!(take_instance_lock(&dir).unwrap().is_some());
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn a_folder_that_cannot_be_made_is_an_error_with_its_own_text() {
+        let dir = test_dir("lock-no-folder");
+        let in_the_way = dir.join("file");
+        std::fs::write(&in_the_way, b"").unwrap();
+        let error = take_instance_lock(&in_the_way.join("profile")).unwrap_err();
+        assert_eq!(error.raw_os_error(), Some(libc::ENOTDIR));
+        assert_eq!(
+            lock_error_text(&error),
+            mac::s()
+                .error_system
+                .replace("{code}", &libc::ENOTDIR.to_string())
+        );
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
 }
