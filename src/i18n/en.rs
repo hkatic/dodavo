@@ -12,7 +12,7 @@ pub const EN: Strings = Strings {
     menu_edit: "&Edit Recipient…\tF2",
     menu_remove: "&Remove Recipient\tDel",
     menu_copy_id: "&Copy My Contact ID\tCtrl+Shift+C",
-    menu_settings: "&Settings…",
+    menu_settings: "&Settings…\tCtrl+Comma",
     menu_exit: "E&xit",
     menu_view_help: "&View Help\tF1",
     menu_how: "&How It Works",

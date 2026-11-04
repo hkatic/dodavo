@@ -8,7 +8,9 @@ use windows_sys::Win32::{
     System::DataExchange::COPYDATASTRUCT,
     UI::{
         Controls::*,
-        Input::KeyboardAndMouse::{GetFocus, IsWindowEnabled, VK_DELETE, VK_F1, VK_F2},
+        Input::KeyboardAndMouse::{
+            GetFocus, IsWindowEnabled, VK_DELETE, VK_F1, VK_F2, VK_OEM_COMMA,
+        },
         Shell::{DragAcceptFiles, DragFinish, DragQueryFileW, DragQueryPoint, HDROP},
         WindowsAndMessaging::*,
     },
@@ -187,9 +189,11 @@ fn build_menu() -> (HMENU, HMENU) {
     (bar, transfers)
 }
 
-fn build_accelerators() -> HACCEL {
+/// The shortcuts of the main window. Menus show them after a tab in their
+/// texts (`i18n`), and the help lists them.
+fn accelerators() -> [ACCEL; 8] {
     let virt = FVIRTKEY | FCONTROL;
-    let table = [
+    [
         ACCEL {
             fVirt: virt,
             key: b'O' as u16,
@@ -225,7 +229,17 @@ fn build_accelerators() -> HACCEL {
             key: b'T' as u16,
             cmd: ID_SHOW_TRANSFERS,
         },
-    ];
+        // The key the Mac has for its settings, with Command.
+        ACCEL {
+            fVirt: virt,
+            key: VK_OEM_COMMA,
+            cmd: ID_SETTINGS,
+        },
+    ]
+}
+
+fn build_accelerators() -> HACCEL {
+    let table = accelerators();
     unsafe { CreateAcceleratorTableW(table.as_ptr(), table.len() as i32) }
 }
 
@@ -1089,6 +1103,33 @@ fn urgent_message(w: &Window, msg: u32, wp: WPARAM, lp: LPARAM) -> Option<LRESUL
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::i18n::Lang;
+
+    /// Settings has its shortcut, which its menu item shows in every language.
+    #[test]
+    fn settings_have_a_shortcut() {
+        assert!(accelerators().iter().any(|a| {
+            a.cmd == ID_SETTINGS && a.key == VK_OEM_COMMA && a.fVirt == FVIRTKEY | FCONTROL
+        }));
+        for lang in Lang::ALL {
+            let text = lang.strings().menu_settings;
+            assert!(text.contains("\tCtrl+"), "{lang:?}: {text}");
+        }
+    }
+
+    #[test]
+    fn no_shortcut_repeats() {
+        let table = accelerators();
+        for (i, a) in table.iter().enumerate() {
+            assert!(
+                !table[..i]
+                    .iter()
+                    .any(|b| b.key == a.key && b.fVirt == a.fVirt),
+                "the shortcut of command {} repeats",
+                a.cmd
+            );
+        }
+    }
 
     /// Donate comes right after License, Check for Updates right before About.
     #[test]

@@ -15,7 +15,7 @@ pub const SR_LATN: Strings = Strings {
     menu_edit: "&Uredi primaoca…\tF2",
     menu_remove: "U&kloni primaoca\tDel",
     menu_copy_id: "Kopiraj moj &ID kontakta\tCtrl+Shift+C",
-    menu_settings: "&Postavke…",
+    menu_settings: "&Postavke…\tCtrl+Zarez",
     menu_exit: "I&zlaz",
     menu_view_help: "&Prikaži pomoć\tF1",
     menu_how: "&Kako funkcioniše",

@@ -15,7 +15,7 @@ pub const SL: Strings = Strings {
     menu_edit: "&Uredi prejemnika…\tF2",
     menu_remove: "Od&strani prejemnika\tDel",
     menu_copy_id: "Kopiraj moj &ID stika\tCtrl+Shift+C",
-    menu_settings: "&Nastavitve…",
+    menu_settings: "&Nastavitve…\tCtrl+Vejica",
     menu_exit: "I&zhod",
     menu_view_help: "Ogled &pomoči\tF1",
     menu_how: "&Kako deluje",

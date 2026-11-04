@@ -15,7 +15,7 @@ pub const HR: Strings = Strings {
     menu_edit: "&Uredi primatelja…\tF2",
     menu_remove: "U&kloni primatelja\tDel",
     menu_copy_id: "Kopiraj moj &ID kontakta\tCtrl+Shift+C",
-    menu_settings: "&Postavke…",
+    menu_settings: "&Postavke…\tCtrl+Zarez",
     menu_exit: "I&zlaz",
     menu_view_help: "&Prikaži pomoć\tF1",
     menu_how: "&Kako funkcionira",
