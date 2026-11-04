@@ -44,8 +44,8 @@ stop() {
     exit 1
 }
 
-# True when something differs from the last commit. Line ends do not count: they
-# depend on each machine's settings (see TODO.md).
+# True when something differs from the last commit. Line ends do not count, since a
+# clone made before .gitattributes may still carry CRLF in its working tree.
 has_changes() {
     ! git diff --ignore-cr-at-eol --quiet HEAD || [ -n "$(git ls-files --others --exclude-standard)" ]
 }

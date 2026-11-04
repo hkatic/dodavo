@@ -21,7 +21,7 @@ trap 'rm -rf "$work"' EXIT
 sed -e 's/^targets = .*/targets = ["aarch64-apple-darwin"]/' installer/about.toml > "$work/about.toml"
 
 cargo about generate --locked --fail -c "$work/about.toml" \
-    -m crates/dodavo-ffi/Cargo.toml installer/about.hbs > "$work/crates.txt"
+    -m crates/dodavo-ffi/Cargo.toml installer/about.hbs | tr -d '\r' > "$work/crates.txt"
 
 sysroot=$(rustc --print sysroot)
 library="$sysroot/share/doc/rust/COPYRIGHT-library.html"

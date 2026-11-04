@@ -1,0 +1,9 @@
+# Every text file is stored and checked out with LF line ends, on Windows too:
+# the program and the scripts take them, and Windows editors do.
+* text=auto eol=lf
+
+# Images and other binary files.
+*.ico   binary
+*.icns  binary
+*.png   binary
+*.dmg   binary
