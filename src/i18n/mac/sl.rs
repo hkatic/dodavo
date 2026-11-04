@@ -205,7 +205,7 @@ pub const SL: Strings = Strings {
     language_system: "Privzeto v sistemu",
     always_save: "Vedno shrani prejete elemente v to mapo",
     auto_accept: "Prenose začni samodejno, brez vprašanja",
-    auto_accept_note: "Samo od oseb med vašimi prejemniki. Če zgoraj ni izbrana mapa, se elementi shranijo v mapo Prenosi.",
+    auto_accept_note: "Samo od oseb med vašimi prejemniki, v zgornjo mapo. Brez te mape Dodavo vedno vpraša, kam naj shrani.",
     received_folder_label: "Ko prispe mapa:",
     received_zip: "Obdrži samo arhiv ZIP",
     login_item_failed: "Dodavo ni mogel spremeniti odpiranja ob prijavi: {error}",

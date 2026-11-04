@@ -205,7 +205,7 @@ pub const SR_LATN: Strings = Strings {
     language_system: "Podrazumevani jezik sistema",
     always_save: "Uvek čuvaj primljene stavke u ovoj fascikli",
     auto_accept: "Prenose pokreći automatski, bez pitanja",
-    auto_accept_note: "Samo od osoba među vašim primaocima. Ako iznad nije izabrana fascikla, stavke se čuvaju u fascikli Preuzimanja.",
+    auto_accept_note: "Samo od osoba među vašim primaocima, u fasciklu iznad. Bez te fascikle Dodavo uvek pita gde da sačuva.",
     received_folder_label: "Kada stigne fascikla:",
     received_zip: "Zadrži samo ZIP arhivu",
     login_item_failed: "Dodavo nije mogao da promeni otvaranje pri prijavljivanju: {error}",

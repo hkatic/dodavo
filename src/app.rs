@@ -549,8 +549,8 @@ fn handle_net_event(event: Event) -> Option<Event> {
             let cfg = cfg();
             // Without enough disk space, or on a drive that cannot hold a
             // file this large, ask instead (the window explains why).
-            let auto_dir = Some(cfg.auto_save_dir()).filter(|d| {
-                cfg.auto_accept && known && std::fs::create_dir_all(d).is_ok() && {
+            let auto_dir = cfg.auto_save_dir(known).filter(|d| {
+                std::fs::create_dir_all(d).is_ok() && {
                     let space = incoming::check_space(&offer, d, cfg.received_folder);
                     space.fits && space.enough != Some(false)
                 }

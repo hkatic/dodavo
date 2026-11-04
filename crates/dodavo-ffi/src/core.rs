@@ -984,8 +984,8 @@ impl Core {
         // Without enough disk space, or on a volume that cannot hold a file
         // this large, ask instead (the window explains why). Off the lock: the
         // first use of Downloads may wait for the user to allow it.
-        let auto_dir = Some(cfg.auto_save_dir()).filter(|d| {
-            cfg.auto_accept && known && std::fs::create_dir_all(d).is_ok() && {
+        let auto_dir = cfg.auto_save_dir(known).filter(|d| {
+            std::fs::create_dir_all(d).is_ok() && {
                 let space = space::check_space(&pending.offer, d, &temp_dir, cfg.received_folder);
                 space.fits && space.enough != Some(false)
             }
@@ -1351,7 +1351,8 @@ impl Settings {
             check_updates: cfg.check_updates,
             language: cfg.language.clone(),
             always_save: cfg.always_save,
-            always_save_dir: cfg.always_save_dir.clone(),
+            // Downloads, when no other folder was chosen.
+            always_save_dir: Some(cfg.always_save_folder()),
             auto_accept: cfg.auto_accept,
             received_folder: cfg.received_folder,
         }
@@ -1365,7 +1366,11 @@ impl Settings {
         cfg.check_updates = self.check_updates;
         cfg.language = self.language.clone();
         cfg.always_save = self.always_save;
-        cfg.always_save_dir = self.always_save_dir.clone();
+        // Unset, it follows Downloads, and needs no permission to be shown.
+        cfg.always_save_dir = self
+            .always_save_dir
+            .clone()
+            .filter(|d| *d != dodavo_core::platform::downloads_dir());
         cfg.auto_accept = self.auto_accept;
         cfg.received_folder = self.received_folder;
     }
@@ -1375,10 +1380,12 @@ impl Settings {
             return Some(mac::s().enter_my_name);
         }
         if self.always_save {
-            let usable = self
-                .always_save_dir
-                .as_ref()
-                .is_some_and(|d| d.is_absolute() && std::fs::create_dir_all(d).is_ok());
+            // Downloads exists, and creating it might ask for permission
+            // to use a folder that the settings do not even touch.
+            let usable = self.always_save_dir.as_ref().is_some_and(|d| {
+                *d == dodavo_core::platform::downloads_dir()
+                    || (d.is_absolute() && std::fs::create_dir_all(d).is_ok())
+            });
             if !usable {
                 return Some(mac::s().invalid_save_folder);
             }

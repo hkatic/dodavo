@@ -133,6 +133,7 @@ fn pages_use_the_program_texts() {
         let table = mac::strings(lang);
         let page = visible(page(lang));
         for (key, text) in [
+            ("auto_accept_note", table.auto_accept_note),
             ("menu_send", table.menu_send),
             ("menu_add_recipient", table.menu_add_recipient),
             ("menu_edit_recipient", table.menu_edit_recipient),

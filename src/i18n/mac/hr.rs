@@ -205,7 +205,7 @@ pub const HR: Strings = Strings {
     language_system: "Zadano u sustavu",
     always_save: "Uvijek spremaj primljene stavke u ovu mapu",
     auto_accept: "Prijenose pokreći automatski, bez pitanja",
-    auto_accept_note: "Samo od osoba među vašim primateljima. Ako gore nije odabrana mapa, stavke se spremaju u mapu Preuzimanja.",
+    auto_accept_note: "Samo od osoba među vašim primateljima, u gornju mapu. Bez te mape Dodavo uvijek pita gdje spremiti.",
     received_folder_label: "Kada stigne mapa:",
     received_zip: "Zadrži samo ZIP arhivu",
     login_item_failed: "Dodavo nije mogao promijeniti otvaranje pri prijavi: {error}",

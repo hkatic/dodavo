@@ -238,7 +238,7 @@ pub const SL: Strings = Strings {
     always_save: "&Vedno shrani prejete datoteke v to mapo:",
     always_save_folder_label: "Mapa za &shranjevanje:",
     auto_accept: "Prenose začni s&amodejno, brez vprašanja",
-    auto_accept_note: "(samo od oseb z vašega seznama prejemnikov; če zgoraj ni izbrana mapa, se datoteke shranijo v mapo Prenosi)",
+    auto_accept_note: "(samo od oseb z vašega seznama prejemnikov, v zgornjo mapo; brez te mape Dodavo vedno vpraša, kam naj shrani)",
     received_folder_label: "Po p&rejemu mape:",
     received_extract: "Obdrži samo razpakirano mapo",
     received_keep_zip: "Obdrži samo datoteko ZIP (brez razpakiranja)",

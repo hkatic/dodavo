@@ -238,7 +238,7 @@ pub const HR: Strings = Strings {
     always_save: "&Uvijek spremaj primljene datoteke u ovu mapu:",
     always_save_folder_label: "Mapa za &spremanje:",
     auto_accept: "Prijenose pokreći au&tomatski, bez pitanja",
-    auto_accept_note: "(samo od osoba s vašeg popisa primatelja; ako gore nije odabrana mapa, datoteke se spremaju u mapu Preuzimanja)",
+    auto_accept_note: "(samo od osoba s vašeg popisa primatelja, u gornju mapu; bez te mape Dodavo uvijek pita gdje spremiti)",
     received_folder_label: "Nakon primanja map&e:",
     received_extract: "Zadrži samo raspakiranu mapu",
     received_keep_zip: "Zadrži samo ZIP datoteku (bez raspakiravanja)",

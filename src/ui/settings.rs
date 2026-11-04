@@ -99,6 +99,9 @@ impl SettingsDialog {
         window::enable(self.dir_label, on);
         window::enable(self.dir, on);
         window::enable(self.browse, on);
+        // Without that folder Dodavo asks where to save, so nothing can start
+        // by itself. The setting keeps its value for when the folder is back.
+        window::enable(self.auto, on);
     }
 
     fn save(&self, w: &Window) -> bool {
@@ -141,6 +144,8 @@ impl SettingsDialog {
             .and_then(|i| Lang::ALL.get(i))
             .map(|l| l.code().to_string());
         let language_changed = language != app::cfg().language;
+        // Unset, it follows Downloads to wherever that is moved.
+        let dir = dir.filter(|d| *d != crate::platform::downloads_dir());
         app::update_cfg(|c| {
             c.my_name = my_name;
             c.always_save = always;
@@ -195,10 +200,7 @@ impl Handler for SettingsDialog {
             cfg.always_save,
             (inner_x, 152, inner_w, 20),
         );
-        let dir = cfg
-            .always_save_dir
-            .clone()
-            .unwrap_or_else(|| cfg.suggested_save_dir());
+        let dir = cfg.always_save_folder();
         // The label right before the field gives it its accessible name (the
         // check box above would otherwise not be used as the name).
         self.dir_label = w.caption(tr!(always_save_folder_label), (sub_x, 176, sub_w, 18));
@@ -208,7 +210,6 @@ impl Handler for SettingsDialog {
             (sub_x, 198, sub_w - 92, 24),
         );
         self.browse = w.button(tr!(browse), ID_BROWSE, (x + COLUMN_W - 86, 197, 86, 26));
-        // Independent of the folder above: without it, files go to Downloads.
         self.auto = w.checkbox(
             tr!(auto_accept),
             ID_AUTO,

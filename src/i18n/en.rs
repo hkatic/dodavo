@@ -235,7 +235,7 @@ pub const EN: Strings = Strings {
     always_save: "&Always save received files to this folder:",
     always_save_folder_label: "&Folder:",
     auto_accept: "Start transfers au&tomatically, without asking",
-    auto_accept_note: "(only from people in your recipient list; without the folder above, files are saved to Downloads)",
+    auto_accept_note: "(only from people in your recipient list, into the folder above; without that folder, Dodavo always asks where to save)",
     received_folder_label: "After receiving a fol&der:",
     received_extract: "Keep only the unpacked folder",
     received_keep_zip: "Keep only the ZIP file (don't unpack)",

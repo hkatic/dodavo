@@ -37,8 +37,8 @@ impl CloseAction {
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum ConnectionLostAction {
-    #[default]
     Ask,
+    #[default]
     Wait,
     Cancel,
 }
@@ -78,15 +78,21 @@ impl ReceivedFolder {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(default)]
 pub struct Config {
+    /// What the settings in the file mean (see `upgrade`). A file of 1.0.0
+    /// does not have it, which reads as 0 rather than as the current version.
+    #[serde(default)]
+    pub settings_version: u32,
     /// Name shown to the people we send files to.
     pub my_name: String,
     pub contacts: Vec<Contact>,
-    /// When set, received files are saved here without asking for a location.
+    /// When set, received files go to `always_save_folder`. Otherwise the
+    /// user is asked where to save each one.
     pub always_save: bool,
+    /// The folder of `always_save`; `None` is Downloads, wherever that is.
     pub always_save_dir: Option<PathBuf>,
-    /// Start transfers from known recipients without confirmation, saving to
-    /// `always_save_dir` when `always_save` is set and to Downloads otherwise.
-    /// Offers from anyone else are always shown first.
+    /// Start transfers from known recipients without confirmation, as long as
+    /// `always_save` says where they go. Offers from anyone else are always
+    /// shown first.
     pub auto_accept: bool,
     /// The last folder the user picked for saving received files.
     pub last_save_dir: Option<PathBuf>,
@@ -119,10 +125,11 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         Config {
+            settings_version: SETTINGS_VERSION,
             my_name: crate::platform::user_name()
                 .unwrap_or_else(|| crate::i18n::s().unknown_user.into()),
             contacts: Vec::new(),
-            always_save: false,
+            always_save: true,
             always_save_dir: None,
             auto_accept: true,
             last_save_dir: None,
@@ -130,7 +137,7 @@ impl Default for Config {
             minimize_to_tray: true,
             start_minimized: false,
             close_running_transfer: CloseAction::Ask,
-            connection_lost: ConnectionLostAction::Ask,
+            connection_lost: ConnectionLostAction::Wait,
             ask_after_receive: true,
             show_after_send: true,
             received_folder: ReceivedFolder::Extract,
@@ -142,6 +149,9 @@ impl Default for Config {
         }
     }
 }
+
+/// The version of `Config::settings_version` that this program writes.
+const SETTINGS_VERSION: u32 = 1;
 
 /// The settings file exists but could not be used.
 #[derive(Debug)]
@@ -170,8 +180,11 @@ impl Config {
                 });
             }
         };
-        match serde_json::from_slice(&bytes) {
-            Ok(cfg) => Ok(cfg),
+        match serde_json::from_slice::<Config>(&bytes) {
+            Ok(mut cfg) => {
+                cfg.upgrade();
+                Ok(cfg)
+            }
             Err(e) => {
                 // Under a free name, never over an earlier one.
                 let backup =
@@ -183,6 +196,27 @@ impl Config {
                 })
             }
         }
+    }
+
+    /// Gives settings of an earlier version what they mean now. Every field
+    /// is saved, so a file cannot tell a choice from what was the default then.
+    fn upgrade(&mut self) {
+        if self.settings_version < 1 {
+            // "Ask every time" was the default of 1.0.0, and nearly everyone's
+            // value. Whoever wants it can choose it again, and then it stays.
+            if self.connection_lost == ConnectionLostAction::Ask {
+                self.connection_lost = ConnectionLostAction::Wait;
+            }
+            // In 1.0.0, without the box a known sender's transfer went to
+            // Downloads by itself, whatever folder was stored; without the
+            // box now, Dodavo asks. So what these users have stays as it is.
+            // With automatic transfers off they were asked anyway.
+            if !self.always_save && self.auto_accept {
+                self.always_save = true;
+                self.always_save_dir = None;
+            }
+        }
+        self.settings_version = self.settings_version.max(SETTINGS_VERSION);
     }
 
     pub fn save(&self, dir: &Path) -> std::io::Result<()> {
@@ -198,12 +232,17 @@ impl Config {
         self.contacts.iter().find(|c| c.id.eq_ignore_ascii_case(id))
     }
 
+    /// The folder of "Always save received files to this folder".
+    pub fn always_save_folder(&self) -> PathBuf {
+        self.always_save_dir
+            .clone()
+            .unwrap_or_else(crate::platform::downloads_dir)
+    }
+
     /// The folder suggested for saving a received transfer.
     pub fn suggested_save_dir(&self) -> PathBuf {
-        if self.always_save
-            && let Some(dir) = &self.always_save_dir
-        {
-            return dir.clone();
+        if self.always_save {
+            return self.always_save_folder();
         }
         self.last_save_dir
             .clone()
@@ -211,12 +250,10 @@ impl Config {
             .unwrap_or_else(crate::platform::downloads_dir)
     }
 
-    /// The folder used for transfers that start without asking.
-    pub fn auto_save_dir(&self) -> PathBuf {
-        match &self.always_save_dir {
-            Some(dir) if self.always_save => dir.clone(),
-            _ => crate::platform::downloads_dir(),
-        }
+    /// Where a transfer offered by a sender who is (`known`) or is not a
+    /// recipient starts by itself; `None` if the user has to answer the offer.
+    pub fn auto_save_dir(&self, known: bool) -> Option<PathBuf> {
+        (known && self.auto_accept && self.always_save).then(|| self.always_save_folder())
     }
 }
 
@@ -242,11 +279,11 @@ mod tests {
             name: "Ana".into(),
             id: "abc".into(),
         });
-        cfg.always_save = true;
+        cfg.always_save = false;
         cfg.always_save_dir = Some(PathBuf::from(r"C:\Temp"));
         cfg.language = Some("hr".into());
         cfg.close_running_transfer = CloseAction::Background;
-        cfg.connection_lost = ConnectionLostAction::Wait;
+        cfg.connection_lost = ConnectionLostAction::Ask;
         cfg.show_after_send = false;
         cfg.received_folder = ReceivedFolder::Both;
         cfg.auto_accept = false;
@@ -291,12 +328,150 @@ mod tests {
         assert!(cfg.ask_after_receive);
         assert!(cfg.show_after_send);
         assert!(cfg.auto_accept);
+        assert!(cfg.always_save);
+        assert_eq!(cfg.always_save_dir, None);
         assert_eq!(cfg.received_folder, ReceivedFolder::Extract);
         assert_eq!(cfg.close_running_transfer, CloseAction::Ask);
-        assert_eq!(cfg.connection_lost, ConnectionLostAction::Ask);
+        assert_eq!(cfg.connection_lost, ConnectionLostAction::Wait);
         assert_eq!(cfg.language, None);
         assert!(cfg.check_updates);
         assert_eq!(cfg.update_last_check, None);
         assert_eq!(cfg.update_remind_after, None);
+    }
+
+    fn load_json(name: &str, json: &str) -> Config {
+        let dir =
+            std::env::temp_dir().join(format!("dodavo-cfg-upgrade-{name}-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("config.json"), json).unwrap();
+        let cfg = Config::load(&dir).unwrap();
+        std::fs::remove_dir_all(&dir).ok();
+        cfg
+    }
+
+    /// The fields of a settings file of 1.0.0 that decide where a transfer goes.
+    fn from_1_0_0(name: &str, always: bool, dir: Option<&str>, auto: bool, lost: &str) -> Config {
+        let dir = dir.map_or("null".to_string(), |d| format!("{d:?}"));
+        load_json(
+            name,
+            &format!(
+                r#"{{"my_name":"X","always_save":{always},"always_save_dir":{dir},
+                    "auto_accept":{auto},"connection_lost":"{lost}"}}"#
+            ),
+        )
+    }
+
+    #[test]
+    fn a_new_installation_saves_by_itself_and_waits() {
+        let cfg = Config::default();
+        assert_eq!(cfg.settings_version, SETTINGS_VERSION);
+        assert!(cfg.always_save);
+        assert_eq!(cfg.always_save_dir, None);
+        assert_eq!(cfg.connection_lost, ConnectionLostAction::Wait);
+        assert_eq!(
+            cfg.auto_save_dir(true),
+            Some(crate::platform::downloads_dir())
+        );
+    }
+
+    /// With 1.0.0's defaults, a known sender's transfers went to Downloads by
+    /// themselves, also with another folder stored behind the cleared box.
+    #[test]
+    fn the_defaults_of_1_0_0_keep_doing_what_they_did() {
+        for (name, dir) in [("no-folder", None), ("stale-folder", Some(r"D:\Stuff"))] {
+            let cfg = from_1_0_0(name, false, dir, true, "ask");
+            assert_eq!(cfg.settings_version, SETTINGS_VERSION);
+            assert!(cfg.always_save);
+            assert_eq!(cfg.always_save_dir, None);
+            assert_eq!(cfg.connection_lost, ConnectionLostAction::Wait);
+            assert_eq!(
+                cfg.auto_save_dir(true),
+                Some(crate::platform::downloads_dir())
+            );
+        }
+    }
+
+    /// Someone who was asked about every transfer still is.
+    #[test]
+    fn asking_about_every_transfer_stays() {
+        let cfg = from_1_0_0("ask-all", false, None, false, "wait");
+        assert!(!cfg.always_save);
+        assert!(!cfg.auto_accept);
+        assert_eq!(cfg.auto_save_dir(true), None);
+    }
+
+    #[test]
+    fn a_chosen_folder_and_choices_for_a_lost_connection_stay() {
+        let cfg = from_1_0_0("chosen", true, Some(r"D:\Inbox"), true, "cancel");
+        assert_eq!(cfg.always_save_dir, Some(PathBuf::from(r"D:\Inbox")));
+        assert_eq!(cfg.connection_lost, ConnectionLostAction::Cancel);
+        assert_eq!(cfg.auto_save_dir(true), Some(PathBuf::from(r"D:\Inbox")));
+    }
+
+    /// Only a file of an earlier version is upgraded: these choices, made in
+    /// this version, stay as they are at the next start.
+    #[test]
+    fn the_upgrade_happens_once() {
+        let dir = std::env::temp_dir().join(format!("dodavo-cfg-once-{}", std::process::id()));
+        let mut cfg = Config {
+            connection_lost: ConnectionLostAction::Ask,
+            always_save: false,
+            ..Config::default()
+        };
+        cfg.save(&dir).unwrap();
+        cfg = Config::load(&dir).unwrap();
+        assert_eq!(cfg.connection_lost, ConnectionLostAction::Ask);
+        assert!(!cfg.always_save);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn offers_start_by_themselves_only_with_the_folder_and_from_recipients() {
+        let dir = PathBuf::from(r"D:\Inbox");
+        let cfg = Config {
+            always_save: true,
+            always_save_dir: Some(dir.clone()),
+            auto_accept: true,
+            ..Config::default()
+        };
+        assert_eq!(cfg.auto_save_dir(true), Some(dir.clone()));
+        // Someone who is not a recipient always has to be answered.
+        assert_eq!(cfg.auto_save_dir(false), None);
+        let no_auto = Config {
+            auto_accept: false,
+            ..cfg.clone()
+        };
+        assert_eq!(no_auto.auto_save_dir(true), None);
+        let no_folder = Config {
+            always_save: false,
+            ..cfg.clone()
+        };
+        assert_eq!(no_folder.auto_save_dir(true), None);
+    }
+
+    #[test]
+    fn the_suggested_folder_follows_the_box() {
+        let dir = std::env::temp_dir();
+        let cfg = Config {
+            always_save: true,
+            always_save_dir: Some(PathBuf::from(r"D:\Inbox")),
+            last_save_dir: Some(dir.clone()),
+            ..Config::default()
+        };
+        assert_eq!(cfg.suggested_save_dir(), PathBuf::from(r"D:\Inbox"));
+        // With the box on, the last folder never takes the place of Downloads.
+        let downloads = Config {
+            always_save_dir: None,
+            ..cfg.clone()
+        };
+        assert_eq!(
+            downloads.suggested_save_dir(),
+            crate::platform::downloads_dir()
+        );
+        let asks = Config {
+            always_save: false,
+            ..cfg
+        };
+        assert_eq!(asks.suggested_save_dir(), dir);
     }
 }

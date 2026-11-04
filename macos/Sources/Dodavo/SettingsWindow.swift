@@ -25,7 +25,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSTe
             Core.settings()
             ?? Settings(
                 myName: "", openAtLogin: false, hideAtLogin: false, showInMenuBar: true,
-                checkUpdates: true, language: nil, alwaysSave: false, alwaysSaveDir: nil,
+                checkUpdates: true, language: nil, alwaysSave: true, alwaysSaveDir: nil,
                 autoAccept: true, receivedFolder: "extract")
         settings.openAtLogin = LoginItem.isEnabled ?? settings.openAtLogin
         let tabs = NSTabViewController()
@@ -177,6 +177,8 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSTe
         folderLabel.isHidden = settings.alwaysSaveDir == nil
         chooseFolder.isEnabled = settings.alwaysSave
         autoAccept.state = settings.autoAccept ? .on : .off
+        // Without the folder Dodavo asks where to save, so nothing can start by itself.
+        autoAccept.isEnabled = settings.alwaysSave
         let keepIndex = keep.itemArray.firstIndex {
             ($0.representedObject as? String) == settings.receivedFolder
         }

@@ -238,7 +238,7 @@ pub const SR_LATN: Strings = Strings {
     always_save: "&Uvek čuvaj primljene datoteke u ovoj fascikli:",
     always_save_folder_label: "&Fascikla za čuvanje:",
     auto_accept: "Prenose pokreći au&tomatski, bez pitanja",
-    auto_accept_note: "(samo od osoba sa vaše liste primalaca; ako iznad nije izabrana fascikla, datoteke se čuvaju u fascikli Preuzimanja)",
+    auto_accept_note: "(samo od osoba sa vaše liste primalaca, u fasciklu iznad; bez te fascikle Dodavo uvek pita gde da sačuva)",
     received_folder_label: "Posle prijema fa&scikle:",
     received_extract: "Zadrži samo raspakovanu fasciklu",
     received_keep_zip: "Zadrži samo ZIP datoteku (bez raspakivanja)",

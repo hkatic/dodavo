@@ -205,7 +205,7 @@ pub const EN: Strings = Strings {
     language_system: "System Default",
     always_save: "Always save received items to this folder",
     auto_accept: "Start transfers automatically, without asking",
-    auto_accept_note: "Only from people in your recipients. Without the folder above, items are saved to Downloads.",
+    auto_accept_note: "Only from people in your recipients, into the folder above. Without that folder, Dodavo always asks where to save.",
     received_folder_label: "When a folder arrives:",
     received_zip: "Keep only the ZIP archive",
     login_item_failed: "Dodavo could not change how it opens at login: {error}",
