@@ -56,10 +56,6 @@ Each offer from a recipient is checked by itself (`Event::Offer` in `src/app.rs`
 
 `Core::send` returns no error when `contact_by_id` finds nobody, so no transfer appears and no message says why. It takes a recipient removed or given another ID while the send is on its way, and a new text in the Mac table.
 
-### A Mac shows the placeholders of a folder it cannot make when accepting an offer
-
-`Core::check_accept` passes the text `folder_unusable` on as it stands when `create_dir_all` fails on the chosen folder, so the alert says `{path}` and `{error}` instead of the folder and the reason.
-
 ### An all-users uninstall leaves other accounts' entries in File Explorer's menus
 
 Each account writes its own "Send with Dodavo" entry and Send to shortcut when Dodavo starts there, and the uninstaller reaches only the account that runs it. In the other accounts both stay, and fail when used, until they are deleted by hand or Dodavo is installed again. The same goes for their "Start with Windows" value.

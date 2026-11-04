@@ -348,8 +348,8 @@ fn take_instance_lock(data_dir: &Path) -> io::Result<Option<File>> {
     }
 }
 
-/// What kept the lock from being taken, in the user's language.
-fn lock_error_text(error: &io::Error) -> String {
+/// What kept a folder from being used, in the user's language.
+fn folder_error_text(error: &io::Error) -> String {
     match error.raw_os_error() {
         // To `error_text`, these say that the part of a transfer has gone.
         Some(code @ (libc::ENOENT | libc::ENOTDIR)) => {
@@ -358,6 +358,14 @@ fn lock_error_text(error: &io::Error) -> String {
         Some(code) => dodavo_core::platform::error_text(code).unwrap_or_else(|| error.to_string()),
         None => error.to_string(),
     }
+}
+
+/// The message for a folder that cannot be used.
+fn folder_unusable(path: &Path, error: &io::Error) -> String {
+    mac::s()
+        .folder_unusable
+        .replace("{path}", &path.display().to_string())
+        .replace("{error}", &folder_error_text(error))
 }
 
 /// Whether the user can tell a file from a folder with a path.
@@ -420,14 +428,7 @@ impl Core {
             // Kept for the life of the program: it ends with the process.
             Ok(Some(instance)) => std::mem::forget(instance),
             Ok(None) => started.already_running = true,
-            Err(e) => {
-                started.fatal = Some(
-                    mac::s()
-                        .folder_unusable
-                        .replace("{path}", &data_dir.display().to_string())
-                        .replace("{error}", &lock_error_text(&e)),
-                );
-            }
+            Err(e) => started.fatal = Some(folder_unusable(&data_dir, &e)),
         }
 
         if let Some(e) = cfg_error {
@@ -791,8 +792,8 @@ impl Core {
         if !dir.is_absolute() {
             return serde_json::json!({ "problem": mac::s().choose_save_folder });
         }
-        if std::fs::create_dir_all(dir).is_err() {
-            return serde_json::json!({ "problem": mac::s().folder_unusable });
+        if let Err(e) = std::fs::create_dir_all(dir) {
+            return serde_json::json!({ "problem": folder_unusable(dir, &e) });
         }
         let space = space::check_space(&offer, dir, &temp_dir, folder);
         if !space.fits {
@@ -1304,28 +1305,28 @@ fn recipient_problem(
     name: &str,
     contact_id: &str,
     editing: Option<&str>,
-) -> Option<&'static str> {
+) -> Option<String> {
     let name = name.trim();
     let id = cleaned_id(contact_id);
     if name.is_empty() {
-        return Some(mac::s().enter_recipient_name);
+        return Some(mac::s().enter_recipient_name.to_string());
     }
     if identity::parse_contact_id(&id).is_none() {
-        return Some(mac::s().invalid_contact_id);
+        return Some(mac::s().invalid_contact_id.to_string());
     }
     if id.eq_ignore_ascii_case(my_id) {
-        return Some(mac::s().own_contact_id);
+        return Some(mac::s().own_contact_id.to_string());
     }
     let others = || {
         cfg.contacts
             .iter()
             .filter(|c| editing.is_none_or(|old| !c.id.eq_ignore_ascii_case(old)))
     };
-    if others().any(|c| c.id.eq_ignore_ascii_case(&id)) {
-        return Some(mac::s().contact_id_taken);
+    if let Some(c) = others().find(|c| c.id.eq_ignore_ascii_case(&id)) {
+        return Some(mac::s().contact_id_taken.replace("{name}", &c.name));
     }
-    if others().any(|c| c.name.to_lowercase() == name.to_lowercase()) {
-        return Some(mac::s().name_taken);
+    if let Some(c) = others().find(|c| c.name.to_lowercase() == name.to_lowercase()) {
+        return Some(mac::s().name_taken.replace("{name}", &c.name));
     }
     None
 }
@@ -1465,11 +1466,107 @@ mod tests {
         let error = take_instance_lock(&in_the_way.join("profile")).unwrap_err();
         assert_eq!(error.raw_os_error(), Some(libc::ENOTDIR));
         assert_eq!(
-            lock_error_text(&error),
+            folder_error_text(&error),
             mac::s()
                 .error_system
                 .replace("{code}", &libc::ENOTDIR.to_string())
         );
         std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /// A `Core` without a network, with one offer waiting.
+    fn core_with_offer(id: u64, dir: &Path) -> Core {
+        extern "C" fn nothing(_: *mut std::ffi::c_void) {}
+        let offer = Offer {
+            kind: Kind::File,
+            name: "file.txt".into(),
+            size: 1,
+            file_count: 0,
+            content_size: 0,
+            largest_file: 1,
+            sender_name: "sender".into(),
+            token: [0; 16],
+            modified: None,
+            created: None,
+        };
+        let pending = PendingOffer {
+            from_id: String::new(),
+            from_name: String::new(),
+            offer,
+        };
+        Core {
+            state: Mutex::new(State {
+                cfg: Config::default(),
+                data_dir: dir.to_path_buf(),
+                temp_dir: dir.to_path_buf(),
+                net: NetHandle::idle(),
+                online: None,
+                transfers: BTreeMap::new(),
+                offers: HashMap::from([(id, pending)]),
+                shown: HashMap::new(),
+                busy: false,
+                update_job: None,
+                update: None,
+                next_update_look: Instant::now(),
+            }),
+            my_id: String::new(),
+            outbox: Box::leak(Box::new(Outbox {
+                queue: Mutex::new(VecDeque::new()),
+                wake: Wake {
+                    function: nothing,
+                    context: std::ptr::null_mut(),
+                },
+            })),
+            _events: mpsc::channel().0,
+        }
+    }
+
+    #[test]
+    fn accepting_into_a_folder_that_cannot_be_made_says_which_and_why() {
+        let dir = test_dir("accept-no-folder");
+        let in_the_way = dir.join("file");
+        std::fs::write(&in_the_way, b"").unwrap();
+        let chosen = in_the_way.join("received");
+
+        let answer = core_with_offer(1, &dir).check_accept(1, &chosen);
+
+        let problem = answer["problem"].as_str().unwrap();
+        let reason = mac::s()
+            .error_system
+            .replace("{code}", &libc::ENOTDIR.to_string());
+        assert!(problem.contains(chosen.to_str().unwrap()), "{problem}");
+        assert!(problem.contains(&reason), "{problem}");
+        assert!(!problem.contains('{'), "{problem}");
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn a_taken_contact_id_or_name_says_who_has_it() {
+        let new_id = |name| {
+            let dir = test_dir(name);
+            let id = identity::load_or_create(&dir).unwrap().public().to_string();
+            std::fs::remove_dir_all(&dir).unwrap();
+            id
+        };
+        let (taken, free) = (new_id("recipient-taken"), new_id("recipient-free"));
+        let mut cfg = Config::default();
+        cfg.contacts.push(Contact {
+            name: "Ana".into(),
+            id: taken.clone(),
+        });
+
+        assert_eq!(
+            recipient_problem(&cfg, "", "Someone", &taken, None),
+            Some(mac::s().contact_id_taken.replace("{name}", "Ana"))
+        );
+        assert_eq!(
+            recipient_problem(&cfg, "", "ANA", &free, None),
+            Some(mac::s().name_taken.replace("{name}", "Ana"))
+        );
+        // Editing that recipient: nobody else has them.
+        assert_eq!(
+            recipient_problem(&cfg, "", "Ana", &taken, Some(&taken)),
+            None
+        );
     }
 }
