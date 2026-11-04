@@ -40,6 +40,10 @@ Seen once on 2026-11-01: after a 500 MB transfer failed on a 200 MB NTFS volume,
 
 ## Low
 
+### An all-users uninstall leaves other accounts' entries in File Explorer's menus
+
+Each account writes its own "Send with Dodavo" entry and Send to shortcut when Dodavo starts there, and the uninstaller reaches only the account that runs it. In the other accounts both stay, and fail when used, until they are deleted by hand or Dodavo is installed again. The same goes for their "Start with Windows" value.
+
 ### Colliding names in a zip overwrite each other on Windows
 
 `archive::unzip` opens each entry with `create` and `truncate`, so of two entries whose names are the same when case does not count, the later one replaces the earlier one. A zip from Dodavo on Windows cannot have that, and one from a Mac has unique names (`archive::names`), so it takes a hand-made zip. The Mac creates only new files.

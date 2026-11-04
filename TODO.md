@@ -13,7 +13,8 @@ Remove an item in the commit that settles it. This file is public, so keep secre
 - **Go through the Mac version with VoiceOver by hand.** `macos/tests/voiceover-checklist.md` is the list. Listen for what is awkward rather than wrong, and try it with braille, with the keys that VoiceOver takes itself, and through a change between online and offline.
 - **Exchange transfers between a Mac and released Windows 1.0.0.** Both directions, file and folder in all three ways of keeping one, names Windows cannot take, pause, cancel on each side, restart on each side and a lost connection. `examples/peer.rs` does it without the interface.
 - **Try what macOS decides at a login and on older systems.** Telling a start at login (`LoginItem.launchedAtLogin`), also with `SMAppService`; the Local Network and Files and Folders prompts during an automatic receive at login; opening a received app that has the quarantine mark; `LSSharedFileList` on macOS 11 and 12.
-- **Publish the first Mac release.** Write the release notes of 1.0.1 in all four languages, build it with `macos/release.sh`, and publish it with `macos/publish.sh`. A release has to carry both manifests (see README).
+- **Try the changed settings on a Mac.** The Settings window shows Downloads with "Always save" on, and "Start transfers automatically" is unavailable with it off; an offer from a recipient then asks where to save.
+- **Publish the first Mac release.** Build it with `macos/release.sh`, and publish it with `macos/publish.sh`. A release has to carry both manifests (see README).
 
 - **Install the published 1.0.0 from the release page.** Try a new installation for the current user and for all users, an installation over an older copy, and uninstalling.
 - **Send between two computers on different networks.** Check connecting through real NAT, and falling back to a relay there.
@@ -29,7 +30,9 @@ Remove an item in the commit that settles it. This file is public, so keep secre
 - **Build for Intel Macs.** Add `x86_64-apple-darwin` and combine the two with `lipo`, once there is one to test on.
 
 - **Run the first real update when the next version is out.** Download and install it from the real GitHub URL.
-- **Run the builds for Windows 7 SP1 and Windows 8.1 on those systems.**
+- **Run the builds for Windows 7 SP1 and Windows 8.1 on those systems.** Include "Send with Dodavo" and Send to.
+- **Build the Windows 7 targets on GitHub Actions.** Only `installer\build.ps1` checks their imports, so a change that breaks them shows only when the installer is built, as moving `CoTaskMemFree` into the library did.
+- **Check File Explorer's menus with real selections and a screen reader.** Windows starts Dodavo from Explorer with the right to take the foreground, which scripts cannot do. Check that the window comes to the front from both menus, and what NVDA, JAWS and Narrator say when it does.
 - **Run transfers with the 32-bit builds.**
 - **Check the notifications live on Windows 11.** Test scripts cannot see them, so watch them by hand.
 
@@ -38,4 +41,6 @@ Remove an item in the commit that settles it. This file is public, so keep secre
 - **Trim the Mac's license file.** `macos/licenses.sh` takes all of Rust's `COPYRIGHT-library.html`, 1.4 MB of it; `installer/licenses.ps1` picks what is linked.
 - **Make a Liquid Glass icon for macOS 26 and later.** `macos/Resources/make-icon.swift` draws one for the older grid, which those systems show as it is.
 
+- **Give Dodavo an entry in Windows 11's new File Explorer menu.** It takes a sparse package signed with a trusted certificate, and a COM DLL (`IExplorerCommand`), so it comes after code signing (see `ISSUES.md`). Windows 10 builds 19041 and later could use it too; Windows 7 and 8.1 keep the classic entries.
+- **Show the items of one selection in one window.** Each item opens its own progress window, up to 100 from the context menu and more from Send to.
 - **Report the zip crate's panic to its authors.** `enclosed_name` panics on ordinary names such as "Kuća.jpg" in zip 9.1 and 9.2, because `is_windows_reserved_device_name` splits a name at a byte index. Dodavo avoids it with its own check (`archive::entry_path`).

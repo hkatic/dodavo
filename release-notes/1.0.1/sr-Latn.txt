@@ -1,0 +1,5 @@
+Slanje datoteka i fascikli direktno iz Istraživača datoteka.
+
+- Novo: „Pošalji programom Dodavo“ u kontekstualnom meniju datoteka i fascikli i Dodavo u meniju „Pošalji u“. U operativnom sistemu Windows 11 nalaze se pod „Prikaži još opcija“. Možete da ih uklonite u postavkama.
+- Stavke od osoba sa vaše liste primalaca sada se bez pitanja čuvaju u fascikli Preuzimanja ili u fascikli koju ste izabrali. Opozovite izbor opcije „Uvek čuvaj primljene datoteke u ovoj fascikli“ ako želite da Dodavo za svaku stavku pita gde da je sačuva. Ponude bilo koga drugog i dalje se prvo prikazuju.
+- Ako se veza prekine, Dodavo sada čeka, sam nastavlja i o tome vas obaveštava obaveštenjem. Ako želite da umesto toga pita, u postavkama izaberite „Pitaj svaki put“.

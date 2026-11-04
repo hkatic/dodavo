@@ -1,0 +1,5 @@
+Pošiljanje datotek in map neposredno iz Raziskovalca.
+
+- Novo: »Pošlji s programom Dodavo« v priročnem meniju datotek in map ter Dodavo v meniju »Pošlji v«. V sistemu Windows 11 sta pod »Pokaži več možnosti«. V nastavitvah ju lahko odstranite.
+- Elementi od oseb z vašega seznama prejemnikov se zdaj brez vprašanja shranijo v mapo Prenosi ali v mapo, ki ste jo izbrali. Počistite možnost »Vedno shrani prejete datoteke v to mapo«, če želite, da Dodavo za vsak element vpraša, kam naj ga shrani. Ponudbe kogar koli drugega so še naprej najprej prikazane.
+- Če se povezava prekine, Dodavo zdaj čaka, sam nadaljuje in vas o tem obvesti z obvestilom. Če želite, da namesto tega vpraša, v nastavitvah izberite »Vprašaj vsakič«.
