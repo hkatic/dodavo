@@ -14,7 +14,6 @@ Remove an item in the commit that settles it. This file is public, so keep secre
 - **Exchange transfers between a Mac and released Windows 1.0.0.** Both directions, file and folder in all three ways of keeping one, names Windows cannot take, pause, cancel on each side, restart on each side and a lost connection. `examples/peer.rs` does it without the interface.
 - **Try what macOS decides at a login and on older systems.** Telling a start at login (`LoginItem.launchedAtLogin`), also with `SMAppService`; the Local Network and Files and Folders prompts during an automatic receive at login; opening a received app that has the quarantine mark; `LSSharedFileList` on macOS 11 and 12.
 - **Try the changed settings on a Mac.** The Settings window shows Downloads with "Always save" on, and "Start transfers automatically" is unavailable with it off; an offer from a recipient then asks where to save.
-- **Publish the first Mac release.** Build it with `macos/release.sh`, and publish it with `macos/publish.sh`. A release has to carry both manifests (see README).
 
 - **Install the published 1.0.0 from the release page.** Try a new installation for the current user and for all users, an installation over an older copy, and uninstalling.
 - **Send between two computers on different networks.** Check connecting through real NAT, and falling back to a relay there.
@@ -28,7 +27,7 @@ Remove an item in the commit that settles it. This file is public, so keep secre
 - **Have the Serbian (Latin) Mac texts reviewed.** macOS has no Serbian of its own to take the terms from, unlike Croatian and Slovenian; these follow the Croatian ones and the Windows table.
 - **Build for Intel Macs.** Add `x86_64-apple-darwin` and combine the two with `lipo`, once there is one to test on.
 
-- **Run the first real update when the next version is out.** Download and install it from the real GitHub URL.
+- **Run the first real update on a Mac when the next version is out.** Have a copy of 1.0.1 download and install it from the real GitHub URL.
 - **Run the builds for Windows 7 SP1 and Windows 8.1 on those systems.** Include "Send with Dodavo" and Send to.
 - **Check the Send with Dodavo window with a screen reader.** Check that it comes to the front from the Send to menu, and what NVDA, JAWS and Narrator say when it does.
 - **Have native speakers check the Serbian (Latin) and Slovenian texts of 1.0.1.** Including the Windows labels that the help quotes: "Pošalji u" and "Prikaži još opcija", "Pošlji v" and "Pokaži več možnosti".
