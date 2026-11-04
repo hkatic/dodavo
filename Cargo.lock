@@ -576,14 +576,18 @@ dependencies = [
 
 [[package]]
 name = "dodavo"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "anyhow",
  "blake3",
+ "core-foundation",
+ "core-foundation-sys",
  "ed25519-dalek",
  "embed-resource",
+ "icu_normalizer",
  "iroh",
  "iroh-mdns-address-lookup",
+ "libc",
  "postcard",
  "rand",
  "reqwest",
@@ -597,6 +601,16 @@ dependencies = [
  "windows",
  "windows-sys 0.61.2",
  "zip",
+]
+
+[[package]]
+name = "dodavo-ffi"
+version = "1.0.1"
+dependencies = [
+ "dodavo",
+ "libc",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

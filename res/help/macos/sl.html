@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="sl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pomoč za Dodavo</title>
+<link rel="stylesheet" href="help.css">
+</head>
+<body>
+<a class="skip-link" href="#main">Preskoči na glavno vsebino</a>
+
+<header>
+<h1>Pomoč za Dodavo</h1>
+<p class="intro">Dodavo pošilja datoteke in mape neposredno z enega računalnika na drugega. Ne potrebujete računa, storitve v oblaku ali povezave: vsak od vas ima ID stika, datoteke pa potujejo neposredno od računalnika do računalnika, celovito šifrirane. Deluje med računalniki Mac ter med Macom in računalnikom z Windows.</p>
+</header>
+
+<nav aria-labelledby="contents">
+<h2 id="contents">Vsebina</h2>
+<ol>
+<li><a href="#using-help">Uporaba te pomoči</a></li>
+<li><a href="#how-it-works">Kako deluje Dodavo</a></li>
+<li><a href="#installing">Nameščanje in odstranjevanje</a></li>
+<li><a href="#getting-started">Prvi koraki</a></li>
+<li><a href="#main-window">Glavno okno</a></li>
+<li><a href="#recipients">Upravljanje prejemnikov</a></li>
+<li><a href="#sending">Pošiljanje datotek in map</a></li>
+<li><a href="#receiving">Prejemanje datotek in map</a></li>
+<li><a href="#progress">Spremljanje prenosa</a></li>
+<li><a href="#background">Delovanje v ozadju</a></li>
+<li><a href="#settings">Nastavitve</a></li>
+<li><a href="#shortcuts">Bližnjice na tipkovnici</a></li>
+<li><a href="#connections">Povezave in varnost</a></li>
+<li><a href="#faq">Pogosta vprašanja</a></li>
+<li><a href="#troubleshooting">Odpravljanje težav</a></li>
+<li><a href="#license">Licenca</a></li>
+<li><a href="#donate">Doniranje</a></li>
+</ol>
+</nav>
+
+<main id="main" tabindex="-1">
+
+<section aria-labelledby="using-help">
+<h2 id="using-help">Uporaba te pomoči</h2>
+<p>Ta pomoč se odpre v spletnem brskalniku, v jeziku, ki ga uporablja Dodavo. Če jo želite znova odpreti, izberite Pomoč > Pomoč za Dodavo ali pritisnite <kbd>⌘?</kbd>.</p>
+<p>Vsaka tema je naslov 2. ravni. Z VoiceOverjem pritisnite <kbd>VO</kbd>-<kbd>⌘</kbd>-<kbd>H</kbd> za naslednji naslov ali odprite rotor z <kbd>VO</kbd>-<kbd>U</kbd> in izberite s seznama.</p>
+<p>Imena menijev, gumbov in drugih kontrolnikov so napisana natanko tako, kot so prikazana v Dodavu. Vse lahko naredite samo s tipkovnico in z VoiceOverjem; kjer se to razlikuje od uporabe kazalca, tema to pove.</p>
+</section>
+
+<section aria-labelledby="how-it-works">
+<h2 id="how-it-works">Kako deluje Dodavo</h2>
+<p>Vsak računalnik z Dodavom ima trajni <strong>ID stika</strong>: kodo s 64 znaki, ki nadomesti naslov. Delite ga enkrat; ne spreminja se, kamor koli gre računalnik.</p>
+<ol>
+<li>Kopirate svoj ID stika in ga pošljete drugi osebi, na primer po e-pošti ali v sporočilu.</li>
+<li>Druga oseba doda vas med svoje prejemnike, vi pa njo med svoje.</li>
+<li>Če želite kaj poslati, izberete osebo in izberete, kaj boste poslali.</li>
+<li>Dodavo druge osebe vpraša, ali naj to sprejme in kam naj shrani, ali pa začne sam, če ste med njenimi prejemniki.</li>
+<li>Element potuje neposredno v njen računalnik, šifriran vso pot.</li>
+</ol>
+<p>Dodavo mora biti zagnan v obeh računalnikih. Zapiranje okna ne zapre aplikacije, tako da lahko prejema datoteke v ozadju; to stori Zapri Dodavo (<kbd>⌘Q</kbd>).</p>
+</section>
+
+<section aria-labelledby="installing">
+<h2 id="installing">Nameščanje in odstranjevanje</h2>
+<p>Dodavo zahteva macOS 11 Big Sur ali novejši v Macu s čipom Apple.</p>
+<p>Odprite sliko diska <code>Dodavo-&lt;version&gt;-macos.dmg</code> in iz nje odprite Dodavo. Nato ponudi, da se sam premakne v mapo Aplikacije: izberite Premakni v mapo Aplikacije. To lahko naredite tudi v Finderju brez vlečenja: izberite Dodavo, pritisnite <kbd>⌘C</kbd>, pritisnite <kbd>⇧⌘A</kbd> za mapo Aplikacije in pritisnite <kbd>⌘V</kbd>.</p>
+<p>Dokler teče s slike diska, se Dodavo ne more sam posodabljati, zato vpraša Želite premakniti Dodavo v mapo Aplikacije?</p>
+<p>Ko so prvič potrebni, macOS vpraša, ali sme Dodavo uporabljati lokalno omrežje, pošiljati obvestila in uporabljati mape, kot je Prenosi. Dovolite to: v razdelku <a href="#troubleshooting">Odpravljanje težav</a> piše, kaj se sicer zgodi in kako pozneje spremenite odgovor.</p>
+<p>Za odstranitev zaprite Dodavo in ga premaknite v Koš. Vaše nastavitve in ID stika ostanejo v mapi <code>~/Library/Application Support/Dodavo</code>, tako da nova namestitev obdrži isti ID stika; izbrišite tudi to mapo, če želite, da izginejo.</p>
+</section>
+
+<section aria-labelledby="getting-started">
+<h2 id="getting-started">Prvi koraki</h2>
+<ol>
+<li>Izberite Datoteka > Kopiraj moj ID stika (<kbd>⇧⌘C</kbd>) in pošljite svoj ID stika drugi osebi.</li>
+<li>Prosite jo, naj naredi enako, nato izberite Datoteka > Dodaj prejemnika … (<kbd>⌘N</kbd>) in vnesite ime in njen ID stika.</li>
+<li>Ko je oseba izbrana na seznamu, izberite Datoteka > Pošlji … (<kbd>⌘O</kbd>) in izberite, kaj želite poslati.</li>
+<li>Spremljajte to v oknu Prenosi: Prenosi > Prikaži prenose (<kbd>⌘T</kbd>).</li>
+</ol>
+</section>
+
+<section aria-labelledby="main-window">
+<h2 id="main-window">Glavno okno</h2>
+<p>Glavno okno prikazuje vaše prejemnike v tabeli s stolpci Ime, ID stika in Prenos. Zadnji pove, kaj se dogaja s to osebo. Pod tabelo vrstica stanja pove, ali je Dodavo povezan; VoiceOver sporoči, ko se to spremeni.</p>
+<p>Orodna vrstica ima ukaze Pošlji, Dodaj prejemnika, Kopiraj moj ID stika in Prenosi. Ukaz Pošlji ni na voljo, dokler ni izbran prejemnik.</p>
+<p>Z VoiceOverjem pojdite na tabelo in pritisnite <kbd>VO</kbd>-<kbd>⇧</kbd>-<kbd>↓</kbd> za delo z njo, nato se s puščičnimi tipkami premikajte med prejemniki. Pritisnite <kbd>Return</kbd> za pošiljanje izbranemu prejemniku ali <kbd>VO</kbd>-<kbd>⇧</kbd>-<kbd>M</kbd> za meni z ukazi Pošlji …, Prikaži prenos, Uredi prejemnika … in Odstrani prejemnika.</p>
+<p>Brez VoiceOverja vklopite krmarjenje s tipkovnico v: Sistemske nastavitve > Tipkovnica, da se s tipko <kbd>Tab</kbd> premikate med vsemi kontrolniki; macOS ga ima privzeto izklopljenega in <kbd>Tab</kbd> doseže le besedilna polja in sezname.</p>
+</section>
+
+<section aria-labelledby="recipients">
+<h2 id="recipients">Upravljanje prejemnikov</h2>
+<p>Dodaj prejemnika … (<kbd>⌘N</kbd>) zahteva ime, ki ga vidite samo vi, in ID stika osebe. Osebo prosite, naj v svojem Dodavu izbere Kopiraj moj ID stika in vam ga pošlje.</p>
+<p>Uredi prejemnika … (<kbd>⌘I</kbd>) ju spremeni, Odstrani prejemnika (<kbd>⌘⌫</kbd> ali <kbd>Delete</kbd> v tabeli) pa odstrani osebo, po vprašanju. Prenosi v teku se nadaljujejo.</p>
+<p>Kopiraj moj ID stika (<kbd>⇧⌘C</kbd>) postavi vaš ID stika v odložišče. Najdete ga tudi na zavihku Splošno v nastavitvah.</p>
+</section>
+
+<section aria-labelledby="sending">
+<h2 id="sending">Pošiljanje datotek in map</h2>
+<p>Izberite prejemnika, nato Datoteka > Pošlji … (<kbd>⌘O</kbd>). V podoknu lahko izberete datoteke in mape, tudi več hkrati; vsaka postane ločen prenos. Aplikacije in dokumenti, ki so paketi, tu štejejo za mape in tako tudi prispejo.</p>
+<p>Obstajajo tudi drugi načini:</p>
+<ul>
+<li>Povlecite elemente na prejemnika v tabeli; če jih je več, najprej sledi vprašanje.</li>
+<li>Spustite elemente na ikono Dodava v Docku in izberite prejemnika.</li>
+<li>V Finderju izberite elemente in izberite Storitve > Pošlji z Dodavom v meniju Finder ali v kontekstnem meniju (<kbd>VO</kbd>-<kbd>⇧</kbd>-<kbd>M</kbd>).</li>
+</ul>
+<p>Mapa se samodejno zapakira in na drugi strani znova razpakira. Elementi, ki nekaj pomenijo samo macOS-u, kot je <code>.DS_Store</code>, so izpuščeni. Povezave znotraj mape prispejo v drug Mac; povezave, ki vodijo iz nje, niso poslane. Finderjeve oznake in drugi razširjeni atributi ne potujejo.</p>
+<p>Windows v imenih ne dovoli nekaterih znakov, kot sta <code>:</code> in <code>?</code>. Ker pošiljatelj ne more vedeti, kateri sistem ima druga stran, mapa nosi imena, ki jih sprejme vsak sistem, s podčrtajem namesto takega znaka. Drug Mac obnovi izvirna imena; računalnik z Windows obdrži spremenjena.</p>
+</section>
+
+<section aria-labelledby="receiving">
+<h2 id="receiving">Prejemanje datotek in map</h2>
+<p>Ko vam nekdo nekaj pošilja, se prikaže okno Dohodni prenos, obvestilo to sporoči, ikona Dodava pa poskakuje v Docku. Ne vzame fokusa temu, kar počnete: kliknite obvestilo ali ikono, da pridete do njega.</p>
+<p>Okno pove, kdo pošilja kaj in ali je dovolj prostega prostora. Shrani v: pokaže, kam gre, Izberi … pa to spremeni. Sprejmi sprejme (<kbd>Return</kbd>), Zavrni zavrne (<kbd>Esc</kbd>). VoiceOver prebere okno, ko pridete do njega.</p>
+<p>Od oseb med vašimi prejemniki se lahko prenos začne sam: glejte Prenose začni samodejno, brez vprašanja v razdelku <a href="#settings">Nastavitve</a>. Pri vseh drugih Dodavo vedno najprej vpraša in pove, da pošiljatelj ni med vašimi prejemniki.</p>
+<p>Prejeti elementi dobijo enako oznako kot prenosi iz interneta, zato macOS vpraša, preden odpre aplikacijo, ki je prispela na ta način.</p>
+<p>Diski v obliki MS-DOS (FAT) ne morejo shraniti datotek, velikih 4 GB ali več; Dodavo to pove pred sprejemom.</p>
+</section>
+
+<section aria-labelledby="progress">
+<h2 id="progress">Spremljanje prenosa</h2>
+<p>Prenosi (<kbd>⌘T</kbd>) prikaže vse prenose. Vsaka vrstica prikaže element, drugo osebo, kaj se dogaja, koliko je končano, hitrost in preostali čas. Zapiranje tega okna nanje ne vpliva.</p>
+<p>Z VoiceOverjem se vsaka vrstica prebere kot en stavek. Pritisnite <kbd>VO</kbd>-<kbd>⇧</kbd>-<kbd>M</kbd> na vrstici za meni s tem, kar je mogoče narediti z njo, ali <kbd>VO</kbd>-<kbd>⇧</kbd>-<kbd>↓</kbd> za njene gumbe: Začasno ustavi in Nadaljuj, Prekliči prenos, po koncu pa Odpri, Prikaži v Finderju in Odstrani s seznama. Spremembe so sporočene, dokler je Dodavo v ospredju, sicer pa pridejo kot obvestila.</p>
+<p>Samo s tipkovnico izberite vrstico s puščičnimi tipkami: <kbd>Space</kbd> jo začasno ustavi ali nadaljuje, <kbd>Delete</kbd> jo prekliče, končano pa odstrani s seznama, <kbd>Return</kbd> pa odpre, kar je bilo shranjeno.</p>
+<p>Če se povezava izgubi ali računalnik preide v stanje spanja ali se znova zažene, prenos počaka in se nadaljuje, kjer se je ustavil, takoj ko sta oba računalnika zagnana in povezana. Po 30 dneh brez napredka se prenos konča. Na koncu se preveri celoten element.</p>
+<p>Medtem ko se podatki prenašajo, Dodavo preprečuje, da bi Mac sam prešel v stanje spanja. Zapiranje pokrova prenosnika ga še vedno uspava; prenos se nadaljuje po bujenju.</p>
+<p>Ko prispe celoten element, je prejemnikov, zato pošiljatelj prenosa ne more več preklicati. Počisti končane odstrani vrstice končanih prenosov.</p>
+</section>
+
+<section aria-labelledby="background">
+<h2 id="background">Delovanje v ozadju</h2>
+<p>Zapiranje glavnega okna pusti Dodavo zagnan, da lahko prejemate datoteke. Kliknite njegovo ikono v Docku, da znova odprete okno.</p>
+<p>Ko je vklopljeno Prikaži v menijski vrstici, ikona Dodava v menijski vrstici pokaže, koliko prenosov poteka, njen meni pa ima Odpri Dodavo, prenose v teku, Kopiraj moj ID stika in Zapri Dodavo. Z VoiceOverjem pritisnite <kbd>VO</kbd>-<kbd>M</kbd>-<kbd>M</kbd>, da pridete do nje.</p>
+<p>Ko je vklopljeno Odpri ob prijavi, se Dodavo zažene ob prijavi; z Skrij, ko se odpre ob prijavi brez prikaza okna.</p>
+</section>
+
+<section aria-labelledby="settings">
+<h2 id="settings">Nastavitve</h2>
+<p>Odprite jih z ukazom Nastavitve … (<kbd>⌘,</kbd>) v meniju Dodavo; pred macOS-om 13 je to Nastavitve …. Spremembe veljajo takoj.</p>
+<p>Splošno:</p>
+<ul>
+<li>Vaše ime: Prikazano je osebam, ki jim pošiljate datoteke.</li>
+<li>Vaš ID stika: z gumbom Kopiraj.</li>
+<li>Odpri ob prijavi in Skrij, ko se odpre ob prijavi.</li>
+<li>Prikaži v menijski vrstici.</li>
+<li>Samodejno preverjaj posodobitve: enkrat na dan Dodavo poišče novejšo različico in prikaže njene opombe, kadar je na voljo. Preveri posodobitve … to naredi kadar koli.</li>
+<li>Jezik: Privzeto v sistemu sledi macOS-u. Novi jezik bo uporabljen, ko boste naslednjič odprli Dodavo.</li>
+</ul>
+<p>Prejemanje:</p>
+<ul>
+<li>Vedno shrani prejete elemente v to mapo, z gumbom Izberi ….</li>
+<li>Prenose začni samodejno, brez vprašanja. Samo od oseb med vašimi prejemniki. Če zgoraj ni izbrana mapa, se elementi shranijo v mapo Prenosi.</li>
+<li>Ko prispe mapa: Obdrži samo razpakirano mapo, Obdrži samo arhiv ZIP ali Obdrži razpakirano mapo in datoteko ZIP.</li>
+</ul>
+</section>
+
+<section aria-labelledby="shortcuts">
+<h2 id="shortcuts">Bližnjice na tipkovnici</h2>
+<table>
+<thead><tr><th scope="col">Tipke</th><th scope="col">Ukaz</th></tr></thead>
+<tbody>
+<tr><td><kbd>⌘O</kbd></td><td>Pošlji …</td></tr>
+<tr><td><kbd>⌘N</kbd></td><td>Dodaj prejemnika …</td></tr>
+<tr><td><kbd>⌘I</kbd></td><td>Uredi prejemnika …</td></tr>
+<tr><td><kbd>⌘⌫</kbd></td><td>Odstrani prejemnika</td></tr>
+<tr><td><kbd>⇧⌘C</kbd></td><td>Kopiraj moj ID stika</td></tr>
+<tr><td><kbd>⌘T</kbd></td><td>Prikaži prenose</td></tr>
+<tr><td><kbd>⌘,</kbd></td><td>Nastavitve …</td></tr>
+<tr><td><kbd>⌘?</kbd></td><td>Pomoč za Dodavo</td></tr>
+<tr><td><kbd>⌘W</kbd></td><td>Zapri</td></tr>
+<tr><td><kbd>⌘M</kbd></td><td>Minimiraj</td></tr>
+<tr><td><kbd>⌘H</kbd></td><td>Skrij Dodavo</td></tr>
+<tr><td><kbd>⌘Q</kbd></td><td>Zapri Dodavo</td></tr>
+</tbody>
+</table>
+<p>V pogovornih oknih <kbd>Return</kbd> izbere privzeti gumb, <kbd>Esc</kbd> pa prekliče. V tabeli prejemnikov <kbd>Return</kbd> pošlje izbrani osebi, <kbd>Delete</kbd> pa jo odstrani.</p>
+</section>
+
+<section aria-labelledby="connections">
+<h2 id="connections">Povezave in varnost</h2>
+<p>Dodavo povezuje računalnike s tehnologijo iroh (iroh.computer):</p>
+<ul>
+<li>Neposredno, skozi usmerjevalnike in požarne zidove, brez posredovanja vrat.</li>
+<li>Znotraj lokalnega omrežja, kjer se računalniki najdejo sami.</li>
+<li>Prek posredniškega strežnika, kadar neposredna pot ni mogoča. Podatki ostanejo šifrirani, zato jih posrednik ne more brati, a je počasneje.</li>
+</ul>
+<p>Vse je celovito šifrirano in berljivo le obema računalnikoma. Vsak element se na koncu preveri s kontrolno vsoto BLAKE3. Vrstica prenosa pove, ali gre neposredno ali prek posrednika.</p>
+<p>Vaš ID stika je po naravi javen; da je vaš, dokazuje skrivni ključ v mapi <code>~/Library/Application Support/Dodavo</code>, ki ga lahko bere samo vaš uporabnik.</p>
+</section>
+
+<section aria-labelledby="faq">
+<h2 id="faq">Pogosta vprašanja</h2>
+<p><strong>Ali lahko pošljem nekomu z Windows?</strong> Da. Deluje enako v obe smeri.</p>
+<p><strong>Ali je druga oseba lahko brez povezave?</strong> Ne ob začetku prenosa: Dodavo mora biti zagnan v obeh računalnikih, sicer sporoči, da se ne more povezati. Ko je prenos sprejet, je lahko katera koli stran brez povezave, prenos pa se nadaljuje, ko sta obe spet povezani.</p>
+<p><strong>Ali datoteka gre prek strežnika?</strong> Samo prek posrednika, šifrirana, če ni mogoče najti neposredne poti.</p>
+<p><strong>Ali obstaja omejitev velikosti?</strong> Samo prosti prostor na drugi strani in 4 GB na datoteko na diskih MS-DOS (FAT).</p>
+</section>
+
+<section aria-labelledby="troubleshooting">
+<h2 id="troubleshooting">Odpravljanje težav</h2>
+<p><strong>macOS noče odpreti Dodava.</strong> Znova prenesite sliko diska s strani izdaj in odprite Dodavo iz nje. Prvič macOS vpraša, ali želite odpreti aplikacijo, preneseno iz interneta: izberite Odpri.</p>
+<p><strong>Dodavo pravi, da ni povezan.</strong> Preverite internetno povezavo. Prenosi v lokalnem omrežju še vedno delujejo.</p>
+<p><strong>Prenosi med računalniki v istem omrežju so zelo počasni.</strong> Dodavo morda ne sme uporabljati lokalnega omrežja: preverite Sistemske nastavitve > Zasebnost in varnost > Lokalno omrežje. Brez tega gredo podatki prek posrednika.</p>
+<p><strong>Prenos pravi, da Dodavo ne sme uporabljati elementa.</strong> Dovolite to v: Sistemske nastavitve > Zasebnost in varnost > Datoteke in mape, in prenos se nadaljuje.</p>
+<p><strong>Obvestil ni.</strong> Preverite Sistemske nastavitve > Obvestila > Dodavo in ali je vklopljen fokus. Ko so obvestila izklopljena, ikona Dodava namesto tega poskakuje v Docku, Prenosi pa vedno prikaže stanje prenosov.</p>
+</section>
+
+<section aria-labelledby="license">
+<h2 id="license">Licenca</h2>
+<p>Dodavo je prosta programska oprema pod licenco GNU General Public License, različice 3 ali novejše, in je na voljo brez kakršnega koli jamstva. Pomoč > Licenca prikaže licenco in licence komponent, vgrajenih vanj.</p>
+</section>
+
+<section aria-labelledby="donate">
+<h2 id="donate">Doniranje</h2>
+<p>Dodavo je brezplačen. Če želite podpreti njegov razvoj, Pomoč > Doniraj … odpre <a href="https://paypal.me/hrvix">avtorjevo stran na PayPalu</a>.</p>
+</section>
+
+</main>
+</body>
+</html>

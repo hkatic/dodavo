@@ -4,7 +4,6 @@
 //! `PhaseNotice` and `Finished` for what is).
 
 use std::{
-    collections::VecDeque,
     path::{Path, PathBuf},
     time::{Duration, Instant},
 };
@@ -30,7 +29,9 @@ use crate::{
     config::{CloseAction, ConnectionLostAction, ReceivedFolder},
     i18n::tr,
     net::{Command, Kind, Outcome, Phase},
+    view::{can_pause, keeps_progress, moves_data, percent},
 };
+pub use crate::view::{Direction, Speed};
 
 const ID_CANCEL: u16 = 11;
 const ID_PAUSE: u16 = 12;
@@ -59,73 +60,8 @@ const RATE_INTERVAL: Duration = Duration::from_secs(1);
 /// Shows the speed and the remaining time again, also when no data comes
 /// (see `Progress::show_rate`).
 const TIMER_RATE: usize = 3;
-/// How long the data of a transfer may stop coming before its speed is
-/// zero (see `Speed::stalled`): a computer that is switched off or loses its
-/// network is noticed only after half a minute.
-pub const STALLED_AFTER: Duration = Duration::from_secs(5);
-/// The reports of the last this long give the speed; reports further apart
-/// do not make one together.
-const SPEED_WINDOW: Duration = Duration::from_secs(4);
-
-/// The speed of a transfer from its progress reports, which the progress
-/// window and the notification area icon show (`app::Transfer`).
-#[derive(Default)]
-pub struct Speed {
-    /// The reports (time, bytes done) of the last few seconds: at least two,
-    /// once there are, so that they span some time.
-    samples: VecDeque<(Instant, u64)>,
-    /// When the amount done last grew in this phase.
-    moved: Option<Instant>,
-}
-
-impl Speed {
-    /// Starts over: a new phase may count something else, and after a pause
-    /// or a lost connection the old speed says nothing.
-    pub fn reset(&mut self) {
-        *self = Speed::default();
-    }
-
-    /// Notes the report that `done` bytes are done, at `now`.
-    pub fn note(&mut self, now: Instant, done: u64) {
-        if let Some(&(at, before)) = self.samples.back() {
-            if done > before {
-                self.moved = Some(now);
-            }
-            // Data that comes again after a while starts a new measurement.
-            if now.duration_since(at) > SPEED_WINDOW {
-                self.samples.clear();
-            }
-        }
-        self.samples.push_back((now, done));
-        while self.samples.len() > 2 && now.duration_since(self.samples[0].0) > SPEED_WINDOW {
-            self.samples.pop_front();
-        }
-    }
-
-    /// Bytes per second over the recent reports, once they span half a
-    /// second in which the amount grew.
-    pub fn rate(&self) -> Option<u64> {
-        let (&(t0, d0), &(t1, d1)) = (self.samples.front()?, self.samples.back()?);
-        let secs = t1.duration_since(t0).as_secs_f64();
-        (secs > 0.5 && d1 > d0).then(|| ((d1 - d0) as f64 / secs) as u64)
-    }
-
-    /// The amount grew in this phase, but not for `STALLED_AFTER` up to
-    /// `now`. Not before it grew: a sender that checks what it sent before a
-    /// restart sends nothing for a while on a connection that is fine.
-    pub fn stalled(&self, now: Instant) -> bool {
-        self.moved
-            .is_some_and(|at| now.duration_since(at) >= STALLED_AFTER)
-    }
-}
 const MIN_WIDTH: i32 = 460;
 const HEIGHT: i32 = 238;
-
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub enum Direction {
-    Send,
-    Receive,
-}
 
 struct Progress {
     id: u64,
@@ -348,39 +284,6 @@ pub fn set_path(hwnd: HWND, direct: Option<bool>) -> bool {
 /// Shows the final result. Returns `None` if the window is busy.
 pub fn finish(hwnd: HWND, outcome: &Outcome) -> Option<Finished> {
     window::with_handler::<Progress, _>(hwnd, |p, w| p.finish(w, outcome))
-}
-
-fn percent(done: u64, total: u64) -> u64 {
-    if total == 0 {
-        100
-    } else {
-        (done as u128 * 100 / total as u128).min(100) as u64
-    }
-}
-
-/// Phases between which the progress so far stays on screen.
-fn keeps_progress(phase: Phase) -> bool {
-    matches!(
-        phase,
-        Phase::Transferring
-            | Phase::Paused
-            | Phase::PausedByPeer
-            | Phase::WaitingForConnection { .. }
-            | Phase::PartInUse { .. }
-    )
-}
-
-/// Phases in which the user can pause or resume.
-fn can_pause(phase: Phase) -> bool {
-    keeps_progress(phase) && phase != Phase::PartInUse { finishing: true }
-}
-
-/// Phases in which data moves on this side, so that it has a speed.
-fn moves_data(phase: Option<Phase>) -> bool {
-    matches!(
-        phase,
-        Some(Phase::Preparing | Phase::Transferring | Phase::Verifying | Phase::Unpacking)
-    )
 }
 
 /// What the speed and remaining time rows show (see `Progress::rate`).
@@ -1376,6 +1279,7 @@ impl Handler for Progress {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::view::STALLED_AFTER;
 
     /// Goes to `phase` as `set_phase` does; the title of the notification
     /// that it gives, if any.
@@ -1389,29 +1293,6 @@ mod tests {
 
     const IN_USE: Phase = Phase::PartInUse { finishing: false };
     const IN_USE_FINISHING: Phase = Phase::PartInUse { finishing: true };
-
-    /// The speed comes from the reports of the last few seconds, and a
-    /// measurement starts over after a gap; it stalls only once the amount
-    /// grew and then did not.
-    #[test]
-    fn speed_comes_from_the_recent_reports() {
-        let mut s = Speed::default();
-        let start = Instant::now();
-        let at = |secs: u64| start + Duration::from_millis(secs * 100);
-        s.note(at(0), 0);
-        assert!(!s.stalled(at(100)), "nothing has moved yet");
-        s.note(at(2), 100);
-        assert_eq!(s.rate(), None, "too early");
-        s.note(at(20), 200);
-        assert_eq!(s.rate(), Some(100));
-        s.note(at(70), 700);
-        assert_eq!(s.samples.len(), 1, "after a gap");
-        assert_eq!(s.rate(), None);
-        assert!(!s.stalled(at(70) + STALLED_AFTER - Duration::from_millis(1)));
-        assert!(s.stalled(at(70) + STALLED_AFTER));
-        s.reset();
-        assert!(s.rate().is_none() && !s.stalled(at(200)));
-    }
 
     /// The window shows a speed while data moves and some is still to come,
     /// and zero once the data of a transfer has stopped coming; the

@@ -1,14 +1,13 @@
 //! Folder packing/unpacking, file dates, the mark of the web and file name
 //! helpers.
 
+#[cfg(target_os = "macos")]
+use std::os::macos::fs::FileTimesExt;
+#[cfg(windows)]
+use std::os::windows::fs::FileTimesExt;
 use std::{
     fs::{File, FileTimes, Metadata, OpenOptions},
     io::{self, BufWriter, Read, Write},
-    os::windows::{
-        ffi::OsStrExt,
-        fs::{FileTimesExt, MetadataExt, OpenOptionsExt},
-        io::AsRawHandle,
-    },
     path::{Path, PathBuf},
     sync::atomic::{AtomicBool, Ordering},
     time::{Duration, SystemTime},
@@ -16,22 +15,6 @@ use std::{
 
 use anyhow::{Context, bail};
 use serde::{Deserialize, Serialize};
-use windows_sys::Win32::{
-    Foundation::{
-        ERROR_ACCESS_DENIED, ERROR_LOCK_VIOLATION, ERROR_SHARING_VIOLATION, FILETIME,
-        GENERIC_WRITE, HANDLE, INVALID_HANDLE_VALUE, MAX_PATH, SYSTEMTIME,
-    },
-    Storage::FileSystem::{
-        BY_HANDLE_FILE_INFORMATION, DELETE, FILE_ATTRIBUTE_DIRECTORY, FILE_ATTRIBUTE_HIDDEN,
-        FILE_BASIC_INFO, FILE_DISPOSITION_INFO, FILE_FLAG_BACKUP_SEMANTICS,
-        FILE_FLAG_OPEN_REPARSE_POINT, FILE_ID_INFO, FILE_INFO_BY_HANDLE_CLASS,
-        FILE_READ_ATTRIBUTES, FILE_RENAME_INFO, FILE_WRITE_ATTRIBUTES, FileBasicInfo,
-        FileDispositionInfo, FileIdInfo, FileRenameInfo, FindClose, FindFirstFileW,
-        GetFileInformationByHandle, GetFileInformationByHandleEx, GetVolumeInformationByHandleW,
-        MoveFileExW, SetFileInformationByHandle, WIN32_FIND_DATAW,
-    },
-    System::Time::{FileTimeToSystemTime, SystemTimeToTzSpecificLocalTime},
-};
 use zip::{
     CompressionMethod, DateTime, ExtraField, System, ZipArchive, ZipWriter,
     write::{FullFileOptions, SimpleFileOptions},
@@ -39,7 +22,35 @@ use zip::{
 
 use crate::i18n::tr;
 
+// What differs between the operating systems. Whatever the file system can and
+// cannot do, what the functions promise stays the same; where a promise cannot
+// be kept, the module says so.
+#[cfg(target_os = "macos")]
+mod macos;
+#[cfg(target_os = "macos")]
+use self::macos as os;
+#[cfg(windows)]
+mod windows;
+#[cfg(windows)]
+use self::windows as os;
+
+mod names;
+pub use names::offer_name;
+
+pub use os::{
+    being_deleted, cannot_tell, connection_options, created_now, delete_held, delete_on_close,
+    file_id, file_system, is_busy, keep_creation_time, last_step_options, length_options,
+    mark_of_the_web, name_taken, rename_new, rename_open, set_times, temp_dir, temp_dir_for,
+};
+#[cfg(target_os = "macos")]
+pub use os::{full_sync_refused, sync_as_far_as_possible};
+use os::{hide, hide_open, is_taken};
+
 const BUF_SIZE: usize = 256 * 1024;
+
+/// The MS-DOS attributes of a zip entry that [`zip_folder`] notes.
+const FILE_ATTRIBUTE_HIDDEN: u32 = 0x02;
+const FILE_ATTRIBUTE_DIRECTORY: u32 = 0x10;
 
 /// The zip extra field with the exact Windows file times of an entry
 /// (PKWARE APPNOTE 4.5.5): modified, accessed and created, in 100 ns units
@@ -90,12 +101,7 @@ pub struct ItemTimes {
 
 impl ItemTimes {
     pub fn of(meta: &Metadata) -> Self {
-        let known = |t: u64| (t != 0).then_some(t);
-        ItemTimes {
-            modified: known(meta.last_write_time()),
-            accessed: known(meta.last_access_time()),
-            created: known(meta.creation_time()),
-        }
+        os::item_times(meta)
     }
 
     /// Gives `path` the modified and created dates. Best effort: a file
@@ -189,6 +195,20 @@ pub fn filetime_to_system(filetime: u64) -> Option<SystemTime> {
     }
 }
 
+/// A `SystemTime` as a Windows file time.
+pub fn system_to_filetime(time: SystemTime) -> Option<u64> {
+    let intervals = |since: Duration| {
+        since
+            .as_secs()
+            .checked_mul(10_000_000)?
+            .checked_add(u64::from(since.subsec_nanos() / 100))
+    };
+    match time.duration_since(SystemTime::UNIX_EPOCH) {
+        Ok(since) => FILETIME_UNIX_EPOCH.checked_add(intervals(since)?),
+        Err(before) => FILETIME_UNIX_EPOCH.checked_sub(intervals(before.duration())?),
+    }
+}
+
 /// The dates to set, or `None` when there are none.
 fn file_times(modified: Option<SystemTime>, created: Option<SystemTime>) -> Option<FileTimes> {
     if modified.is_none() && created.is_none() {
@@ -204,70 +224,16 @@ fn file_times(modified: Option<SystemTime>, created: Option<SystemTime>) -> Opti
     Some(times)
 }
 
-/// Sets the modified and created dates of a file or folder.
-pub fn set_times(
-    path: &Path,
-    modified: Option<SystemTime>,
-    created: Option<SystemTime>,
-) -> io::Result<()> {
-    let Some(times) = file_times(modified, created) else {
-        return Ok(());
-    };
-    // Writing the attributes is all that is needed; backup semantics let
-    // the same call open a folder.
-    OpenOptions::new()
-        .access_mode(FILE_WRITE_ATTRIBUTES)
-        .custom_flags(FILE_FLAG_BACKUP_SEMANTICS)
-        .open(path)?
-        .set_times(times)
-}
-
-/// Marks a received file as coming from another computer (the Internet
-/// zone), as browsers mark downloads, so that SmartScreen and Office's
-/// Protected View treat it the same way. The mark is the `Zone.Identifier`
-/// stream of the file; file systems without streams (FAT32, exFAT) cannot
-/// keep it, which is fine. Writing the stream changes the file's modified
-/// date, so dates are set after the mark.
-pub fn mark_of_the_web(path: &Path) -> io::Result<()> {
-    let mut stream = path.as_os_str().to_owned();
-    stream.push(":Zone.Identifier");
-    std::fs::write(stream, "[ZoneTransfer]\r\nZoneId=3\r\n")
-}
-
 /// The MS-DOS date and time of a zip entry: the local time of `filetime`,
 /// with the daylight saving rules of that date. Outside the years the
 /// format can hold (1980–2107), the zip default.
 fn dos_time(filetime: Option<u64>) -> DateTime {
     filetime
-        .and_then(local_time)
-        .and_then(|t| {
-            DateTime::from_date_and_time(
-                t.wYear,
-                t.wMonth as u8,
-                t.wDay as u8,
-                t.wHour as u8,
-                t.wMinute as u8,
-                t.wSecond as u8,
-            )
-            .ok()
+        .and_then(os::local_time)
+        .and_then(|(year, month, day, hour, minute, second)| {
+            DateTime::from_date_and_time(year, month, day, hour, minute, second).ok()
         })
         .unwrap_or_default()
-}
-
-fn local_time(filetime: u64) -> Option<SYSTEMTIME> {
-    let filetime = FILETIME {
-        dwLowDateTime: filetime as u32,
-        dwHighDateTime: (filetime >> 32) as u32,
-    };
-    let mut utc = SYSTEMTIME::default();
-    let mut local = SYSTEMTIME::default();
-    // SAFETY: both calls only read and write the local structures passed to
-    // them; a null time zone means the current one.
-    let ok = unsafe {
-        FileTimeToSystemTime(&filetime, &mut utc) != 0
-            && SystemTimeToTzSpecificLocalTime(std::ptr::null(), &utc, &mut local) != 0
-    };
-    ok.then_some(local)
 }
 
 /// Extensions of formats that are already compressed; storing them is faster
@@ -286,8 +252,12 @@ struct Entry {
     is_dir: bool,
     /// The file or folder is hidden (see [`unzip`]).
     hidden: bool,
+    /// A file that can be run (see [`os::is_executable`]).
+    executable: bool,
     size: u64,
     times: ItemTimes,
+    /// What the name does not say (see [`names`]).
+    fidelity: names::Fidelity,
 }
 
 impl Entry {
@@ -301,6 +271,8 @@ impl Entry {
     ) -> anyhow::Result<FullFileOptions<'static, 'static>> {
         let (mode, folder) = if self.is_dir {
             (0o040755, FILE_ATTRIBUTE_DIRECTORY)
+        } else if self.executable {
+            (0o100755, 0)
         } else {
             (0o100644, 0)
         };
@@ -315,47 +287,119 @@ impl Entry {
             .external_attributes(mode << 16 | folder | hidden)
             .into_full_options();
         options.add_extra_field(NTFS_EXTRA_FIELD, self.times.ntfs_extra(), false)?;
+        if let Some(data) = self.fidelity.clone().encode() {
+            options.add_extra_field(names::EXTRA_FIELD, data, false)?;
+        }
         Ok(options)
     }
 }
 
-fn collect(root: &Path) -> anyhow::Result<Vec<Entry>> {
+/// Whether this system writes zips for any receiver (see [`names`]). Windows'
+/// own names are fine as they are.
+const PORTABLE_NAMES: bool = cfg!(target_os = "macos");
+
+/// The folder's items as they go into the zip. With `portable`, as [`names`]
+/// says.
+fn collect(root: &Path, portable: bool) -> anyhow::Result<Vec<Entry>> {
     let mut out = Vec::new();
-    let mut stack = vec![(root.to_path_buf(), String::new())];
-    while let Some((dir, prefix)) = stack.pop() {
+    let mut namer = names::Namer::default();
+    let mut root_links = Vec::new();
+    // Each folder with its name in the zip, its depth and its entry.
+    let mut stack = vec![(root.to_path_buf(), String::new(), 0, None)];
+    while let Some((dir, prefix, levels, entry_of_dir)) = stack.pop() {
         let read = std::fs::read_dir(&dir)
             .with_context(|| tr!(error_cannot_read_folder, path = dir.display()))?;
+        let mut links = Vec::new();
         for item in read {
             let item = item?;
+            let own_name = item.file_name().to_string_lossy().into_owned();
+            if portable && names::is_system_item(&own_name) {
+                continue;
+            }
             // symlink_metadata: do not follow links/junctions (avoids loops and escaping the folder).
             let meta = item.path().symlink_metadata()?;
             if meta.file_type().is_symlink() {
+                if portable
+                    && let Some(target) = std::fs::read_link(item.path())
+                        .ok()
+                        .and_then(|t| t.to_str().map(str::to_string))
+                        .filter(|t| names::link_stays_inside(levels, t))
+                {
+                    links.push((own_name, target));
+                }
                 continue;
             }
-            let name = format!("{prefix}{}", item.file_name().to_string_lossy());
+            let (short, original) = if portable {
+                let short = namer.name(&prefix, &own_name, meta.is_dir());
+                // Only what composing does not explain: it would carry
+                // nearly every name that came from HFS+ along otherwise.
+                let same = names::composed(&own_name) == short;
+                (short, (!same).then_some(own_name.clone()))
+            } else {
+                (own_name.clone(), None)
+            };
+            let name = format!("{prefix}{short}");
             let times = ItemTimes::of(&meta);
-            let hidden = meta.file_attributes() & FILE_ATTRIBUTE_HIDDEN != 0;
+            // On macOS, a name with a dot in front is hidden just the same.
+            let hidden = os::is_hidden(&meta) || (portable && own_name.starts_with('.'));
+            let fidelity = names::Fidelity {
+                name: original,
+                links: Vec::new(),
+            };
             if meta.is_dir() {
                 out.push(Entry {
                     path: item.path(),
                     name: format!("{name}/"),
                     is_dir: true,
                     hidden,
+                    executable: false,
                     size: 0,
                     times,
+                    fidelity,
                 });
-                stack.push((item.path(), format!("{name}/")));
+                stack.push((
+                    item.path(),
+                    format!("{name}/"),
+                    levels + 1,
+                    Some(out.len() - 1),
+                ));
             } else if meta.is_file() {
                 out.push(Entry {
                     path: item.path(),
                     name,
                     is_dir: false,
                     hidden,
+                    executable: os::is_executable(&meta),
                     size: meta.len(),
                     times,
+                    fidelity,
                 });
             }
         }
+        match entry_of_dir {
+            Some(entry) => {
+                let entry: &mut Entry = &mut out[entry];
+                entry.fidelity.links = links;
+            }
+            None => root_links = links,
+        }
+    }
+    // The links at the top go on an entry for the folder itself, which
+    // `unzip` of every version skips.
+    if !root_links.is_empty() {
+        out.push(Entry {
+            path: root.to_path_buf(),
+            name: "./".into(),
+            is_dir: true,
+            hidden: false,
+            executable: false,
+            size: 0,
+            times: ItemTimes::default(),
+            fidelity: names::Fidelity {
+                name: None,
+                links: root_links,
+            },
+        });
     }
     Ok(out)
 }
@@ -377,8 +421,19 @@ pub fn zip_folder(
     cancel: &AtomicBool,
     progress: &mut dyn FnMut(u64, u64),
 ) -> anyhow::Result<Packed> {
+    zip_folder_as(root, dest, PORTABLE_NAMES, cancel, progress)
+}
+
+/// [`zip_folder`], with `portable` as in [`collect`].
+fn zip_folder_as(
+    root: &Path,
+    dest: &Path,
+    portable: bool,
+    cancel: &AtomicBool,
+    progress: &mut dyn FnMut(u64, u64),
+) -> anyhow::Result<Packed> {
     // The folder is walked once; the same list gives the statistics for the offer.
-    let entries = collect(root)?;
+    let entries = collect(root, portable)?;
     let file_count = entries.iter().filter(|e| !e.is_dir).count() as u64;
     let total: u64 = entries.iter().map(|e| e.size).sum();
     let largest = entries.iter().map(|e| e.size).max().unwrap_or(0);
@@ -453,6 +508,10 @@ pub fn unzip(
         total += archive.by_index(i)?.size();
     }
     std::fs::create_dir_all(dest)?;
+    if mark {
+        os::mark_folder(dest);
+    }
+    let mut unpacked_names = os::UnpackedNames::default();
     let mut done = 0u64;
     let mut buf = vec![0u8; BUF_SIZE];
     // Creating anything in a folder changes its modified date, so the dates
@@ -466,31 +525,31 @@ pub fn unzip(
         let Some(rel) = entry.name().ok().and_then(|name| entry_path(&name)) else {
             bail!(tr!(error_unsafe_path, path = format!("{:?}", entry.name())));
         };
+        let fidelity = fidelity_of(&entry);
         if rel.as_os_str().is_empty() {
             if entry.is_dir() {
+                unpacked_names.note_links(Path::new(""), fidelity.links);
                 continue;
             }
             bail!(tr!(error_unsafe_path, path = format!("{:?}", entry.name())));
         }
-        let target = dest.join(rel);
+        let (rel, links) = unpacked_names.place(rel, entry.is_dir(), fidelity);
+        let target = dest.join(&rel);
         let times = ItemTimes::of_entry(&entry);
         let hidden = is_hidden(&entry);
         if entry.is_dir() {
             std::fs::create_dir_all(&target)?;
+            if mark {
+                os::mark_folder(&target);
+            }
+            unpacked_names.note_links(&rel, links);
             folders.push((target, times, hidden));
             continue;
         }
         if let Some(parent) = target.parent() {
             std::fs::create_dir_all(parent)?;
         }
-        let file = OpenOptions::new()
-            .write(true)
-            .create(true)
-            .truncate(true)
-            // Also reading the attributes: a hidden file is hidden through
-            // this handle (see `hide_open`).
-            .access_mode(GENERIC_WRITE | FILE_READ_ATTRIBUTES)
-            .open(&target)?;
+        let (file, target) = os::open_unpacked(target)?;
         // The mark before the data and the dates: writing it changes the
         // modified date.
         if mark {
@@ -514,11 +573,14 @@ pub fn unzip(
         out.flush()?;
         // All written: the dates, and whether it is hidden, go on through
         // the same handle.
+        os::keep_executable(out.get_ref(), entry.external_attributes());
         times.apply_to(out.get_ref());
         if hidden {
             let _ = hide_open(out.get_ref());
         }
     }
+    // Last: nothing was written through them, and once they exist nothing is.
+    unpacked_names.make_links(dest);
     // Children before their parents, so that nothing touches a folder after
     // its date has been set.
     folders.sort_by_key(|(path, ..)| std::cmp::Reverse(path.components().count()));
@@ -531,6 +593,19 @@ pub fn unzip(
     Ok(())
 }
 
+/// What the private field of a zip entry says (see [`names`]).
+fn fidelity_of<R: Read>(entry: &zip::read::ZipFile<'_, R>) -> names::Fidelity {
+    entry
+        .extra_data_fields()
+        .find_map(|field| match field {
+            ExtraField::Custom(custom) if custom.header_id == names::EXTRA_FIELD => {
+                names::Fidelity::decode(&custom.data)
+            }
+            _ => None,
+        })
+        .unwrap_or_default()
+}
+
 /// Whether a zip entry is a hidden file or folder, as [`zip_folder`] notes
 /// it (MS-DOS attributes). That is all that is kept of the attributes. A
 /// sender's read-only file would hold up the deletion of a folder that is
@@ -540,31 +615,6 @@ pub fn unzip(
 /// hidden even from those who show hidden files.
 fn is_hidden<R: Read>(entry: &zip::read::ZipFile<'_, R>) -> bool {
     entry.system() == System::Dos && entry.external_attributes() & FILE_ATTRIBUTE_HIDDEN != 0
-}
-
-/// Makes the file or folder at `path` hidden (see [`hide_open`]).
-fn hide(path: &Path) -> io::Result<()> {
-    let item = OpenOptions::new()
-        .access_mode(FILE_READ_ATTRIBUTES | FILE_WRITE_ATTRIBUTES)
-        .custom_flags(FILE_FLAG_BACKUP_SEMANTICS)
-        .open(path)?;
-    hide_open(&item)
-}
-
-/// Makes the open file or folder `item` hidden, keeping its other
-/// attributes and its dates (the zero dates of the change leave them as
-/// they are). Its handle needs to read and write the attributes.
-fn hide_open(item: &File) -> io::Result<()> {
-    let info = FILE_BASIC_INFO {
-        FileAttributes: item.metadata()?.file_attributes() | FILE_ATTRIBUTE_HIDDEN,
-        ..FILE_BASIC_INFO::default()
-    };
-    set_file_info(
-        item,
-        FileBasicInfo,
-        std::slice::from_ref(&info),
-        size_of::<FILE_BASIC_INFO>(),
-    )
 }
 
 /// The path of a zip entry named `name` inside the folder it is unpacked
@@ -656,6 +706,10 @@ pub fn sanitize_file_name(name: &str) -> String {
     if is_device_name(&s) {
         return format!("_{s}");
     }
+    // APFS counts bytes, not characters, and the part and a number still have
+    // to fit (`.zip.part`, " (99)").
+    #[cfg(target_os = "macos")]
+    let s = names::cut_to(&s, 240, names::bytes);
     s
 }
 
@@ -665,54 +719,11 @@ pub fn sanitize_file_name(name: &str) -> String {
 /// used, so nothing checks for a free name first and uses it later: the
 /// functions below take each name in one step that never replaces anything.
 fn numbered(name: &str, is_folder: bool) -> impl Iterator<Item = String> + '_ {
-    let (stem, ext) = match (is_folder, name.rfind('.')) {
+    let (stem, ext) = match (is_folder && !os::is_package(name), name.rfind('.')) {
         (false, Some(pos)) if pos > 0 => (&name[..pos], &name[pos..]),
         _ => (name, ""),
     };
     std::iter::once(name.to_string()).chain((2..).map(move |i| format!("{stem} ({i}){ext}")))
-}
-
-/// Whether something has the name `path`. Also true for a file that was
-/// deleted while another program still had it open: it keeps its name until
-/// it is closed, but cannot be opened, and creating something under that
-/// name fails with "access denied" instead of "already exists".
-pub fn name_taken(path: &Path) -> bool {
-    path.symlink_metadata().is_ok() || listed(path)
-}
-
-/// Whether the folder lists `path`, which it still does for a deleted file
-/// that is open somewhere (opening it fails then, at least on Windows
-/// versions whose metadata calls open the file).
-fn listed(path: &Path) -> bool {
-    // FindFirstFileW takes the name as a pattern, in which `*` and `?` are
-    // wildcards, and so are `<`, `>` and `"` (the DOS wildcards). A name with
-    // one of them would match other names; Windows allows none of them in a
-    // name anyway (see `sanitize_file_name`), so nothing is listed under it.
-    let pattern = path
-        .file_name()
-        .is_some_and(|n| n.to_string_lossy().contains(['*', '?', '<', '>', '"']));
-    if pattern {
-        return false;
-    }
-    let Ok(wide) = wide_path(path) else {
-        return false;
-    };
-    let mut found = WIN32_FIND_DATAW::default();
-    // SAFETY: `wide` is a NUL-terminated wide string and `found` a local
-    // structure that the call fills; both outlive it.
-    let search = unsafe { FindFirstFileW(wide.as_ptr(), &mut found) };
-    if search == INVALID_HANDLE_VALUE {
-        return false;
-    }
-    // SAFETY: a search handle that FindFirstFileW returned, closed once.
-    unsafe { FindClose(search) };
-    true
-}
-
-/// Whether creating something at `path` failed because the name is taken.
-fn is_taken(error: &io::Error, path: &Path) -> bool {
-    error.kind() == io::ErrorKind::AlreadyExists
-        || (error.raw_os_error() == Some(ERROR_ACCESS_DENIED as i32) && name_taken(path))
 }
 
 /// The identity of a file or folder: its volume and its number there (the
@@ -745,48 +756,7 @@ pub struct FileId {
 impl FileId {
     /// The identity of an open file or folder.
     pub fn of(item: &File) -> io::Result<FileId> {
-        let handle = item.as_raw_handle();
-        let fat = on_fat(handle);
-        let created = if fat {
-            // 0 where the file system keeps no creation time.
-            Some(item.metadata()?.creation_time()).filter(|&t| t != 0)
-        } else {
-            None
-        };
-        let mut info = FILE_ID_INFO::default();
-        // SAFETY: the handle stays open during the call, which only fills
-        // the local structure of the given size.
-        let ok = unsafe {
-            GetFileInformationByHandleEx(
-                handle,
-                FileIdInfo,
-                (&raw mut info).cast(),
-                size_of::<FILE_ID_INFO>() as u32,
-            )
-        } != 0;
-        if ok {
-            return Ok(FileId {
-                volume: info.VolumeSerialNumber,
-                file: if fat { [0; 16] } else { info.FileId.Identifier },
-                created,
-            });
-        }
-        // Windows 7 does not know the 128-bit IDs.
-        let mut info = BY_HANDLE_FILE_INFORMATION::default();
-        // SAFETY: as above.
-        if unsafe { GetFileInformationByHandle(handle, &mut info) } == 0 {
-            return Err(io::Error::last_os_error());
-        }
-        let mut file = [0; 16];
-        if !fat {
-            let index = (u64::from(info.nFileIndexHigh) << 32) | u64::from(info.nFileIndexLow);
-            file[..8].copy_from_slice(&index.to_le_bytes());
-        }
-        Ok(FileId {
-            volume: u64::from(info.dwVolumeSerialNumber),
-            file,
-            created,
-        })
+        os::file_id_of(item)
     }
 
     /// Whether the identity tells the item apart from the other items of its
@@ -852,39 +822,7 @@ fn same_creation(a: u64, b: u64) -> bool {
     apart <= MOST_APART && apart.is_multiple_of(QUARTER_HOUR)
 }
 
-/// Gives the new file or folder at `path` the time of its creation, and
-/// returns its identity: Windows may give a new item the creation time of
-/// one of the same name that was deleted moments before, which on FAT and
-/// exFAT would make it look like that one (see [`FileId`]), so there a time
-/// that cannot be set is an error. Elsewhere the item's number tells it, and
-/// an item whose dates may not be changed is fine as it is. The time is a
-/// whole multiple of the 10 ms that those file systems keep, so that it reads
-/// back the same however they round it.
-pub fn created_now(path: &Path) -> io::Result<FileId> {
-    let opened = OpenOptions::new()
-        .access_mode(FILE_WRITE_ATTRIBUTES)
-        .custom_flags(FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT)
-        .open(path);
-    let item = match opened {
-        Ok(item) => item,
-        Err(e) => {
-            return match file_id(path) {
-                Ok(id) if id.numbered() => Ok(id),
-                _ => Err(e),
-            };
-        }
-    };
-    let set = match filetime_to_system(filetime_now() / FAT_CREATION_STEP * FAT_CREATION_STEP) {
-        Some(now) => item.set_times(FileTimes::new().set_created(now)),
-        None => Err(io::ErrorKind::InvalidData.into()),
-    };
-    let id = FileId::of(&item)?;
-    match set {
-        Err(e) if !id.numbered() => Err(e),
-        _ => Ok(id),
-    }
-}
-
+#[cfg(any(windows, test))]
 /// The current time as a Windows file time.
 fn filetime_now() -> u64 {
     let since_epoch = SystemTime::now()
@@ -895,84 +833,10 @@ fn filetime_now() -> u64 {
         + u64::from(since_epoch.subsec_nanos() / 100)
 }
 
-/// Gives the open file `file`, which has just been renamed, its creation
-/// time back where the identity `id` that it had before has one (on FAT and
-/// exFAT): a rename gives it the time of an item of its new name that was
-/// deleted moments before (see [`FileId`]). Fails if that was needed and
-/// could not be done. The handle needs the right to write attributes.
-pub fn keep_creation_time(file: &File, id: &FileId) -> io::Result<()> {
-    let Some(created) = id.created else {
-        return Ok(());
-    };
-    if id.numbered() || id.same_item(&FileId::of(file)?) {
-        return Ok(());
-    }
-    let created = filetime_to_system(created).ok_or(io::ErrorKind::InvalidData)?;
-    file.set_times(FileTimes::new().set_created(created))
-}
-
 #[cfg(test)]
 thread_local! {
     /// Tests: this thread sees every volume as FAT or exFAT (see [`FileId`]).
     pub static PRETEND_FAT: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
-}
-
-/// The [`FileId`] of what is at `path` (a link itself, not what it points to).
-pub fn file_id(path: &Path) -> io::Result<FileId> {
-    // Reading it needs no access rights; backup semantics open folders too.
-    let item = OpenOptions::new()
-        .access_mode(0)
-        .custom_flags(FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT)
-        .open(path)?;
-    FileId::of(&item)
-}
-
-/// Whether an open file or folder is on a FAT or exFAT volume (see
-/// [`FileId`]).
-fn on_fat(handle: HANDLE) -> bool {
-    #[cfg(test)]
-    if PRETEND_FAT.get() {
-        return true;
-    }
-    // "FAT", "FAT32" or "exFAT".
-    file_system_of(handle).is_some_and(|name| name.to_ascii_uppercase().contains("FAT"))
-}
-
-/// The file system of the volume that holds `path`, an existing file or
-/// folder (such as the root of the volume): "NTFS", "FAT32", "exFAT", …
-/// Tests pretend "FAT32" with [`PRETEND_FAT`].
-pub fn file_system(path: &Path) -> Option<String> {
-    #[cfg(test)]
-    if PRETEND_FAT.get() {
-        return Some("FAT32".into());
-    }
-    let item = OpenOptions::new()
-        .access_mode(0)
-        .custom_flags(FILE_FLAG_BACKUP_SEMANTICS)
-        .open(path)
-        .ok()?;
-    file_system_of(item.as_raw_handle())
-}
-
-/// See [`file_system`]: by an open handle.
-fn file_system_of(handle: HANDLE) -> Option<String> {
-    let mut name = [0u16; MAX_PATH as usize + 1];
-    // SAFETY: the handle is open; the call writes at most `name.len()`
-    // characters to the local buffer, and the other outputs are not wanted.
-    let ok = unsafe {
-        GetVolumeInformationByHandleW(
-            handle,
-            std::ptr::null_mut(),
-            0,
-            std::ptr::null_mut(),
-            std::ptr::null_mut(),
-            std::ptr::null_mut(),
-            name.as_mut_ptr(),
-            name.len() as u32,
-        )
-    } != 0;
-    let len = name.iter().position(|&c| c == 0).unwrap_or(name.len());
-    ok.then(|| String::from_utf16_lossy(&name[..len]))
 }
 
 /// Creates an empty file under the first free one of the numbered names. The
@@ -1055,154 +919,12 @@ fn move_unique(
     unreachable!("infinite iterator")
 }
 
-/// Renames `from` to `to` on the same volume, failing with `AlreadyExists`
-/// where `std::fs::rename` would replace a file that is there, and also where
-/// a deleted file still holds the name (see [`name_taken`]). A rename that
-/// another program blocks for a moment (a virus scanner reading the new
-/// file, typically) is tried again for a few seconds.
-pub fn rename_new(from: &Path, to: &Path) -> io::Result<()> {
-    let (wide_from, wide_to) = (wide_path(from)?, wide_path(to)?);
-    renamed(to, || {
-        // SAFETY: both are NUL-terminated wide strings that outlive the call;
-        // no flags: fail rather than replace, and stay on the volume.
-        if unsafe { MoveFileExW(wide_from.as_ptr(), wide_to.as_ptr(), 0) } != 0 {
-            Ok(())
-        } else {
-            Err(io::Error::last_os_error())
-        }
-    })
-}
-
-/// Renames the open file `file` to `to` on the same volume, never replacing
-/// anything, as [`rename_new`] does: what is renamed is the file that is
-/// open, whatever has its old name by then. The handle needs delete access.
-pub fn rename_open(file: &File, to: &Path) -> io::Result<()> {
-    let name = wide_path(to)?;
-    let offset = std::mem::offset_of!(FILE_RENAME_INFO, FileName);
-    let size = offset + name.len() * size_of::<u16>();
-    // Zeroed: replace nothing, no root folder (the name is a full path). In
-    // whole words, aligned for the structure.
-    let mut info = vec![0usize; size.div_ceil(size_of::<usize>())];
-    let start = info.as_mut_ptr().cast::<u8>();
-    // SAFETY: the buffer is large enough for the structure with the whole
-    // name (and its NUL) after its header, and aligned for it; the name is
-    // copied into the buffer, which it does not overlap.
-    unsafe {
-        (*start.cast::<FILE_RENAME_INFO>()).FileNameLength =
-            ((name.len() - 1) * size_of::<u16>()) as u32;
-        std::ptr::copy_nonoverlapping(name.as_ptr(), start.add(offset).cast(), name.len());
-    }
-    renamed(to, || {
-        set_file_info(file, FileRenameInfo, info.as_slice(), size)
-    })
-}
-
-/// Runs `rename`, which renames something to `to` and replaces nothing:
-/// fails with `AlreadyExists` where the name is taken (see [`is_taken`]), and
-/// tries again for a few seconds while another program blocks it.
-fn renamed(to: &Path, rename: impl FnMut() -> io::Result<()>) -> io::Result<()> {
-    // Of the last error: whether the name is taken.
-    let mut taken = false;
-    let blocked = |e: &io::Error| {
-        taken = is_taken(e, to);
-        !taken && (is_busy(e) || e.raw_os_error() == Some(ERROR_ACCESS_DENIED as i32))
-    };
-    match retried(RENAME_RETRY_MS, blocked, rename) {
-        Err(e) if taken => Err(io::Error::new(io::ErrorKind::AlreadyExists, e)),
-        done => done,
-    }
-}
-
-/// Deletes the open file `file` once the last handle to it is closed; until
-/// then it keeps its name (see [`name_taken`]), and nothing can open it. The
-/// handle needs delete access.
-pub fn delete_on_close(file: &File) -> io::Result<()> {
-    let info = [FILE_DISPOSITION_INFO { DeleteFile: true }];
-    set_file_info(
-        file,
-        FileDispositionInfo,
-        &info,
-        size_of::<FILE_DISPOSITION_INFO>(),
-    )
-}
-
-/// Changes what `class` says of the open file `file`
-/// (`SetFileInformationByHandle`) to the first `size` bytes of `info`.
-fn set_file_info<T>(
-    file: &File,
-    class: FILE_INFO_BY_HANDLE_CLASS,
-    info: &[T],
-    size: usize,
-) -> io::Result<()> {
-    assert!(size <= size_of_val(info));
-    // SAFETY: the handle is open, and the call reads `size` bytes of `info`,
-    // which has them and outlives it.
-    let ok = unsafe {
-        SetFileInformationByHandle(
-            file.as_raw_handle(),
-            class,
-            info.as_ptr().cast(),
-            size as u32,
-        )
-    } != 0;
-    if ok {
-        Ok(())
-    } else {
-        Err(io::Error::last_os_error())
-    }
-}
-
 /// The pauses between attempts on a file that another program holds for a
 /// moment, such as a virus scanner that reads it: to delete it (see
 /// [`delete_held`]), or to open the part file of a receive before the
 /// transfer says that it waits for that program. About a second and a half
 /// in all.
 pub const HELD_RETRY_MS: &[u64] = &[50, 100, 200, 400, 800];
-
-/// Whether deleting the file at `path` failed with `error` only for now:
-/// another program has it open (see [`is_busy`]), it is being deleted
-/// already and goes once the last program lets go of it (see
-/// [`being_deleted`]), or it may be deleted but a program has it mapped
-/// into memory, as a virus scanner or the search indexer may, which Windows
-/// also reports as "access denied" (see [`deletable`]). Not where it is
-/// read-only, or may not be deleted, which trying again never changes.
-pub fn delete_held(error: &io::Error, path: &Path) -> bool {
-    is_busy(error)
-        || (error.kind() == io::ErrorKind::PermissionDenied
-            && (being_deleted(path) || deletable(path)))
-}
-
-/// Whether the file at `path` may be deleted and is not read-only, so that
-/// a deletion that was denied all the same was denied only for now (see
-/// [`delete_held`]).
-fn deletable(path: &Path) -> bool {
-    OpenOptions::new()
-        .access_mode(DELETE)
-        .custom_flags(FILE_FLAG_OPEN_REPARSE_POINT)
-        .open(path)
-        .and_then(|file| file.metadata())
-        .is_ok_and(|m| m.is_file() && !m.permissions().readonly())
-}
-
-/// Whether the file at `path` is being deleted: it was deleted while a
-/// program still has it open, so it keeps its name but cannot be opened
-/// (see [`name_taken`]).
-pub fn being_deleted(path: &Path) -> bool {
-    let opened = OpenOptions::new()
-        .access_mode(0)
-        .custom_flags(FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT)
-        .open(path);
-    opened.is_err_and(|e| e.kind() == io::ErrorKind::PermissionDenied) && listed(path)
-}
-
-/// Whether another program has the file open in a way that keeps this one
-/// out for now: a sharing or lock violation.
-pub fn is_busy(error: &io::Error) -> bool {
-    matches!(
-        error.raw_os_error().map(|c| c as u32),
-        Some(ERROR_SHARING_VIOLATION | ERROR_LOCK_VIOLATION)
-    )
-}
 
 /// Runs `open`, which opens a file, again while another program keeps it
 /// out (see [`is_busy`]), pausing between attempts as `pauses` says (in ms):
@@ -1231,53 +953,180 @@ pub fn retried<T>(
     }
 }
 
-/// A path for a Win32 call: absolute, NUL-terminated, and with the `\\?\`
-/// prefix when it is too long for the plain form (as `std::fs` does).
-fn wide_path(path: &Path) -> io::Result<Vec<u16>> {
-    const VERBATIM: &str = r"\\?\";
-    let full = std::path::absolute(path)?;
-    let text: Vec<u16> = full.as_os_str().encode_wide().collect();
-    let verbatim: Vec<u16> = VERBATIM.encode_utf16().collect();
-    let mut wide = Vec::with_capacity(text.len() + 9);
-    // CreateDirectory's limit, a little below MAX_PATH, to be safe.
-    if text.len() >= 248 && !text.starts_with(&verbatim) {
-        if text.starts_with(&verbatim[..2]) {
-            // \\server\share\… → \\?\UNC\server\share\…
-            wide.extend(r"\\?\UNC".encode_utf16());
-            wide.extend_from_slice(&text[1..]);
-        } else {
-            wide.extend_from_slice(&verbatim);
-            wide.extend_from_slice(&text);
+/// What tests do that differs between the operating systems.
+#[cfg(test)]
+pub mod testing {
+    use super::*;
+    #[cfg(windows)]
+    use std::os::windows::fs::OpenOptionsExt;
+
+    /// Keeps others from changing or deleting a file until it is dropped.
+    pub struct Held {
+        #[cfg(windows)]
+        _file: File,
+        #[cfg(target_os = "macos")]
+        path: PathBuf,
+    }
+
+    /// Holds `path` as another program that has it open and shares nothing
+    /// does.
+    #[cfg(windows)]
+    pub fn hold(path: &Path) -> Held {
+        Held {
+            _file: OpenOptions::new()
+                .read(true)
+                .share_mode(0)
+                .open(path)
+                .unwrap(),
         }
-    } else {
-        wide.extend_from_slice(&text);
     }
-    wide.push(0);
-    Ok(wide)
+
+    /// Holds `path` as another program that has it open for reading and
+    /// lets others read it does.
+    #[cfg(windows)]
+    pub fn hold_readable(path: &Path) -> Held {
+        use windows_sys::Win32::Storage::FileSystem::FILE_SHARE_READ;
+        Held {
+            _file: OpenOptions::new()
+                .read(true)
+                .share_mode(FILE_SHARE_READ)
+                .open(path)
+                .unwrap(),
+        }
+    }
+
+    /// Holds `path` as another program that has it open for writing does.
+    #[cfg(windows)]
+    pub fn hold_writing(path: &Path) -> Held {
+        Held {
+            _file: OpenOptions::new().write(true).open(path).unwrap(),
+        }
+    }
+
+    /// No program can do that on macOS. What comes closest for the code under
+    /// test is the immutable flag: changing or deleting the file is refused,
+    /// until the flag is gone.
+    #[cfg(target_os = "macos")]
+    pub fn hold(path: &Path) -> Held {
+        set_immutable(path, true);
+        Held {
+            path: path.to_path_buf(),
+        }
+    }
+
+    /// See [`hold`].
+    #[cfg(target_os = "macos")]
+    pub fn hold_readable(path: &Path) -> Held {
+        hold(path)
+    }
+
+    /// See [`hold`].
+    #[cfg(target_os = "macos")]
+    pub fn hold_writing(path: &Path) -> Held {
+        hold(path)
+    }
+
+    #[cfg(target_os = "macos")]
+    fn set_immutable(path: &Path, on: bool) {
+        use std::{
+            ffi::CString,
+            os::{macos::fs::MetadataExt, unix::ffi::OsStrExt},
+        };
+        let flags = path.symlink_metadata().unwrap().st_flags();
+        let flags = if on {
+            flags | libc::UF_IMMUTABLE
+        } else {
+            flags & !libc::UF_IMMUTABLE
+        };
+        let c_path = CString::new(path.as_os_str().as_bytes()).unwrap();
+        // SAFETY: a C string that outlives the call.
+        assert_eq!(unsafe { libc::chflags(c_path.as_ptr(), flags) }, 0);
+    }
+
+    #[cfg(target_os = "macos")]
+    impl Drop for Held {
+        fn drop(&mut self) {
+            set_immutable(&self.path, false);
+        }
+    }
+
+    /// Whether `path` has the mark of the web (see [`mark_of_the_web`]).
+    #[cfg(windows)]
+    pub fn has_mark(path: &Path) -> bool {
+        let mut stream = path.as_os_str().to_owned();
+        stream.push(":Zone.Identifier");
+        std::fs::read_to_string(stream).is_ok_and(|mark| mark == "[ZoneTransfer]\r\nZoneId=3\r\n")
+    }
+
+    /// Whether `path` has the mark of the web (see [`mark_of_the_web`]).
+    #[cfg(target_os = "macos")]
+    pub fn has_mark(path: &Path) -> bool {
+        use std::{ffi::CString, os::unix::ffi::OsStrExt};
+        let c_path = CString::new(path.as_os_str().as_bytes()).unwrap();
+        let mut value = [0u8; 128];
+        // SAFETY: C strings and a buffer of the given length, which outlive
+        // the call.
+        let len = unsafe {
+            libc::getxattr(
+                c_path.as_ptr(),
+                c"com.apple.quarantine".as_ptr(),
+                value.as_mut_ptr().cast(),
+                value.len(),
+                0,
+                libc::XATTR_NOFOLLOW,
+            )
+        };
+        len > 0
+            && value[..len as usize].starts_with(b"0083;")
+            && value.windows(6).any(|w| w == b"Dodavo")
+    }
+
+    /// Makes `link`, a link to the folder `target`.
+    #[cfg(windows)]
+    pub fn link_folder(link: &Path, target: &Path) {
+        let status = std::process::Command::new("cmd")
+            .args(["/C", "mklink", "/J"])
+            .arg(link)
+            .arg(target)
+            .stdout(std::process::Stdio::null())
+            .status()
+            .unwrap();
+        assert!(status.success());
+    }
+
+    /// Makes `link`, a link to the folder `target`.
+    #[cfg(target_os = "macos")]
+    pub fn link_folder(link: &Path, target: &Path) {
+        std::os::unix::fs::symlink(target, link).unwrap();
+    }
+
+    /// When the item at `path` was created, as a Windows file time.
+    pub fn created(path: &Path) -> u64 {
+        system_to_filetime(path.symlink_metadata().unwrap().created().unwrap()).unwrap()
+    }
+
+    /// Whether the item at `path` is hidden.
+    pub fn hidden(path: &Path) -> bool {
+        os::is_hidden(&path.symlink_metadata().unwrap())
+    }
 }
 
-pub fn temp_dir() -> io::Result<PathBuf> {
-    let dir = std::env::temp_dir().join("Dodavo");
-    std::fs::create_dir_all(&dir)?;
-    Ok(dir)
-}
-
-/// Where a profile keeps the temporary archives of its transfers: the
-/// folder of [`temp_dir`], or a sub folder per `--profile`. Each profile
-/// cleans up leftovers in its own folder only, so that it never deletes the
-/// archive of a transfer that another profile is still running. The folder is
-/// created when it is used (temp cleaners may remove it meanwhile).
-pub fn temp_dir_for(profile: Option<&str>) -> PathBuf {
-    let base = std::env::temp_dir().join("Dodavo");
-    match profile {
-        Some(p) => base.join("profiles").join(p),
-        None => base,
-    }
-}
+#[cfg(all(test, target_os = "macos"))]
+#[path = "archive/macos_volumes.rs"]
+mod macos_volumes;
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(windows)]
+    use os::{listed, wide_path};
+    #[cfg(windows)]
+    use std::os::windows::{fs::OpenOptionsExt, io::AsRawHandle};
+    #[cfg(windows)]
+    use windows_sys::Win32::{
+        Foundation::ERROR_ACCESS_DENIED,
+        Storage::FileSystem::{DELETE, FILE_WRITE_ATTRIBUTES},
+    };
 
     fn scratch(name: &str) -> PathBuf {
         let d = std::env::temp_dir().join(format!("dodavo-test-{name}-{}", std::process::id()));
@@ -1375,12 +1224,20 @@ mod tests {
 
     #[test]
     fn entry_paths() {
-        let path = |name: &str| entry_path(name).map(|p| p.to_string_lossy().into_owned());
-        assert_eq!(path("a/b.txt").as_deref(), Some(r"a\b.txt"));
-        assert_eq!(path(r"a\b.txt").as_deref(), Some(r"a\b.txt"));
-        assert_eq!(path("Kuća/Račun.pdf").as_deref(), Some(r"Kuća\Račun.pdf"));
+        // With "/" for the separator of the system.
+        let path = |name: &str| {
+            entry_path(name).map(|p| {
+                p.components()
+                    .map(|c| c.as_os_str().to_string_lossy().into_owned())
+                    .collect::<Vec<_>>()
+                    .join("/")
+            })
+        };
+        assert_eq!(path("a/b.txt").as_deref(), Some("a/b.txt"));
+        assert_eq!(path(r"a\b.txt").as_deref(), Some("a/b.txt"));
+        assert_eq!(path("Kuća/Račun.pdf").as_deref(), Some("Kuća/Račun.pdf"));
         assert_eq!(path("a/../b.txt").as_deref(), Some("b.txt"));
-        assert_eq!(path("./a//b/").as_deref(), Some(r"a\b"));
+        assert_eq!(path("./a//b/").as_deref(), Some("a/b"));
         assert_eq!(path("/a.txt").as_deref(), Some("a.txt"));
         assert_eq!(path("./").as_deref(), Some(""));
         for unsafe_name in [
@@ -1508,8 +1365,7 @@ mod tests {
         for (name, modified, created) in items {
             assert_eq!(dates(&out.join(name)), (modified, created), "{name}");
         }
-        let mark = std::fs::read_to_string(out.join("a.txt:Zone.Identifier")).unwrap();
-        assert_eq!(mark, "[ZoneTransfer]\r\nZoneId=3\r\n");
+        assert!(testing::has_mark(&out.join("a.txt")));
         std::fs::remove_dir_all(&base).ok();
     }
 
@@ -1524,7 +1380,6 @@ mod tests {
         std::fs::write(src.join("desktop.ini"), b"[x]").unwrap();
         std::fs::write(src.join("plain.txt"), b"plain").unwrap();
         std::fs::write(src.join("locked.txt"), b"ro").unwrap();
-        let attribute = |path: &Path| path.symlink_metadata().unwrap().file_attributes();
         for name in ["secret", "desktop.ini"] {
             hide(&src.join(name)).unwrap();
         }
@@ -1553,7 +1408,7 @@ mod tests {
         )
         .unwrap();
 
-        let hidden = |name: &str| attribute(&out.join(name)) & FILE_ATTRIBUTE_HIDDEN != 0;
+        let hidden = |name: &str| testing::hidden(&out.join(name));
         assert!(hidden("secret") && hidden("desktop.ini"));
         assert!(!hidden("plain.txt") && !hidden("secret/in.txt") && !hidden("locked.txt"));
         assert!(out.join("secret").is_dir());
@@ -1569,8 +1424,7 @@ mod tests {
             (at(1_500_000_000), created)
         );
         assert_eq!(dates(&out.join("secret")), (at(1_600_000_000), created));
-        let mark = std::fs::read_to_string(out.join("desktop.ini:Zone.Identifier")).unwrap();
-        assert_eq!(mark, "[ZoneTransfer]\r\nZoneId=3\r\n");
+        assert!(testing::has_mark(&out.join("desktop.ini")));
 
         let mut writable = src.join("locked.txt").metadata().unwrap().permissions();
         #[allow(clippy::permissions_set_readonly_false)]
@@ -1648,12 +1502,14 @@ mod tests {
             name: "./".into(),
             is_dir: true,
             hidden: false,
+            executable: false,
             size: 0,
             times: ItemTimes {
                 modified: Some(long_ago),
                 accessed: None,
                 created: Some(long_ago),
             },
+            fidelity: names::Fidelity::default(),
         };
         let zip_path = base.join("dot.zip");
         let mut zip = ZipWriter::new(File::create(&zip_path).unwrap());
@@ -1673,7 +1529,7 @@ mod tests {
             &mut |_, _| {},
         )
         .unwrap();
-        let created = std::fs::metadata(&out).unwrap().creation_time();
+        let created = testing::created(&out);
         assert!(
             filetime_now() - created < 10 * 60 * 10_000_000,
             "its own date"
@@ -1754,21 +1610,25 @@ mod tests {
         let new = created_now(&a).unwrap();
         assert!(!old.same_item(&new));
         assert!(new.same_item(&file_id(&a).unwrap()));
-        let created = std::fs::metadata(&a).unwrap().creation_time();
+        let created = testing::created(&a);
+        #[cfg(windows)]
         assert_eq!(created % FAT_CREATION_STEP, 0, "whole hundredths");
         assert!(filetime_now() - created < 10 * 60 * 10_000_000);
-        // Renamed to the name of an item deleted moments before, it may get
-        // that one's time; it gets its own back.
         let b = base.join("b.txt");
         std::fs::rename(&a, &b).unwrap();
-        set_times(&b, None, Some(long_ago)).unwrap();
-        assert!(!new.same_item(&file_id(&b).unwrap()));
-        let renamed = OpenOptions::new()
-            .access_mode(FILE_WRITE_ATTRIBUTES)
-            .open(&b)
-            .unwrap();
-        keep_creation_time(&renamed, &new).unwrap();
-        drop(renamed);
+        // Renamed to the name of an item deleted moments before, it may get
+        // that one's time on Windows; it gets its own back.
+        #[cfg(windows)]
+        {
+            set_times(&b, None, Some(long_ago)).unwrap();
+            assert!(!new.same_item(&file_id(&b).unwrap()));
+            let renamed = OpenOptions::new()
+                .access_mode(FILE_WRITE_ATTRIBUTES)
+                .open(&b)
+                .unwrap();
+            keep_creation_time(&renamed, &new).unwrap();
+            drop(renamed);
+        }
         assert!(new.same_item(&file_id(&b).unwrap()));
         // As earlier versions noted it, the name tells.
         assert!(!old.without_creation_time().tells_apart());
@@ -1786,6 +1646,7 @@ mod tests {
     /// writing its attributes, as on some shared folders) is told by its
     /// number all the same; on FAT and exFAT, where only its creation time
     /// tells, that is an error.
+    #[cfg(windows)]
     #[test]
     fn an_item_whose_dates_are_locked_is_told_by_its_number() {
         let base = scratch("locked-dates");
@@ -1825,6 +1686,205 @@ mod tests {
         assert!(!same_creation(t, t + 26 * 60 * minute + 15 * minute));
         assert!(!same_creation(t, t + FAT_CREATION_STEP));
         assert!(!same_creation(t, t + 14 * minute));
+    }
+
+    /// A zip as a Mac writes it unpacks under the rules of every receiver:
+    /// on Windows under the names in the zip, which that accepts, and without
+    /// links; on a Mac with each item's own name back and its links. What a
+    /// peer says there is checked: it decides where things go.
+    #[test]
+    fn a_zip_for_any_receiver_unpacks_everywhere() {
+        let base = scratch("any-receiver");
+        let plain = |name: &str, is_dir, executable, fidelity| Entry {
+            path: base.clone(),
+            name: name.into(),
+            is_dir,
+            hidden: false,
+            executable,
+            size: 0,
+            times: ItemTimes::default(),
+            fidelity,
+        };
+        let named = |name: &str| names::Fidelity {
+            name: Some(name.into()),
+            links: Vec::new(),
+        };
+        let zip_path = base.join("mac.zip");
+        let mut zip = ZipWriter::new(File::create(&zip_path).unwrap());
+        let file = |zip: &mut ZipWriter<File>, entry: Entry, data: &[u8]| {
+            let options = entry.options(SimpleFileOptions::default()).unwrap();
+            zip.start_file(entry.name.as_str(), options).unwrap();
+            zip.write_all(data).unwrap();
+        };
+        let root = plain(
+            "./",
+            true,
+            false,
+            names::Fidelity {
+                name: None,
+                links: vec![
+                    ("to-a".into(), "a_b_.txt".into()),
+                    ("to-sub".into(), "sub_/x.txt".into()),
+                    // Those two must not come to be.
+                    ("out".into(), "../secret".into()),
+                    ("a/b".into(), "a_b_.txt".into()),
+                ],
+            },
+        );
+        zip.add_directory("./", root.options(SimpleFileOptions::default()).unwrap())
+            .unwrap();
+        file(
+            &mut zip,
+            plain("a_b_.txt", false, false, named("a:b?.txt")),
+            b"a",
+        );
+        file(
+            &mut zip,
+            plain("run.sh", false, true, names::Fidelity::default()),
+            b"r",
+        );
+        // A name that would go elsewhere is not used.
+        file(
+            &mut zip,
+            plain("evil.txt", false, false, named("../evil.txt")),
+            b"e",
+        );
+        let sub = plain("sub_/", true, false, named("su:b"));
+        zip.add_directory(
+            sub.name.as_str(),
+            sub.options(SimpleFileOptions::default()).unwrap(),
+        )
+        .unwrap();
+        file(
+            &mut zip,
+            plain("sub_/x.txt", false, false, names::Fidelity::default()),
+            b"x",
+        );
+        zip.finish().unwrap();
+
+        let out = base.join("out");
+        let cancel = AtomicBool::new(false);
+        unzip(
+            File::open(&zip_path).unwrap(),
+            &out,
+            false,
+            &cancel,
+            &mut |_, _| {},
+        )
+        .unwrap();
+
+        assert_eq!(std::fs::read(out.join("evil.txt")).unwrap(), b"e");
+        assert!(!base.join("evil.txt").exists());
+        assert!(!out.join("out").exists() && !out.join("a").exists());
+        #[cfg(windows)]
+        {
+            assert_eq!(std::fs::read(out.join("a_b_.txt")).unwrap(), b"a");
+            assert_eq!(std::fs::read(out.join("sub_/x.txt")).unwrap(), b"x");
+            assert!(!out.join("to-a").exists());
+        }
+        #[cfg(target_os = "macos")]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            assert_eq!(std::fs::read(out.join("a:b?.txt")).unwrap(), b"a");
+            assert_eq!(std::fs::read(out.join("su:b/x.txt")).unwrap(), b"x");
+            assert!(!out.join("a_b_.txt").exists() && !out.join("sub_").exists());
+            let mode = |name: &str| out.join(name).metadata().unwrap().permissions().mode() & 0o111;
+            assert_ne!(mode("run.sh"), 0, "it can still be run");
+            assert_eq!(mode("su:b/x.txt"), 0);
+            assert!(out.join("to-a").is_symlink());
+            assert!(out.join("to-sub").is_symlink());
+        }
+        std::fs::remove_dir_all(&base).ok();
+    }
+
+    /// What a Mac packs is what Windows accepts, whatever the names are here,
+    /// and another Mac gets it back as it was.
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn a_folder_with_any_names_goes_to_any_receiver() {
+        use std::os::unix::fs::PermissionsExt;
+        let base = scratch("any-names");
+        let src = base.join("src");
+        std::fs::create_dir_all(src.join("su:b/in?ner")).unwrap();
+        let nfd = "Kuc\u{301}a.jpg";
+        for (name, data) in [
+            ("a:b?.txt", "1"),
+            ("CON.txt", "2"),
+            ("trailing.", "3"),
+            ("star*.log", "4"),
+            ("su:b/in?ner/deep|file", "5"),
+            (nfd, "6"),
+            (".hidden", "7"),
+            // What is not sent.
+            (".DS_Store", "no"),
+            ("._a.txt", "no"),
+            ("Icon\r", "no"),
+        ] {
+            std::fs::write(src.join(name), data).unwrap();
+        }
+        let script = src.join("run.sh");
+        std::fs::write(&script, "#!/bin/sh\n").unwrap();
+        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+        std::os::unix::fs::symlink("a:b?.txt", src.join("inside")).unwrap();
+        std::os::unix::fs::symlink("/etc/hosts", src.join("outside")).unwrap();
+        std::os::unix::fs::symlink("../../secret", src.join("su:b/climbs")).unwrap();
+
+        let zip = base.join("x.zip");
+        let cancel = AtomicBool::new(false);
+        let packed = zip_folder(&src, &zip, &cancel, &mut |_, _| {}).unwrap();
+        assert_eq!(packed.files, 8);
+
+        // Windows' rule (and what the released version would do with it).
+        let mut archive = ZipArchive::new(File::open(&zip).unwrap()).unwrap();
+        for i in 0..archive.len() {
+            let entry = archive.by_index(i).unwrap();
+            let name = entry.name().unwrap();
+            assert!(entry_path(&name).is_some(), "{name}");
+        }
+        drop(archive);
+
+        let out = base.join("out");
+        unzip(
+            File::open(&zip).unwrap(),
+            &out,
+            true,
+            &cancel,
+            &mut |_, _| {},
+        )
+        .unwrap();
+        for (name, data) in [
+            ("a:b?.txt", "1"),
+            ("CON.txt", "2"),
+            ("trailing.", "3"),
+            ("star*.log", "4"),
+            ("su:b/in?ner/deep|file", "5"),
+            (".hidden", "7"),
+        ] {
+            assert_eq!(
+                std::fs::read_to_string(out.join(name)).unwrap(),
+                data,
+                "{name}"
+            );
+        }
+        // Normalization does not count here.
+        assert_eq!(std::fs::read_to_string(out.join("Kuća.jpg")).unwrap(), "6");
+        assert!(!out.join(".DS_Store").exists());
+        assert!(!out.join("._a.txt").exists());
+        assert_ne!(
+            out.join("run.sh").metadata().unwrap().permissions().mode() & 0o111,
+            0
+        );
+        assert_eq!(
+            std::fs::read_link(out.join("inside")).unwrap(),
+            Path::new("a:b?.txt")
+        );
+        assert!(!out.join("outside").exists() && !out.join("su:b/climbs").exists());
+        assert!(testing::hidden(&out.join(".hidden")));
+        assert!(
+            testing::has_mark(&out.join("su:b")),
+            "folders are marked too"
+        );
+        std::fs::remove_dir_all(&base).ok();
     }
 
     #[test]
@@ -1870,6 +1930,7 @@ mod tests {
     /// goes once the program lets go, so the end of a transfer tries again
     /// (see `delete_held`); not for a read-only file, where that never
     /// helps.
+    #[cfg(windows)]
     #[test]
     fn a_mapped_file_is_tried_again() {
         use windows_sys::Win32::{
@@ -1929,6 +1990,7 @@ mod tests {
     /// A file that was deleted while another program still has it open
     /// keeps its name until it is closed: the next free name is used then,
     /// instead of failing with "access denied".
+    #[cfg(windows)]
     #[test]
     fn a_name_that_is_being_deleted_is_taken() {
         use windows_sys::Win32::Storage::FileSystem::FILE_SHARE_READ;
@@ -2051,10 +2113,7 @@ mod tests {
         // Through a handle, the same: what moves is the file that is open.
         let open_part = base.join("b.txt.part");
         std::fs::write(&open_part, b"open").unwrap();
-        let open = OpenOptions::new()
-            .access_mode(windows_sys::Win32::Storage::FileSystem::DELETE)
-            .open(&open_part)
-            .unwrap();
+        let open = last_step_options(true).open(&open_part).unwrap();
         let err = rename_open(&open, &base.join("a.txt")).unwrap_err();
         assert_eq!(err.kind(), io::ErrorKind::AlreadyExists);
         let moved = move_open_to_unique_noted(&open, &base, "a.txt", &mut |_| Ok(())).unwrap();
@@ -2077,6 +2136,7 @@ mod tests {
         std::fs::remove_dir_all(&base).ok();
     }
 
+    #[cfg(windows)]
     #[test]
     fn long_paths_get_the_verbatim_prefix() {
         let as_text = |w: Vec<u16>| String::from_utf16(&w[..w.len() - 1]).unwrap();

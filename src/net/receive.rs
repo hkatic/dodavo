@@ -5,7 +5,6 @@
 
 use std::{
     io,
-    os::windows::fs::OpenOptionsExt,
     path::{Path, PathBuf},
     sync::{
         Arc, Mutex,
@@ -23,10 +22,6 @@ use tokio::{
     io::AsyncWriteExt,
     sync::{mpsc, oneshot, watch},
     task::JoinHandle,
-};
-use windows_sys::Win32::Storage::FileSystem::{
-    DELETE, FILE_GENERIC_READ, FILE_GENERIC_WRITE, FILE_SHARE_READ, FILE_WRITE_ATTRIBUTES,
-    FILE_WRITE_DATA,
 };
 
 use super::{
@@ -452,6 +447,9 @@ struct Receiver<'a> {
     /// The hash of those bytes; `None` until the part file was hashed again
     /// after a restart.
     hasher: Option<blake3::Hasher>,
+    /// `hasher` is of the part on disk, and no data was written since.
+    #[cfg(target_os = "macos")]
+    hashed_from_disk: bool,
     /// The sender's hash of the whole item, once `Done` arrived.
     done_hash: Option<[u8; 32]>,
     status: Arc<Status>,
@@ -570,6 +568,8 @@ async fn accept(
         size,
         have: 0,
         hasher: Some(blake3::Hasher::new()),
+        #[cfg(target_os = "macos")]
+        hashed_from_disk: false,
         done_hash: None,
         status: Status::new(shared, id, ctl.paused.subscribe()),
         peer_suspended: false,
@@ -700,7 +700,7 @@ fn open_own_part(
     session: &Arc<Session>,
     pauses: &[u64],
 ) -> anyhow::Result<(std::fs::File, KeptPart)> {
-    let (part, _) = open_checked(session, &connection_options(), pauses)?;
+    let (part, _) = open_checked(session, &archive::connection_options(), pauses)?;
     let kept = session.keep_part(&part)?;
     Ok((part, kept))
 }
@@ -715,16 +715,38 @@ fn cut_part(session: &Session, pauses: &[u64]) -> io::Result<()> {
     archive::while_busy(pauses, || record.truncate_to_synced())
 }
 
-/// How a connection opens the part file (see `open_own_part`): to append to
-/// it, as `append` would, and to delete it through a second handle at a
-/// cancel (see `Session::keep_part`); other programs can only read it
-/// meanwhile.
-fn connection_options() -> std::fs::OpenOptions {
-    let mut options = std::fs::OpenOptions::new();
-    options
-        .access_mode((FILE_GENERIC_WRITE & !FILE_WRITE_DATA) | DELETE)
-        .share_mode(FILE_SHARE_READ);
-    options
+/// Opens the part file to hash it (see `Receiver::rehash`). The handle that
+/// the connection writes to keeps it the part on Windows.
+#[cfg(windows)]
+fn open_to_hash(_session: &Session, path: &Path, pauses: &[u64]) -> io::Result<std::fs::File> {
+    archive::while_busy(pauses, || std::fs::File::open(path))
+}
+
+/// Opens the part file to hash it (see `Receiver::rehash`): only while it is
+/// still the part, as told by the handle that is read, since no connection
+/// keeps others from replacing it on macOS.
+#[cfg(target_os = "macos")]
+fn open_to_hash(session: &Session, _path: &Path, pauses: &[u64]) -> io::Result<std::fs::File> {
+    open_checked(session, &archive::last_step_options(false), pauses).map(|(part, _)| part)
+}
+
+/// Writes what arrived to the disk.
+#[cfg(windows)]
+async fn sync_part(out: &tokio::fs::File) -> io::Result<()> {
+    out.sync_data().await
+}
+
+/// Writes what arrived to the disk. Rust asks for all of it to reach the
+/// medium, which some file systems (SMB) refuse: then as far as they can do.
+#[cfg(target_os = "macos")]
+async fn sync_part(out: &tokio::fs::File) -> io::Result<()> {
+    match out.sync_data().await {
+        Err(e) if archive::full_sync_refused(&e) => {
+            let file = out.try_clone().await?.into_std().await;
+            off_runtime(move || archive::sync_as_far_as_possible(&file)).await
+        }
+        done => done,
+    }
 }
 
 /// Opens the part file of the receive with `options` if it is still the
@@ -853,6 +875,8 @@ impl<'a> Receiver<'a> {
             size: record.offer.size,
             have: record.have().min(record.offer.size),
             hasher: None,
+            #[cfg(target_os = "macos")]
+            hashed_from_disk: false,
             done_hash: record.done_hash,
             status: Status::new(shared, id, ctl.paused.subscribe()),
             peer_suspended: false,
@@ -1149,6 +1173,23 @@ impl<'a> Receiver<'a> {
         }
     }
 
+    /// Fails once the part is no longer where the record says. Nothing keeps
+    /// others from moving or deleting it on macOS during a connection, and
+    /// writes to a file that is in the Trash would be lost: better to know
+    /// now than after the rest of the data.
+    #[cfg(target_os = "macos")]
+    async fn check_part(&self) -> anyhow::Result<()> {
+        let session = self.session.clone();
+        let there = off_runtime(move || {
+            session
+                .with_record(TransferRecord::clone)
+                .is_none_or(|record| record.part_is_there())
+        })
+        .await;
+        anyhow::ensure!(there, session::part_missing());
+        Ok(())
+    }
+
     /// After a restart: the hash of the part file as it is on disk.
     async fn rehash(&mut self) -> anyhow::Result<()> {
         if self.hasher.is_some() {
@@ -1167,10 +1208,8 @@ impl<'a> Receiver<'a> {
         let mut pauses = archive::HELD_RETRY_MS;
         let mut waiting = false;
         let mut file = loop {
-            let path = self.part_path.clone();
-            match off_runtime(move || archive::while_busy(pauses, || std::fs::File::open(&path)))
-                .await
-            {
+            let (session, path) = (self.session.clone(), self.part_path.clone());
+            match off_runtime(move || open_to_hash(&session, &path, pauses)).await {
                 Err(e) if archive::is_busy(&e) => {
                     if !std::mem::replace(&mut waiting, true) {
                         self.status.set(Phase::PartInUse {
@@ -1187,6 +1226,13 @@ impl<'a> Receiver<'a> {
             self.status.set(Phase::Verifying);
         }
         let have = self.have;
+        // More than arrived means that another program has written to it,
+        // and the part cannot be trusted (see `archive::macos`). On Windows
+        // the handle that writes keeps others out.
+        #[cfg(target_os = "macos")]
+        if file.metadata()?.len() != have {
+            bail!(tr!(error_damaged));
+        }
         let cancel = self.ctl.cancel.clone();
         let shared = self.shared.clone();
         let id = self.id;
@@ -1209,6 +1255,10 @@ impl<'a> Receiver<'a> {
         })
         .await??;
         self.hasher = Some(hasher);
+        #[cfg(target_os = "macos")]
+        {
+            self.hashed_from_disk = true;
+        }
         Ok(())
     }
 
@@ -1241,7 +1291,7 @@ impl<'a> Receiver<'a> {
         // Whatever happened, what was written has to be on disk before `have`
         // is trusted, also after a power cut.
         out.flush().await?;
-        out.sync_data().await?;
+        sync_part(&out).await?;
         drop(out);
         drop(kept);
         self.save_synced().await;
@@ -1250,6 +1300,15 @@ impl<'a> Receiver<'a> {
         #[cfg(test)]
         while held_before_verifying(&self.name) {
             tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+
+        // On macOS nothing keeps other programs from writing to the part
+        // during a connection (see `archive::macos`), and the hash so far is
+        // of what arrived: what counts is what is on disk.
+        #[cfg(target_os = "macos")]
+        if !self.hashed_from_disk {
+            self.hasher = None;
+            self.rehash().await?;
         }
 
         if hash != *self.hasher.as_ref().unwrap().finalize().as_bytes() {
@@ -1306,12 +1365,18 @@ impl<'a> Receiver<'a> {
                     recv.read_exact(&mut buf[..len]).await.map_err(lost)?;
                     out.write_all(&buf[..len]).await?;
                     self.hasher.as_mut().unwrap().update(&buf[..len]);
+                    #[cfg(target_os = "macos")]
+                    {
+                        self.hashed_from_disk = false;
+                    }
                     self.have += len as u64;
                     unsynced += len as u64;
                     if unsynced >= SYNC_EVERY {
-                        out.sync_data().await?;
+                        sync_part(out).await?;
                         self.save_synced().await;
                         unsynced = 0;
+                        #[cfg(target_os = "macos")]
+                        self.check_part().await?;
                     }
                     if throttle.ready() || self.have == self.size {
                         self.shared.emit(Event::Progress {
@@ -1522,14 +1587,7 @@ impl Transfer {
     /// the part is open, that it goes on. A cancel ends the wait (with
     /// `Cancelled`).
     fn open_part(&self, renames: bool) -> io::Result<(std::fs::File, FileId)> {
-        let mut options = std::fs::OpenOptions::new();
-        options
-            .access_mode(if renames {
-                FILE_GENERIC_READ | FILE_WRITE_ATTRIBUTES | DELETE
-            } else {
-                FILE_GENERIC_READ
-            })
-            .share_mode(FILE_SHARE_READ);
+        let options = archive::last_step_options(renames);
         let mut pauses = archive::HELD_RETRY_MS;
         let mut waiting = false;
         let opened = loop {
@@ -1857,8 +1915,9 @@ mod tests {
             .duration_since(meta.created().unwrap())
             .unwrap();
         assert!(age < Duration::from_secs(10 * 60), "{age:?}");
-        use std::os::windows::fs::MetadataExt;
-        assert_eq!(meta.creation_time() % 100_000, 0);
+        // A whole multiple of the 10 ms that FAT and exFAT keep.
+        #[cfg(windows)]
+        assert_eq!(archive::testing::created(&part) % 100_000, 0);
         std::fs::remove_dir_all(&base).ok();
     }
 
@@ -1874,12 +1933,16 @@ mod tests {
         std::fs::create_dir_all(part.parent().unwrap()).unwrap();
         std::fs::write(&part, b"abc").unwrap();
         let transfer = receiving(&base, &part, Kind::File, ReceivedFolder::Extract);
-        let open = open_own_part(&transfer.session, &[]).unwrap();
-        assert!(std::fs::remove_file(&part).is_err());
-        assert!(std::fs::rename(&part, base.join("elsewhere")).is_err());
-        assert!(std::fs::OpenOptions::new().write(true).open(&part).is_err());
-        assert_eq!(std::fs::read(&part).unwrap(), b"abc", "it can be read");
-        drop(open);
+        // macOS has no way of keeping others out (see `archive::macos`).
+        #[cfg(windows)]
+        {
+            let open = open_own_part(&transfer.session, &[]).unwrap();
+            assert!(std::fs::remove_file(&part).is_err());
+            assert!(std::fs::rename(&part, base.join("elsewhere")).is_err());
+            assert!(std::fs::OpenOptions::new().write(true).open(&part).is_err());
+            assert_eq!(std::fs::read(&part).unwrap(), b"abc", "it can be read");
+            drop(open);
+        }
         std::fs::remove_file(&part).unwrap();
         std::fs::write(&part, b"another").unwrap();
         let missing = open_own_part(&transfer.session, &[]).err().unwrap();
@@ -1924,6 +1987,8 @@ mod tests {
         assert!(session::records(&transfer.data_dir).is_empty());
         // The connection is gone, and its last write still holds the part.
         drop(kept);
+        // On macOS, deleting frees the name at once.
+        #[cfg(windows)]
         assert!(archive::name_taken(&part), "until the write is over");
         drop(writing);
         assert!(!archive::name_taken(&part));
@@ -1938,13 +2003,7 @@ mod tests {
     fn the_end_of_a_transfer_waits_a_moment_for_a_held_part() {
         let base = scratch("held-at-end");
         let part = base.join("a.txt.part");
-        let held = |part: &Path| {
-            std::fs::OpenOptions::new()
-                .read(true)
-                .share_mode(FILE_SHARE_READ)
-                .open(part)
-                .unwrap()
-        };
+        let held = archive::testing::hold_readable;
         std::fs::write(&part, b"abc").unwrap();
         let transfer = receiving(&base, &part, Kind::File, ReceivedFolder::Extract);
         let scanner = held(&part);
@@ -1978,7 +2037,8 @@ mod tests {
         let part = base.join("a.txt.part");
         std::fs::write(&part, b"abc").unwrap();
         let transfer = receiving(&base, &part, Kind::File, ReceivedFolder::Extract);
-        let (opened, _) = open_checked(&transfer.session, &connection_options(), &[]).unwrap();
+        let (opened, _) =
+            open_checked(&transfer.session, &archive::connection_options(), &[]).unwrap();
         assert!(transfer.session.cancel_blocking(&transfer.data_dir));
         let e = transfer.session.keep_part(&opened).err().unwrap();
         assert!(archive::is_cancelled(&e.into()));
@@ -1998,7 +2058,7 @@ mod tests {
         let part = base.join("a.txt.part");
         std::fs::write(&part, b"abc").unwrap();
         let transfer = receiving(&base, &part, Kind::File, ReceivedFolder::Extract);
-        let other = std::fs::OpenOptions::new().write(true).open(&part).unwrap();
+        let other = archive::testing::hold_writing(&part);
         let e = open_own_part(&transfer.session, &[]).err().unwrap();
         assert!(
             e.downcast_ref::<io::Error>().is_some_and(archive::is_busy),
@@ -2035,11 +2095,7 @@ mod tests {
             *synced = Some(3);
         }
         transfer.session.set_record(record.clone());
-        let held = std::fs::OpenOptions::new()
-            .read(true)
-            .share_mode(FILE_SHARE_READ)
-            .open(&part)
-            .unwrap();
+        let held = archive::testing::hold_readable(&part);
         let Ok(checked) = check_restored(record, &transfer.data_dir) else {
             panic!("the restore failed");
         };
@@ -2094,7 +2150,7 @@ mod tests {
             }
         };
 
-        let other = std::fs::OpenOptions::new().write(true).open(&part).unwrap();
+        let other = archive::testing::hold_writing(&part);
         let (close, closed) = oneshot::channel::<()>();
         let waiting = tokio::spawn({
             let (session, status, msgs) = (session.clone(), status.clone(), msgs.clone());
@@ -2172,6 +2228,7 @@ mod tests {
     }
 
     /// Lets go of `other` once `noted` says that the last step waits for it.
+    #[cfg(windows)]
     fn let_go_when_waited_for(
         noted: &Arc<std::sync::Mutex<Vec<bool>>>,
         other: std::fs::File,
@@ -2200,11 +2257,7 @@ mod tests {
         let dest = part.parent().unwrap().to_path_buf();
         let mut transfer = receiving(&base, &part, Kind::Folder, ReceivedFolder::Extract);
         let noted = noting_waits(&mut transfer);
-        let other = std::fs::OpenOptions::new()
-            .read(true)
-            .share_mode(FILE_SHARE_READ)
-            .open(&part)
-            .unwrap();
+        let other = archive::testing::hold_readable(&part);
         let (t, _) = times(1_500_000_000);
         let folder = finish(&transfer, &dest, ReceivedFolder::Extract, t);
         assert_eq!(std::fs::read(folder.join("a.txt")).unwrap(), b"alpha");
@@ -2212,22 +2265,28 @@ mod tests {
         drop(other);
         std::fs::remove_dir_all(&base).ok();
 
-        let base = scratch("only-read-writer");
-        let part = received_zip(&base, "recv.zip");
-        let dest = part.parent().unwrap().to_path_buf();
-        let mut transfer = receiving(&base, &part, Kind::Folder, ReceivedFolder::Extract);
-        let noted = noting_waits(&mut transfer);
-        let writer = std::fs::OpenOptions::new().write(true).open(&part).unwrap();
-        let letting_go = let_go_when_waited_for(&noted, writer);
-        let folder = finish(&transfer, &dest, ReceivedFolder::Extract, t);
-        letting_go.join().unwrap();
-        assert_eq!(std::fs::read(folder.join("a.txt")).unwrap(), b"alpha");
-        assert_eq!(*noted.lock().unwrap(), [true, false]);
-        std::fs::remove_dir_all(&base).ok();
+        // A writer does not keep out one who reads on macOS, which checks the
+        // part on disk instead (see `Receiver::pump`).
+        #[cfg(windows)]
+        {
+            let base = scratch("only-read-writer");
+            let part = received_zip(&base, "recv.zip");
+            let dest = part.parent().unwrap().to_path_buf();
+            let mut transfer = receiving(&base, &part, Kind::Folder, ReceivedFolder::Extract);
+            let noted = noting_waits(&mut transfer);
+            let writer = std::fs::OpenOptions::new().write(true).open(&part).unwrap();
+            let letting_go = let_go_when_waited_for(&noted, writer);
+            let folder = finish(&transfer, &dest, ReceivedFolder::Extract, t);
+            letting_go.join().unwrap();
+            assert_eq!(std::fs::read(folder.join("a.txt")).unwrap(), b"alpha");
+            assert_eq!(*noted.lock().unwrap(), [true, false]);
+            std::fs::remove_dir_all(&base).ok();
+        }
     }
 
     /// A cancel while the last step waits for another program that keeps
     /// the part out ends the wait, and the step as cancelled.
+    #[cfg(windows)]
     #[test]
     fn a_cancel_ends_the_wait_of_the_last_step() {
         let base = scratch("wait-cancel");
@@ -2522,7 +2581,7 @@ mod tests {
         assert_eq!(path, dest.join("Photos"));
         assert_eq!(std::fs::read(path.join("a.txt")).unwrap(), b"alpha");
         assert_eq!(std::fs::metadata(&path).unwrap().modified().unwrap(), at);
-        assert!(path.join("a.txt:Zone.Identifier").exists());
+        assert!(archive::testing::has_mark(&path.join("a.txt")));
         assert!(!part.exists(), "the temporary zip goes when it ends");
 
         // Only the zip.
@@ -2665,7 +2724,6 @@ mod tests {
     /// forgotten.
     #[test]
     fn a_held_file_in_the_earlier_folder_does_not_stop_it() {
-        use std::os::windows::fs::OpenOptionsExt;
         let base = scratch("held");
         let dest = base.join("dest");
         let (t, _) = times(1_400_000_000);
@@ -2673,11 +2731,7 @@ mod tests {
         let partial = dest.join("Photos");
         std::fs::create_dir_all(&partial).unwrap();
         std::fs::write(partial.join("a.txt"), b"al").unwrap();
-        let held = std::fs::OpenOptions::new()
-            .read(true)
-            .share_mode(0)
-            .open(partial.join("a.txt"))
-            .unwrap();
+        let held = archive::testing::hold(&partial.join("a.txt"));
         let transfer = receiving(&base, &part, Kind::Folder, ReceivedFolder::Extract);
         was_unpacking_into(&transfer, &partial);
         let cancel = AtomicBool::new(false);
@@ -2721,13 +2775,7 @@ mod tests {
         std::fs::write(outside.join("keep.txt"), b"keep").unwrap();
         let partial = dest.join("Photos");
         std::fs::create_dir_all(&partial).unwrap();
-        let made = std::process::Command::new("cmd")
-            .args(["/C", "mklink", "/J"])
-            .arg(partial.join("sub"))
-            .arg(&outside)
-            .output()
-            .unwrap();
-        assert!(made.status.success(), "{made:?}");
+        archive::testing::link_folder(&partial.join("sub"), &outside);
         let transfer = receiving(&base, &part, Kind::Folder, ReceivedFolder::Extract);
         was_unpacking_into(&transfer, &partial);
         let path = finish(&transfer, &dest, ReceivedFolder::Extract, t);

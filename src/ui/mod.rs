@@ -36,23 +36,18 @@ use windows_sys::{
     core::HRESULT,
 };
 
-use crate::i18n::{self, Strings, fill, tr, trn};
+pub use crate::format::{format_duration, format_size};
+pub use crate::platform::{from_wide_ptr, wide};
 
 pub const APP_NAME: &str = "Dodavo";
 /// The author, the website (the repository on GitHub) and the years of the
 /// copyright notice, from Cargo.toml (the years from
 /// `[package.metadata.dodavo]`, passed on by build.rs, which also writes all
 /// three into the program's version resource).
-pub const APP_AUTHOR: &str = env!("CARGO_PKG_AUTHORS");
-pub const APP_WEBSITE: &str = env!("CARGO_PKG_REPOSITORY");
-pub const COPYRIGHT_YEARS: &str = env!("DODAVO_COPYRIGHT_YEARS");
-/// The page that Help → Donate opens. The help pages name it too (a test
-/// checks them).
-pub const DONATE_URL: &str = "https://paypal.me/hrvix";
-
-pub fn wide(s: &str) -> Vec<u16> {
-    s.encode_utf16().chain(std::iter::once(0)).collect()
-}
+pub const APP_AUTHOR: &str = dodavo_core::AUTHOR;
+pub const APP_WEBSITE: &str = dodavo_core::WEBSITE;
+pub const COPYRIGHT_YEARS: &str = dodavo_core::COPYRIGHT_YEARS;
+pub use dodavo_core::DONATE_URL;
 
 /// A text with the `\r\n` line ends a multiline edit control needs.
 pub fn crlf(text: &str) -> String {
@@ -62,17 +57,6 @@ pub fn crlf(text: &str) -> String {
 /// A menu text without the shortcut shown after the tab ("&Open\tCtrl+O").
 pub fn without_shortcut(text: &str) -> &str {
     text.split_once('\t').map_or(text, |(shown, _)| shown)
-}
-
-/// Reads a NUL terminated UTF-16 string.
-pub fn from_wide_ptr(p: *const u16) -> String {
-    if p.is_null() {
-        return String::new();
-    }
-    unsafe {
-        let len = (0..).take_while(|&i| *p.add(i) != 0).count();
-        String::from_utf16_lossy(std::slice::from_raw_parts(p, len))
-    }
 }
 
 pub fn get_text(hwnd: HWND) -> String {
@@ -242,62 +226,11 @@ pub fn ask(
     .unwrap_or((IDCANCEL, false))
 }
 
-pub fn format_size(bytes: u64) -> String {
-    format_size_in(i18n::s(), bytes)
-}
-
-fn format_size_in(s: &Strings, bytes: u64) -> String {
-    if bytes < 1024 {
-        return fill(s.pick(&s.bytes, bytes), &[("n", &bytes)]);
-    }
-    let units = [s.kilobytes, s.megabytes, s.gigabytes, s.terabytes];
-    let mut v = bytes as f64 / 1024.0;
-    let mut unit = 0;
-    while v >= 1024.0 && unit < units.len() - 1 {
-        v /= 1024.0;
-        unit += 1;
-    }
-    let number = if v >= 100.0 {
-        format!("{v:.0}")
-    } else {
-        format!("{v:.1}").replace('.', s.decimal_separator)
-    };
-    format!("{number} {}", units[unit])
-}
-
-pub fn format_duration(secs: u64) -> String {
-    match secs {
-        0..=4 => tr!(few_seconds).into(),
-        5..=59 => trn!(seconds, secs),
-        60..=3599 => tr!(minutes_seconds, m = secs / 60, s = secs % 60),
-        _ => tr!(hours_minutes, h = secs / 3600, m = (secs % 3600) / 60),
-    }
-}
-
 /// Shortens a Contact ID for display, e.g. `3f8a9c…e41b07`.
 pub fn short_id(id: &str) -> String {
     if id.len() <= 16 {
         id.to_string()
     } else {
         format!("{}…{}", &id[..8], &id[id.len() - 6..])
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::i18n::Lang;
-
-    #[test]
-    fn sizes() {
-        let en = Lang::En.strings();
-        assert_eq!(format_size_in(en, 1), "1 byte");
-        assert_eq!(format_size_in(en, 512), "512 bytes");
-        assert_eq!(format_size_in(en, 1536), "1.5 KB");
-        assert_eq!(format_size_in(en, 250 * 1024 * 1024), "250 MB");
-        let hr = Lang::Hr.strings();
-        assert_eq!(format_size_in(hr, 1536), "1,5 kB");
-        assert_eq!(format_size_in(hr, 3), "3 bajta");
-        assert_eq!(format_size_in(Lang::Sl.strings(), 2), "2 bajta");
     }
 }

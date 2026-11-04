@@ -2,7 +2,7 @@
 
 *Dodavo* comes from the Croatian *dodati*, "to hand over", and is pronounced "doh-DAH-voh".
 
-Send files and folders directly from one Windows computer to another. You don't need an account, a cloud upload, a ZIP file you made yourself, or a link.
+Send files and folders directly from one computer to another, on Windows and on Macs with Apple silicon. You don't need an account, a cloud upload, a ZIP file you made yourself, or a link. What follows is mostly about Windows; [the Mac version](#the-mac-version) has its own section.
 
 - **Send File / Send Folder** to a person in your recipient list (from the File menu, the right-click menu, the buttons, or by dragging items onto a person).
 - Folders are zipped automatically, sent, and unpacked on the recipient's computer. In Settings the recipient can choose to keep only the ZIP file, or both the folder and the ZIP file.
@@ -24,17 +24,31 @@ Send files and folders directly from one Windows computer to another. You don't 
 
 Download the setup program, `Dodavo-<version>-setup.exe`, from the [latest release](https://github.com/hkatic/dodavo/releases/latest) and run it. By default it installs Dodavo for the current user, without administrator rights. Dodavo then checks for new versions by itself and installs them on request.
 
-The setup program is not code-signed yet, so Windows warns when you start it. [System requirements](#system-requirements) says what to do then, and how to verify the download first.
+If Windows warns when you start it, [System requirements](#system-requirements) says what to do, and how to verify the download.
 
 ## System requirements
 
 Windows 7 with Service Pack 1, Windows 8.1, Windows 10 and Windows 11, 32-bit and 64-bit (Windows on ARM runs the x64 or x86 build through its emulation). One setup program installs the build that fits the Windows version and architecture.
 
-Windows 10 and 11 are what Dodavo is developed and tested on. Windows 7 and 8.1 are no longer supported by Microsoft and get a separate build (see [Building](#building)); it starts and runs there as far as can be checked without those systems, but it is provided as is. On Windows 7 without the SHA-2 code signing updates from 2019 (KB4474419 and KB4490628), Windows cannot verify SHA-256 signatures and shows the setup program as coming from an unknown publisher.
+Windows 7 and 8.1 get a separate build (see [Building](#building)). On Windows 7 without the SHA-2 code signing updates from 2019 (KB4474419 and KB4490628), Windows cannot verify SHA-256 signatures and shows the setup program as coming from an unknown publisher.
 
 Dodavo carries its own list of trusted certificate authorities (the Mozilla root set bundled by iroh) for its encrypted connections to the relay and address lookup servers, so it does not depend on the Windows certificate store and connects even on a Windows 7 whose root certificates were never updated.
 
-An unsigned build (see [Code signing](#installer)) is flagged when it is started: Windows 8.1 and later show SmartScreen's "Windows protected your PC" (choose **More info**, then **Run anyway**), and Windows 7 asks whether to run software whose publisher could not be verified. Verify the download first: `certutil -hashfile Dodavo-<version>-setup.exe SHA256` must match the published `.sha256` file.
+Windows may flag the setup program when it is started: Windows 8.1 and later show SmartScreen's "Windows protected your PC" (choose **More info**, then **Run anyway**), and Windows 7 asks whether to run software whose publisher could not be verified. Verify the download first: `certutil -hashfile Dodavo-<version>-setup.exe SHA256` must match the published `.sha256` file.
+
+## The Mac version
+
+A native Mac app in Swift and AppKit, which follows Apple's terms and interface guidelines and is built for VoiceOver. It exchanges transfers with Windows copies in both directions.
+
+- macOS 11 Big Sur or later, on Apple silicon. Intel Macs may follow.
+- **Send…** chooses files and folders, also several at once. Items can also be dragged onto a recipient, dropped on the Dock icon, or sent with the Finder's service **Send with Dodavo**.
+- All transfers are in one **Transfers** window, like the Finder's copy window: closing it does nothing to them, and each row has Pause or Resume, Cancel Transfer, and at the end Open and Show in Finder.
+- Closing the main window leaves Dodavo running, so that it can receive; ⌘Q quits. It can show in the menu bar, and open at login.
+- Notifications report transfers, with their own actions, and VoiceOver announces what changes while Dodavo is in front.
+- Received items get `com.apple.quarantine`, as downloads do. Settings and the Contact ID are in `~/Library/Application Support/Dodavo`.
+- Folder names that Windows cannot take (`:`, `?`, …) arrive changed on Windows and as they were on another Mac; items that only mean something to macOS are left out. Finder tags and other extended attributes do not travel.
+
+Building: `macos/build.sh`, which needs Xcode's command line tools and Rust (`rustup`), writes `target/macos/Dodavo.app`. `macos/release.sh` makes the final release in one command: tests, build, signing with a Developer ID certificate, notarization and a check of the result. Two copies side by side: `open -n target/macos/Dodavo.app --args --profile alice`.
 
 ## How connections work
 
@@ -70,7 +84,7 @@ Two rules keep every build starting on its oldest Windows version:
 powershell -ExecutionPolicy Bypass -File installer\check-imports.ps1 target\release\Dodavo.exe
 ```
 
-Windows 7 cannot be tested here; the import check proves that the program loads, and the builds are tried on Windows 11.
+The import check makes sure that these builds load on Windows 7.
 
 ### Installer
 
@@ -108,9 +122,9 @@ If none is set, the installer is built unsigned, which is fine for testing; [Sys
 
 Installed copies look for new versions on GitHub: once a day they fetch `https://github.com/hkatic/dodavo/releases/latest/download/update.json`, the update manifest attached to the latest published release (drafts and pre-releases are skipped by GitHub's `latest`). The manifest names the version, the installer's URL, size and SHA-256, the release notes per language, and an Ed25519 signature over those facts, made with a key that is kept outside the repository; the matching public key is compiled into the program (`src\update\keys.rs`), so a tampered manifest or installer is never run.
 
-A release therefore consists of three files on the GitHub release `v<version>`: `Dodavo-<version>-setup.exe`, its `.sha256`, and `update.json`. The steps:
+A release therefore consists of three files on the GitHub release `v<version>`: `Dodavo-<version>-setup.exe`, its `.sha256`, and `update.json`. The Mac version adds three of its own, `Dodavo-<version>-macos.dmg`, its `.sha256`, and `update-macos.json`, made by `macos/make-dmg.sh` and `macos/publish.sh`, and looks for its own manifest in the same way, signed so that it never verifies on Windows. **Every release has to carry both manifests**, because each system reads the latest release: without its manifest, that system's check fails. A release for one system only carries the other's manifest of the version that system is on. Both scripts add their files to the same draft, which goes public when it has all of them. The steps:
 
-1. Set the new version in `Cargo.toml` and write the release notes as plain text in `release-notes\<version>\en.txt` (required), `hr.txt`, `sr-Latn.txt` and `sl.txt`; the program shows the user's language and falls back to English.
+1. Set the new version in `Cargo.toml` and `crates/dodavo-ffi/Cargo.toml`, and write the release notes as plain text in `release-notes\<version>\en.txt` (required), `hr.txt`, `sr-Latn.txt` and `sl.txt`; the program shows the user's language and falls back to English.
 2. Commit, tag `v<version>`, and build the installer with `installer\build.ps1`.
 3. Run `installer\publish.ps1` (with the signing key in `DODAVO_UPDATE_KEY_FILE` or `-KeyFile`). It builds the release tool (`cargo build --release --features release-tool --bin dodavo-release`), writes and verifies `target\installer\update.json`, and with `-Publish` creates the GitHub release as a draft with `gh` and publishes it after a confirmation. Without `gh`, upload the three files by hand.
 
@@ -129,6 +143,10 @@ A release therefore consists of three files on the GitHub release `v<version>`: 
 | Path | Purpose |
 | --- | --- |
 | `src/net/` | iroh endpoint, transfer protocol, sending and receiving |
+| `src/view.rs` | what a transfer shows and what can be done with it, for the Mac interface so far |
+| `src/platform/` | what differs between the systems, below the interface |
+| `crates/dodavo-ffi/` | the state of the Mac program, and what Swift calls |
+| `macos/` | the Mac interface in Swift, its bundle, and scripts to build and publish it |
 | `src/archive.rs` | zipping and unzipping folders (rejects unsafe paths), safe file names |
 | `src/i18n/` | user interface translations, one string table per language |
 | `src/app.rs` | application state; passes network and update events to the UI thread |

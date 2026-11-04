@@ -3,17 +3,21 @@
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+#[cfg(windows)]
 mod app;
-mod archive;
-mod config;
-mod i18n;
-mod identity;
-mod net;
+#[cfg(windows)]
 mod ui;
-mod update;
 
+#[cfg(windows)]
+// The Win32 user interface reaches the library through `crate::net` and so on.
+pub(crate) use dodavo_core::{
+    archive, config, format, i18n, identity, net, platform, space, update, view,
+};
+
+#[cfg(windows)]
 use std::sync::atomic::{AtomicBool, AtomicIsize, Ordering};
 
+#[cfg(windows)]
 use windows_sys::Win32::{
     Foundation::{CloseHandle, ERROR_ALREADY_EXISTS, GetLastError, HANDLE},
     System::{
@@ -32,9 +36,12 @@ use windows_sys::Win32::{
     },
 };
 
+#[cfg(windows)]
 use i18n::tr;
+#[cfg(windows)]
 use ui::wide;
 
+#[cfg(windows)]
 struct Args {
     minimized: bool,
     /// Separate settings and identity, e.g. to run two instances for testing.
@@ -43,11 +50,14 @@ struct Args {
     updated: bool,
 }
 
+#[cfg(windows)]
 /// The mutexes that mark a running instance (see `main`). They are closed
 /// right before an update's Setup takes over, so that Setup never sees them.
 static INSTANCE_MUTEX: AtomicIsize = AtomicIsize::new(0);
+#[cfg(windows)]
 static RUNNING_MUTEX: AtomicIsize = AtomicIsize::new(0);
 
+#[cfg(windows)]
 /// Releases the "running" mutexes before this instance exits for an update.
 pub fn release_instance_mutexes() {
     for mutex in [&INSTANCE_MUTEX, &RUNNING_MUTEX] {
@@ -58,6 +68,7 @@ pub fn release_instance_mutexes() {
     }
 }
 
+#[cfg(windows)]
 fn parse_args() -> Args {
     let mut args = Args {
         minimized: false,
@@ -85,6 +96,7 @@ fn parse_args() -> Args {
     args
 }
 
+#[cfg(windows)]
 /// Brings the window of the instance that is already running to the front.
 fn show_running_instance(title: &str) {
     let class = wide(ui::window::MAIN_CLASS);
@@ -113,6 +125,7 @@ fn show_running_instance(title: &str) {
     }
 }
 
+#[cfg(windows)]
 fn main() {
     std::panic::set_hook(Box::new(|info| {
         // One message at a time: several tasks may fail the same way at once.
@@ -249,4 +262,11 @@ fn main() {
     // also stops the network thread.
     app::with(|a| a.net.shutdown(std::time::Duration::from_secs(3)));
     std::process::exit(0);
+}
+
+/// The Mac user interface is a program of its own, in `macos/`.
+#[cfg(not(windows))]
+fn main() {
+    eprintln!("This program is the Windows user interface. See macos/ for the Mac one.");
+    std::process::exit(1);
 }

@@ -119,8 +119,8 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         Config {
-            my_name: std::env::var("USERNAME")
-                .unwrap_or_else(|_| crate::i18n::s().unknown_user.into()),
+            my_name: crate::platform::user_name()
+                .unwrap_or_else(|| crate::i18n::s().unknown_user.into()),
             contacts: Vec::new(),
             always_save: false,
             always_save_dir: None,
@@ -208,29 +208,22 @@ impl Config {
         self.last_save_dir
             .clone()
             .filter(|d| d.is_dir())
-            .unwrap_or_else(crate::ui::shell::downloads_dir)
+            .unwrap_or_else(crate::platform::downloads_dir)
     }
 
     /// The folder used for transfers that start without asking.
     pub fn auto_save_dir(&self) -> PathBuf {
         match &self.always_save_dir {
             Some(dir) if self.always_save => dir.clone(),
-            _ => crate::ui::shell::downloads_dir(),
+            _ => crate::platform::downloads_dir(),
         }
     }
 }
 
-/// `%APPDATA%\Dodavo`, or a separate sub folder per `--profile`.
+/// The folder of the settings and the identity (`%APPDATA%\Dodavo`, see
+/// `platform::data_base`), or a separate sub folder per `--profile`.
 pub fn data_dir(profile: Option<&str>) -> PathBuf {
-    let appdata = std::env::var_os("APPDATA")
-        .map(PathBuf::from)
-        .unwrap_or_else(std::env::temp_dir);
-    let base = appdata.join("Dodavo");
-    // Keep the identity and settings of versions released under the old name.
-    let legacy = appdata.join("QuickAndEasyFileTransfer");
-    if !base.exists() && legacy.is_dir() {
-        let _ = std::fs::rename(&legacy, &base);
-    }
+    let base = crate::platform::data_base();
     match profile {
         Some(p) => base.join("profiles").join(p),
         None => base,
