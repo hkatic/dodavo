@@ -111,9 +111,6 @@ MinVersion=6.1sp1
 MinVersion=10.0
 #endif
 
-; Every running instance (of any profile) holds this mutex, so Setup and the
-; uninstaller ask the user to close Dodavo first. See src/main.rs.
-AppMutex={#AppMutexName}
 
 ; Follows the Windows light/dark app mode, like the program itself.
 WizardStyle=modern dynamic
@@ -152,12 +149,11 @@ Name: "croatian"; MessagesFile: "languages\Croatian.isl"
 Name: "slovenian"; MessagesFile: "compiler:Languages\Slovenian.isl"
 
 [CustomMessages]
-; Shown (in the log, since the update runs silently) when Dodavo did not exit
-; in time for an automatic update.
-english.UpdateStillRunning=Dodavo is still running. Exit Dodavo and start the update again.
-croatian.UpdateStillRunning=Dodavo je još uvijek pokrenut. Izađite iz programa Dodavo i ponovno pokrenite ažuriranje.
-serbianlatin.UpdateStillRunning=Dodavo je i dalje pokrenut. Izađite iz programa Dodavo i ponovo pokrenite ažuriranje.
-slovenian.UpdateStillRunning=Dodavo še vedno teče. Končajte Dodavo in znova zaženite posodobitev.
+; Shown when Dodavo did not close in time for Setup or the uninstaller.
+english.StillRunning=Dodavo is still running and could not be closed. Exit Dodavo, then try again.
+croatian.StillRunning=Dodavo je još uvijek pokrenut i nije ga moguće zatvoriti. Izađite iz programa Dodavo pa pokušajte ponovno.
+serbianlatin.StillRunning=Dodavo je i dalje pokrenut i nije moguće zatvoriti ga. Izađite iz programa Dodavo, pa pokušajte ponovo.
+slovenian.StillRunning=Dodavo se še vedno izvaja in ga ni bilo mogoče zapreti. Končajte Dodavo in poskusite znova.
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
@@ -218,10 +214,17 @@ Filename: "{app}\{#AppExeName}"; Parameters: "{param:DODAVOARGS|}"; Flags: nowai
   all users (Windows asks the user), so everything below runs with the rights
   the installation needs. InitializeSetup then asks every running instance
   of Dodavo (all profiles hold the same mutex) to exit by posting the window
-  message Dodavo_ExitForUpdate to their main windows, and waits for them;
-  this runs before Setup's own AppMutex check, which a silent Setup would
-  fail. PrepareToInstall waits once more, right before the files are
-  replaced, and the second [Run] entry above starts Dodavo again afterwards.
+  message Dodavo_ExitForUpdate to their main windows, and waits for them.
+  PrepareToInstall does so once more, right before the files are replaced,
+  and the second [Run] entry above starts Dodavo again afterwards.
+
+  Setup started by the user and the uninstaller close Dodavo in the same way,
+  when the user has chosen Install or confirmed: PrepareToInstall, and
+  CurUninstallStepChanged below. Transfers are suspended, not cancelled, and
+  continue at the next start, so there is nothing to ask. That is why there is
+  no AppMutex directive: Setup would check it at its start, and ask the user
+  to close Dodavo before even showing the wizard.
+
   The message name, the window class name and the parameters are a contract
   with src/update and src/ui/main_window.rs: keep them in step. }
 
@@ -250,7 +253,7 @@ begin
   Result := ExpandConstant('{param:DODAVOUPDATE|}') <> '';
 end;
 
-{ Asks every running instance of Dodavo to exit for the update. }
+{ Asks every running instance of Dodavo to exit. }
 procedure AskDodavoToExit;
 var
   Msg: UINT;
@@ -266,7 +269,7 @@ begin
     Count := Count + 1;
     Wnd := FindWindowExW(0, Wnd, DodavoMainClass, 0);
   end;
-  Log(Format('Update: asked %d Dodavo window(s) to exit', [Count]));
+  Log(Format('Asked %d Dodavo window(s) to exit', [Count]));
 end;
 
 { Waits for the Dodavo that started the update and for every other instance
@@ -283,7 +286,7 @@ begin
     Process := OpenProcess(SYNCHRONIZE, False, Pid);
     if Process <> 0 then
     begin
-      Log(Format('Update: waiting for Dodavo (process %d) to exit', [Pid]));
+      Log(Format('Waiting for Dodavo (process %d) to exit', [Pid]));
       WaitForSingleObject(Process, UpdateWaitTicks * 250);
       CloseHandle(Process);
     end;
@@ -292,15 +295,15 @@ begin
   while CheckForMutexes('{#AppMutexName}') and (Ticks < UpdateWaitTicks) do
   begin
     if Ticks = 0 then
-      Log('Update: waiting for the other instances of Dodavo to exit');
+      Log('Waiting for the instances of Dodavo to exit');
     Sleep(250);
     Ticks := Ticks + 1;
   end;
   Result := not CheckForMutexes('{#AppMutexName}');
 end;
 
-{ Runs (after any elevation) before Setup's own AppMutex check at startup,
-  which a silent Setup would fail: tells Dodavo to exit now and waits. }
+{ An automatic update (after any elevation): tells Dodavo to exit now and
+  waits, so that Dodavo can tell from Setup ending early that it did not start. }
 function InitializeSetup: Boolean;
 begin
   Result := True;
@@ -309,20 +312,32 @@ begin
     AskDodavoToExit;
     if not WaitForDodavoToExit then
     begin
-      Log('Update: Dodavo is still running; giving up');
+      Log('Dodavo is still running; giving up');
       Result := False;
     end;
   end;
 end;
 
-{ Runs before Setup checks for files in use: the last chance for an instance
-  that was started meanwhile to go. }
+{ Runs when the user has chosen Install, before Setup checks for files in use:
+  closes Dodavo, or, in an update, an instance that was started meanwhile. }
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 begin
   Result := '';
-  if IsAutoUpdate and not WaitForDodavoToExit then
+  AskDodavoToExit;
+  if not WaitForDodavoToExit then
   begin
-    Log('Update: Dodavo is still running; giving up');
-    Result := CustomMessage('UpdateStillRunning');
+    Log('Dodavo is still running; giving up');
+    Result := CustomMessage('StillRunning');
+  end;
+end;
+
+{ Runs after the user has confirmed uninstalling, before anything is removed. }
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+begin
+  if CurUninstallStep = usAppMutexCheck then
+  begin
+    AskDodavoToExit;
+    if not WaitForDodavoToExit then
+      RaiseException(CustomMessage('StillRunning'));
   end;
 end;

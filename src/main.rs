@@ -138,8 +138,8 @@ fn take_instance_mutex(name: &[u16]) -> bool {
 }
 
 /// Held by every instance, whatever its profile, so the installer and
-/// uninstaller can tell that Dodavo is running (AppMutex in
-/// installer\Dodavo.iss), and by a start that waits to hand over its items,
+/// uninstaller can wait until Dodavo has closed (installer\Dodavo.iss), and by
+/// a start that waits to hand over its items,
 /// which also keeps the file of the program open.
 #[cfg(windows)]
 fn hold_running_mutex() {
