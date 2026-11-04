@@ -36,6 +36,15 @@ use windows_sys::Win32::{
     },
 };
 
+// The `windows` crates bind CoTaskMemFree to combase.dll, which Windows 7 does
+// not have, and ole32.dll exports it on every Windows version. Whichever comes
+// first on the linker's command line wins for the whole program, also for the
+// calls in those crates, and only the libraries of the program itself come
+// before them. `installer\check-imports.ps1 -Profile win7` fails without this.
+#[cfg(windows)]
+#[link(name = "ole32")]
+unsafe extern "system" {}
+
 #[cfg(windows)]
 use i18n::tr;
 #[cfg(windows)]
