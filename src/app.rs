@@ -365,7 +365,10 @@ pub fn accept_offer(
     dir: PathBuf,
     activate: bool,
 ) {
-    update_cfg(|c| c.last_save_dir = Some(dir.clone()));
+    // Several offers answered together go to one folder: one save is enough.
+    if with(|a| a.cfg.last_save_dir.as_ref() != Some(&dir)) {
+        update_cfg(|c| c.last_save_dir = Some(dir.clone()));
+    }
     let folder = cfg().received_folder;
     let hwnd = progress::open(
         id,
@@ -492,6 +495,28 @@ fn refresh_tray(force: bool) {
     });
     tray::set_status(main_window(), count, &tip);
     keep_awake(busy);
+}
+
+/// Whether a transfer in this phase is getting somewhere by itself. A paused
+/// one and one waiting for a connection may stay that way for days.
+fn under_way(phase: Option<Phase>) -> bool {
+    !matches!(
+        phase,
+        Some(Phase::Paused | Phase::PausedByPeer | Phase::WaitingForConnection { .. })
+    )
+}
+
+/// Whether another transfer with the same person as `id` is under way: the
+/// items of one selection, which should not pile up a dialog each.
+pub fn others_under_way(id: u64) -> bool {
+    with(|a| {
+        let Some(peer) = a.transfers.get(&id).map(|t| t.peer_id.clone()) else {
+            return false;
+        };
+        a.transfers.iter().any(|(other, t)| {
+            *other != id && t.active && t.peer_id.eq_ignore_ascii_case(&peer) && under_way(t.phase)
+        })
+    })
 }
 
 pub fn active_transfer_count() -> usize {
@@ -746,6 +771,18 @@ pub fn offer_window_closed(id: u64) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A transfer that may wait for days must not keep dialogs away.
+    #[test]
+    fn waiting_transfers_are_not_under_way() {
+        assert!(under_way(None));
+        assert!(under_way(Some(Phase::Connecting)));
+        assert!(under_way(Some(Phase::WaitingForAccept)));
+        assert!(under_way(Some(Phase::Transferring)));
+        assert!(!under_way(Some(Phase::Paused)));
+        assert!(!under_way(Some(Phase::PausedByPeer)));
+        assert!(!under_way(Some(Phase::WaitingForConnection { lost: true })));
+    }
 
     fn transfer(phase: Option<Phase>, done: u64, total: u64) -> Transfer {
         let mut t = Transfer::new(

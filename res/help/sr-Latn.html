@@ -96,7 +96,7 @@
 <li>Otkucajte <kbd>Dodavo</kbd> u polje za pretragu da biste ga pronašli na listi. U sistemu Windows 11 pritisnite <kbd>Tab</kbd> da biste došli do dugmeta za dodatne opcije pored njega, pritisnite <kbd>Enter</kbd> i izaberite <span class="ui">Deinstaliraj</span>. U sistemima Windows 10, 8.1 i 7 izaberite Dodavo na listi i izaberite <span class="ui">Deinstaliraj</span>.</li>
 <li>Potvrdite izborom opcije <span class="ui">Deinstaliraj</span>, a zatim <span class="ui">Da</span>.</li>
 </ol>
-<p>Deinstalacija uklanja program, njegove prečice, njegove stavke u menijima Istraživača datoteka i unos za opciju <span class="ui">Pokreni pri prijavljivanju u Windows</span>. Vaše postavke, lista primalaca i ID kontakta ostaju u fascikli opisanoj u odeljku <a href="#your-data">Vaše postavke i identitet</a>, pa je posle ponovne instalacije sve kao pre. Ako želite da ih uklonite, posle deinstalacije izbrišite tu fasciklu; vaš ID kontakta je tada trajno izgubljen.</p>
+<p>Deinstalacija uklanja program, njegove prečice, njegove stavke u menijima Istraživača datoteka i unos za opciju <span class="ui">Pokreni pri prijavljivanju u Windows</span>. Vaše postavke, lista primalaca i ID kontakta ostaju u fascikli opisanoj u odeljku <a href="#your-data">Vaše postavke i identitet</a>, pa je posle ponovne instalacije sve kao pre. Nedovršeni prenosi takođe ostaju i nastavljaju se ako ponovo instalirate Dodavo; u suprotnom možete da izbrišete njihove delimično primljene datoteke, čiji se nazivi završavaju na <code>.part</code>. Ako želite da ih uklonite, posle deinstalacije izbrišite tu fasciklu; vaš ID kontakta je tada trajno izgubljen.</p>
 </section>
 
 <section aria-labelledby="getting-started">
@@ -201,7 +201,7 @@
 
 <h3 id="after-sending">Kada poslata stavka stigne</h3>
 <p>Kada druga osoba primi sve, kontrolni zbir bude potvrđen i stavka bude sačuvana na drugom računaru, Dodavo prikazuje poruku, na primer <span class="ui">Gotovo! Datoteka je isporučena primaocu (Ana).</span>, a ispod nje naziv stavke. Čitači ekrana je čitaju. Pritisnite <kbd>Enter</kbd> ili <kbd>Esc</kbd> ili izaberite <span class="ui">Zatvori</span>; zatvara se i prozor napretka.</p>
-<p>Ako izaberete <span class="ui">Ne prikazuj ponovo</span>, prozor napretka će se sledeći put zatvoriti sam, a obaveštenje će vam javiti da je prenos završen. Poruku možete ponovo da uključite u postavkama opcijom <span class="ui">Posle slanja prikaži poruku kada datoteka ili fascikla stigne</span>. Ako je prozor napretka skriven ili umanjen kada se prenos završi ili ako su još u toku drugi prenosi, prikazuje se samo obaveštenje. Kada prenos ne uspe, bude odbijen ili otkazan, prozor napretka ostaje otvoren da biste mogli da pročitate šta se dogodilo.</p>
+<p>Ako izaberete <span class="ui">Ne prikazuj ponovo</span>, prozor napretka će se sledeći put zatvoriti sam, a obaveštenje će vam javiti da je prenos završen. Poruku možete ponovo da uključite u postavkama opcijom <span class="ui">Posle slanja prikaži poruku kada datoteka ili fascikla stigne</span>. Ako je prozor napretka skriven ili umanjen kada se prenos završi ili ako su još u toku drugi prenosi sa istom osobom, prikazuje se samo obaveštenje. Kada prenos ne uspe, bude odbijen ili otkazan, prozor napretka ostaje otvoren da biste mogli da pročitate šta se dogodilo.</p>
 </section>
 
 <section aria-labelledby="receiving">
@@ -220,7 +220,7 @@
 <dt><span class="ui">Prihvati</span> (<kbd>Alt</kbd>+<kbd>I</kbd>) i <span class="ui">Odbij</span> (<kbd>Alt</kbd>+<kbd>O</kbd>)</dt>
 <dd>Kada se prozor otvori, fokus je na dugmetu <span class="ui">Prihvati</span>, pa pritiskom tastera <kbd>Enter</kbd> prihvatate prenos; čitači ekrana obično najpre pročitaju tekst prozora, od podebljanog reda do rečenice o slobodnom prostoru na disku. Pritiskom tastera <kbd>Esc</kbd> ili zatvaranjem prozora odbijate ga.</dd>
 </dl>
-<p>Kada vam ista osoba šalje više stavki odjednom, one dele jedan prozor, a vaš odgovor se odnosi na sve. Podebljani red kaže koliko ih je, sledeći red navodi njihovu ukupnu veličinu, a polje <span class="ui">Stavke</span> (<kbd>Alt</kbd>+<kbd>T</kbd>) ih navodi. Stavke koje stignu dok je prozor otvoren dodaju se u njega.</p>
+<p>Kada vam ista osoba šalje više stavki odjednom, one dele jedan prozor, a vaš odgovor se odnosi na sve. Podebljani red kaže koliko ih je, sledeći red navodi njihovu ukupnu veličinu, a polje <span class="ui">Stavke</span> (<kbd>Alt</kbd>+<kbd>T</kbd>) ih navodi. Stavke koje stignu dok je prozor otvoren dodaju se u njega, a one koje su stigle u poslednjoj sekundi vaš odgovor još ne obuhvata: ostaju u prozoru.</p>
 <p>Ako nema dovoljno slobodnog prostora, Dodavo pita da li ipak želite da prihvatite prenos. Ako pošiljalac otkaže pre nego što odgovorite, prozor se zatvara, a obaveštenje vas o tome izveštava.</p>
 <p>Kada prihvatite prenos, prozor napretka prikazuje njegov tok. Ako u fascikli već postoji stavka sa istim nazivom, nova se čuva sa dodatim brojem, na primer <code>Izveštaj (2).pdf</code>; ništa se ne zamenjuje.</p>
 
@@ -233,7 +233,7 @@
 <li>Za fasciklu zadržanu samo kao ZIP datoteku poruka glasi <span class="ui">Gotovo! Fascikla je sačuvana kao ZIP datoteka.</span>, a izbor je isti kao za datoteku.</li>
 <li><span class="ui">Zatvori</span> ne radi ništa od toga.</li>
 </ul>
-<p>Ako izaberete <span class="ui">Ne pitaj me ponovo</span>, Dodavo će sledeći put umesto pitanja prikazati obaveštenje. Izborom obaveštenja stavka se prikazuje u Istraživaču datoteka. Pitanje možete ponovo da uključite u postavkama opcijom <span class="ui">Posle prijema pitaj da li da se otvori datoteka ili fascikla</span>. Dok su u toku drugi prenosi, Dodavo ne pita, već prikazuje obaveštenje; pitanje dolazi posle poslednjeg.</p>
+<p>Ako izaberete <span class="ui">Ne pitaj me ponovo</span>, Dodavo će sledeći put umesto pitanja prikazati obaveštenje. Izborom obaveštenja stavka se prikazuje u Istraživaču datoteka. Pitanje možete ponovo da uključite u postavkama opcijom <span class="ui">Posle prijema pitaj da li da se otvori datoteka ili fascikla</span>. Dok su u toku drugi prenosi sa istom osobom, Dodavo ne pita, već prikazuje obaveštenje; pitanje dolazi posle poslednjeg.</p>
 
 <h3 id="auto-accept">Primanje bez pitanja</h3>
 <p>Prenosi od osoba sa vaše liste primalaca počinju odmah, bez prozora Dolazni prenos, ako su u postavkama uključene obe opcije: <span class="ui">Uvek čuvaj primljene datoteke u ovoj fascikli</span> i <span class="ui">Prenose pokreći automatski, bez pitanja</span>. Uključene su dok ih ne isključite. Dodavo prikazuje obaveštenje <span class="ui">Primanje</span> i čuva stavku u fascikli iz prve opcije, a to je vaša fascikla Preuzimanja ako niste izabrali drugu. Za prenose od nepoznatih pošiljalaca i prenose koji ne bi stali na disk Dodavo i dalje pita. Na ovaj način prenos mogu da pokrenu samo osobe koje ste sami dodali: njihov ID kontakta ne može da se falsifikuje.</p>

@@ -96,7 +96,7 @@
 <li>V iskalno polje vnesite <kbd>Dodavo</kbd>, da ga najdete na seznamu. V sistemu Windows 11 pritisnite <kbd>Tab</kbd>, da pridete do gumba <span class="ui">Več</span> ob njem, pritisnite <kbd>Enter</kbd> in izberite <span class="ui">Odstrani</span>. V sistemih Windows 10, 8.1 in 7 izberite Dodavo na seznamu in izberite <span class="ui">Odstrani</span>.</li>
 <li>Potrdite z izbiro <span class="ui">Odstrani</span> in nato <span class="ui">Da</span>.</li>
 </ol>
-<p>Odstranitev izbriše program, njegove bližnjice, njegove vnose v menijih Raziskovalca in vnos za možnost <span class="ui">Zaženi ob vpisu v Windows</span>. Vaše nastavitve, seznam prejemnikov in ID stika ostanejo v mapi, opisani v razdelku <a href="#your-data">Vaše nastavitve in identiteta</a>, zato je po ponovni namestitvi vse kot prej. Če jih želite odstraniti, po odstranitvi izbrišite to mapo; vaš ID stika je tedaj za vedno izgubljen.</p>
+<p>Odstranitev izbriše program, njegove bližnjice, njegove vnose v menijih Raziskovalca in vnos za možnost <span class="ui">Zaženi ob vpisu v Windows</span>. Vaše nastavitve, seznam prejemnikov in ID stika ostanejo v mapi, opisani v razdelku <a href="#your-data">Vaše nastavitve in identiteta</a>, zato je po ponovni namestitvi vse kot prej. Nedokončani prenosi prav tako ostanejo in se nadaljujejo, če Dodavo znova namestite; sicer lahko izbrišete njihove delno prejete datoteke, katerih imena se končajo s <code>.part</code>. Če jih želite odstraniti, po odstranitvi izbrišite to mapo; vaš ID stika je tedaj za vedno izgubljen.</p>
 </section>
 
 <section aria-labelledby="getting-started">
@@ -201,7 +201,7 @@
 
 <h3 id="after-sending">Ko poslani element prispe</h3>
 <p>Ko druga oseba prejme vse in je kontrolna vsota potrjena ter je element shranjen v drugem računalniku, Dodavo prikaže sporočilo, na primer <span class="ui">Končano! Datoteka je bila dostavljena prejemniku (Ana).</span>, pod njim pa ime elementa. Bralniki zaslona ga preberejo. Pritisnite <kbd>Enter</kbd> ali <kbd>Esc</kbd> ali izberite <span class="ui">Zapri</span>; zapre se tudi okno napredka.</p>
-<p>Če izberete <span class="ui">Ne prikaži več</span>, se okno napredka naslednjič zapre samo, obvestilo pa vam sporoči, da je prenos končan. Sporočilo lahko znova vklopite v nastavitvah z možnostjo <span class="ui">Po pošiljanju pokaži sporočilo, ko datoteka ali mapa prispe</span>. Če je okno napredka ob koncu prenosa skrito ali pomanjšano ali če še potekajo drugi prenosi, se prikaže le obvestilo. Ko prenos ne uspe, je zavrnjen ali preklican, okno napredka ostane odprto, da lahko preberete, kaj se je zgodilo.</p>
+<p>Če izberete <span class="ui">Ne prikaži več</span>, se okno napredka naslednjič zapre samo, obvestilo pa vam sporoči, da je prenos končan. Sporočilo lahko znova vklopite v nastavitvah z možnostjo <span class="ui">Po pošiljanju pokaži sporočilo, ko datoteka ali mapa prispe</span>. Če je okno napredka ob koncu prenosa skrito ali pomanjšano ali če še potekajo drugi prenosi z isto osebo, se prikaže le obvestilo. Ko prenos ne uspe, je zavrnjen ali preklican, okno napredka ostane odprto, da lahko preberete, kaj se je zgodilo.</p>
 </section>
 
 <section aria-labelledby="receiving">
@@ -220,7 +220,7 @@
 <dt><span class="ui">Sprejmi</span> (<kbd>Alt</kbd>+<kbd>J</kbd>) in <span class="ui">Zavrni</span> (<kbd>Alt</kbd>+<kbd>Z</kbd>)</dt>
 <dd>Ko se okno odpre, je fokus na gumbu <span class="ui">Sprejmi</span>, zato s tipko <kbd>Enter</kbd> prenos sprejmete; bralniki zaslona običajno najprej preberejo besedilo okna, od krepke vrstice do stavka o prostem prostoru na disku. S tipko <kbd>Esc</kbd> ali z zaprtjem okna ga zavrnete.</dd>
 </dl>
-<p>Ko vam ista oseba pošlje več elementov hkrati, si delijo eno okno, vaš odgovor pa velja za vse. Krepka vrstica pove, koliko jih je, naslednja vrstica navede njihovo skupno velikost, polje <span class="ui">Elementi</span> (<kbd>Alt</kbd>+<kbd>E</kbd>) pa jih našteje. Elementi, ki prispejo, medtem ko je okno odprto, se dodajo vanj.</p>
+<p>Ko vam ista oseba pošlje več elementov hkrati, si delijo eno okno, vaš odgovor pa velja za vse. Krepka vrstica pove, koliko jih je, naslednja vrstica navede njihovo skupno velikost, polje <span class="ui">Elementi</span> (<kbd>Alt</kbd>+<kbd>E</kbd>) pa jih našteje. Elementi, ki prispejo, medtem ko je okno odprto, se dodajo vanj, tistih, ki so prispeli v zadnji sekundi, pa vaš odgovor še ne zajame: ostanejo v oknu.</p>
 <p>Če prostora ni dovolj, vas Dodavo vpraša, ali želite prenos vseeno sprejeti. Če pošiljatelj prenos prekliče, preden odgovorite, se okno zapre, obvestilo pa vas o tem obvesti.</p>
 <p>Ko prenos sprejmete, okno napredka prikazuje njegov potek. Če v mapi že obstaja element z enakim imenom, se novi shrani z dodano številko, na primer <code>Poročilo (2).pdf</code>; nič se ne prepiše.</p>
 
@@ -233,7 +233,7 @@
 <li>Za mapo, ki je obdržana le kot datoteka ZIP, se sporočilo glasi <span class="ui">Končano! Mapa je shranjena kot datoteka ZIP.</span>, izbira pa je enaka kot za datoteko.</li>
 <li><span class="ui">Zapri</span> ne naredi ničesar od tega.</li>
 </ul>
-<p>Če izberete <span class="ui">Ne sprašuj me več</span>, bo Dodavo naslednjič namesto vprašanja prikazal obvestilo. Če izberete obvestilo, se element prikaže v Raziskovalcu. Vprašanje lahko znova vklopite v nastavitvah z možnostjo <span class="ui">Po prejemu vprašaj, ali naj se datoteka ali mapa odpre</span>. Dokler potekajo drugi prenosi, Dodavo ne vpraša, ampak prikaže obvestilo; vprašanje pride po zadnjem.</p>
+<p>Če izberete <span class="ui">Ne sprašuj me več</span>, bo Dodavo naslednjič namesto vprašanja prikazal obvestilo. Če izberete obvestilo, se element prikaže v Raziskovalcu. Vprašanje lahko znova vklopite v nastavitvah z možnostjo <span class="ui">Po prejemu vprašaj, ali naj se datoteka ali mapa odpre</span>. Dokler potekajo drugi prenosi z isto osebo, Dodavo ne vpraša, ampak prikaže obvestilo; vprašanje pride po zadnjem.</p>
 
 <h3 id="auto-accept">Prejemanje brez vprašanja</h3>
 <p>Prenosi od oseb z vašega seznama prejemnikov se začnejo takoj, brez okna Dohodni prenos, če sta v nastavitvah vklopljeni obe možnosti: <span class="ui">Vedno shrani prejete datoteke v to mapo</span> in <span class="ui">Prenose začni samodejno, brez vprašanja</span>. Vklopljeni sta, dokler ju ne izklopite. Dodavo prikaže obvestilo <span class="ui">Prejemanje</span> in shrani element v mapo iz prve možnosti, to pa je vaša mapa Prenosi, če niste izbrali druge. Za prenose od neznanih pošiljateljev in prenose, za katere na disku ne bi bilo dovolj prostora, Dodavo še vedno vpraša. Tako lahko prenos začnejo le osebe, ki ste jih dodali sami: njihovega ID-ja stika ni mogoče ponarediti.</p>

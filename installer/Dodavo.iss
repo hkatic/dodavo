@@ -259,13 +259,19 @@ var
   Msg: UINT;
   Wnd: HWND;
   Count: Integer;
+  SuspendTransfers: Integer;
 begin
   Msg := RegisterWindowMessageW(ExitForUpdateMessage);
+  { 0 in an automatic update: the instance does as the user chose in its
+    Update Available window. Otherwise nobody chose anything: 1 suspends. }
+  SuspendTransfers := 1;
+  if IsAutoUpdate then
+    SuspendTransfers := 0;
   Count := 0;
   Wnd := FindWindowExW(0, 0, DodavoMainClass, 0);
   while Wnd <> 0 do
   begin
-    PostMessage(Wnd, Msg, 0, 0);
+    PostMessage(Wnd, Msg, SuspendTransfers, 0);
     Count := Count + 1;
     Wnd := FindWindowExW(0, Wnd, DodavoMainClass, 0);
   end;

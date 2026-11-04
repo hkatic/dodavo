@@ -389,6 +389,8 @@ impl UpdateWindow {
     }
 
     fn fail(&mut self, w: &Window, e: Error) {
+        // The choice was for this attempt, not for a later one from elsewhere.
+        app::with(|a| a.update_cancel_transfers = false);
         let text = e.text();
         self.back_to_idle(w, Some(&text));
         window::show(self.status, true);

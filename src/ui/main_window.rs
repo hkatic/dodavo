@@ -1073,11 +1073,13 @@ fn urgent_message(w: &Window, msg: u32, wp: WPARAM, lp: LPARAM) -> Option<LRESUL
         // (see `update`). The instance that installs exits as the user chose
         // in the Update Available window; the other profiles leave with their
         // transfers suspended, as at a logoff, and are not started again by
-        // Setup. `exit` also ends a dialog that is open.
+        // Setup. `exit` also ends a dialog that is open. A wParam other than 0
+        // comes from a Setup or an uninstaller the user started: nobody chose
+        // anything then, so all transfers are suspended.
         m if m == MSG_EXIT_FOR_UPDATE.get() && m != 0 => {
             // The mutexes go first, so that Setup never sees them.
             crate::release_instance_mutexes();
-            exit(w.hwnd, app::with(|a| a.update_cancel_transfers));
+            exit(w.hwnd, wp == 0 && app::with(|a| a.update_cancel_transfers));
             Some(0)
         }
         // Logoff or shutdown is never blocked with a question: transfers

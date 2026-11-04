@@ -48,6 +48,10 @@ Each offer gets its own `IncomingWindowController`, centred on the same spot, so
 
 ## Low
 
+### Automatic acceptance checks the free space of each item alone
+
+Each offer from a recipient is checked by itself (`Event::Offer` in `src/app.rs`), so several large items that fit one by one all start, and the later ones fail once the disk is full. The Incoming Transfer window counts them together. The check would have to include what is still to arrive for the transfers already running.
+
 ### A Mac says nothing when sending to a recipient who has just been removed
 
 `Core::send` returns no error when `contact_by_id` finds nobody, so no transfer appears and no message says why. It takes a recipient removed or given another ID while the send is on its way, and a new text in the Mac table.

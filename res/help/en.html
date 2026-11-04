@@ -96,7 +96,7 @@
 <li>Type <kbd>Dodavo</kbd> in the search box to find it in the list. In Windows 11, press <kbd>Tab</kbd> to reach its <span class="ui">More options</span> button, press <kbd>Enter</kbd> and choose <span class="ui">Uninstall</span>. In Windows 10, 8.1 and 7, select Dodavo in the list and choose <span class="ui">Uninstall</span>.</li>
 <li>Confirm with <span class="ui">Uninstall</span> and then <span class="ui">Yes</span>.</li>
 </ol>
-<p>Uninstalling removes the program, its shortcuts, its entries in File Explorer's menus and the <span class="ui">Start with Windows</span> entry. Your settings, your recipient list and your Contact ID stay in the folder described in <a href="#your-data">Your settings and identity</a>, so if you install Dodavo again, everything is as before. If you want to remove them as well, delete that folder after uninstalling; your Contact ID is then lost for good.</p>
+<p>Uninstalling removes the program, its shortcuts, its entries in File Explorer's menus and the <span class="ui">Start with Windows</span> entry. Your settings, your recipient list and your Contact ID stay in the folder described in <a href="#your-data">Your settings and identity</a>, so if you install Dodavo again, everything is as before. Unfinished transfers stay as well, and continue if you install Dodavo again; otherwise you can delete their partly received files, which end in <code>.part</code>. If you want to remove them as well, delete that folder after uninstalling; your Contact ID is then lost for good.</p>
 </section>
 
 <section aria-labelledby="getting-started">
@@ -201,7 +201,7 @@
 
 <h3 id="after-sending">When a sent item has arrived</h3>
 <p>When the other person has received everything, the checksum has been confirmed and the item has been saved on the other computer, Dodavo shows a message, for example <span class="ui">Done! Ana has received the file.</span>, followed by the name of the item. Screen readers read it. Press <kbd>Enter</kbd> or <kbd>Esc</kbd>, or choose <span class="ui">Close</span>; the progress window closes too.</p>
-<p>If you select <span class="ui">Don't show this again</span>, the progress window closes by itself next time, and a notification tells you that the transfer is complete. You can turn the message back on in Settings with <span class="ui">After sending, show a message once the item has arrived</span>. If the progress window is hidden or minimized when the transfer ends, or other transfers are still running, there is only the notification. A transfer that fails, is declined or is cancelled keeps its progress window open, so that you can read what happened.</p>
+<p>If you select <span class="ui">Don't show this again</span>, the progress window closes by itself next time, and a notification tells you that the transfer is complete. You can turn the message back on in Settings with <span class="ui">After sending, show a message once the item has arrived</span>. If the progress window is hidden or minimized when the transfer ends, or other transfers with the same person are still running, there is only the notification. A transfer that fails, is declined or is cancelled keeps its progress window open, so that you can read what happened.</p>
 </section>
 
 <section aria-labelledby="receiving">
@@ -220,7 +220,7 @@
 <dt><span class="ui">Accept</span> (<kbd>Alt</kbd>+<kbd>A</kbd>) and <span class="ui">Decline</span> (<kbd>Alt</kbd>+<kbd>D</kbd>)</dt>
 <dd>When the window opens, the focus is on <span class="ui">Accept</span>, so pressing <kbd>Enter</kbd> accepts; screen readers usually read the text of the window first, from the bold line to the free disk space sentence. Pressing <kbd>Esc</kbd> or closing the window declines.</dd>
 </dl>
-<p>When one person sends several items at once, they share one window, and your answer applies to all of them. The bold line says how many there are, the next line gives their total size, and the <span class="ui">Items</span> field (<kbd>Alt</kbd>+<kbd>I</kbd>) lists them. Items that arrive while the window is open are added to it.</p>
+<p>When one person sends several items at once, they share one window, and your answer applies to all of them. The bold line says how many there are, the next line gives their total size, and the <span class="ui">Items</span> field (<kbd>Alt</kbd>+<kbd>I</kbd>) lists them. Items that arrive while the window is open are added to it, and those that arrived within the last second are not covered by your answer yet: they stay in the window.</p>
 <p>If there is not enough free space, Dodavo asks whether you want to accept anyway. If the sender cancels before you answer, the window closes and a notification tells you so.</p>
 <p>After you accept, a progress window shows the transfer. If an item with the same name already exists in the folder, the new one is saved with a number added, for example <code>Report (2).pdf</code>; nothing is overwritten.</p>
 
@@ -233,7 +233,7 @@
 <li>For a folder kept only as a ZIP file, the message says <span class="ui">Done! The folder has been saved as a ZIP file.</span>, and you have the same choices as for a file.</li>
 <li><span class="ui">Close</span> does neither.</li>
 </ul>
-<p>If you select <span class="ui">Don't ask me again</span>, Dodavo shows a notification instead next time. Selecting the notification shows the item in File Explorer. You can turn the question back on in Settings with <span class="ui">After receiving, ask whether to open the file or folder</span>. While other transfers are still running, Dodavo does not ask, and shows the notification instead; the question comes after the last one.</p>
+<p>If you select <span class="ui">Don't ask me again</span>, Dodavo shows a notification instead next time. Selecting the notification shows the item in File Explorer. You can turn the question back on in Settings with <span class="ui">After receiving, ask whether to open the file or folder</span>. While other transfers with the same person are still running, Dodavo does not ask, and shows the notification instead; the question comes after the last one.</p>
 
 <h3 id="auto-accept">Receiving without being asked</h3>
 <p>Transfers from people in your recipient list start immediately, without the Incoming Transfer window, as long as <span class="ui">Always save received files to this folder</span> and <span class="ui">Start transfers automatically, without asking</span> are both on in Settings. They are on unless you clear them. Dodavo shows a notification, <span class="ui">Receiving</span>, and saves the item in the folder from the first option, which is your Downloads folder unless you chose another one. Transfers from unknown senders, and transfers that would not fit on the disk, are still asked about. Only the people you added yourself can start a transfer this way: their Contact ID cannot be forged.</p>

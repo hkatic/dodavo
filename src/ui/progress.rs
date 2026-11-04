@@ -786,13 +786,12 @@ impl Progress {
         // or the message, if any; a failed one stays to show what happened.
         // A hidden or minimized window asks nothing: a question needs a
         // window that is seen, and the notification reports instead. Nor does
-        // one while others are running: several items of a selection would
-        // pile up a dialog each. The last to finish asks.
+        // one while others with the same person are under way: several items
+        // of a selection would pile up a dialog each. The last to finish asks.
         let hidden = self.background || window::is_minimized(w.hwnd);
-        let others_running = app::active_transfer_count() > 0;
         self.after = if !completed && !self.background {
             AfterFinish::Stay
-        } else if hidden || others_running {
+        } else if hidden || app::others_under_way(self.id) {
             AfterFinish::Close
         } else if received
             && ask_after_receive
