@@ -20,11 +20,15 @@ use std::{
 
 use windows_sys::Win32::{
     Foundation::HWND,
-    UI::{Controls::*, Input::KeyboardAndMouse::IsWindowEnabled, WindowsAndMessaging::*},
+    UI::{
+        Controls::*,
+        Input::KeyboardAndMouse::{GetFocus, IsWindowEnabled},
+        WindowsAndMessaging::*,
+    },
 };
 
 use super::{
-    accessibility, crlf, info, main_window, send, set_text,
+    accessibility, crlf, error, info, main_window, send, set_text,
     tray::{self, BalloonAction},
     wide,
     window::{self, CreateOptions, Handler, Window},
@@ -33,6 +37,7 @@ use crate::{
     app,
     config::Contact,
     i18n::{tr, trn},
+    identity,
     net::Kind,
 };
 
@@ -229,13 +234,15 @@ unsafe extern "system" fn announce_timer(_: HWND, _: u32, _: usize, _: u32) {
 }
 
 /// Shows the current recipients. The one selected stays selected; if it is
-/// gone, none is, so that nothing goes to someone else by mistake.
+/// gone, none is, so that nothing goes to someone else by mistake. Only a list
+/// that had nobody in it selects someone by itself.
 pub fn refresh_recipients() {
     let Some(c) = CONTROLS.get() else {
         return;
     };
     let selected = main_window::list_selection(c.list);
     let keep = selected.and_then(|i| SHOWN.with(|s| s.borrow().get(i).map(|c| c.id.clone())));
+    let had_recipients = SHOWN.with(|s| !s.borrow().is_empty());
     let contacts = app::cfg().contacts;
     send(c.list, LVM_DELETEALLITEMS, 0, 0);
     for (i, contact) in contacts.iter().enumerate() {
@@ -250,6 +257,7 @@ pub fn refresh_recipients() {
         Some(id) => contacts
             .iter()
             .position(|contact| contact.id.eq_ignore_ascii_case(id)),
+        None if had_recipients => None,
         None => (!contacts.is_empty()).then_some(0),
     };
     if let Some(index) = index {
@@ -257,15 +265,18 @@ pub fn refresh_recipients() {
     }
     let any = !contacts.is_empty();
     SHOWN.set(contacts);
+    // A change made in another window leaves the focus where it is. Here, the
+    // focus must not stay on a control that goes away.
+    let focus = unsafe { GetFocus() };
+    if !any && (focus == c.list || focus == c.send) {
+        window::focus(c.add);
+    }
     window::show(c.list, any);
     window::show(c.note, !any);
     window::enable(c.send, any);
     window::with_window(c.window, |w| {
         w.default_id.set(if any { ID_SEND } else { ID_ADD });
     });
-    if !any {
-        window::focus(c.add);
-    }
 }
 
 struct SendTo;
@@ -281,6 +292,12 @@ impl SendTo {
             info(w.hwnd, tr!(select_recipient_first));
             return;
         };
+        // Once, rather than from `start_send` for every item, and the window
+        // stays with what it offers.
+        if identity::parse_contact_id(&contact.id).is_none() {
+            error(w.hwnd, &tr!(contact_invalid, name = contact.name));
+            return;
+        }
         let paths = PATHS.take();
         for (i, path) in paths.into_iter().enumerate() {
             let kind = if path.is_dir() {
@@ -386,9 +403,11 @@ impl Handler for SendTo {
         CONTROLS.set(Some(controls));
         show_paths(&controls);
         refresh_recipients();
-        if !app::cfg().contacts.is_empty() {
-            window::focus(list);
-        }
+        window::focus(if SHOWN.with(|s| s.borrow().is_empty()) {
+            add
+        } else {
+            list
+        });
     }
 
     fn on_command(&mut self, w: &Window, id: u16, _code: u16) -> bool {

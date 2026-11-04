@@ -40,6 +40,14 @@ Seen once on 2026-11-01: after a 500 MB transfer failed on a 200 MB NTFS volume,
 
 ## Low
 
+### A Mac says nothing when sending to a recipient who has just been removed
+
+`Core::send` returns no error when `contact_by_id` finds nobody, so no transfer appears and no message says why. It takes a recipient removed or given another ID while the send is on its way, and a new text in the Mac table.
+
+### A Mac reports any failure of its instance lock as "already running"
+
+`take_instance_lock` returns `None` for a data folder it cannot create or write, and for a volume without `flock`, as well as for a lock that another copy holds. The app then acts as if a copy were running instead of naming the problem. Only `EWOULDBLOCK` means that.
+
 ### An all-users uninstall leaves other accounts' entries in File Explorer's menus
 
 Each account writes its own "Send with Dodavo" entry and Send to shortcut when Dodavo starts there, and the uninstaller reaches only the account that runs it. In the other accounts both stay, and fail when used, until they are deleted by hand or Dodavo is installed again. The same goes for their "Start with Windows" value.

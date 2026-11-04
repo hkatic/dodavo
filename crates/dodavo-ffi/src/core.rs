@@ -302,7 +302,8 @@ impl Outbox {
             announce: None,
         } = &message
         {
-            for waiting in queue.iter_mut() {
+            // The newest one: it is what the row shows when this has been taken.
+            for waiting in queue.iter_mut().rev() {
                 if let Out::Row {
                     row: older,
                     announce,
@@ -990,6 +991,13 @@ impl Core {
                 space.fits && space.enough != Some(false)
             }
         });
+        // The same goes for an offer that asks where to save.
+        let asked = auto_dir.is_none().then(|| {
+            let dir = cfg.suggested_save_dir();
+            let space: SpaceOut =
+                space::check_space(&pending.offer, &dir, &temp_dir, cfg.received_folder).into();
+            (dir, space)
+        });
         let mut state = lock(&self.state);
         if let Some(dir) = auto_dir {
             state.cfg.last_save_dir = Some(dir.clone());
@@ -1002,9 +1010,9 @@ impl Core {
             self.give(id, Some(notice), None);
             return;
         }
-        let dir = cfg.suggested_save_dir();
-        let space: SpaceOut =
-            space::check_space(&pending.offer, &dir, &temp_dir, cfg.received_folder).into();
+        let Some((dir, space)) = asked else {
+            return;
+        };
         let description = match pending.offer.kind {
             Kind::File => mac_description_file(&pending.offer),
             Kind::Folder => mac_description_folder(&pending.offer),
@@ -1219,18 +1227,13 @@ fn now_secs() -> u64 {
 }
 
 fn handle_events(events: mpsc::Receiver<Event>) {
+    // Set as soon as `Core::start`, which started this thread, returns. The
+    // network runs already, and only a progress event may be lost.
+    let core = crate::CORE.wait();
     loop {
         match events.recv_timeout(TICK) {
-            Ok(event) => {
-                if let Some(core) = crate::CORE.get() {
-                    core.on_event(event);
-                }
-            }
-            Err(mpsc::RecvTimeoutError::Timeout) => {
-                if let Some(core) = crate::CORE.get() {
-                    core.tick();
-                }
-            }
+            Ok(event) => core.on_event(event),
+            Err(mpsc::RecvTimeoutError::Timeout) => core.tick(),
             Err(mpsc::RecvTimeoutError::Disconnected) => return,
         }
     }

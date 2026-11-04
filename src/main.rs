@@ -120,10 +120,49 @@ fn parse_args(mut it: impl Iterator<Item = OsString>) -> Args {
     args
 }
 
-/// Hands `paths` to the instance that is running or still starting, and has
-/// it offer them for sending. Returns `false` if it never took them.
+/// Whether this process now is the instance of its profile. It keeps no handle
+/// otherwise: while one is open the mutex stays, even after the instance has
+/// gone, and a new start would then take itself for a second one.
 #[cfg(windows)]
-fn forward_to_running_instance(title: &str, paths: &[PathBuf]) -> bool {
+fn take_instance_mutex(name: &[u16]) -> bool {
+    unsafe {
+        let handle = CreateMutexW(std::ptr::null(), 1, name.as_ptr());
+        let taken = GetLastError() != ERROR_ALREADY_EXISTS;
+        if taken {
+            INSTANCE_MUTEX.store(handle as isize, Ordering::SeqCst);
+        } else {
+            CloseHandle(handle);
+        }
+        taken
+    }
+}
+
+/// Held by every instance, whatever its profile, so the installer and
+/// uninstaller can tell that Dodavo is running (AppMutex in
+/// installer\Dodavo.iss), and by a start that waits to hand over its items,
+/// which also keeps the file of the program open.
+#[cfg(windows)]
+fn hold_running_mutex() {
+    if RUNNING_MUTEX.load(Ordering::SeqCst) == 0 {
+        let name = wide("Local\\DodavoRunning");
+        let handle = unsafe { CreateMutexW(std::ptr::null(), 0, name.as_ptr()) };
+        RUNNING_MUTEX.store(handle as isize, Ordering::SeqCst);
+    }
+}
+
+/// What became of items that a start wanted to hand over.
+#[cfg(windows)]
+enum Handover {
+    Taken,
+    /// The instance has ended meanwhile, and this process is the instance now.
+    InstanceGone,
+    NoAnswer,
+}
+
+/// Hands `paths` to the instance that is running or still starting, and has
+/// it offer them for sending.
+#[cfg(windows)]
+fn forward_to_running_instance(title: &str, paths: &[PathBuf], mutex: &[u16]) -> Handover {
     let class = wide(ui::window::MAIN_CLASS);
     let title = wide(title);
     let payload = ui::send_to::encode(paths);
@@ -135,7 +174,13 @@ fn forward_to_running_instance(title: &str, paths: &[PathBuf]) -> bool {
     let deadline = Instant::now() + FORWARD_TIMEOUT;
     loop {
         let window = unsafe { FindWindowW(class.as_ptr(), title.as_ptr()) };
-        if !window.is_null() {
+        if window.is_null() {
+            // An instance that is exiting has no window for a few seconds
+            // before it ends. Of all the processes waiting, one takes over.
+            if take_instance_mutex(mutex) {
+                return Handover::InstanceGone;
+            }
+        } else {
             let mut answer = 0;
             let sent = unsafe {
                 // See `show_running_instance`.
@@ -156,11 +201,11 @@ fn forward_to_running_instance(title: &str, paths: &[PathBuf]) -> bool {
                 )
             };
             if sent != 0 && answer != 0 {
-                return true;
+                return Handover::Taken;
             }
         }
         if Instant::now() >= deadline {
-            return false;
+            return Handover::NoAnswer;
         }
         std::thread::sleep(Duration::from_millis(100));
     }
@@ -251,34 +296,29 @@ fn main() {
         .map(|path| std::path::absolute(path).unwrap_or_else(|_| path.clone()))
         .collect();
 
-    // Only one instance per profile: a second start brings the first one to the front.
-    // The mutex handle is deliberately kept open for the life of the process.
+    // Only one instance per profile: a second start brings the first one to the
+    // front, or hands it what is to be sent. The mutex handle of the instance is
+    // deliberately kept open for the life of the process.
     let instance_mutex = wide(&format!("Local\\Dodavo-{}", profile.unwrap_or("default")));
-    let already_running = unsafe {
-        let handle = CreateMutexW(std::ptr::null(), 1, instance_mutex.as_ptr());
-        INSTANCE_MUTEX.store(handle as isize, Ordering::SeqCst);
-        GetLastError() == ERROR_ALREADY_EXISTS
-    };
-    if already_running {
-        // While a handle is open the mutex stays, even after the instance has
-        // gone, and a new start would take itself for a second one. The wait
-        // below is long enough for that, for example during an update.
-        release_instance_mutexes();
-        if !send.is_empty() {
-            if !forward_to_running_instance(&title, &send) {
-                report_forward_failure(profile);
-            }
-        } else if !args.minimized {
+    if !take_instance_mutex(&instance_mutex) {
+        if send.is_empty() {
             // A start in the background (autostart) leaves the running instance alone.
-            show_running_instance(&title);
+            if !args.minimized {
+                show_running_instance(&title);
+            }
+            return;
         }
-        return;
+        hold_running_mutex();
+        match forward_to_running_instance(&title, &send, &instance_mutex) {
+            Handover::Taken => return,
+            Handover::InstanceGone => {}
+            Handover::NoAnswer => {
+                report_forward_failure(profile);
+                return;
+            }
+        }
     }
-    // Held by every instance, whatever its profile, so the installer and
-    // uninstaller can tell that Dodavo is running (AppMutex in installer\Dodavo.iss).
-    let running_mutex = wide("Local\\DodavoRunning");
-    let handle = unsafe { CreateMutexW(std::ptr::null(), 0, running_mutex.as_ptr()) };
-    RUNNING_MUTEX.store(handle as isize, Ordering::SeqCst);
+    hold_running_mutex();
     unsafe {
         CoInitializeEx(
             std::ptr::null(),

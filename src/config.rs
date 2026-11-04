@@ -213,8 +213,8 @@ impl Config {
             }
             // In 1.0.0, without the box a known sender's transfer went to
             // Downloads by itself, whatever folder was stored; without the
-            // box now, Dodavo asks. So what these users have stays as it is.
-            // With automatic transfers off they were asked anyway.
+            // box now, Dodavo asks. So those transfers go on as they did. With
+            // automatic transfers off, they were asked anyway.
             if !self.always_save && self.auto_accept {
                 self.always_save = true;
                 self.always_save_dir = None;
