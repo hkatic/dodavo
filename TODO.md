@@ -31,7 +31,6 @@ Remove an item in the commit that settles it. This file is public, so keep secre
 
 - **Run the first real update when the next version is out.** Download and install it from the real GitHub URL.
 - **Run the builds for Windows 7 SP1 and Windows 8.1 on those systems.** Include "Send with Dodavo" and Send to.
-- **Build the Windows 7 targets on GitHub Actions.** Only `installer\build.ps1` checks their imports, so a change that breaks them shows only when the installer is built, as moving `CoTaskMemFree` into the library did.
 - **Check File Explorer's menus with real selections and a screen reader.** Windows starts Dodavo from Explorer with the right to take the foreground, which scripts cannot do. Check that the window comes to the front from both menus, and what NVDA, JAWS and Narrator say when it does.
 - **Run transfers with the 32-bit builds.**
 - **Check the notifications live on Windows 11.** Test scripts cannot see them, so watch them by hand.

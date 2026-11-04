@@ -44,6 +44,46 @@ jobs:
       - name: Test
         run: cargo test --locked -- --test-threads=1
 
+  # What a release contains: all four programs, each with the import check of
+  # its Windows versions, and Setup. The Windows 7 programs are only built and
+  # checked here. Setup is unsigned: a release is built and signed elsewhere.
+  windows-all-builds:
+    runs-on: windows-latest
+    timeout-minutes: 120
+    steps:
+      - name: Keep line ends as committed
+        run: git config --global core.autocrlf false
+      - uses: actions/checkout@v7
+      - name: Install Rust
+        run: |
+          rustup toolchain install stable --profile minimal --no-self-update
+          rustup default stable
+      - uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            ~/.cargo/bin/cargo-about.exe
+            target
+          key: windows-all-${{ hashFiles('Cargo.lock') }}
+      # installer\licenses.ps1 needs it.
+      - name: Install cargo-about
+        run: |
+          if (-not (Get-Command cargo-about -ErrorAction SilentlyContinue)) {
+            cargo install cargo-about --locked --features cli
+          }
+      - name: Build all programs and Setup
+        run: powershell -ExecutionPolicy Bypass -File installer\build.ps1
+      - uses: actions/upload-artifact@v7
+        with:
+          name: Dodavo-setup-unsigned
+          path: target/installer/Dodavo-*-setup.exe*
+          if-no-files-found: error
+          retention-days: 14
+      # One at a time: the network tests start real iroh endpoints.
+      - name: Test the 32-bit program
+        run: cargo test --locked --target i686-pc-windows-msvc -- --test-threads=1
+
   macos:
     runs-on: macos-latest
     timeout-minutes: 60
