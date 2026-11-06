@@ -9,8 +9,10 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -141,11 +143,13 @@ fun RecipientsScreen(navigator: Navigator) {
         },
         floatingActionButton = {
             if (state.state is CoreState.Running) {
-                ExtendedFloatingActionButton(
-                    onClick = { navigator.go(RecipientEditorKey()) },
-                    icon = { Icon(Icons.Filled.Add, contentDescription = null) },
-                    text = { Text(stringResource(R.string.add_recipient)) },
-                )
+                // Icon and text as content: the form with `icon` and `text`
+                // keeps its text from accessibility services (Material 3 1.4).
+                ExtendedFloatingActionButton(onClick = { navigator.go(RecipientEditorKey()) }) {
+                    Icon(Icons.Filled.Add, contentDescription = null)
+                    Spacer(Modifier.width(12.dp))
+                    Text(stringResource(R.string.add_recipient))
+                }
             }
         },
     ) { padding ->

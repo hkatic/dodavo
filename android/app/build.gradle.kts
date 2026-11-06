@@ -86,9 +86,13 @@ dependencies {
     testImplementation(libs.kotlinx.coroutines.test)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
+    androidTestImplementation(libs.androidx.compose.ui.test.junit4.accessibility)
     androidTestImplementation(libs.androidx.test.core)
     androidTestImplementation(libs.androidx.test.runner)
+    androidTestImplementation(libs.androidx.test.rules)
     androidTestImplementation(libs.androidx.test.ext.junit)
+    // Newer than what Compose's test library brings, which Android 17 no longer runs.
+    androidTestImplementation(libs.androidx.test.espresso.core)
 }
 
 // The native library: Dodavo's Rust core for the app's ABIs, through
