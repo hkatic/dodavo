@@ -116,8 +116,8 @@ pub fn strings_xml(lang: Lang) -> String {
     let english = android::strings(Lang::En);
     let mut out = String::from(
         "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n\
-         <!-- Made by `cargo run -p dodavo-android --example gen_strings`\n     \
-         from src/i18n/android. Do not edit. -->\n\
+         <!-- Made from src/i18n/android by the example gen_strings of\n     \
+         crates/dodavo-android. Do not edit. -->\n\
          <resources>\n",
     );
     out.push_str(&format!(

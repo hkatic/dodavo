@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Made by `cargo run -p dodavo-android --example gen_strings`
-     from src/i18n/android. Do not edit. -->
+<!-- Made from src/i18n/android by the example gen_strings of
+     crates/dodavo-android. Do not edit. -->
 <resources>
     <!-- The language of these texts, which the app gives Dodavo's core. -->
     <string name="dodavo_lang" translatable="false">en</string>

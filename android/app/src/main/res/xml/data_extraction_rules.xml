@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The recipients and the settings are backed up; the identity is not, as two
+     phones with one Contact ID would collide, nor are the records of transfers. -->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="file" path="Dodavo/secret.key" />
+        <exclude domain="file" path="Dodavo/transfers" />
+        <exclude domain="file" path="Dodavo/running.lock" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="file" path="Dodavo/secret.key" />
+        <exclude domain="file" path="Dodavo/transfers" />
+        <exclude domain="file" path="Dodavo/running.lock" />
+    </device-transfer>
+</data-extraction-rules>

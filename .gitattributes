@@ -7,3 +7,4 @@
 *.icns  binary
 *.png   binary
 *.dmg   binary
+*.jar   binary
