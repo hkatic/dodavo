@@ -26,8 +26,24 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    // The upload key, which Google Play checks a bundle against (Play App
+    // Signing holds the app's own key). Only from the environment, as
+    // android/release.sh says; without it, a release build is unsigned.
+    val uploadKeystore = providers.environmentVariable("DODAVO_UPLOAD_KEYSTORE")
+    signingConfigs {
+        if (uploadKeystore.isPresent) {
+            create("upload") {
+                storeFile = file(uploadKeystore.get())
+                storePassword = providers.environmentVariable("DODAVO_UPLOAD_STORE_PASSWORD").get()
+                keyAlias = providers.environmentVariable("DODAVO_UPLOAD_KEY_ALIAS").get()
+                keyPassword = providers.environmentVariable("DODAVO_UPLOAD_KEY_PASSWORD").get()
+            }
+        }
+    }
+
     buildTypes {
         release {
+            signingConfig = signingConfigs.findByName("upload")
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(

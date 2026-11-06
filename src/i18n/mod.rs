@@ -579,9 +579,9 @@ pub fn init(setting: Option<&str>) {
 }
 
 /// Android: the app's language changed while it runs (the user chose another
-/// one for it in the system's settings). Windows and the Mac keep theirs for
-/// as long as they run.
-#[cfg(any(target_os = "android", test))]
+/// one for it in the system's settings); Linux builds the same program for
+/// its tests. Windows and the Mac keep theirs for as long as they run.
+#[cfg(any(target_os = "android", target_os = "linux", test))]
 pub fn switch(lang: Lang) {
     LANG.store(place(lang), Ordering::SeqCst);
 }

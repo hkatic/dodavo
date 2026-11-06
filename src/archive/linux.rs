@@ -66,7 +66,10 @@ fn kind_of(volume: &libc::statfs) -> i64 {
     if PRETEND_FAT.get() {
         return MSDOS;
     }
-    volume.f_type as i64
+    // Its type differs between the C libraries (i64 on Linux, u64 on Android).
+    #[allow(clippy::unnecessary_cast)]
+    let kind = volume.f_type as i64;
+    kind
 }
 
 /// A number for the volume: from `f_fsid`, which ext4 and f2fs derive from
