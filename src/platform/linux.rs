@@ -205,3 +205,20 @@ pub fn api_level() -> u32 {
         text.to_str().ok().and_then(|t| t.trim().parse().ok()).unwrap_or(0)
     })
 }
+
+/// Gives iroh, and the crates below it, Java's VM and the app's context,
+/// which they need for the system's DNS servers and the network's
+/// interfaces. Once, before the network starts: without it, those crates
+/// find out by catching a panic, which the panic hook would see first.
+///
+/// # Safety
+///
+/// Both pointers stay valid until the process ends.
+#[cfg(target_os = "android")]
+pub unsafe fn install_android_jni_context(
+    java_vm: *mut std::ffi::c_void,
+    context: *mut std::ffi::c_void,
+) {
+    // SAFETY: as the caller says.
+    unsafe { iroh::dns::install_android_jni_context(java_vm, context) }
+}

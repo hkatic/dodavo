@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/dodavo-ffi"]
+members = ["crates/dodavo-ffi", "crates/dodavo-android"]
 
 [package]
 name = "dodavo"

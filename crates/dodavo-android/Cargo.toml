@@ -1,0 +1,20 @@
+[package]
+name = "dodavo-android"
+version = "1.0.1"
+edition = "2024"
+description = "The library behind the Android user interface of Dodavo"
+license = "GPL-3.0-or-later"
+publish = false
+
+[lib]
+# libdodavo.so, which the app loads (`System.loadLibrary("dodavo")`).
+name = "dodavo"
+crate-type = ["cdylib", "rlib"]
+doctest = false
+
+[dependencies]
+dodavo = { path = "../.." }
+dodavo-ffi = { path = "../dodavo-ffi" }
+
+[target.'cfg(target_os = "android")'.dependencies]
+jni = "0.22"
