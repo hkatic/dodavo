@@ -1490,7 +1490,8 @@ mod tests {
         )
         .unwrap();
         assert_eq!(std::fs::read(out.join("Trip/a.txt")).unwrap(), b"hello");
-        let what = if cfg!(target_os = "macos") {
+        // Restored where the system takes it (see `os::takes_name`).
+        let what = if cfg!(any(target_os = "macos", target_os = "linux")) {
             "what?.txt"
         } else {
             "what_.txt"
@@ -1669,10 +1670,14 @@ mod tests {
             times.modified.and_then(filetime_to_system),
             Some(at(1_500_000_000))
         );
-        assert_eq!(
-            times.created.and_then(filetime_to_system),
-            testing::kept(at(1_400_000_000))
-        );
+        // Where it cannot be given (Linux), the zip has the file's own
+        // birth time, if the file system keeps one.
+        if testing::CREATION_TIMES {
+            assert_eq!(
+                times.created.and_then(filetime_to_system),
+                Some(at(1_400_000_000))
+            );
+        }
         drop(entry);
         assert!(
             archive.file_names().all(|n| !n.unwrap().starts_with("src")),
