@@ -53,6 +53,10 @@ pub enum Command {
     Resume {
         id: u64,
     },
+    /// The system says that the network changed (another Wi-Fi, mobile
+    /// data, or back from sleep). Android tells only the app, so iroh hears
+    /// it from there; elsewhere iroh watches the network itself.
+    NetworkChange,
     /// Closes the transfer's connection as if the network had dropped it.
     #[cfg(test)]
     DropConnection {
@@ -974,6 +978,10 @@ async fn run(secret: SecretKey, shared: Arc<Shared>, mut rx: mpsc::UnboundedRece
                 if let Some(ctl) = shared.control(id) {
                     ctl.paused.send_replace(false);
                 }
+            }
+            Command::NetworkChange => {
+                let endpoint = endpoint.clone();
+                tokio::spawn(async move { endpoint.network_change().await });
             }
             #[cfg(test)]
             Command::DropConnection { id } => {
