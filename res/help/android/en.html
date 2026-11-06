@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dodavo Help</title>
+<link rel="stylesheet" href="help.css">
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to main content</a>
+
+<header>
+<h1>Dodavo Help</h1>
+<p class="intro">Dodavo sends files and folders directly from one device to another. You don't need an account, a cloud service or a link: each of you has a Contact ID, and files go straight from one device to the other, end-to-end encrypted. It works between Android phones and tablets, Windows PCs and Macs.</p>
+</header>
+
+<nav aria-labelledby="contents">
+<h2 id="contents">Contents</h2>
+<ol>
+<li><a href="#using-help">Using this help</a></li>
+<li><a href="#how-it-works">How Dodavo works</a></li>
+<li><a href="#installing">Installing and uninstalling</a></li>
+<li><a href="#getting-started">Getting started</a></li>
+<li><a href="#main-screens">The main screens</a></li>
+<li><a href="#recipients">Managing recipients</a></li>
+<li><a href="#sending">Sending files and folders</a></li>
+<li><a href="#receiving">Receiving files and folders</a></li>
+<li><a href="#progress">Following a transfer</a></li>
+<li><a href="#background">Receiving in the background</a></li>
+<li><a href="#blocking">Blocking a sender</a></li>
+<li><a href="#settings">Settings</a></li>
+<li><a href="#talkback">Using Dodavo with TalkBack</a></li>
+<li><a href="#connections">Connections and security</a></li>
+<li><a href="#faq">Frequently asked questions</a></li>
+<li><a href="#troubleshooting">Troubleshooting</a></li>
+<li><a href="#license">License</a></li>
+</ol>
+</nav>
+
+<main id="main" tabindex="-1">
+
+<section aria-labelledby="using-help">
+<h2 id="using-help">Using this help</h2>
+<p>This help is in Dodavo, in the language Dodavo is using. To open it, tap More options at the top of the Recipients screen and choose Help.</p>
+<p>Each topic is a level 2 heading. With TalkBack, choose Headings in the reading controls, then swipe down or up to go from one heading to the next.</p>
+<p>Names of screens, buttons and other controls are written exactly as they appear in Dodavo.</p>
+</section>
+
+<section aria-labelledby="how-it-works">
+<h2 id="how-it-works">How Dodavo works</h2>
+<p>Every device running Dodavo has a permanent <strong>Contact ID</strong>: a code of 64 characters that takes the place of an address. You share it once; it does not change, wherever the device goes.</p>
+<ol>
+<li>You share your Contact ID with the other person, for example in a message.</li>
+<li>The other person adds you to their recipients, and you add them to yours.</li>
+<li>To send something, you tap the person and choose what to send.</li>
+<li>The other person's Dodavo asks whether to accept it, or starts the transfer by itself if they allow that for their recipients.</li>
+<li>The item goes directly to their device, encrypted all the way.</li>
+</ol>
+<p>Dodavo has to be running on both devices when a transfer starts. On Android, others can reach it at any time with Receive in the background turned on (see <a href="#background">Receiving in the background</a>); otherwise while it is open or a transfer runs.</p>
+</section>
+
+<section aria-labelledby="installing">
+<h2 id="installing">Installing and uninstalling</h2>
+<p>Dodavo needs Android 8.0 or later.</p>
+<p>At the first start, Android asks whether Dodavo may send notifications (Android 13 and later), find and connect to devices on your local network (Android 17 and later), and use your files (Android 8 to 10). Allow them: without notifications, Dodavo cannot tell you about what arrives while you are in another app; without the local network, data between devices on the same network takes the long way, through the internet or a relay, which is slower; and on Android 8 to 10, Dodavo cannot save what it receives without access to your files.</p>
+<p>Uninstalling Dodavo deletes your Contact ID: installed again, it has a new one, which you have to share again. If Android backs up your apps, your recipients and settings come back with it. The items you received stay in the folder Download/Dodavo.</p>
+</section>
+
+<section aria-labelledby="getting-started">
+<h2 id="getting-started">Getting started</h2>
+<ol>
+<li>On the Recipients screen, tap More options and choose Share my Contact ID, then send it to the other person.</li>
+<li>Ask them to do the same. Tap Add recipient, enter a name and their Contact ID, and tap Save.</li>
+<li>Tap the person, and choose the files to send.</li>
+<li>Follow the transfer on the Transfers screen.</li>
+</ol>
+</section>
+
+<section aria-labelledby="main-screens">
+<h2 id="main-screens">The main screens</h2>
+<p>Dodavo has two main screens, Recipients and Transfers, which the navigation bar at the bottom switches between. On a wider screen, it is a navigation rail at the side.</p>
+<p>At the top of both, a status line says whether Dodavo is online, and what just happened: a transfer that ended, or someone who wants to send you something. TalkBack reads it when it changes, without moving the focus.</p>
+<p>On the Recipients screen, More options has Share my Contact ID, Copy my Contact ID, Settings, Help and About Dodavo.</p>
+</section>
+
+<section aria-labelledby="recipients">
+<h2 id="recipients">Managing recipients</h2>
+<p>Add recipient asks for a name, which only you see, and the person's Contact ID. Paste puts in a Contact ID that you copied. If something is wrong, the field says what, and the screen stays open until it is right.</p>
+<p>Each recipient has a button More options for that person, with Send files, Send a folder, Edit, Copy Contact ID, Block and Remove. Remove and Block ask first.</p>
+</section>
+
+<section aria-labelledby="sending">
+<h2 id="sending">Sending files and folders</h2>
+<p>Tap a recipient to send files: Android's file picker opens, where you can choose one or more files. Each becomes a transfer of its own. To send a folder, choose Send a folder from the recipient's menu. On Android 11 and later, the picker does not let you choose the Download folder itself or the top of the internal storage, only the folders inside them.</p>
+<p>From another app, share an item and choose Dodavo, then tap the person who gets it.</p>
+<p>Dodavo makes a copy of what you choose in its own storage before it offers it, so that the transfer can go on after a restart, and deletes the copy once the transfer no longer needs it.</p>
+<p>A folder is packed automatically and unpacked again on the other side. Windows and Android's shared storage do not allow some characters in names, such as <code>:</code> and <code>?</code>. Since a sender cannot tell what system the other side runs, a folder carries names that any system takes, with an underscore in place of such a character. A Mac restores the original names; Android and Windows keep the changed ones.</p>
+</section>
+
+<section aria-labelledby="receiving">
+<h2 id="receiving">Receiving files and folders</h2>
+<p>When someone sends you something, the status line says so, and a card at the top of the main screens shows what it is, with the button Incoming transfer. When Dodavo is not in front, a notification says so instead, with Review and Decline.</p>
+<p>The Incoming transfer screen says who sends what, and whether there is enough free space. A sender who is not one of your recipients comes with a warning, and with a check box to add them to your recipients. Accept takes it, Decline refuses it, and More options has Block sender. Going back leaves the offer waiting.</p>
+<p>Received items go to the folder Download/Dodavo. If an item with the same name is there already, the new one gets a number, for example <code>Report (2).pdf</code>; nothing is overwritten. From people in your recipients, a transfer can start by itself: see Start transfers automatically in <a href="#settings">Settings</a>.</p>
+</section>
+
+<section aria-labelledby="progress">
+<h2 id="progress">Following a transfer</h2>
+<p>The Transfers screen shows a card for each transfer: the item, the other person, what it is doing, how much is done, the speed and the time remaining. TalkBack reads these as one item. The buttons follow: Pause or Resume and Cancel transfer while it runs, and Remove from list when it has ended. A received file also has Open and Share, and a received folder Show folder, which opens Android's view of your downloads, where the folder Dodavo is. Cancel transfer asks first. Clear finished removes the transfers that have ended.</p>
+<p>If the connection is lost, or a device restarts, the transfer waits and continues where it stopped once both are online again. After 30 days without progress, it ends. At the end, the whole item is checked. Once all of an item has arrived, it is the receiver's, so the sender can no longer cancel the transfer.</p>
+<p>While data moves, Dodavo keeps running with a notification that shows the transfer. While Dodavo is in the background, Android 15 and later allow that for 6 hours a day. After that, Android may stop Dodavo, and the transfer waits until Dodavo is open again; with Receive in the background turned on, it goes on.</p>
+</section>
+
+<section aria-labelledby="background">
+<h2 id="background">Receiving in the background</h2>
+<p>With Receive in the background turned on in Settings, others can send you files also while Dodavo is closed. A notification, Ready to receive, shows that Dodavo is running, and it starts again after the device restarts. Turning it on asks for notifications, as offers then arrive while you are in another app.</p>
+<p>Turned off, Android may stop Dodavo at any time after you leave it, unless a transfer is running. Someone who sends you something then is told that Dodavo could not connect to you.</p>
+</section>
+
+<section aria-labelledby="blocking">
+<h2 id="blocking">Blocking a sender</h2>
+<p>If someone sends you things you do not want, choose Block from that recipient's menu, or Block sender in More options on the Incoming transfer screen, and confirm with Block. From then on, Dodavo declines everything they send you, without asking. They see only that their offer was declined, and are not told that they are blocked. A recipient you block is removed from your recipients. Transfers that are already under way go on.</p>
+<p>Settings &gt; Blocked senders lists them, with Unblock. Adding a blocked person as a recipient also unblocks them.</p>
+</section>
+
+<section aria-labelledby="settings">
+<h2 id="settings">Settings</h2>
+<p>Open them with More options &gt; Settings on the Recipients screen. Changes apply at once.</p>
+<ul>
+<li>Your name: Shown to the people you send files to.</li>
+<li>Your Contact ID, with Copy Contact ID and Share.</li>
+<li>Receive in the background: see <a href="#background">Receiving in the background</a>.</li>
+<li>Start transfers automatically: Only from your recipients, into Download/Dodavo. Dodavo always asks first for anyone else.</li>
+<li>When a folder arrives: Keep only the unpacked folder, Keep only the ZIP archive, or Keep both the unpacked folder and the ZIP file.</li>
+<li>Blocked senders: see <a href="#blocking">Blocking a sender</a>.</li>
+<li>Language: on Android 13 and later, it opens Android's own choice of language for Dodavo; before, Dodavo lists its languages.</li>
+<li>Notifications: Android's settings of Dodavo's notifications.</li>
+</ul>
+</section>
+
+<section aria-labelledby="talkback">
+<h2 id="talkback">Using Dodavo with TalkBack</h2>
+<p>Every button and field has a name. Swipe right or left to go from item to item, and double-tap to activate one. The status line is read when it changes, without moving the focus. In the list of recipients, double-tapping a name sends files to that person, and the button after it, More options for that person, opens their menu. A transfer's card is read as one item, followed by its buttons.</p>
+</section>
+
+<section aria-labelledby="connections">
+<h2 id="connections">Connections and security</h2>
+<p>Dodavo connects devices with iroh (iroh.computer):</p>
+<ul>
+<li>Directly, through routers and firewalls, without any port forwarding.</li>
+<li>Within your local network, where devices find each other by themselves.</li>
+<li>Through a relay server where a direct path is impossible. Data stays encrypted, so the relay cannot read it, but it is slower.</li>
+</ul>
+<p>Everything is end-to-end encrypted, and only the two devices can read it. Each item is checked with a BLAKE3 checksum at the end.</p>
+<p>Your Contact ID is public by nature; what proves it is yours is a secret key in Dodavo's own storage, which only Dodavo can read, and which is not backed up.</p>
+</section>
+
+<section aria-labelledby="faq">
+<h2 id="faq">Frequently asked questions</h2>
+<p><strong>Can I send to someone on Windows or a Mac?</strong> Yes. It works the same way in both directions.</p>
+<p><strong>Can the other person be offline?</strong> Not when a transfer starts: Dodavo has to be running on both devices, otherwise it says that it could not connect. Once a transfer has been accepted, either side may go offline, and it continues when both are back.</p>
+<p><strong>Does a file go through a server?</strong> Only through a relay, encrypted, if no direct path can be found.</p>
+<p><strong>Is there a limit to the size?</strong> Only the free space: the other side needs room for the item, and your device for the copy that Dodavo makes of what you send. Before it accepts, Dodavo says whether there is enough.</p>
+</section>
+
+<section aria-labelledby="troubleshooting">
+<h2 id="troubleshooting">Troubleshooting</h2>
+<p><strong>Dodavo says that it is offline.</strong> Check the internet connection. Transfers within the local network still work.</p>
+<p><strong>Transfers are slow between devices on the same network.</strong> On Android 17 and later, Dodavo may not be allowed to use the local network: allow Nearby devices in Android's settings of Dodavo, under Permissions.</p>
+<p><strong>There are no notifications.</strong> Turn them on with Notifications in Dodavo's Settings.</p>
+<p><strong>Sending says: Dodavo cannot read this item.</strong> Dodavo may no longer read what you chose, for example because the app that shared it has closed. Choose or share it again.</p>
+</section>
+
+<section aria-labelledby="license">
+<h2 id="license">License</h2>
+<p>Dodavo is free software under the GNU General Public License, version 3 or later, and comes with absolutely no warranty. About Dodavo &gt; Licenses shows the license, and the licenses of the components built into it.</p>
+</section>
+
+</main>
+</body>
+</html>

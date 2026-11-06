@@ -14,6 +14,7 @@ material3-adaptive = "1.3.0"
 webkit = "1.18.0"
 datastore = "1.3.0"
 junit = "4.13.2"
+aboutlibraries = "15.3.0"
 androidx-test = "1.7.0"
 androidx-test-junit = "1.3.0"
 
@@ -51,3 +52,5 @@ androidx-test-ext-junit = { module = "androidx.test.ext:junit", version.ref = "a
 android-application = { id = "com.android.application", version.ref = "agp" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
+# The licenses of the libraries, for res/third-party-licenses-android.txt.
+aboutlibraries = { id = "com.mikepenz.aboutlibraries.plugin", version.ref = "aboutlibraries" }
