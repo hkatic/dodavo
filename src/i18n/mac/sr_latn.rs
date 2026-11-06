@@ -124,6 +124,7 @@ pub const SR_LATN: Strings = Strings {
     menu_add_recipient: "Dodaj primaoca…",
     menu_edit_recipient: "Uredi primaoca…",
     menu_remove_recipient: "Ukloni primaoca",
+    menu_block_recipient: "Blokiraj primaoca",
     menu_copy_id: "Kopiraj moj ID kontakta",
     menu_close: "Zatvori",
     menu_edit: "Uredi",
@@ -165,6 +166,15 @@ pub const SR_LATN: Strings = Strings {
     save: "Sačuvaj",
     remove: "Ukloni",
     remove_text: "Tu osobu možete ponovo da dodate pomoću njenog ID-ja kontakta.",
+    block_confirm: "Želite li da blokirate „{name}“?",
+    block_text: "Dodavo će od sada bez pitanja odbijati sve što vam ta osoba pošalje. \
+        Ta osoba neće saznati da je blokirana, a prenosi koji su već u toku se nastavljaju. \
+        Osobu možete da deblokirate u: {settings} > Blokirani.",
+    block_recipient_text: "Osoba se uklanja sa liste primalaca, a Dodavo će od sada bez pitanja \
+        odbijati sve što vam pošalje. Ta osoba neće saznati da je blokirana, a prenosi koji su već \
+        u toku se nastavljaju. Osobu možete da deblokirate u: {settings} > Blokirani.",
+    block: "Blokiraj",
+    block_sender: "Blokiraj pošiljaoca",
     send_panel_message: "Izaberite datoteke i fascikle za slanje. Primalac: {name}",
     send_panel_prompt: "Pošalji",
     pick_recipient_title: "Kome poslati?",
@@ -195,6 +205,11 @@ pub const SR_LATN: Strings = Strings {
     space_fat: "„{drive}“ koristi format MS-DOS (FAT), koji ne može da sačuva datoteke od 4 GB ili veće, a prenos bi tamo sačuvao datoteku od {size}. Izaberite fasciklu na drugom disku.",
     settings_general: "Opšte",
     settings_receiving: "Prijem",
+    settings_blocked: "Blokirani",
+    blocked_senders_label: "Blokirani pošiljaoci:",
+    blocked_entry: "{name} (ID kontakta {id})",
+    blocked_none: "Nijedan pošiljalac nije blokiran.",
+    unblock: "Deblokiraj",
     my_name_label: "Vaše ime:",
     my_name_help: "Prikazuje se osobama kojima šaljete datoteke.",
     open_at_login: "Otvori pri prijavljivanju",

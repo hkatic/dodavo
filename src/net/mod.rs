@@ -358,7 +358,13 @@ pub(crate) struct Shared {
     /// other side sees one clean suspension and not a fresh connection that
     /// dies a moment later without explanation.
     pub(crate) shutting_down: AtomicBool,
+    /// Senders whose offers are declined without asking (see
+    /// `NetHandle::set_blocked`).
+    blocked: Blocked,
 }
+
+/// The blocked senders, shared by the network and its handle.
+type Blocked = Arc<Mutex<HashSet<EndpointId>>>;
 
 impl Shared {
     pub(crate) fn emit(&self, event: Event) {
@@ -526,6 +532,7 @@ pub(crate) fn spawn_path_watch(
 #[derive(Clone)]
 pub struct NetHandle {
     tx: mpsc::UnboundedSender<Command>,
+    blocked: Blocked,
 }
 
 impl NetHandle {
@@ -534,11 +541,19 @@ impl NetHandle {
     pub fn idle() -> NetHandle {
         NetHandle {
             tx: mpsc::unbounded_channel().0,
+            blocked: Blocked::default(),
         }
     }
 
     pub fn send(&self, cmd: Command) {
         let _ = self.tx.send(cmd);
+    }
+
+    /// From now on, offers from these senders are declined without asking:
+    /// the sender learns only that the offer was declined, and nothing here
+    /// sees it. Transfers with them that are under way go on.
+    pub fn set_blocked(&self, ids: impl IntoIterator<Item = EndpointId>) {
+        *self.blocked.lock().unwrap() = ids.into_iter().collect();
     }
 
     /// Suspends all transfers and closes connections so that peers learn
@@ -552,14 +567,18 @@ impl NetHandle {
 
 /// Starts the network thread. `sink` is called from network threads for
 /// every event. `data_dir` holds the records of unfinished transfers and
-/// `temp_dir` the temporary archives of folder transfers.
+/// `temp_dir` the temporary archives of folder transfers. Offers from the
+/// `blocked` senders are declined from the start (see
+/// `NetHandle::set_blocked`).
 pub fn start(
     secret: SecretKey,
     data_dir: PathBuf,
     temp_dir: PathBuf,
+    blocked: impl IntoIterator<Item = EndpointId>,
     sink: impl Fn(Event) + Send + Sync + 'static,
 ) -> NetHandle {
     let (tx, rx) = mpsc::unbounded_channel();
+    let blocked = Blocked::new(Mutex::new(blocked.into_iter().collect()));
     let shared = Arc::new(Shared {
         sink: Box::new(sink),
         data_dir,
@@ -569,6 +588,7 @@ pub fn start(
         sessions: Mutex::new(Vec::new()),
         restoring: Mutex::new(HashSet::new()),
         shutting_down: AtomicBool::new(false),
+        blocked: blocked.clone(),
     });
     std::thread::Builder::new()
         .name("network".into())
@@ -580,7 +600,7 @@ pub fn start(
             rt.block_on(run(secret, shared, rx));
         })
         .expect("spawn network thread");
-    NetHandle { tx }
+    NetHandle { tx, blocked }
 }
 
 async fn bind(secret: SecretKey) -> anyhow::Result<Endpoint> {
@@ -662,6 +682,14 @@ async fn accept(shared: Arc<Shared>, endpoint: Endpoint, conn: Connection) {
     let peer = conn.remote_id();
     // Short answers, after which the connection is done.
     let answer = match first {
+        Msg::Offer(_) if shared.blocked.lock().unwrap().contains(&peer) => {
+            // Declined as the user would, so the sender cannot tell; the
+            // connection stays until the sender has read it.
+            let _ = protocol::write_msg(&mut send, &Msg::Decline).await;
+            let _ = send.finish();
+            let _ = tokio::time::timeout(Duration::from_secs(5), conn.closed()).await;
+            return;
+        }
         Msg::Offer(offer) => {
             receive::handle(shared, endpoint, conn, send, recv, offer).await;
             return;
@@ -1082,9 +1110,16 @@ mod tests {
             SecretKey::generate(),
             base.join("a"),
             base.join("temp"),
+            [],
             sink(tx_a),
         );
-        let b = Arc::new(start(key_b, base.join("b"), base.join("temp"), sink(tx_b)));
+        let b = Arc::new(start(
+            key_b,
+            base.join("b"),
+            base.join("temp"),
+            [],
+            sink(tx_b),
+        ));
 
         // Receiver: accept everything except offers named "decline.txt" (the
         // folder "Kept" also keeps its zip), and pause the first transfer
@@ -1271,6 +1306,69 @@ mod tests {
         std::fs::remove_dir_all(&base).ok();
     }
 
+    /// An offer from a blocked sender is declined without the receiver
+    /// seeing it, and one sent after the block is lifted is shown again.
+    #[test]
+    fn a_blocked_sender_is_declined_unseen() {
+        let base = scratch("blocked");
+        let (tx_a, rx_a) = mpsc::channel();
+        let (tx_b, rx_b) = mpsc::channel();
+        let key_a = SecretKey::generate();
+        let key_b = SecretKey::generate();
+        let id_b = key_b.public();
+        let a = start(
+            key_a.clone(),
+            base.join("a"),
+            base.join("temp"),
+            [],
+            sink(tx_a),
+        );
+        let b = start(
+            key_b,
+            base.join("b"),
+            base.join("temp"),
+            [key_a.public()],
+            sink(tx_b),
+        );
+        let file = base.join("note.txt");
+        std::fs::write(&file, b"hello").unwrap();
+        let send = |id| {
+            a.send(Command::Send {
+                id,
+                to: id_b,
+                path: file.clone(),
+                kind: Kind::File,
+                my_name: "A".into(),
+                peer_name: "B".into(),
+            })
+        };
+
+        let first = next_transfer_id();
+        send(first);
+        let outcome = wait_finished(&rx_a, first);
+        assert!(matches!(outcome, Outcome::Declined), "{outcome:?}");
+        let seen: Vec<Event> = rx_b.try_iter().collect();
+        assert!(
+            !seen
+                .iter()
+                .any(|e| matches!(e, Event::Offer { .. } | Event::Finished { .. })),
+            "{seen:?}"
+        );
+
+        b.set_blocked([]);
+        let second = next_transfer_id();
+        send(second);
+        let Event::Offer { id, from, .. } = wait_for(&rx_b, |e| matches!(e, Event::Offer { .. }))
+        else {
+            unreachable!()
+        };
+        assert_eq!(from, key_a.public());
+        b.send(Command::Respond { id, accept: None });
+        let outcome = wait_finished(&rx_a, second);
+        assert!(matches!(outcome, Outcome::Declined), "{outcome:?}");
+        std::fs::remove_dir_all(&base).ok();
+    }
+
     /// The sender's connection is dropped in the middle; the transfer
     /// continues on a new one and the file is still intact.
     #[test]
@@ -1284,9 +1382,16 @@ mod tests {
             SecretKey::generate(),
             base.join("a"),
             base.join("temp"),
+            [],
             sink(tx_a),
         );
-        let b = Arc::new(start(key_b, base.join("b"), base.join("temp"), sink(tx_b)));
+        let b = Arc::new(start(
+            key_b,
+            base.join("b"),
+            base.join("temp"),
+            [],
+            sink(tx_b),
+        ));
         let recv_dir = base.join("received");
         let b_thread = {
             let recv_dir = recv_dir.clone();
@@ -1379,9 +1484,16 @@ mod tests {
             SecretKey::generate(),
             base.join("a"),
             base.join("temp"),
+            [],
             sink(tx_a),
         );
-        let b = start(key_b.clone(), dir_b.clone(), base.join("temp"), sink(tx_b));
+        let b = start(
+            key_b.clone(),
+            dir_b.clone(),
+            base.join("temp"),
+            [],
+            sink(tx_b),
+        );
         let recv_dir = base.join("received");
 
         let file = base.join("big.bin");
@@ -1428,7 +1540,7 @@ mod tests {
             )
         });
         let (tx_b2, rx_b2) = mpsc::channel();
-        let b2 = start(key_b, dir_b.clone(), base.join("temp"), sink(tx_b2));
+        let b2 = start(key_b, dir_b.clone(), base.join("temp"), [], sink(tx_b2));
         let Event::Restored {
             id: id_b2, have, ..
         } = wait_for(&rx_b2, |e| matches!(e, Event::Restored { .. }))
@@ -1485,9 +1597,16 @@ mod tests {
             SecretKey::generate(),
             base.join("a"),
             base.join("temp"),
+            [],
             sink(tx_a),
         );
-        let b = start(key_b.clone(), dir_b.clone(), base.join("temp"), sink(tx_b));
+        let b = start(
+            key_b.clone(),
+            dir_b.clone(),
+            base.join("temp"),
+            [],
+            sink(tx_b),
+        );
         let recv_dir = base.join("received");
 
         let folder = base.join("Photos");
@@ -1560,7 +1679,7 @@ mod tests {
         record.save(&dir_b).unwrap();
 
         let (tx_b2, rx_b2) = mpsc::channel();
-        let b2 = start(key_b, dir_b.clone(), base.join("temp"), sink(tx_b2));
+        let b2 = start(key_b, dir_b.clone(), base.join("temp"), [], sink(tx_b2));
         let Event::Restored { id: id_b2, .. } =
             wait_for(&rx_b2, |e| matches!(e, Event::Restored { .. }))
         else {
@@ -1856,6 +1975,7 @@ mod tests {
             sessions: Mutex::new(Vec::new()),
             restoring: Mutex::new(HashSet::new()),
             shutting_down: AtomicBool::new(false),
+            blocked: Blocked::default(),
         });
         (shared, events)
     }
@@ -2261,6 +2381,7 @@ mod tests {
             SecretKey::generate(),
             data_dir.clone(),
             base.join("temp"),
+            [],
             sink(tx),
         );
         let Event::Restored { id, .. } = wait_for(&rx, |e| matches!(e, Event::Restored { .. }))
@@ -2308,8 +2429,20 @@ mod tests {
         receive::HOLD_VERIFY.lock().unwrap().push(name.into());
         let (tx_a, _rx_a) = mpsc::channel();
         let (tx_b, rx_b) = mpsc::channel();
-        let a = start(key_a.clone(), dir_a.clone(), base.join("temp"), sink(tx_a));
-        let b = start(key_b.clone(), dir_b.clone(), base.join("temp"), sink(tx_b));
+        let a = start(
+            key_a.clone(),
+            dir_a.clone(),
+            base.join("temp"),
+            [],
+            sink(tx_a),
+        );
+        let b = start(
+            key_b.clone(),
+            dir_b.clone(),
+            base.join("temp"),
+            [],
+            sink(tx_b),
+        );
         let id = next_transfer_id();
         a.send(Command::Send {
             id,
@@ -2365,7 +2498,7 @@ mod tests {
     fn restart(base: &std::path::Path, s: &Stopped) -> (Restarted, Restarted) {
         let restored = |key: &SecretKey, dir: &PathBuf| {
             let (tx, rx) = mpsc::channel();
-            let net = start(key.clone(), dir.clone(), base.join("temp"), sink(tx));
+            let net = start(key.clone(), dir.clone(), base.join("temp"), [], sink(tx));
             let Event::Restored { id, .. } = wait_for(&rx, |e| matches!(e, Event::Restored { .. }))
             else {
                 unreachable!()

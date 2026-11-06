@@ -132,7 +132,7 @@
 </ul>
 <p>The status line cannot receive keyboard focus. To hear it, use your screen reader's command for reading the whole window: <kbd>NVDA</kbd>+<kbd>B</kbd> in NVDA, <kbd>Insert</kbd>+<kbd>B</kbd> in JAWS, or <kbd>Narrator</kbd>+<kbd>W</kbd> in Narrator.</p>
 <p>The menu bar has three menus. The <span class="ui">File</span> menu (<kbd>Alt</kbd>+<kbd>F</kbd>) contains <span class="ui">Send File…</span>, <span class="ui">Send Folder…</span>, <span class="ui">Add Recipient…</span>, <span class="ui">Edit Recipient…</span>, <span class="ui">Remove Recipient</span>, <span class="ui">Copy My Contact ID</span>, <span class="ui">Settings…</span> and <span class="ui">Exit</span>. The <span class="ui">Transfers</span> menu (<kbd>Alt</kbd>+<kbd>T</kbd>) lists every transfer in progress, with the person, the item and the state, and ends with <span class="ui">Show All Transfers</span> (<kbd>Ctrl</kbd>+<kbd>T</kbd>); when nothing is running, it says <span class="ui">No transfers in progress</span>. See <a href="#finding-transfers">Finding a transfer that runs in the background</a>. The <span class="ui">Help</span> menu (<kbd>Alt</kbd>+<kbd>H</kbd>) contains <span class="ui">View Help</span>, <span class="ui">How It Works</span> (a short summary), <span class="ui">License</span> (see <a href="#license">License</a>), <span class="ui">Donate</span> (see <a href="#donate">Donating</a>), <span class="ui">Check for Updates…</span> (see <a href="#update">Updating Dodavo</a>) and <span class="ui">About</span> (the version, the author, the website and the license; see <a href="#about">About Dodavo</a>).</p>
-<p>When a person is selected in the list, the menu of actions (<kbd>Enter</kbd>, a double-click, <kbd>Shift</kbd>+<kbd>F10</kbd> or the Menu key, or a right-click) offers <span class="ui">Send File…</span>, <span class="ui">Send Folder…</span>, <span class="ui">Show Transfer</span> (only while a transfer with that person is running; <span class="ui">Show Transfers</span> when there are several), <span class="ui">Edit…</span> and <span class="ui">Remove</span>.</p>
+<p>When a person is selected in the list, the menu of actions (<kbd>Enter</kbd>, a double-click, <kbd>Shift</kbd>+<kbd>F10</kbd> or the Menu key, or a right-click) offers <span class="ui">Send File…</span>, <span class="ui">Send Folder…</span>, <span class="ui">Show Transfer</span> (only while a transfer with that person is running; <span class="ui">Show Transfers</span> when there are several), <span class="ui">Edit…</span>, <span class="ui">Remove</span> and <span class="ui">Block</span>.</p>
 </section>
 
 <section aria-labelledby="recipients">
@@ -160,6 +160,7 @@
 <ul>
 <li>To change the name or the Contact ID, press <kbd>F2</kbd> or choose <span class="ui">Edit Recipient…</span> from the <span class="ui">File</span> menu. The <span class="ui">Edit Recipient</span> dialog works like <span class="ui">Add Recipient</span>.</li>
 <li>To remove the person, press <kbd>Delete</kbd> or choose <span class="ui">Remove Recipient</span> from the <span class="ui">File</span> menu, then confirm with <span class="ui">Yes</span>.</li>
+<li>To block the person, choose <span class="ui">Block Recipient</span> from the <span class="ui">File</span> menu, or <span class="ui">Block</span> from the menu of actions, then confirm with <span class="ui">Yes</span>. See <a href="#blocking">Blocking a sender</a>.</li>
 </ul>
 </section>
 
@@ -219,6 +220,8 @@
 <dd>A sentence below the folder says whether there is enough free space on that drive, how much is needed and how much is available. A folder that is unpacked needs room both for the download and for unpacking; a folder that you keep only as a ZIP file needs room for the ZIP file (see <span class="ui">After receiving a folder</span> in <a href="#settings-receiving">Settings</a>). The sentence is updated when you choose a folder with Browse or leave the folder field. On a drive with the FAT32 file system, such as many USB sticks and memory cards, no file can be 4 GB or larger: if the transfer would save such a file there, the sentence says so, and you need to choose a folder on another drive.</dd>
 <dt><span class="ui">Accept</span> (<kbd>Alt</kbd>+<kbd>A</kbd>) and <span class="ui">Decline</span> (<kbd>Alt</kbd>+<kbd>D</kbd>)</dt>
 <dd>When the window opens, the focus is on <span class="ui">Accept</span>, so pressing <kbd>Enter</kbd> accepts; screen readers usually read the text of the window first, from the bold line to the free disk space sentence. Pressing <kbd>Esc</kbd> or closing the window declines.</dd>
+<dt><span class="ui">Block Sender</span> (<kbd>Alt</kbd>+<kbd>K</kbd>)</dt>
+<dd>Declines what the person sends and blocks them, after you confirm with <span class="ui">Yes</span>. See <a href="#blocking">Blocking a sender</a>.</dd>
 </dl>
 <p>When one person sends several items at once, they share one window, and your answer applies to all of them. The bold line says how many there are, the next line gives their total size, and the <span class="ui">Items</span> field (<kbd>Alt</kbd>+<kbd>I</kbd>) lists them. Items that arrive while the window is open are added to it, and those that arrived within the last second are not covered by your answer yet: they stay in the window.</p>
 <p>If there is not enough free space, Dodavo asks whether you want to accept anyway. If the sender cancels before you answer, the window closes and a notification tells you so.</p>
@@ -238,6 +241,13 @@
 <h3 id="auto-accept">Receiving without being asked</h3>
 <p>Transfers from people in your recipient list start immediately, without the Incoming Transfer window, as long as <span class="ui">Always save received files to this folder</span> and <span class="ui">Start transfers automatically, without asking</span> are both on in Settings. They are on unless you clear them. Dodavo shows a notification, <span class="ui">Receiving</span>, and saves the item in the folder from the first option, which is your Downloads folder unless you chose another one. Transfers from unknown senders, and transfers that would not fit on the disk, are still asked about. Only the people you added yourself can start a transfer this way: their Contact ID cannot be forged.</p>
 <p>To choose where to save each item, clear <span class="ui">Always save received files to this folder</span>: every transfer then opens the Incoming Transfer window. To decide about every transfer but keep your folder as the suggestion, clear <span class="ui">Start transfers automatically, without asking</span> instead.</p>
+<h3 id="blocking">Blocking a sender</h3>
+<p>If someone sends you things you do not want, you can block them. Dodavo then declines everything they send you, without asking and without a notification. They see only that their offer was declined, and are not told that they are blocked. Transfers with them that are already under way go on; cancel them in their progress windows if you want them to stop.</p>
+<ul>
+<li>In the Incoming Transfer window, activate <span class="ui">Block Sender</span> (<kbd>Alt</kbd>+<kbd>K</kbd>) and confirm with <span class="ui">Yes</span>. Everything the person offers that waits for an answer is declined.</li>
+<li>In the main window, select the person and choose <span class="ui">Block Recipient</span> from the <span class="ui">File</span> menu. A blocked person is removed from your recipients.</li>
+</ul>
+<p>To unblock someone, open Settings, activate <span class="ui">Blocked Senders…</span> (<kbd>Alt</kbd>+<kbd>E</kbd>), select the person in the <span class="ui">Blocked Senders</span> dialog and activate <span class="ui">Unblock</span> (<kbd>Alt</kbd>+<kbd>U</kbd>). Adding a blocked person as a recipient also unblocks them.</p>
 </section>
 
 <section aria-labelledby="progress">
@@ -324,6 +334,8 @@
 <dd>A list with <span class="ui">Keep only the unpacked folder</span>, <span class="ui">Keep only the ZIP file (don't unpack)</span> and <span class="ui">Keep both the unpacked folder and the ZIP file</span>. A received folder arrives as a ZIP file; this decides whether Dodavo unpacks it and whether it keeps the ZIP file. Keeping the ZIP file is useful if you want to store or pass on the folder exactly as it arrived. The choice applies to transfers you accept after changing it. See <a href="#after-receiving">When the transfer is complete</a> and <a href="#faq-dates">Are the dates of files and folders kept?</a></dd>
 <dt><span class="ui">After receiving, ask whether to open the file or folder</span></dt>
 <dd>Asks what to do after an item has been received. See <a href="#after-receiving">When the transfer is complete</a>.</dd>
+<dt><span class="ui">Blocked Senders…</span></dt>
+<dd>Opens the list of the senders you blocked, where you can unblock them. See <a href="#blocking">Blocking a sender</a>.</dd>
 </dl>
 <h3 id="settings-general">General</h3>
 <dl>
@@ -394,6 +406,7 @@
 <tr><td><kbd>Alt</kbd>+<kbd>I</kbd></td><td>Move to the list of items, when there are several</td></tr>
 <tr><td><kbd>Alt</kbd>+<kbd>A</kbd></td><td>Accept</td></tr>
 <tr><td><kbd>Alt</kbd>+<kbd>D</kbd></td><td>Decline</td></tr>
+<tr><td><kbd>Alt</kbd>+<kbd>K</kbd></td><td>Block the sender</td></tr>
 <tr><td><kbd>Alt</kbd>+<kbd>S</kbd></td><td>Move to the Save to field</td></tr>
 <tr><td><kbd>Alt</kbd>+<kbd>B</kbd></td><td>Browse for a folder</td></tr>
 <tr><td><kbd>Alt</kbd>+<kbd>M</kbd></td><td>Add the unknown sender to my recipients</td></tr>
@@ -530,7 +543,7 @@
 <p>No. Every transfer is end-to-end encrypted between the two computers. When the data has to go through a relay server, the relay only passes on encrypted data that it cannot read. The Contact ID is the recipient's public key, so the connection can only be established with the computer that holds the matching secret key. See <a href="#connections">Connections and security</a>.</p>
 
 <h3 id="faq-id-secret">Is my Contact ID secret? Can anyone send me files?</h3>
-<p>The Contact ID is not secret; it works like a phone number. Anyone who has it can offer you a file. Only transfers from people in your recipient list start by themselves (<span class="ui">Start transfers automatically, without asking</span>, which you can turn off in Settings). From anyone else, nothing is saved on your computer until you choose <span class="ui">Accept</span>, and their offers are marked with an unknown sender warning. See <a href="#auto-accept">Receiving without being asked</a>.</p>
+<p>The Contact ID is not secret; it works like a phone number. Anyone who has it can offer you a file. Only transfers from people in your recipient list start by themselves (<span class="ui">Start transfers automatically, without asking</span>, which you can turn off in Settings). From anyone else, nothing is saved on your computer until you choose <span class="ui">Accept</span>, and their offers are marked with an unknown sender warning. See <a href="#auto-accept">Receiving without being asked</a>. If someone keeps sending you things you do not want, see <a href="#blocking">Blocking a sender</a>.</p>
 
 <h3 id="faq-servers">What does Dodavo send to servers on the internet?</h3>
 <p>Only what is needed for other computers to find yours. Dodavo publishes the addresses at which your computer can currently be reached under your Contact ID, to the lookup service of the iroh network, and keeps a connection to a relay server so that a transfer can be set up even when a direct connection is not possible. The names and contents of your files travel only inside the encrypted connection to the other computer. Once a day, when <span class="ui">Check for updates automatically (once a day)</span> is on, Dodavo also fetches from the Dodavo page on GitHub (github.com) a small file that describes the latest version, and it downloads the setup program from there when you choose to install an update; see <a href="#update">Updating Dodavo</a>. Dodavo has no accounts and sends no usage statistics.</p>

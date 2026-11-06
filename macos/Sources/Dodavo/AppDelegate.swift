@@ -531,6 +531,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             file, L[.menu_remove_recipient], #selector(MainWindowController.removeRecipient(_:)),
             "\u{8}", target: nil)
         remove.keyEquivalentModifierMask = [.command]
+        add(
+            file, L[.menu_block_recipient], #selector(MainWindowController.blockRecipient(_:)), "",
+            target: nil)
         file.addItem(.separator())
         let copyID = add(file, L[.menu_copy_id], #selector(copyMyContactID), "c")
         copyID.keyEquivalentModifierMask = [.command, .shift]
@@ -621,6 +624,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// The list changed from elsewhere (see `IncomingWindowController`).
     func recipientsChanged() {
         mainWindow?.recipientsChanged()
+    }
+
+    /// A sender was blocked (see `Core.block`): the windows of the offers of
+    /// theirs that were declined close, and the lists show it.
+    func senderBlocked(declined: [UInt64], error: String?) {
+        for id in declined {
+            incoming[id]?.closeWithoutAnswer()
+            incoming[id] = nil
+            notifier?.forgetOffer(id)
+        }
+        mainWindow?.recipientsChanged()
+        settingsWindow?.blockedChanged()
+        if let error = error { showAlert(error, on: mainWindow?.window) }
     }
 
     @objc func checkForUpdates(_: Any?) {

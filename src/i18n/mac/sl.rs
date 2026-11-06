@@ -124,6 +124,7 @@ pub const SL: Strings = Strings {
     menu_add_recipient: "Dodaj prejemnika …",
     menu_edit_recipient: "Uredi prejemnika …",
     menu_remove_recipient: "Odstrani prejemnika",
+    menu_block_recipient: "Blokiraj prejemnika",
     menu_copy_id: "Kopiraj moj ID stika",
     menu_close: "Zapri",
     menu_edit: "Uredi",
@@ -165,6 +166,15 @@ pub const SL: Strings = Strings {
     save: "Shrani",
     remove: "Odstrani",
     remove_text: "To osebo lahko znova dodate z njenim ID-jem stika.",
+    block_confirm: "Ali želite blokirati »{name}«?",
+    block_text: "Dodavo bo odslej brez vprašanja zavrnil vse, kar vam pošlje ta oseba. \
+        Ta oseba ne bo izvedela, da je blokirana, prenosi, ki že potekajo, pa se nadaljujejo. \
+        Osebo lahko odblokirate v: {settings} > Blokirani.",
+    block_recipient_text: "Oseba bo odstranjena s seznama prejemnikov, Dodavo pa bo odslej brez \
+        vprašanja zavrnil vse, kar vam pošlje. Ta oseba ne bo izvedela, da je blokirana, prenosi, \
+        ki že potekajo, pa se nadaljujejo. Osebo lahko odblokirate v: {settings} > Blokirani.",
+    block: "Blokiraj",
+    block_sender: "Blokiraj pošiljatelja",
     send_panel_message: "Izberite datoteke in mape za pošiljanje. Prejemnik: {name}",
     send_panel_prompt: "Pošlji",
     pick_recipient_title: "Komu poslati?",
@@ -195,6 +205,11 @@ pub const SL: Strings = Strings {
     space_fat: "»{drive}« uporablja obliko MS-DOS (FAT), ki ne more shraniti datotek, velikih 4 GB ali več, prenos pa bi tja shranil datoteko velikosti {size}. Izberite mapo na drugem disku.",
     settings_general: "Splošno",
     settings_receiving: "Prejemanje",
+    settings_blocked: "Blokirani",
+    blocked_senders_label: "Blokirani pošiljatelji:",
+    blocked_entry: "{name} (ID stika {id})",
+    blocked_none: "Noben pošiljatelj ni blokiran.",
+    unblock: "Odblokiraj",
     my_name_label: "Vaše ime:",
     my_name_help: "Prikazano je osebam, ki jim pošiljate datoteke.",
     open_at_login: "Odpri ob prijavi",

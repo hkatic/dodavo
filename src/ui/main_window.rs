@@ -47,6 +47,7 @@ const ID_SHOW_CONTACT_TRANSFERS: u16 = 114;
 const ID_CHECK_UPDATES: u16 = 115;
 const ID_LICENSE: u16 = 116;
 const ID_DONATE: u16 = 117;
+const ID_BLOCK: u16 = 118;
 const ID_LIST: u16 = 200;
 /// The first automatic update check, shortly after the start.
 const TIMER_UPDATE_START: usize = 1;
@@ -166,6 +167,7 @@ fn build_menu() -> (HMENU, HMENU) {
     menu_item(file, ID_ADD, tr!(menu_add));
     menu_item(file, ID_EDIT, tr!(menu_edit));
     menu_item(file, ID_REMOVE, tr!(menu_remove));
+    menu_item(file, ID_BLOCK, tr!(menu_block));
     menu_separator(file);
     menu_item(file, ID_COPY_ID, tr!(menu_copy_id));
     menu_item(file, ID_SETTINGS, tr!(menu_settings));
@@ -537,10 +539,7 @@ impl MainWindow {
     fn add_recipient(&self, w: &Window) {
         if let Some(contact) = super::recipient::show(w.hwnd, None) {
             let name = contact.name.clone();
-            app::update_cfg(|c| {
-                c.contacts.push(contact);
-                c.contacts.sort_by_key(|c| c.name.to_lowercase());
-            });
+            app::update_cfg(|c| c.add_contact(contact));
             self.refresh_and_select(&name);
         }
     }
@@ -552,12 +551,7 @@ impl MainWindow {
         };
         if let Some(contact) = super::recipient::show(w.hwnd, Some(&existing)) {
             let name = contact.name.clone();
-            app::update_cfg(|c| {
-                if let Some(slot) = c.contacts.iter_mut().find(|c| **c == existing) {
-                    *slot = contact;
-                }
-                c.contacts.sort_by_key(|c| c.name.to_lowercase());
-            });
+            app::update_cfg(|c| c.replace_contact(&existing, contact));
             self.refresh_and_select(&name);
         }
     }
@@ -577,6 +571,17 @@ impl MainWindow {
         if confirm(w.hwnd, &tr!(remove_confirm, name = contact.name)) {
             app::update_cfg(|c| c.contacts.retain(|x| *x != contact));
             refresh_list();
+        }
+    }
+
+    /// Blocks the selected recipient, if the user confirms it, which also
+    /// removes them from the list.
+    fn block_recipient(&self, w: &Window) {
+        let Some(contact) = self.selected_contact(w) else {
+            return;
+        };
+        if confirm(w.hwnd, &tr!(block_recipient_confirm, name = contact.name)) {
+            app::block_sender(&contact.name, &contact.id, std::ptr::null_mut());
         }
     }
 
@@ -663,6 +668,7 @@ impl MainWindow {
             ID_ADD => self.add_recipient(w),
             ID_EDIT => self.edit_recipient(w),
             ID_REMOVE => self.remove_recipient(w),
+            ID_BLOCK => self.block_recipient(w),
             ID_COPY_ID => self.copy_my_id(w),
             ID_SHOW_TRANSFERS => self.show_transfers(w),
             ID_SHOW_CONTACT_TRANSFERS => self.show_contact_transfers(w),
@@ -715,6 +721,7 @@ impl MainWindow {
             menu_separator(menu);
             menu_item(menu, ID_EDIT, tr!(ctx_edit));
             menu_item(menu, ID_REMOVE, tr!(ctx_remove));
+            menu_item(menu, ID_BLOCK, tr!(ctx_block));
         } else {
             menu_item(menu, ID_ADD, tr!(ctx_add));
         }

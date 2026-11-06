@@ -90,6 +90,7 @@ enum K: String {
     case menu_add_recipient
     case menu_edit_recipient
     case menu_remove_recipient
+    case menu_block_recipient
     case menu_copy_id
     case menu_close
     case menu_edit
@@ -131,6 +132,11 @@ enum K: String {
     case save
     case remove
     case remove_text
+    case block_confirm
+    case block_text
+    case block_recipient_text
+    case block
+    case block_sender
     case send_panel_message
     case send_panel_prompt
     case pick_recipient_title
@@ -161,6 +167,11 @@ enum K: String {
     case space_fat
     case settings_general
     case settings_receiving
+    case settings_blocked
+    case blocked_senders_label
+    case blocked_entry
+    case blocked_none
+    case unblock
     case my_name_label
     case my_name_help
     case open_at_login

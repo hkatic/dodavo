@@ -229,6 +229,14 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSToolba
         }
     }
 
+    @objc func blockRecipient(_: Any?) {
+        guard let contact = targetContact, let window = window else { return }
+        confirmBlocking(contact.name, isRecipient: true, on: window) {
+            let (error, declined) = Core.block(name: contact.name, id: contact.id)
+            (NSApp.delegate as? AppDelegate)?.senderBlocked(declined: declined, error: error)
+        }
+    }
+
     /// Items that came from elsewhere: to whom? The selected recipient is what
     /// Return takes.
     func chooseRecipient(forSending paths: [String]) {
@@ -263,7 +271,8 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSToolba
     /// Commands that need a recipient are unavailable without one.
     @objc func validateMenuItem(_ item: NSMenuItem) -> Bool {
         switch item.action {
-        case #selector(send(_:)), #selector(editRecipient(_:)), #selector(removeRecipient(_:)):
+        case #selector(send(_:)), #selector(editRecipient(_:)), #selector(removeRecipient(_:)),
+            #selector(blockRecipient(_:)):
             return targetContact != nil && window?.attachedSheet == nil
         case #selector(addRecipient(_:)):
             return window?.attachedSheet == nil
@@ -388,6 +397,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSToolba
         menu.addItem(.separator())
         add(L[.menu_edit_recipient], #selector(editRecipient(_:)))
         add(L[.menu_remove_recipient], #selector(removeRecipient(_:)))
+        add(L[.menu_block_recipient], #selector(blockRecipient(_:)))
     }
 
     // MARK: Dropping items on a recipient

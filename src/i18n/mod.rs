@@ -170,6 +170,7 @@ strings! {
         menu_add,
         menu_edit,
         menu_remove,
+        menu_block,
         menu_copy_id,
         menu_settings,
         menu_exit,
@@ -184,6 +185,7 @@ strings! {
         ctx_add,
         ctx_edit,
         ctx_remove,
+        ctx_block,
         ctx_show_transfer,
         ctx_show_transfers,
         tray_open,
@@ -226,6 +228,8 @@ strings! {
         pick_file_title,
         pick_folder_title,
         remove_confirm,
+        block_confirm,
+        block_recipient_confirm,
         id_copied,
         clipboard_busy,
         help_text,
@@ -347,6 +351,7 @@ strings! {
         browse,
         accept,
         decline,
+        block_sender,
         pick_save_folder,
         choose_save_folder,
         folder_unusable,
@@ -400,6 +405,13 @@ strings! {
         language_restart,
         my_id_label,
         copy,
+        blocked_senders_button,
+        // The Blocked Senders dialog.
+        blocked_title,
+        blocked_list_label,
+        blocked_entry,
+        blocked_none,
+        unblock,
         enter_my_name,
         invalid_save_folder,
         // File Explorer's menus and the Send with Dodavo window.
@@ -770,7 +782,7 @@ mod tests {
         }
         for lang in Lang::ALL {
             let s = lang.strings();
-            let groups: [(&str, Vec<&str>); 22] = [
+            let groups: [(&str, Vec<&str>); 23] = [
                 ("menu bar", vec![s.menu_file, s.menu_transfers, s.menu_help]),
                 (
                     "File menu",
@@ -780,6 +792,7 @@ mod tests {
                         s.menu_add,
                         s.menu_edit,
                         s.menu_remove,
+                        s.menu_block,
                         s.menu_copy_id,
                         s.menu_settings,
                         s.menu_exit,
@@ -806,6 +819,7 @@ mod tests {
                         s.ctx_show_transfer,
                         s.ctx_edit,
                         s.ctx_remove,
+                        s.ctx_block,
                     ],
                 ),
                 // Without a selected recipient.
@@ -846,6 +860,7 @@ mod tests {
                         s.connection_lost_label,
                         s.language_label,
                         s.copy,
+                        s.blocked_senders_button,
                     ],
                 ),
                 (
@@ -896,7 +911,12 @@ mod tests {
                         s.browse,
                         s.accept,
                         s.decline,
+                        s.block_sender,
                     ],
+                ),
+                (
+                    "blocked senders",
+                    vec![s.blocked_list_label, s.unblock],
                 ),
                 (
                     "update",

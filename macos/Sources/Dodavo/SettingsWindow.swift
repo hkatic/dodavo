@@ -1,7 +1,9 @@
 import AppKit
 
 /// Settings apply as they are changed, as on a Mac they do.
-final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSTextFieldDelegate {
+final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSTextFieldDelegate,
+    NSTableViewDataSource, NSTableViewDelegate
+{
     private var settings: Settings
     private let started: Started
     private let applied: () -> Void
@@ -17,6 +19,11 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSTe
     private let chooseFolder = NSButton()
     private let autoAccept = NSButton(checkboxWithTitle: L[.auto_accept], target: nil, action: nil)
     private let keep = NSPopUpButton()
+    private let blockedTable = NSTableView()
+    private let blockedNone = makeLabel(L[.blocked_none])
+    private let unblock = NSButton()
+    /// What the table of blocked senders shows.
+    private var blocked: [Contact] = []
 
     init(started: Started, applied: @escaping () -> Void) {
         self.started = started
@@ -38,8 +45,10 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSTe
         window.delegate = self
         let general = page(L[.settings_general], "gearshape", generalPage())
         let receiving = page(L[.settings_receiving], "square.and.arrow.down", receivingPage())
+        let blockedTab = page(L[.settings_blocked], "hand.raised", blockedPage())
         tabs.addTabViewItem(general)
         tabs.addTabViewItem(receiving)
+        tabs.addTabViewItem(blockedTab)
         show()
         window.setContentSize(tabs.view.fittingSize)
         window.center()
@@ -161,6 +170,98 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSTe
         return grid
     }
 
+    private func blockedPage() -> NSView {
+        let label = NSTextField(labelWithString: L[.blocked_senders_label])
+        let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("sender"))
+        column.resizingMask = .autoresizingMask
+        blockedTable.addTableColumn(column)
+        blockedTable.headerView = nil
+        blockedTable.dataSource = self
+        blockedTable.delegate = self
+        name(blockedTable, by: label)
+        let scroll = NSScrollView()
+        scroll.documentView = blockedTable
+        scroll.hasVerticalScroller = true
+        scroll.borderType = .bezelBorder
+        scroll.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            scroll.widthAnchor.constraint(equalToConstant: 440),
+            scroll.heightAnchor.constraint(equalToConstant: 150),
+        ])
+        unblock.title = L[.unblock]
+        unblock.bezelStyle = .rounded
+        unblock.target = self
+        unblock.action = #selector(unblockSelected)
+        blockedNone.preferredMaxLayoutWidth = 440
+        reloadBlocked()
+        return makeColumn([label, scroll, blockedNone, unblock])
+    }
+
+    /// Someone was blocked elsewhere (see `AppDelegate.senderBlocked`).
+    func blockedChanged() {
+        reloadBlocked()
+    }
+
+    private func reloadBlocked() {
+        let selected = blockedTable.selectedRow
+        blocked = Core.blocked()
+        blockedTable.reloadData()
+        blockedNone.isHidden = !blocked.isEmpty
+        if !blocked.isEmpty {
+            let row = min(max(selected, 0), blocked.count - 1)
+            blockedTable.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
+        }
+        unblock.isEnabled = blockedTable.selectedRow >= 0
+    }
+
+    @objc private func unblockSelected() {
+        let row = blockedTable.selectedRow
+        guard blocked.indices.contains(row) else { return }
+        if let error = Core.errorOf("unblock", ["contact_id": blocked[row].id]) {
+            showAlert(error, on: window)
+        }
+        reloadBlocked()
+        // The button may be unavailable now, and the focus must not stay on it.
+        window?.makeFirstResponder(blockedTable)
+        if blocked.isEmpty { announce(L[.blocked_none]) }
+    }
+
+    func numberOfRows(in _: NSTableView) -> Int {
+        blocked.count
+    }
+
+    func tableView(_ tableView: NSTableView, viewFor column: NSTableColumn?, row: Int) -> NSView? {
+        guard blocked.indices.contains(row) else { return nil }
+        let id = NSUserInterfaceItemIdentifier("sender")
+        let cell: NSTableCellView
+        if let reused = tableView.makeView(withIdentifier: id, owner: self) as? NSTableCellView {
+            cell = reused
+        } else {
+            cell = NSTableCellView()
+            cell.identifier = id
+            let text = NSTextField(labelWithString: "")
+            text.lineBreakMode = .byTruncatingTail
+            text.translatesAutoresizingMaskIntoConstraints = false
+            cell.addSubview(text)
+            cell.textField = text
+            NSLayoutConstraint.activate([
+                text.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 2),
+                text.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -2),
+                text.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
+            ])
+        }
+        let sender = blocked[row]
+        let shortened =
+            sender.id.count <= 16 ? sender.id : "\(sender.id.prefix(8))…\(sender.id.suffix(6))"
+        cell.textField?.stringValue = L.f(.blocked_entry, ["name": sender.name, "id": shortened])
+        cell.textField?.toolTip = sender.id
+        return cell
+    }
+
+    func tableViewSelectionDidChange(_: Notification) {
+        unblock.isEnabled = blockedTable.selectedRow >= 0
+    }
+
     private func show() {
         nameField.stringValue = settings.myName
         openAtLogin.state = settings.openAtLogin ? .on : .off
@@ -230,6 +331,11 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSTe
 
     func windowWillClose(_: Notification) {
         window?.makeFirstResponder(nil)
+    }
+
+    /// Adding a recipient elsewhere may have unblocked them.
+    func windowDidBecomeKey(_: Notification) {
+        reloadBlocked()
     }
 
     @objc private func languageChanged() {

@@ -317,10 +317,7 @@ impl SendTo {
             return;
         };
         let id = contact.id.clone();
-        app::update_cfg(|c| {
-            c.contacts.push(contact);
-            c.contacts.sort_by_key(|c| c.name.to_lowercase());
-        });
+        app::update_cfg(|c| c.add_contact(contact));
         // Also shows the new recipient here (see `refresh_recipients`).
         main_window::refresh_list();
         let Some(c) = CONTROLS.get() else {

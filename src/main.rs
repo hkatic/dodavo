@@ -375,6 +375,7 @@ fn main() {
         secret,
         data_dir.clone(),
         archive::temp_dir_for(profile),
+        cfg.blocked_ids(),
         app::event_sink,
     );
     app::install(app::App {
