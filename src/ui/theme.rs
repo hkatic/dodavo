@@ -316,6 +316,8 @@ unsafe extern "system" fn theme_child(hwnd: HWND, _: LPARAM) -> i32 {
             }
         }
         "edit" | "combobox" => set_theme(hwnd, if dark { Some("DarkMode_CFD") } else { None }),
+        // Dark scroll bars; the colors come from WM_CTLCOLORLISTBOX.
+        "listbox" => set_theme(hwnd, dark.then_some("DarkMode_Explorer")),
         "syslistview32" => {
             set_theme(
                 hwnd,

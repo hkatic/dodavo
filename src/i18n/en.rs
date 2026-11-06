@@ -11,6 +11,7 @@ pub const EN: Strings = Strings {
     menu_add: "&Add Recipient…\tCtrl+N",
     menu_edit: "&Edit Recipient…\tF2",
     menu_remove: "&Remove Recipient\tDel",
+    menu_block: "&Block Recipient",
     menu_copy_id: "&Copy My Contact ID\tCtrl+Shift+C",
     menu_settings: "&Settings…\tCtrl+Comma",
     menu_exit: "E&xit",
@@ -25,6 +26,7 @@ pub const EN: Strings = Strings {
     ctx_add: "&Add Recipient…",
     ctx_edit: "&Edit…",
     ctx_remove: "&Remove",
+    ctx_block: "&Block",
     ctx_show_transfer: "Show &Transfer",
     ctx_show_transfers: "Show &Transfers",
     tray_open: "&Open",
@@ -64,6 +66,15 @@ pub const EN: Strings = Strings {
     pick_file_title: "Choose one or more files to send to {name}",
     pick_folder_title: "Choose one or more folders to send to {name}",
     remove_confirm: "Remove {name} from your recipients?",
+    block_confirm: "Block {name}?\n\n\
+        From now on, Dodavo declines everything this sender sends you, without asking. \
+        They are not told that they are blocked. Transfers that are already under way go on.\n\n\
+        You can unblock them in Settings, under “Blocked Senders”.",
+    block_recipient_confirm: "Block {name}?\n\n\
+        {name} is removed from your recipients, and from now on Dodavo declines everything they \
+        send you, without asking. They are not told that they are blocked. Transfers that are \
+        already under way go on.\n\n\
+        You can unblock them in Settings, under “Blocked Senders”.",
     id_copied: "Your Contact ID has been copied to the clipboard:\n\n{id}\n\n\
         Paste it into an email or chat message and send it to anyone who wants to send you files. \
         They add you with “Add Recipient”.",
@@ -206,6 +217,7 @@ pub const EN: Strings = Strings {
     browse: "&Browse…",
     accept: "&Accept",
     decline: "&Decline",
+    block_sender: "Bloc&k Sender",
     pick_save_folder: "Choose where to save received files",
     choose_save_folder: "Please choose the folder where the received files should be saved.",
     folder_unusable: "The folder cannot be used:\n{path}\n\n{error}",
@@ -261,6 +273,12 @@ pub const EN: Strings = Strings {
     language_restart: "The new language is used after Dodavo is restarted.",
     my_id_label: "Your Contact ID:",
     copy: "&Copy",
+    blocked_senders_button: "Blocked S&enders…",
+    blocked_title: "Blocked Senders",
+    blocked_list_label: "&Blocked senders:",
+    blocked_entry: "{name}  (Contact ID {id})",
+    blocked_none: "No sender is blocked.",
+    unblock: "&Unblock",
     enter_my_name: "Please enter your name. It is shown to the people you send files to.",
     invalid_save_folder: "Please choose a valid folder for saving received files.",
 

@@ -35,6 +35,7 @@ const ID_CHECK_UPDATES: u16 = 23;
 const ID_SHOW_AFTER_SEND: u16 = 24;
 const ID_RECEIVED_FOLDER: u16 = 25;
 const ID_EXPLORER_MENU: u16 = 26;
+const ID_BLOCKED: u16 = 27;
 
 /// The two columns (96-DPI units): headings start at their `x`, the
 /// settings under them are indented.
@@ -266,7 +267,14 @@ impl Handler for SettingsDialog {
             cfg.ask_after_receive,
             (inner_x, y, inner_w, 20),
         );
-        let left_bottom = y + 20;
+        y += 30;
+        let blocked_w = w.button_width(tr!(blocked_senders_button), 160);
+        w.button(
+            tr!(blocked_senders_button),
+            ID_BLOCKED,
+            (inner_x, y, blocked_w, 26),
+        );
+        let left_bottom = y + 26;
 
         let (x, inner_x, inner_w) = (RIGHT_X, RIGHT_X + 10, COLUMN_W - 10);
         heading(tr!(general_heading), x, 12);
@@ -373,6 +381,7 @@ impl Handler for SettingsDialog {
                     set_text(self.dir, &dir.display().to_string());
                 }
             }
+            ID_BLOCKED => super::blocked::show(w.hwnd),
             ID_COPY => {
                 let my_id = app::with(|a| a.my_id.clone());
                 shell::copy_to_clipboard(w.hwnd, &my_id);

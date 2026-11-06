@@ -2,6 +2,7 @@
 
 pub mod about;
 pub mod accessibility;
+pub mod blocked;
 pub mod help;
 pub mod incoming;
 pub mod license;

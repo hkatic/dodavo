@@ -15,6 +15,8 @@ Remove an item in the commit that settles it. This file is public, so keep secre
 - **Try what macOS decides at a login and on older systems.** Telling a start at login (`LoginItem.launchedAtLogin`), also with `SMAppService`; the Local Network and Files and Folders prompts during an automatic receive at login; opening a received app that has the quarantine mark; `LSSharedFileList` on macOS 11 and 12.
 - **Try the changed settings on a Mac.** The Settings window shows Downloads with "Always save" on, and "Start transfers automatically" is unavailable with it off; an offer from a recipient then asks where to save.
 
+- **Try blocking senders by hand on Windows and on a Mac.** Block Sender in the Incoming window (with several of the sender's offers waiting), Block on a recipient, and unblocking: on Windows the Blocked Senders dialog with NVDA, JAWS and Narrator, in light and dark mode; on a Mac the Blocked tab with VoiceOver (see `macos/tests/voiceover-checklist.md`). Check that an offer from a blocked sender shows nothing and is declined on the other side.
+
 - **Install the published 1.0.0 from the release page.** Try a new installation for the current user and for all users, an installation over an older copy, and uninstalling.
 - **Send between two computers on different networks.** Check connecting through real NAT, and falling back to a relay there.
 - **Go through the main tasks with real screen readers.** Use NVDA, JAWS and Narrator, and listen to what is spoken, which scripted checks through MSAA and UI Automation do not cover.

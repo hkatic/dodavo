@@ -14,7 +14,8 @@ names, not what is actually spoken. Write what fails into `ISSUES.md`.
 - [ ] Opening Dodavo puts the focus on the list, which is announced as Recipients.
 - [ ] Interacting with the list reads a recipient's name, Contact ID and transfer, and the arrow keys move between recipients.
 - [ ] `Return` opens the Send panel for the selected recipient.
-- [ ] `VO-Shift-M` on a recipient opens its menu, with Send…, Edit Recipient… and Remove Recipient.
+- [ ] `VO-Shift-M` on a recipient opens its menu, with Send…, Edit Recipient…, Remove Recipient and Block Recipient.
+- [ ] Block Recipient asks first, with an alert that is read, and the recipient then leaves the list.
 - [ ] The toolbar can be reached, and each item says what it does. Send is reported as unavailable with no recipient selected.
 - [ ] The status line can be read, and a change between online and offline is announced.
 - [ ] ⌘N, ⌘I, ⌘⌫, ⇧⌘C, ⌘T, ⌘, and ⌘? work, and ⌘⌫ asks first.
@@ -38,6 +39,8 @@ names, not what is actually spoken. Write what fails into `ISSUES.md`.
 - [ ] `Return` accepts, `Esc` declines. The check box to add the sender reads its name.
 - [ ] Choose… changes the folder, and the new free space is announced.
 - [ ] From a recipient, the transfer starts by itself, with a notification that is read.
+- [ ] Block Sender can be reached with `Tab` and reads its title. Its alert is read, Block closes the window, and the sender's other offers that were waiting close too.
+- [ ] An offer from a blocked sender shows nothing at all, and the sender sees it declined.
 
 ## Transfers window
 
@@ -59,7 +62,8 @@ names, not what is actually spoken. Write what fails into `ISSUES.md`.
 
 ## Settings
 
-- [ ] The tabs General and Receiving can be reached and are announced.
+- [ ] The tabs General, Receiving and Blocked can be reached and are announced.
+- [ ] Blocked: the list reads as Blocked senders, each row as the name with the shortened Contact ID. Unblock is unavailable without a selection, and after the last one "No sender is blocked." is announced and the focus stays in the window.
 - [ ] Each field and check box reads its label. Changing one takes effect at once.
 - [ ] Your Contact ID can be read, and Copy says that it was copied.
 - [ ] Language says that it applies the next time Dodavo opens.

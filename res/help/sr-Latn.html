@@ -132,7 +132,7 @@
 </ul>
 <p>Red statusa ne može da dobije fokus tastature. Da biste ga čuli, upotrebite komandu čitača ekrana za čitanje celog prozora: <kbd>NVDA</kbd>+<kbd>B</kbd> u čitaču NVDA, <kbd>Insert</kbd>+<kbd>B</kbd> u čitaču JAWS ili <kbd>Narator</kbd>+<kbd>W</kbd> u Naratoru.</p>
 <p>Traka sa menijima ima tri menija. Meni <span class="ui">Datoteka</span> (<kbd>Alt</kbd>+<kbd>D</kbd>) sadrži opcije <span class="ui">Pošalji datoteku…</span>, <span class="ui">Pošalji fasciklu…</span>, <span class="ui">Dodaj primaoca…</span>, <span class="ui">Uredi primaoca…</span>, <span class="ui">Ukloni primaoca</span>, <span class="ui">Kopiraj moj ID kontakta</span>, <span class="ui">Postavke…</span> i <span class="ui">Izlaz</span>. Meni <span class="ui">Prenosi</span> (<kbd>Alt</kbd>+<kbd>R</kbd>) navodi sve prenose u toku, sa osobom, stavkom i stanjem, a na kraju sadrži opciju <span class="ui">Prikaži sve prenose</span> (<kbd>Ctrl</kbd>+<kbd>T</kbd>); kada ništa nije u toku, u njemu piše <span class="ui">Nema prenosa u toku</span>. Pogledajte <a href="#finding-transfers">Pronalaženje prenosa koji se odvija u pozadini</a>. Meni <span class="ui">Pomoć</span> (<kbd>Alt</kbd>+<kbd>P</kbd>) sadrži opcije <span class="ui">Prikaži pomoć</span>, <span class="ui">Kako funkcioniše</span> (kratak pregled), <span class="ui">Licenca</span> (pogledajte <a href="#license">Licenca</a>), <span class="ui">Doniraj</span> (pogledajte <a href="#donate">Donacije</a>), <span class="ui">Proveri da li ima ažuriranja…</span> (pogledajte <a href="#update">Ažuriranje programa Dodavo</a>) i <span class="ui">O programu</span> (verzija, autor, veb lokacija i licenca; pogledajte <a href="#about">O programu Dodavo</a>).</p>
-<p>Kada je na listi izabrana osoba, meni radnji (<kbd>Enter</kbd>, dvostruki klik, <kbd>Shift</kbd>+<kbd>F10</kbd>, taster kontekstualnog menija ili desni klik) nudi opcije <span class="ui">Pošalji datoteku…</span>, <span class="ui">Pošalji fasciklu…</span>, <span class="ui">Prikaži prenos</span> (samo dok sa tom osobom traje prenos; <span class="ui">Prikaži prenose</span> kada ih ima više), <span class="ui">Uredi…</span> i <span class="ui">Ukloni</span>.</p>
+<p>Kada je na listi izabrana osoba, meni radnji (<kbd>Enter</kbd>, dvostruki klik, <kbd>Shift</kbd>+<kbd>F10</kbd>, taster kontekstualnog menija ili desni klik) nudi opcije <span class="ui">Pošalji datoteku…</span>, <span class="ui">Pošalji fasciklu…</span>, <span class="ui">Prikaži prenos</span> (samo dok sa tom osobom traje prenos; <span class="ui">Prikaži prenose</span> kada ih ima više), <span class="ui">Uredi…</span>, <span class="ui">Ukloni</span> i <span class="ui">Blokiraj</span>.</p>
 </section>
 
 <section aria-labelledby="recipients">
@@ -160,6 +160,7 @@
 <ul>
 <li>Da biste promenili ime ili ID kontakta, pritisnite <kbd>F2</kbd> ili u meniju <span class="ui">Datoteka</span> izaberite <span class="ui">Uredi primaoca…</span>. Dijalog <span class="ui">Uredi primaoca</span> radi isto kao <span class="ui">Dodaj primaoca</span>.</li>
 <li>Da biste uklonili osobu, pritisnite <kbd>Delete</kbd> ili u meniju <span class="ui">Datoteka</span> izaberite <span class="ui">Ukloni primaoca</span>, a zatim potvrdite dugmetom <span class="ui">Da</span>.</li>
+<li>Da biste blokirali osobu, u meniju <span class="ui">Datoteka</span> izaberite <span class="ui">Blokiraj primaoca</span> ili u meniju radnji izaberite <span class="ui">Blokiraj</span>, a zatim potvrdite dugmetom <span class="ui">Da</span>. Pogledajte <a href="#blocking">Blokiranje pošiljaoca</a>.</li>
 </ul>
 </section>
 
@@ -219,6 +220,8 @@
 <dd>Rečenica ispod fascikle kaže da li na tom disku ima dovoljno slobodnog prostora, koliko je potrebno i koliko je dostupno. Fascikli koja se raspakuje potreban je prostor i za preuzimanje i za raspakivanje; fascikli koju zadržavate samo kao ZIP datoteku potreban je prostor za ZIP datoteku (pogledajte <span class="ui">Posle prijema fascikle</span> u <a href="#settings-receiving">postavkama</a>). Rečenica se ažurira kada fasciklu izaberete dugmetom Pregledaj ili napustite polje sa fasciklom. Na disku sa sistemom datoteka FAT32, kakav imaju mnogi USB fleš diskovi i memorijske kartice, nijedna datoteka ne može biti od 4 GB ili veća: ako bi prenos tamo sačuvao takvu datoteku, rečenica to kaže i treba da izaberete fasciklu na drugom disku.</dd>
 <dt><span class="ui">Prihvati</span> (<kbd>Alt</kbd>+<kbd>I</kbd>) i <span class="ui">Odbij</span> (<kbd>Alt</kbd>+<kbd>O</kbd>)</dt>
 <dd>Kada se prozor otvori, fokus je na dugmetu <span class="ui">Prihvati</span>, pa pritiskom tastera <kbd>Enter</kbd> prihvatate prenos; čitači ekrana obično najpre pročitaju tekst prozora, od podebljanog reda do rečenice o slobodnom prostoru na disku. Pritiskom tastera <kbd>Esc</kbd> ili zatvaranjem prozora odbijate ga.</dd>
+<dt><span class="ui">Blokiraj pošiljaoca</span> (<kbd>Alt</kbd>+<kbd>B</kbd>)</dt>
+<dd>Odbija ono što osoba šalje i blokira je, pošto potvrdite dugmetom <span class="ui">Da</span>. Pogledajte <a href="#blocking">Blokiranje pošiljaoca</a>.</dd>
 </dl>
 <p>Kada vam ista osoba šalje više stavki odjednom, one dele jedan prozor, a vaš odgovor se odnosi na sve. Podebljani red kaže koliko ih je, sledeći red navodi njihovu ukupnu veličinu, a polje <span class="ui">Stavke</span> (<kbd>Alt</kbd>+<kbd>T</kbd>) ih navodi. Stavke koje stignu dok je prozor otvoren dodaju se u njega, a one koje su stigle u poslednjoj sekundi vaš odgovor još ne obuhvata: ostaju u prozoru.</p>
 <p>Ako nema dovoljno slobodnog prostora, Dodavo pita da li ipak želite da prihvatite prenos. Ako pošiljalac otkaže pre nego što odgovorite, prozor se zatvara, a obaveštenje vas o tome izveštava.</p>
@@ -238,6 +241,13 @@
 <h3 id="auto-accept">Primanje bez pitanja</h3>
 <p>Prenosi od osoba sa vaše liste primalaca počinju odmah, bez prozora Dolazni prenos, ako su u postavkama uključene obe opcije: <span class="ui">Uvek čuvaj primljene datoteke u ovoj fascikli</span> i <span class="ui">Prenose pokreći automatski, bez pitanja</span>. Uključene su dok ih ne isključite. Dodavo prikazuje obaveštenje <span class="ui">Primanje</span> i čuva stavku u fascikli iz prve opcije, a to je vaša fascikla Preuzimanja ako niste izabrali drugu. Za prenose od nepoznatih pošiljalaca i prenose koji ne bi stali na disk Dodavo i dalje pita. Na ovaj način prenos mogu da pokrenu samo osobe koje ste sami dodali: njihov ID kontakta ne može da se falsifikuje.</p>
 <p>Ako želite da birate gde se čuva svaka stavka, opozovite izbor opcije <span class="ui">Uvek čuvaj primljene datoteke u ovoj fascikli</span>: svaki prenos tada otvara prozor Dolazni prenos. Ako želite da odlučujete o svakom prenosu, a da se vaša fascikla i dalje predlaže, umesto toga opozovite izbor opcije <span class="ui">Prenose pokreći automatski, bez pitanja</span>.</p>
+<h3 id="blocking">Blokiranje pošiljaoca</h3>
+<p>Ako vam neko šalje ono što ne želite, možete da ga blokirate. Dodavo tada bez pitanja i bez obaveštenja odbija sve što vam ta osoba pošalje. Ona vidi samo da je njena ponuda odbijena i ne saznaje da je blokirana. Prenosi sa njom koji su već u toku se nastavljaju; ako želite da prestanu, otkažite ih u njihovim prozorima napretka.</p>
+<ul>
+<li>U prozoru Dolazni prenos aktivirajte <span class="ui">Blokiraj pošiljaoca</span> (<kbd>Alt</kbd>+<kbd>B</kbd>) i potvrdite dugmetom <span class="ui">Da</span>. Odbija se sve što ta osoba nudi, a čeka odgovor.</li>
+<li>U glavnom prozoru izaberite osobu i u meniju <span class="ui">Datoteka</span> izaberite <span class="ui">Blokiraj primaoca</span>. Blokirana osoba se uklanja sa liste primalaca.</li>
+</ul>
+<p>Da biste nekoga deblokirali, otvorite postavke, aktivirajte <span class="ui">Blokirani pošiljaoci…</span> (<kbd>Alt</kbd>+<kbd>L</kbd>), u dijalogu <span class="ui">Blokirani pošiljaoci</span> izaberite osobu i aktivirajte <span class="ui">Deblokiraj</span> (<kbd>Alt</kbd>+<kbd>D</kbd>). Kada blokiranu osobu dodate u primaoce, ona se takođe deblokira.</p>
 </section>
 
 <section aria-labelledby="progress">
@@ -324,6 +334,8 @@
 <dd>Lista sa opcijama <span class="ui">Zadrži samo raspakovanu fasciklu</span>, <span class="ui">Zadrži samo ZIP datoteku (bez raspakivanja)</span> i <span class="ui">Zadrži raspakovanu fasciklu i ZIP datoteku</span>. Primljena fascikla stiže kao ZIP datoteka; ova postavka određuje da li će je Dodavo raspakovati i da li će zadržati ZIP datoteku. Zadržavanje ZIP datoteke je korisno ako fasciklu želite da sačuvate ili prosledite tačno onakvu kakva je stigla. Izbor važi za prenose koje prihvatite posle promene. Pogledajte <a href="#after-receiving">Kada je prenos završen</a> i <a href="#faq-dates">Da li datoteke i fascikle zadržavaju svoje datume?</a></dd>
 <dt><span class="ui">Posle prijema pitaj da li da se otvori datoteka ili fascikla</span></dt>
 <dd>Pita šta da se uradi pošto je stavka primljena. Pogledajte <a href="#after-receiving">Kada je prenos završen</a>.</dd>
+<dt><span class="ui">Blokirani pošiljaoci…</span></dt>
+<dd>Otvara listu pošiljalaca koje ste blokirali, na kojoj možete da ih deblokirate. Pogledajte <a href="#blocking">Blokiranje pošiljaoca</a>.</dd>
 </dl>
 <h3 id="settings-general">Opšte</h3>
 <dl>
@@ -394,6 +406,7 @@
 <tr><td><kbd>Alt</kbd>+<kbd>T</kbd></td><td>Prelazak na listu stavki, kada ih je više</td></tr>
 <tr><td><kbd>Alt</kbd>+<kbd>I</kbd></td><td>Prihvati</td></tr>
 <tr><td><kbd>Alt</kbd>+<kbd>O</kbd></td><td>Odbij</td></tr>
+<tr><td><kbd>Alt</kbd>+<kbd>B</kbd></td><td>Blokiraj pošiljaoca</td></tr>
 <tr><td><kbd>Alt</kbd>+<kbd>S</kbd></td><td>Prelazak na polje Sačuvaj u</td></tr>
 <tr><td><kbd>Alt</kbd>+<kbd>P</kbd></td><td>Izbor fascikle</td></tr>
 <tr><td><kbd>Alt</kbd>+<kbd>D</kbd></td><td>Dodavanje nepoznatog pošiljaoca u moje primaoce</td></tr>
@@ -530,7 +543,7 @@
 <p>Ne. Svaki prenos je potpuno šifrovan između dva računara. Kada podaci moraju da prođu preko posredničkog servera, server samo prosleđuje šifrovane podatke koje ne može da pročita. ID kontakta je javni ključ primaoca, pa veza može da se uspostavi samo sa računarom koji ima odgovarajući tajni ključ. Pogledajte <a href="#connections">Veze i bezbednost</a>.</p>
 
 <h3 id="faq-id-secret">Da li je moj ID kontakta tajan? Da li bilo ko može da mi šalje datoteke?</h3>
-<p>ID kontakta nije tajan; funkcioniše kao broj telefona. Svako ko ga ima može da vam ponudi datoteku. Sami se pokreću samo prenosi osoba sa vaše liste primalaca (<span class="ui">Prenose pokreći automatski, bez pitanja</span>, što možete da isključite u postavkama). Od bilo koga drugog na vašem računaru se ništa ne čuva dok ne izaberete <span class="ui">Prihvati</span>, a takve ponude su označene upozorenjem o nepoznatom pošiljaocu. Pogledajte <a href="#auto-accept">Primanje bez pitanja</a>.</p>
+<p>ID kontakta nije tajan; funkcioniše kao broj telefona. Svako ko ga ima može da vam ponudi datoteku. Sami se pokreću samo prenosi osoba sa vaše liste primalaca (<span class="ui">Prenose pokreći automatski, bez pitanja</span>, što možete da isključite u postavkama). Od bilo koga drugog na vašem računaru se ništa ne čuva dok ne izaberete <span class="ui">Prihvati</span>, a takve ponude su označene upozorenjem o nepoznatom pošiljaocu. Pogledajte <a href="#auto-accept">Primanje bez pitanja</a>. Ako vam neko stalno šalje ono što ne želite, pogledajte <a href="#blocking">Blokiranje pošiljaoca</a>.</p>
 
 <h3 id="faq-servers">Šta Dodavo šalje serverima na internetu?</h3>
 <p>Samo ono što je potrebno da bi drugi računari pronašli vaš. Dodavo pod vašim ID-om kontakta objavljuje adrese na kojima je vaš računar trenutno dostupan u usluzi za pronalaženje adresa mreže iroh i održava vezu sa posredničkim serverom kako bi prenos mogao da se uspostavi i kada direktna veza nije moguća. Nazivi i sadržaj vaših datoteka putuju samo unutar šifrovane veze sa drugim računarom. Jednom dnevno, kada je uključena postavka <span class="ui">Automatski proveravaj da li ima ažuriranja (jednom dnevno)</span>, Dodavo sa stranice programa Dodavo na GitHub-u (github.com) preuzima i malu datoteku koja opisuje najnoviju verziju, a kada odlučite da instalirate ažuriranje, odatle preuzima instalacioni program; pogledajte <a href="#update">Ažuriranje programa Dodavo</a>. Dodavo nema korisničke naloge i ne šalje statistiku korišćenja.</p>

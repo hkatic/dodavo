@@ -220,6 +220,19 @@ enum Call {
     RemoveRecipient {
         contact_id: String,
     },
+    /// Blocks the sender `contact_id` under `name` (see `Config::block`):
+    /// their offers are declined from now on, and so are those that wait for
+    /// an answer, whose ids the reply lists (`declined`) for their windows to
+    /// close. A recipient is removed.
+    Block {
+        name: String,
+        contact_id: String,
+    },
+    Unblock {
+        contact_id: String,
+    },
+    /// The blocked senders, as `[{name, id}]` in the order of their names.
+    Blocked,
     Settings,
     SetSettings {
         settings: Settings,
@@ -475,9 +488,15 @@ impl Core {
                 my_id = secret.public().to_string();
                 started.my_id = my_id.clone();
                 let sink = events.clone();
-                net = net::start(secret, data_dir.clone(), temp_dir.clone(), move |event| {
-                    let _ = sink.send(event);
-                });
+                net = net::start(
+                    secret,
+                    data_dir.clone(),
+                    temp_dir.clone(),
+                    cfg.blocked_ids(),
+                    move |event| {
+                        let _ = sink.send(event);
+                    },
+                );
             }
             None => {
                 my_id = String::new();
@@ -632,11 +651,10 @@ impl Core {
             Call::AddRecipient { name, contact_id } => {
                 let mut state = lock(&self.state);
                 let contact_id = cleaned_id(&contact_id);
-                state.cfg.contacts.push(Contact {
+                state.cfg.add_contact(Contact {
                     name: name.trim().to_string(),
                     id: contact_id,
                 });
-                sort_contacts(&mut state.cfg.contacts);
                 json(serde_json::json!({ "error": save(&state) }))
             }
             Call::EditRecipient {
@@ -645,17 +663,19 @@ impl Core {
                 contact_id,
             } => {
                 let mut state = lock(&self.state);
-                let contact_id = cleaned_id(&contact_id);
-                if let Some(contact) = state
+                let contact = Contact {
+                    name: name.trim().to_string(),
+                    id: cleaned_id(&contact_id),
+                };
+                let old = state
                     .cfg
                     .contacts
-                    .iter_mut()
+                    .iter()
                     .find(|c| c.id.eq_ignore_ascii_case(&old_id))
-                {
-                    contact.name = name.trim().to_string();
-                    contact.id = contact_id;
+                    .cloned();
+                if let Some(old) = old {
+                    state.cfg.replace_contact(&old, contact);
                 }
-                sort_contacts(&mut state.cfg.contacts);
                 json(serde_json::json!({ "error": save(&state) }))
             }
             Call::RemoveRecipient { contact_id } => {
@@ -665,6 +685,33 @@ impl Core {
                     .contacts
                     .retain(|c| !c.id.eq_ignore_ascii_case(&contact_id));
                 json(serde_json::json!({ "error": save(&state) }))
+            }
+            Call::Block { name, contact_id } => {
+                let mut state = lock(&self.state);
+                let contact_id = cleaned_id(&contact_id);
+                state.cfg.block(name.trim(), &contact_id);
+                let declined: Vec<u64> = state
+                    .offers
+                    .iter()
+                    .filter(|(_, pending)| pending.from_id.eq_ignore_ascii_case(&contact_id))
+                    .map(|(&id, _)| id)
+                    .collect();
+                for &id in &declined {
+                    state.offers.remove(&id);
+                    state.net.send(Command::Respond { id, accept: None });
+                }
+                json(serde_json::json!({ "error": save(&state), "declined": declined }))
+            }
+            Call::Unblock { contact_id } => {
+                let mut state = lock(&self.state);
+                state.cfg.unblock(&contact_id);
+                json(serde_json::json!({ "error": save(&state) }))
+            }
+            Call::Blocked => {
+                let state = lock(&self.state);
+                let mut blocked = state.cfg.blocked.clone();
+                blocked.sort_by_cached_key(|c| c.name.to_lowercase());
+                serde_json::to_string(&blocked).unwrap_or_default()
             }
             Call::Settings => {
                 let state = lock(&self.state);
@@ -1282,16 +1329,15 @@ fn install_panic_hook(outbox: &'static Outbox) {
     }));
 }
 
+/// Saves the settings, which also tells the network whom they block (also
+/// if the file cannot be saved). Returns the text of an error.
 fn save(state: &State) -> Option<String> {
+    state.net.set_blocked(state.cfg.blocked_ids());
     state.cfg.save(&state.data_dir).err().map(|e| {
         mac::s()
             .settings_not_saved
             .replace("{error}", &e.to_string())
     })
-}
-
-fn sort_contacts(contacts: &mut [Contact]) {
-    contacts.sort_by_cached_key(|c| c.name.to_lowercase());
 }
 
 fn cleaned_id(text: &str) -> String {

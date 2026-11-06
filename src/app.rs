@@ -268,11 +268,22 @@ pub fn main_window() -> HWND {
 pub fn update_cfg(f: impl FnOnce(&mut Config)) {
     let result = with(|a| {
         f(&mut a.cfg);
+        // Whoever is blocked now is, also if the file cannot be saved.
+        a.net.set_blocked(a.cfg.blocked_ids());
         a.cfg.save(&a.data_dir)
     });
     if let Err(e) = result {
         ui::error(main_window(), &tr!(settings_not_saved, error = e));
     }
+}
+
+/// Blocks the sender `id` under `name` (see `Config::block`) and declines
+/// what they offer that waits for an answer, except in the window `except`,
+/// which its caller closes.
+pub fn block_sender(name: &str, id: &str, except: HWND) {
+    update_cfg(|c| c.block(name, id));
+    incoming::decline_from(id, except);
+    ui::main_window::refresh_list();
 }
 
 pub fn net_send(cmd: Command) {

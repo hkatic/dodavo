@@ -58,7 +58,9 @@ final class IncomingWindowController: NSWindowController, NSWindowDelegate {
         decline.keyEquivalent = "\u{1b}"
         let accept = makeButton(L[.accept], self, #selector(acceptOffer))
         accept.keyEquivalent = "\r"
-        let buttons = makeButtonRow([decline, accept])
+        // On the leading side, apart from the answers.
+        let block = makeButton(L[.block_sender], self, #selector(blockSender))
+        let buttons = makeButtonRow([decline, accept], leading: [block])
         views.append(buttons)
         let column = makeColumn(views, spacing: 10)
         fill(window, with: column)
@@ -141,6 +143,17 @@ final class IncomingWindowController: NSWindowController, NSWindowDelegate {
         answered = true
         Core.perform("accept", ["id": offer.id, "dir": dir])
         close()
+    }
+
+    @objc private func blockSender() {
+        guard let window = window else { return }
+        confirmBlocking(offer.fromName, isRecipient: offer.known, on: window) {
+            let (error, declined) = Core.block(name: self.offer.fromName, id: self.offer.fromId)
+            // The library declined this offer too, and the window closes with it.
+            self.answered = true
+            (NSApp.delegate as? AppDelegate)?.senderBlocked(declined: declined, error: error)
+            self.close()
+        }
     }
 
     @objc private func declineOffer() {

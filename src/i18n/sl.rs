@@ -14,6 +14,7 @@ pub const SL: Strings = Strings {
     menu_add: "Dod&aj prejemnika…\tCtrl+N",
     menu_edit: "&Uredi prejemnika…\tF2",
     menu_remove: "Od&strani prejemnika\tDel",
+    menu_block: "&Blokiraj prejemnika",
     menu_copy_id: "Kopiraj moj &ID stika\tCtrl+Shift+C",
     menu_settings: "&Nastavitve…\tCtrl+Vejica",
     menu_exit: "I&zhod",
@@ -28,6 +29,7 @@ pub const SL: Strings = Strings {
     ctx_add: "Dod&aj prejemnika…",
     ctx_edit: "&Uredi…",
     ctx_remove: "Od&strani",
+    ctx_block: "&Blokiraj",
     ctx_show_transfer: "Pokaži &prenos",
     ctx_show_transfers: "Pokaži &prenose",
     tray_open: "&Odpri",
@@ -67,6 +69,15 @@ pub const SL: Strings = Strings {
     pick_file_title: "Izberite eno ali več datotek za pošiljanje – prejemnik: {name}",
     pick_folder_title: "Izberite eno ali več map za pošiljanje – prejemnik: {name}",
     remove_confirm: "Ali želite odstraniti »{name}« s seznama prejemnikov?",
+    block_confirm: "Ali želite blokirati »{name}«?\n\n\
+        Dodavo bo odslej brez vprašanja zavrnil vse, kar vam pošlje ta oseba. \
+        Ta oseba ne bo izvedela, da je blokirana. Prenosi, ki že potekajo, se nadaljujejo.\n\n\
+        Osebo lahko odblokirate v nastavitvah, pod »Blokirani pošiljatelji«.",
+    block_recipient_confirm: "Ali želite blokirati »{name}«?\n\n\
+        Oseba bo odstranjena s seznama prejemnikov, Dodavo pa bo odslej brez vprašanja zavrnil vse, \
+        kar vam pošlje. Ta oseba ne bo izvedela, da je blokirana. Prenosi, ki že potekajo, se \
+        nadaljujejo.\n\n\
+        Osebo lahko odblokirate v nastavitvah, pod »Blokirani pošiljatelji«.",
     id_copied: "Vaš ID stika je bil kopiran v odložišče:\n\n{id}\n\n\
         Prilepite ga v e-poštno sporočilo ali sporočilo v klepetu in ga pošljite vsem, ki vam želijo pošiljati datoteke. \
         Dodajo vas z ukazom »Dodaj prejemnika«.",
@@ -209,6 +220,7 @@ pub const SL: Strings = Strings {
     browse: "&Prebrskaj…",
     accept: "Spre&jmi",
     decline: "&Zavrni",
+    block_sender: "&Blokiraj pošiljatelja",
     pick_save_folder: "Izberite, kam naj se shranjujejo prejete datoteke",
     choose_save_folder: "Izberite mapo, v katero naj se shranijo prejete datoteke.",
     folder_unusable: "Mape ni mogoče uporabiti:\n{path}\n\n{error}",
@@ -264,6 +276,12 @@ pub const SL: Strings = Strings {
     language_restart: "Novi jezik bo uporabljen po vnovičnem zagonu programa Dodavo.",
     my_id_label: "Vaš ID stika:",
     copy: "&Kopiraj",
+    blocked_senders_button: "Blokirani po&šiljatelji…",
+    blocked_title: "Blokirani pošiljatelji",
+    blocked_list_label: "&Blokirani pošiljatelji:",
+    blocked_entry: "{name}  (ID stika {id})",
+    blocked_none: "Noben pošiljatelj ni blokiran.",
+    unblock: "&Odblokiraj",
     enter_my_name: "Vnesite svoje ime. Prikazano je osebam, ki jim pošiljate datoteke.",
     invalid_save_folder: "Izberite veljavno mapo za shranjevanje prejetih datotek.",
 

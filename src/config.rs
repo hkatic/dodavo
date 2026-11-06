@@ -85,6 +85,11 @@ pub struct Config {
     /// Name shown to the people we send files to.
     pub my_name: String,
     pub contacts: Vec<Contact>,
+    /// Senders whose offers are declined without asking (see
+    /// `net::NetHandle::set_blocked`). They are not recipients at the same
+    /// time: blocking one removes the recipient, and adding a recipient
+    /// unblocks them.
+    pub blocked: Vec<Contact>,
     /// When set, received files go to `always_save_folder`. Otherwise the
     /// user is asked where to save each one.
     pub always_save: bool,
@@ -132,6 +137,7 @@ impl Default for Config {
             my_name: crate::platform::user_name()
                 .unwrap_or_else(|| crate::i18n::s().unknown_user.into()),
             contacts: Vec::new(),
+            blocked: Vec::new(),
             always_save: true,
             always_save_dir: None,
             auto_accept: true,
@@ -236,6 +242,61 @@ impl Config {
         self.contacts.iter().find(|c| c.id.eq_ignore_ascii_case(id))
     }
 
+    /// Adds `contact` to the recipients, in the order of their names. A
+    /// recipient is no blocked sender, so they are unblocked.
+    pub fn add_contact(&mut self, contact: Contact) {
+        self.unblock(&contact.id);
+        self.contacts.push(contact);
+        self.sort_contacts();
+    }
+
+    /// Puts `contact` in the place of `old`, as `add_contact` would add it.
+    pub fn replace_contact(&mut self, old: &Contact, contact: Contact) {
+        self.unblock(&contact.id);
+        if let Some(slot) = self.contacts.iter_mut().find(|c| *c == old) {
+            *slot = contact;
+        }
+        self.sort_contacts();
+    }
+
+    fn sort_contacts(&mut self) {
+        self.contacts.sort_by_key(|c| c.name.to_lowercase());
+    }
+
+    pub fn is_blocked(&self, id: &str) -> bool {
+        self.blocked.iter().any(|c| c.id.eq_ignore_ascii_case(id))
+    }
+
+    /// Blocks the sender `id`, under `name`, and removes them from the
+    /// recipients; a sender who is blocked already keeps their entry.
+    pub fn block(&mut self, name: &str, id: &str) {
+        self.contacts.retain(|c| !c.id.eq_ignore_ascii_case(id));
+        if !self.is_blocked(id) {
+            self.blocked.push(Contact {
+                name: name.to_string(),
+                id: id.to_string(),
+            });
+        }
+    }
+
+    /// Takes `id` off the blocked list; `false` if it was not on it.
+    pub fn unblock(&mut self, id: &str) -> bool {
+        let before = self.blocked.len();
+        self.blocked.retain(|c| !c.id.eq_ignore_ascii_case(id));
+        self.blocked.len() != before
+    }
+
+    /// The Contact IDs of the blocked senders, for the network
+    /// (`net::start`, `net::NetHandle::set_blocked`). They compare without
+    /// case, as everywhere, and an entry that is not a Contact ID cannot send
+    /// anything, so it is left out.
+    pub fn blocked_ids(&self) -> Vec<iroh::EndpointId> {
+        self.blocked
+            .iter()
+            .filter_map(|c| c.id.to_ascii_lowercase().parse().ok())
+            .collect()
+    }
+
     /// The folder of "Always save received files to this folder".
     pub fn always_save_folder(&self) -> PathBuf {
         self.always_save_dir
@@ -308,6 +369,10 @@ mod tests {
             name: "Ana".into(),
             id: "abc".into(),
         });
+        cfg.blocked.push(Contact {
+            name: "Spam".into(),
+            id: "def".into(),
+        });
         cfg.always_save = false;
         cfg.always_save_dir = Some(PathBuf::from(r"C:\Temp"));
         cfg.language = Some("hr".into());
@@ -323,7 +388,51 @@ mod tests {
         cfg.save(&dir).unwrap();
         assert_eq!(Config::load(&dir).unwrap(), cfg);
         assert!(cfg.contact_by_id("ABC").is_some());
+        assert!(cfg.is_blocked("DEF"));
         std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn a_blocked_sender_is_no_recipient() {
+        let id = iroh::SecretKey::generate().public().to_string();
+        let mut cfg = Config::default();
+        cfg.contacts.push(Contact {
+            name: "Ana".into(),
+            id: id.clone(),
+        });
+        cfg.block("Ana", &id.to_uppercase());
+        assert!(cfg.contact_by_id(&id).is_none());
+        assert!(cfg.is_blocked(&id));
+        assert_eq!(cfg.blocked_ids(), vec![id.parse().unwrap()]);
+        // Blocking again keeps the one entry, under its first name.
+        cfg.block("Someone", &id);
+        assert_eq!(cfg.blocked.len(), 1);
+        assert_eq!(cfg.blocked[0].name, "Ana");
+        assert!(cfg.unblock(&id));
+        assert!(!cfg.unblock(&id));
+        assert!(!cfg.is_blocked(&id));
+        // Whoever becomes a recipient is unblocked.
+        cfg.block("Ana", &id);
+        cfg.add_contact(Contact {
+            name: "Ana".into(),
+            id: id.to_uppercase(),
+        });
+        assert!(!cfg.is_blocked(&id));
+        let other = iroh::SecretKey::generate().public().to_string();
+        cfg.block("Bo", &other);
+        let ana = cfg.contacts[0].clone();
+        cfg.replace_contact(
+            &ana,
+            Contact {
+                name: "Ana".into(),
+                id: other.clone(),
+            },
+        );
+        assert!(!cfg.is_blocked(&other));
+        assert_eq!(cfg.contacts[0].id, other);
+        // What is not a Contact ID never reaches the network.
+        cfg.block("Typo", "not an id");
+        assert!(cfg.blocked_ids().is_empty());
     }
 
     #[test]
@@ -368,6 +477,7 @@ mod tests {
         assert!(cfg.explorer_menu);
         assert_eq!(cfg.update_last_check, None);
         assert_eq!(cfg.update_remind_after, None);
+        assert!(cfg.blocked.is_empty());
     }
 
     fn load_json(name: &str, json: &str) -> Config {

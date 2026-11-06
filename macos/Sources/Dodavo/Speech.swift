@@ -76,15 +76,34 @@ func fill(_ window: NSWindow, with content: NSView, margin: CGFloat = 20) {
     window.contentView = host
 }
 
-/// A row of buttons at the bottom of a window, on the trailing side.
-func makeButtonRow(_ buttons: [NSButton]) -> NSStackView {
+/// A row of buttons at the bottom of a window, on the trailing side, and
+/// `leading` apart from them on the other side. VoiceOver goes through them in
+/// the order they stand in.
+func makeButtonRow(_ buttons: [NSButton], leading: [NSButton] = []) -> NSStackView {
     let spacer = NSView()
     spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
-    let row = NSStackView(views: [spacer] + buttons)
+    let row = NSStackView(views: leading + [spacer] + buttons)
     row.orientation = .horizontal
     row.spacing = 12
     row.translatesAutoresizingMaskIntoConstraints = false
     return row
+}
+
+/// Asks whether to block `name`, as a sheet on `window`; `block` runs if the
+/// answer is yes. A recipient is told that they leave the recipients.
+func confirmBlocking(
+    _ name: String, isRecipient: Bool, on window: NSWindow, then block: @escaping () -> Void
+) {
+    let alert = NSAlert()
+    alert.messageText = L.f(.block_confirm, ["name": name])
+    alert.informativeText = L.f(
+        isRecipient ? .block_recipient_text : .block_text, ["settings": L.settingsName])
+    alert.addButton(withTitle: L[.block])
+    alert.addButton(withTitle: L[.cancel])
+    alert.buttons[1].keyEquivalent = "\u{1b}"
+    alert.beginSheetModal(for: window) { response in
+        if response == .alertFirstButtonReturn { block() }
+    }
 }
 
 /// An alert as a sheet on `window`, or on its own without one.

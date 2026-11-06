@@ -124,6 +124,7 @@ pub const EN: Strings = Strings {
     menu_add_recipient: "Add Recipient…",
     menu_edit_recipient: "Edit Recipient…",
     menu_remove_recipient: "Remove Recipient",
+    menu_block_recipient: "Block Recipient",
     menu_copy_id: "Copy My Contact ID",
     menu_close: "Close",
     menu_edit: "Edit",
@@ -165,6 +166,15 @@ pub const EN: Strings = Strings {
     save: "Save",
     remove: "Remove",
     remove_text: "You can add this person again with their Contact ID.",
+    block_confirm: "Block {name}?",
+    block_text: "From now on, Dodavo declines everything this person sends you, without asking. \
+        They are not told that they are blocked, and transfers that are already under way go on. \
+        You can unblock them in {settings} > Blocked.",
+    block_recipient_text: "This person is removed from your recipients, and from now on Dodavo \
+        declines everything they send you, without asking. They are not told that they are blocked, \
+        and transfers that are already under way go on. You can unblock them in {settings} > Blocked.",
+    block: "Block",
+    block_sender: "Block Sender",
     send_panel_message: "Choose the files and folders to send. Recipient: {name}",
     send_panel_prompt: "Send",
     pick_recipient_title: "Send to Whom?",
@@ -195,6 +205,11 @@ pub const EN: Strings = Strings {
     space_fat: "“{drive}” uses the MS-DOS (FAT) format, which cannot hold files of 4 GB or more, but this transfer would save a file of {size} there. Choose a folder on another volume.",
     settings_general: "General",
     settings_receiving: "Receiving",
+    settings_blocked: "Blocked",
+    blocked_senders_label: "Blocked senders:",
+    blocked_entry: "{name} (Contact ID {id})",
+    blocked_none: "No sender is blocked.",
+    unblock: "Unblock",
     my_name_label: "Your name:",
     my_name_help: "Shown to the people you send files to.",
     open_at_login: "Open at Login",

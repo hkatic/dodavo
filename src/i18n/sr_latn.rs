@@ -14,6 +14,7 @@ pub const SR_LATN: Strings = Strings {
     menu_add: "Dod&aj primaoca…\tCtrl+N",
     menu_edit: "&Uredi primaoca…\tF2",
     menu_remove: "U&kloni primaoca\tDel",
+    menu_block: "&Blokiraj primaoca",
     menu_copy_id: "Kopiraj moj &ID kontakta\tCtrl+Shift+C",
     menu_settings: "&Postavke…\tCtrl+Zarez",
     menu_exit: "I&zlaz",
@@ -28,6 +29,7 @@ pub const SR_LATN: Strings = Strings {
     ctx_add: "Dod&aj primaoca…",
     ctx_edit: "&Uredi…",
     ctx_remove: "U&kloni",
+    ctx_block: "&Blokiraj",
     ctx_show_transfer: "Prikaži &prenos",
     ctx_show_transfers: "Prikaži &prenose",
     tray_open: "&Otvori",
@@ -67,6 +69,14 @@ pub const SR_LATN: Strings = Strings {
     pick_file_title: "Izaberite jednu ili više datoteka za slanje – primalac: {name}",
     pick_folder_title: "Izaberite jednu ili više fascikli za slanje – primalac: {name}",
     remove_confirm: "Želite li da uklonite „{name}“ sa liste primalaca?",
+    block_confirm: "Želite li da blokirate „{name}“?\n\n\
+        Dodavo će od sada bez pitanja odbijati sve što vam ta osoba pošalje. \
+        Ta osoba neće saznati da je blokirana. Prenosi koji su već u toku se nastavljaju.\n\n\
+        Osobu možete da deblokirate u postavkama, pod „Blokirani pošiljaoci“.",
+    block_recipient_confirm: "Želite li da blokirate „{name}“?\n\n\
+        Osoba se uklanja sa liste primalaca, a Dodavo će od sada bez pitanja odbijati sve što vam \
+        pošalje. Ta osoba neće saznati da je blokirana. Prenosi koji su već u toku se nastavljaju.\n\n\
+        Osobu možete da deblokirate u postavkama, pod „Blokirani pošiljaoci“.",
     id_copied: "Vaš ID kontakta je kopiran u međuspremnik:\n\n{id}\n\n\
         Nalepite ga u e-poruku ili poruku ćaskanja i pošaljite ga svima koji žele da vam šalju datoteke. \
         Oni vas dodaju pomoću opcije „Dodaj primaoca“.",
@@ -209,6 +219,7 @@ pub const SR_LATN: Strings = Strings {
     browse: "&Pregledaj…",
     accept: "Pr&ihvati",
     decline: "&Odbij",
+    block_sender: "&Blokiraj pošiljaoca",
     pick_save_folder: "Izaberite gde će se čuvati primljene datoteke",
     choose_save_folder: "Izaberite fasciklu u kojoj će se sačuvati primljene datoteke.",
     folder_unusable: "Fascikla ne može da se koristi:\n{path}\n\n{error}",
@@ -264,6 +275,12 @@ pub const SR_LATN: Strings = Strings {
     language_restart: "Novi jezik će se koristiti nakon ponovnog pokretanja programa Dodavo.",
     my_id_label: "Vaš ID kontakta:",
     copy: "&Kopiraj",
+    blocked_senders_button: "B&lokirani pošiljaoci…",
+    blocked_title: "Blokirani pošiljaoci",
+    blocked_list_label: "&Blokirani pošiljaoci:",
+    blocked_entry: "{name}  (ID kontakta {id})",
+    blocked_none: "Nijedan pošiljalac nije blokiran.",
+    unblock: "&Deblokiraj",
     enter_my_name: "Unesite svoje ime. Prikazuje se osobama kojima šaljete datoteke.",
     invalid_save_folder: "Izaberite važeću fasciklu za čuvanje primljenih datoteka.",
 

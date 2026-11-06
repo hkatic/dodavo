@@ -230,7 +230,8 @@ mod tests {
         let dir = std::env::temp_dir();
         let free = disk_free(&dir).expect("free space").1;
         let mut half = offer(Kind::File);
-        half.size = free / 2 + 1;
+        // With a margin, as other programs change the free space meanwhile.
+        half.size = free / 2 + free / 50;
         let one = check_space_of(&[&half], &dir, &dir, ReceivedFolder::Extract);
         assert_eq!(one.enough, Some(true), "{}", one.text);
         let two = check_space_of(&[&half, &half], &dir, &dir, ReceivedFolder::Extract);

@@ -132,7 +132,7 @@
 </ul>
 <p>Vrstica stanja ne more dobiti fokusa tipkovnice. Če jo želite slišati, uporabite ukaz bralnika zaslona za branje celotnega okna: <kbd>NVDA</kbd>+<kbd>B</kbd> v bralniku NVDA, <kbd>Insert</kbd>+<kbd>B</kbd> v bralniku JAWS ali <kbd>Pripovedovalec</kbd>+<kbd>W</kbd> v Pripovedovalcu.</p>
 <p>Menijska vrstica ima tri menije. Meni <span class="ui">Datoteka</span> (<kbd>Alt</kbd>+<kbd>D</kbd>) vsebuje ukaze <span class="ui">Pošlji datoteko…</span>, <span class="ui">Pošlji mapo…</span>, <span class="ui">Dodaj prejemnika…</span>, <span class="ui">Uredi prejemnika…</span>, <span class="ui">Odstrani prejemnika</span>, <span class="ui">Kopiraj moj ID stika</span>, <span class="ui">Nastavitve…</span> in <span class="ui">Izhod</span>. Meni <span class="ui">Prenosi</span> (<kbd>Alt</kbd>+<kbd>R</kbd>) našteje vse prenose, ki potekajo, z osebo, elementom in stanjem, na koncu pa vsebuje ukaz <span class="ui">Pokaži vse prenose</span> (<kbd>Ctrl</kbd>+<kbd>T</kbd>); ko ne poteka noben prenos, v njem piše <span class="ui">Noben prenos ne poteka</span>. Glejte <a href="#finding-transfers">Iskanje prenosa, ki poteka v ozadju</a>. Meni <span class="ui">Pomoč</span> (<kbd>Alt</kbd>+<kbd>P</kbd>) vsebuje ukaze <span class="ui">Ogled pomoči</span>, <span class="ui">Kako deluje</span> (kratek povzetek), <span class="ui">Licenca</span> (glejte <a href="#license">Licenca</a>), <span class="ui">Doniraj</span> (glejte <a href="#donate">Donacije</a>), <span class="ui">Preveri, ali so na voljo posodobitve…</span> (glejte <a href="#update">Posodabljanje programa Dodavo</a>) in <span class="ui">O programu</span> (različica, avtor, spletno mesto in licenca; glejte <a href="#about">O programu Dodavo</a>).</p>
-<p>Ko je na seznamu izbrana oseba, meni dejanj (<kbd>Enter</kbd>, dvoklik, <kbd>Shift</kbd>+<kbd>F10</kbd>, tipka za priročni meni ali desni klik) ponuja ukaze <span class="ui">Pošlji datoteko…</span>, <span class="ui">Pošlji mapo…</span>, <span class="ui">Pokaži prenos</span> (samo dokler s to osebo poteka prenos; <span class="ui">Pokaži prenose</span>, kadar jih je več), <span class="ui">Uredi…</span> in <span class="ui">Odstrani</span>.</p>
+<p>Ko je na seznamu izbrana oseba, meni dejanj (<kbd>Enter</kbd>, dvoklik, <kbd>Shift</kbd>+<kbd>F10</kbd>, tipka za priročni meni ali desni klik) ponuja ukaze <span class="ui">Pošlji datoteko…</span>, <span class="ui">Pošlji mapo…</span>, <span class="ui">Pokaži prenos</span> (samo dokler s to osebo poteka prenos; <span class="ui">Pokaži prenose</span>, kadar jih je več), <span class="ui">Uredi…</span>, <span class="ui">Odstrani</span> in <span class="ui">Blokiraj</span>.</p>
 </section>
 
 <section aria-labelledby="recipients">
@@ -160,6 +160,7 @@
 <ul>
 <li>Če želite spremeniti ime ali ID stika, pritisnite <kbd>F2</kbd> ali v meniju <span class="ui">Datoteka</span> izberite <span class="ui">Uredi prejemnika…</span>. Pogovorno okno <span class="ui">Uredi prejemnika</span> deluje enako kot <span class="ui">Dodaj prejemnika</span>.</li>
 <li>Če želite osebo odstraniti, pritisnite <kbd>Delete</kbd> ali v meniju <span class="ui">Datoteka</span> izberite <span class="ui">Odstrani prejemnika</span> in potrdite z gumbom <span class="ui">Da</span>.</li>
+<li>Če želite osebo blokirati, v meniju <span class="ui">Datoteka</span> izberite <span class="ui">Blokiraj prejemnika</span> ali v meniju dejanj izberite <span class="ui">Blokiraj</span> in potrdite z gumbom <span class="ui">Da</span>. Glejte <a href="#blocking">Blokiranje pošiljatelja</a>.</li>
 </ul>
 </section>
 
@@ -219,6 +220,8 @@
 <dd>Stavek pod mapo pove, ali je na tem pogonu dovolj prostora, koliko ga je potrebno in koliko ga je na voljo. Mapa, ki se razpakira, potrebuje prostor za prenos in za razpakiranje; mapa, ki jo obdržite le kot datoteko ZIP, potrebuje prostor za datoteko ZIP (glejte <span class="ui">Po prejemu mape</span> v <a href="#settings-receiving">nastavitvah</a>). Stavek se posodobi, ko mapo izberete z gumbom Prebrskaj ali zapustite polje z mapo. Na pogonu z datotečnim sistemom FAT32, ki ga ima veliko pogonov USB in pomnilniških kartic, nobena datoteka ne more biti velika 4 GB ali več: če bi prenos tja shranil takšno datoteko, stavek to pove in izbrati morate mapo na drugem pogonu.</dd>
 <dt><span class="ui">Sprejmi</span> (<kbd>Alt</kbd>+<kbd>J</kbd>) in <span class="ui">Zavrni</span> (<kbd>Alt</kbd>+<kbd>Z</kbd>)</dt>
 <dd>Ko se okno odpre, je fokus na gumbu <span class="ui">Sprejmi</span>, zato s tipko <kbd>Enter</kbd> prenos sprejmete; bralniki zaslona običajno najprej preberejo besedilo okna, od krepke vrstice do stavka o prostem prostoru na disku. S tipko <kbd>Esc</kbd> ali z zaprtjem okna ga zavrnete.</dd>
+<dt><span class="ui">Blokiraj pošiljatelja</span> (<kbd>Alt</kbd>+<kbd>B</kbd>)</dt>
+<dd>Zavrne, kar pošilja oseba, in jo blokira, ko potrdite z gumbom <span class="ui">Da</span>. Glejte <a href="#blocking">Blokiranje pošiljatelja</a>.</dd>
 </dl>
 <p>Ko vam ista oseba pošlje več elementov hkrati, si delijo eno okno, vaš odgovor pa velja za vse. Krepka vrstica pove, koliko jih je, naslednja vrstica navede njihovo skupno velikost, polje <span class="ui">Elementi</span> (<kbd>Alt</kbd>+<kbd>E</kbd>) pa jih našteje. Elementi, ki prispejo, medtem ko je okno odprto, se dodajo vanj, tistih, ki so prispeli v zadnji sekundi, pa vaš odgovor še ne zajame: ostanejo v oknu.</p>
 <p>Če prostora ni dovolj, vas Dodavo vpraša, ali želite prenos vseeno sprejeti. Če pošiljatelj prenos prekliče, preden odgovorite, se okno zapre, obvestilo pa vas o tem obvesti.</p>
@@ -238,6 +241,13 @@
 <h3 id="auto-accept">Prejemanje brez vprašanja</h3>
 <p>Prenosi od oseb z vašega seznama prejemnikov se začnejo takoj, brez okna Dohodni prenos, če sta v nastavitvah vklopljeni obe možnosti: <span class="ui">Vedno shrani prejete datoteke v to mapo</span> in <span class="ui">Prenose začni samodejno, brez vprašanja</span>. Vklopljeni sta, dokler ju ne izklopite. Dodavo prikaže obvestilo <span class="ui">Prejemanje</span> in shrani element v mapo iz prve možnosti, to pa je vaša mapa Prenosi, če niste izbrali druge. Za prenose od neznanih pošiljateljev in prenose, za katere na disku ne bi bilo dovolj prostora, Dodavo še vedno vpraša. Tako lahko prenos začnejo le osebe, ki ste jih dodali sami: njihovega ID-ja stika ni mogoče ponarediti.</p>
 <p>Če želite sami izbrati, kam se shrani vsak element, počistite možnost <span class="ui">Vedno shrani prejete datoteke v to mapo</span>: vsak prenos nato odpre okno Dohodni prenos. Če želite odločati o vsakem prenosu, vaša mapa pa naj se še naprej predlaga, namesto tega počistite možnost <span class="ui">Prenose začni samodejno, brez vprašanja</span>.</p>
+<h3 id="blocking">Blokiranje pošiljatelja</h3>
+<p>Če vam kdo pošilja, česar ne želite, ga lahko blokirate. Dodavo nato brez vprašanja in brez obvestila zavrne vse, kar vam ta oseba pošlje. Oseba vidi le, da je bila njena ponudba zavrnjena, in ne izve, da je blokirana. Prenosi z njo, ki že potekajo, se nadaljujejo; če želite, da se ustavijo, jih prekličite v njihovih oknih napredka.</p>
+<ul>
+<li>V oknu Dohodni prenos aktivirajte <span class="ui">Blokiraj pošiljatelja</span> (<kbd>Alt</kbd>+<kbd>B</kbd>) in potrdite z gumbom <span class="ui">Da</span>. Zavrne se vse, kar ta oseba ponuja in čaka na odgovor.</li>
+<li>V glavnem oknu izberite osebo in v meniju <span class="ui">Datoteka</span> izberite <span class="ui">Blokiraj prejemnika</span>. Blokirana oseba se odstrani s seznama prejemnikov.</li>
+</ul>
+<p>Če želite koga odblokirati, odprite nastavitve, aktivirajte <span class="ui">Blokirani pošiljatelji…</span> (<kbd>Alt</kbd>+<kbd>Š</kbd>), v pogovornem oknu <span class="ui">Blokirani pošiljatelji</span> izberite osebo in aktivirajte <span class="ui">Odblokiraj</span> (<kbd>Alt</kbd>+<kbd>O</kbd>). Če blokirano osebo dodate med prejemnike, se tudi odblokira.</p>
 </section>
 
 <section aria-labelledby="progress">
@@ -324,6 +334,8 @@
 <dd>Seznam z možnostmi <span class="ui">Obdrži samo razpakirano mapo</span>, <span class="ui">Obdrži samo datoteko ZIP (brez razpakiranja)</span> in <span class="ui">Obdrži razpakirano mapo in datoteko ZIP</span>. Prejeta mapa prispe kot datoteka ZIP; ta nastavitev določa, ali jo Dodavo razpakira in ali obdrži datoteko ZIP. Datoteka ZIP je koristna, če želite mapo shraniti ali posredovati natanko takšno, kot je prispela. Izbira velja za prenose, ki jih sprejmete po spremembi. Glejte <a href="#after-receiving">Ko je prenos končan</a> in <a href="#faq-dates">Ali datoteke in mape obdržijo svoje datume?</a></dd>
 <dt><span class="ui">Po prejemu vprašaj, ali naj se datoteka ali mapa odpre</span></dt>
 <dd>Vpraša, kaj naj se zgodi, ko je element prejet. Glejte <a href="#after-receiving">Ko je prenos končan</a>.</dd>
+<dt><span class="ui">Blokirani pošiljatelji…</span></dt>
+<dd>Odpre seznam pošiljateljev, ki ste jih blokirali, na katerem jih lahko odblokirate. Glejte <a href="#blocking">Blokiranje pošiljatelja</a>.</dd>
 </dl>
 <h3 id="settings-general">Splošno</h3>
 <dl>
@@ -394,6 +406,7 @@
 <tr><td><kbd>Alt</kbd>+<kbd>E</kbd></td><td>Premik na seznam elementov, kadar jih je več</td></tr>
 <tr><td><kbd>Alt</kbd>+<kbd>J</kbd></td><td>Sprejmi</td></tr>
 <tr><td><kbd>Alt</kbd>+<kbd>Z</kbd></td><td>Zavrni</td></tr>
+<tr><td><kbd>Alt</kbd>+<kbd>B</kbd></td><td>Blokiraj pošiljatelja</td></tr>
 <tr><td><kbd>Alt</kbd>+<kbd>S</kbd></td><td>Premik v polje Shrani v</td></tr>
 <tr><td><kbd>Alt</kbd>+<kbd>P</kbd></td><td>Izbira mape</td></tr>
 <tr><td><kbd>Alt</kbd>+<kbd>D</kbd></td><td>Dodajanje neznanega pošiljatelja med moje prejemnike</td></tr>
@@ -530,7 +543,7 @@
 <p>Ne. Vsak prenos je med obema računalnikoma celovito šifriran. Kadar morajo podatki prek posredovalnega strežnika, ta le posreduje šifrirane podatke, ki jih ne more prebrati. ID stika je prejemnikov javni ključ, zato je povezavo mogoče vzpostaviti samo z računalnikom, ki ima ustrezni skrivni ključ. Glejte <a href="#connections">Povezave in varnost</a>.</p>
 
 <h3 id="faq-id-secret">Ali je moj ID stika skrivnost? Ali mi lahko kdor koli pošilja datoteke?</h3>
-<p>ID stika ni skrivnost; deluje kot telefonska številka. Kdor ga ima, vam lahko ponudi datoteko. Sami se začnejo le prenosi oseb z vašega seznama prejemnikov (<span class="ui">Prenose začni samodejno, brez vprašanja</span>, kar lahko izklopite v nastavitvah). Od kogar koli drugega se v vaš računalnik nič ne shrani, dokler ne izberete <span class="ui">Sprejmi</span>, takšne ponudbe pa so označene z opozorilom o neznanem pošiljatelju. Glejte <a href="#auto-accept">Prejemanje brez vprašanja</a>.</p>
+<p>ID stika ni skrivnost; deluje kot telefonska številka. Kdor ga ima, vam lahko ponudi datoteko. Sami se začnejo le prenosi oseb z vašega seznama prejemnikov (<span class="ui">Prenose začni samodejno, brez vprašanja</span>, kar lahko izklopite v nastavitvah). Od kogar koli drugega se v vaš računalnik nič ne shrani, dokler ne izberete <span class="ui">Sprejmi</span>, takšne ponudbe pa so označene z opozorilom o neznanem pošiljatelju. Glejte <a href="#auto-accept">Prejemanje brez vprašanja</a>. Če vam kdo vztrajno pošilja, česar ne želite, glejte <a href="#blocking">Blokiranje pošiljatelja</a>.</p>
 
 <h3 id="faq-servers">Kaj Dodavo pošilja strežnikom v internetu?</h3>
 <p>Samo tisto, kar je potrebno, da drugi računalniki najdejo vašega. Dodavo pod vašim ID-jem stika objavi naslove, na katerih je vaš računalnik trenutno dosegljiv, in sicer v storitvi za iskanje naslovov omrežja iroh, ter vzdržuje povezavo s posredovalnim strežnikom, da je prenos mogoče vzpostaviti tudi takrat, ko neposredna povezava ni mogoča. Imena in vsebina vaših datotek potujejo le znotraj šifrirane povezave z drugim računalnikom. Enkrat na dan, ko je vklopljena nastavitev <span class="ui">Samodejno preverjaj, ali so na voljo posodobitve (enkrat na dan)</span>, Dodavo s strani programa Dodavo na GitHubu (github.com) prenese tudi majhno datoteko, ki opisuje najnovejšo različico, in od tam prenese namestitveni program, ko se odločite namestiti posodobitev; glejte <a href="#update">Posodabljanje programa Dodavo</a>. Dodavo nima uporabniških računov in ne pošilja statistike uporabe.</p>

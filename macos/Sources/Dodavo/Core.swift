@@ -264,6 +264,21 @@ enum Core {
     static var contacts: [Contact] {
         call("contacts") ?? []
     }
+    /// Blocks a sender. The offers of theirs that waited for an answer have been
+    /// declined, and their windows are to close.
+    static func block(name: String, id: String) -> (error: String?, declined: [UInt64]) {
+        struct Reply: Decodable {
+            let error: String?
+            let declined: [UInt64]
+        }
+        let reply: Reply? = call("block", ["name": name, "contact_id": id])
+        return (reply?.error, reply?.declined ?? [])
+    }
+
+    /// The blocked senders, in the order of their names.
+    static func blocked() -> [Contact] {
+        call("blocked") ?? []
+    }
 }
 
 /// The texts of the user interface.
@@ -300,5 +315,10 @@ enum L {
     static var settingsMenuItem: String {
         if #available(macOS 13, *) { return L[.menu_settings] }
         return L[.menu_preferences]
+    }
+
+    /// The name of Dodavo's settings as its menu says it, for "{settings} > Blocked".
+    static var settingsName: String {
+        settingsMenuItem.trimmingCharacters(in: CharacterSet(charactersIn: "…").union(.whitespaces))
     }
 }

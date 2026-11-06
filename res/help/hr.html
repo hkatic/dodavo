@@ -132,7 +132,7 @@
 </ul>
 <p>Redak stanja ne može dobiti fokus tipkovnice. Da biste ga čuli, upotrijebite naredbu čitača zaslona za čitanje cijelog prozora: <kbd>NVDA</kbd>+<kbd>B</kbd> u čitaču NVDA, <kbd>Insert</kbd>+<kbd>B</kbd> u čitaču JAWS ili <kbd>Pripovjedač</kbd>+<kbd>W</kbd> u Pripovjedaču.</p>
 <p>Traka izbornika ima tri izbornika. Izbornik <span class="ui">Datoteka</span> (<kbd>Alt</kbd>+<kbd>D</kbd>) sadrži naredbe <span class="ui">Pošalji datoteku…</span>, <span class="ui">Pošalji mapu…</span>, <span class="ui">Dodaj primatelja…</span>, <span class="ui">Uredi primatelja…</span>, <span class="ui">Ukloni primatelja</span>, <span class="ui">Kopiraj moj ID kontakta</span>, <span class="ui">Postavke…</span> i <span class="ui">Izlaz</span>. Izbornik <span class="ui">Prijenosi</span> (<kbd>Alt</kbd>+<kbd>R</kbd>) navodi sve prijenose u tijeku, s osobom, stavkom i stanjem, a na kraju sadrži naredbu <span class="ui">Prikaži sve prijenose</span> (<kbd>Ctrl</kbd>+<kbd>T</kbd>); kada ništa nije u tijeku, u njemu piše <span class="ui">Nema prijenosa u tijeku</span>. Pogledajte <a href="#finding-transfers">Pronalaženje prijenosa koji se odvija u pozadini</a>. Izbornik <span class="ui">Pomoć</span> (<kbd>Alt</kbd>+<kbd>P</kbd>) sadrži naredbe <span class="ui">Prikaži pomoć</span>, <span class="ui">Kako funkcionira</span> (kratak sažetak), <span class="ui">Licenca</span> (pogledajte <a href="#license">Licenca</a>), <span class="ui">Doniraj</span> (pogledajte <a href="#donate">Donacije</a>), <span class="ui">Provjeri ima li ažuriranja…</span> (pogledajte <a href="#update">Ažuriranje programa Dodavo</a>) i <span class="ui">O programu</span> (verzija, autor, web-mjesto i licenca; pogledajte <a href="#about">O programu Dodavo</a>).</p>
-<p>Kada je na popisu odabrana osoba, izbornik radnji (<kbd>Enter</kbd>, dvostruki klik, <kbd>Shift</kbd>+<kbd>F10</kbd>, tipka kontekstnog izbornika ili desni klik) nudi naredbe <span class="ui">Pošalji datoteku…</span>, <span class="ui">Pošalji mapu…</span>, <span class="ui">Prikaži prijenos</span> (samo dok s tom osobom traje prijenos; <span class="ui">Prikaži prijenose</span> kada ih je više), <span class="ui">Uredi…</span> i <span class="ui">Ukloni</span>.</p>
+<p>Kada je na popisu odabrana osoba, izbornik radnji (<kbd>Enter</kbd>, dvostruki klik, <kbd>Shift</kbd>+<kbd>F10</kbd>, tipka kontekstnog izbornika ili desni klik) nudi naredbe <span class="ui">Pošalji datoteku…</span>, <span class="ui">Pošalji mapu…</span>, <span class="ui">Prikaži prijenos</span> (samo dok s tom osobom traje prijenos; <span class="ui">Prikaži prijenose</span> kada ih je više), <span class="ui">Uredi…</span>, <span class="ui">Ukloni</span> i <span class="ui">Blokiraj</span>.</p>
 </section>
 
 <section aria-labelledby="recipients">
@@ -160,6 +160,7 @@
 <ul>
 <li>Da biste promijenili ime ili ID kontakta, pritisnite <kbd>F2</kbd> ili na izborniku <span class="ui">Datoteka</span> odaberite <span class="ui">Uredi primatelja…</span>. Dijaloški okvir <span class="ui">Uredi primatelja</span> radi jednako kao <span class="ui">Dodaj primatelja</span>.</li>
 <li>Da biste uklonili osobu, pritisnite <kbd>Delete</kbd> ili na izborniku <span class="ui">Datoteka</span> odaberite <span class="ui">Ukloni primatelja</span>, a zatim potvrdite gumbom <span class="ui">Da</span>.</li>
+<li>Da biste blokirali osobu, na izborniku <span class="ui">Datoteka</span> odaberite <span class="ui">Blokiraj primatelja</span> ili u izborniku radnji odaberite <span class="ui">Blokiraj</span>, a zatim potvrdite gumbom <span class="ui">Da</span>. Pogledajte <a href="#blocking">Blokiranje pošiljatelja</a>.</li>
 </ul>
 </section>
 
@@ -219,6 +220,8 @@
 <dd>Rečenica ispod mape kaže ima li na tom pogonu dovoljno slobodnog prostora, koliko je potrebno i koliko je dostupno. Mapa koja se raspakirava treba prostor i za preuzimanje i za raspakiravanje; mapa koju zadržavate samo kao ZIP datoteku treba prostor za ZIP datoteku (pogledajte <span class="ui">Nakon primanja mape</span> u <a href="#settings-receiving">postavkama</a>). Rečenica se ažurira kada mapu odaberete gumbom Pregledaj ili napustite polje s mapom. Na pogonu s datotečnim sustavom FAT32, kakav imaju mnogi USB izbrisivi memorijski pogoni i memorijske kartice, nijedna datoteka ne može biti od 4 GB ili veća: ako bi prijenos ondje spremio takvu datoteku, rečenica to kaže i trebate odabrati mapu na drugom pogonu.</dd>
 <dt><span class="ui">Prihvati</span> (<kbd>Alt</kbd>+<kbd>I</kbd>) i <span class="ui">Odbij</span> (<kbd>Alt</kbd>+<kbd>O</kbd>)</dt>
 <dd>Kada se prozor otvori, fokus je na gumbu <span class="ui">Prihvati</span>, pa pritiskom tipke <kbd>Enter</kbd> prihvaćate prijenos; čitači zaslona obično najprije pročitaju tekst prozora, od podebljanog retka do rečenice o slobodnom prostoru na disku. Pritiskom tipke <kbd>Esc</kbd> ili zatvaranjem prozora odbijate ga.</dd>
+<dt><span class="ui">Blokiraj pošiljatelja</span> (<kbd>Alt</kbd>+<kbd>B</kbd>)</dt>
+<dd>Odbija ono što osoba šalje i blokira je, nakon što potvrdite gumbom <span class="ui">Da</span>. Pogledajte <a href="#blocking">Blokiranje pošiljatelja</a>.</dd>
 </dl>
 <p>Kada vam ista osoba šalje više stavki odjednom, one dijele jedan prozor, a vaš se odgovor odnosi na sve. Podebljani redak kaže koliko ih je, sljedeći redak navodi njihovu ukupnu veličinu, a polje <span class="ui">Stavke</span> (<kbd>Alt</kbd>+<kbd>T</kbd>) ih navodi. Stavke koje stignu dok je prozor otvoren dodaju se u njega, a one koje su stigle u posljednjoj sekundi vaš odgovor još ne obuhvaća: ostaju u prozoru.</p>
 <p>Ako nema dovoljno slobodnog prostora, Dodavo pita želite li ipak prihvatiti prijenos. Ako pošiljatelj otkaže prije nego što odgovorite, prozor se zatvara, a obavijest vas o tome izvješćuje.</p>
@@ -238,6 +241,13 @@
 <h3 id="auto-accept">Primanje bez pitanja</h3>
 <p>Prijenosi od osoba s vašeg popisa primatelja počinju odmah, bez prozora Dolazni prijenos, ako su u postavkama uključene obje mogućnosti: <span class="ui">Uvijek spremaj primljene datoteke u ovu mapu</span> i <span class="ui">Prijenose pokreći automatski, bez pitanja</span>. Uključene su dok ih ne isključite. Dodavo prikazuje obavijest <span class="ui">Primanje</span> i sprema stavku u mapu iz prve mogućnosti, a to je vaša mapa Preuzimanja ako niste odabrali drugu. Za prijenose od nepoznatih pošiljatelja i prijenose koji ne bi stali na disk Dodavo i dalje pita. Na taj način prijenos mogu pokrenuti samo osobe koje ste sami dodali: njihov se ID kontakta ne može krivotvoriti.</p>
 <p>Ako želite birati gdje se sprema svaka stavka, poništite odabir mogućnosti <span class="ui">Uvijek spremaj primljene datoteke u ovu mapu</span>: svaki prijenos tada otvara prozor Dolazni prijenos. Ako želite odlučivati o svakom prijenosu, a da se vaša mapa i dalje predlaže, umjesto toga poništite odabir mogućnosti <span class="ui">Prijenose pokreći automatski, bez pitanja</span>.</p>
+<h3 id="blocking">Blokiranje pošiljatelja</h3>
+<p>Ako vam netko šalje ono što ne želite, možete ga blokirati. Dodavo tada bez pitanja i bez obavijesti odbija sve što vam ta osoba pošalje. Ona vidi samo da je njezina ponuda odbijena i ne saznaje da je blokirana. Prijenosi s njom koji su već u tijeku nastavljaju se; ako želite da prestanu, otkažite ih u njihovim prozorima napretka.</p>
+<ul>
+<li>U prozoru Dolazni prijenos aktivirajte <span class="ui">Blokiraj pošiljatelja</span> (<kbd>Alt</kbd>+<kbd>B</kbd>) i potvrdite gumbom <span class="ui">Da</span>. Odbija se sve što ta osoba nudi, a čeka odgovor.</li>
+<li>U glavnom prozoru odaberite osobu i na izborniku <span class="ui">Datoteka</span> odaberite <span class="ui">Blokiraj primatelja</span>. Blokirana osoba uklanja se s popisa primatelja.</li>
+</ul>
+<p>Da biste nekoga deblokirali, otvorite postavke, aktivirajte <span class="ui">Blokirani pošiljatelji…</span> (<kbd>Alt</kbd>+<kbd>L</kbd>), u dijaloškom okviru <span class="ui">Blokirani pošiljatelji</span> odaberite osobu i aktivirajte <span class="ui">Deblokiraj</span> (<kbd>Alt</kbd>+<kbd>D</kbd>). Kada blokiranu osobu dodate u primatelje, ona se također deblokira.</p>
 </section>
 
 <section aria-labelledby="progress">
@@ -324,6 +334,8 @@
 <dd>Popis s mogućnostima <span class="ui">Zadrži samo raspakiranu mapu</span>, <span class="ui">Zadrži samo ZIP datoteku (bez raspakiravanja)</span> i <span class="ui">Zadrži raspakiranu mapu i ZIP datoteku</span>. Primljena mapa stiže kao ZIP datoteka; ova postavka određuje hoće li je Dodavo raspakirati i hoće li zadržati ZIP datoteku. Zadržavanje ZIP datoteke korisno je ako mapu želite pohraniti ili proslijediti točno onakvu kakva je stigla. Izbor vrijedi za prijenose koje prihvatite nakon promjene. Pogledajte <a href="#after-receiving">Kada je prijenos dovršen</a> i <a href="#faq-dates">Zadržavaju li datoteke i mape svoje datume?</a></dd>
 <dt><span class="ui">Nakon primanja pitaj želim li otvoriti datoteku ili mapu</span></dt>
 <dd>Pita što učiniti nakon što je stavka primljena. Pogledajte <a href="#after-receiving">Kada je prijenos dovršen</a>.</dd>
+<dt><span class="ui">Blokirani pošiljatelji…</span></dt>
+<dd>Otvara popis pošiljatelja koje ste blokirali, na kojem ih možete deblokirati. Pogledajte <a href="#blocking">Blokiranje pošiljatelja</a>.</dd>
 </dl>
 <h3 id="settings-general">Općenito</h3>
 <dl>
@@ -394,6 +406,7 @@
 <tr><td><kbd>Alt</kbd>+<kbd>T</kbd></td><td>Prelazak na popis stavki, kada ih je više</td></tr>
 <tr><td><kbd>Alt</kbd>+<kbd>I</kbd></td><td>Prihvati</td></tr>
 <tr><td><kbd>Alt</kbd>+<kbd>O</kbd></td><td>Odbij</td></tr>
+<tr><td><kbd>Alt</kbd>+<kbd>B</kbd></td><td>Blokiraj pošiljatelja</td></tr>
 <tr><td><kbd>Alt</kbd>+<kbd>S</kbd></td><td>Prelazak na polje Spremi u</td></tr>
 <tr><td><kbd>Alt</kbd>+<kbd>P</kbd></td><td>Odabir mape</td></tr>
 <tr><td><kbd>Alt</kbd>+<kbd>D</kbd></td><td>Dodavanje nepoznatog pošiljatelja u moje primatelje</td></tr>
@@ -530,7 +543,7 @@
 <p>Ne. Svaki je prijenos sveobuhvatno šifriran između dvaju računala. Kad podaci moraju proći preko relejnog poslužitelja, poslužitelj samo prosljeđuje šifrirane podatke koje ne može pročitati. ID kontakta javni je ključ primatelja, pa se veza može uspostaviti samo s računalom koje ima odgovarajući tajni ključ. Pogledajte <a href="#connections">Veze i sigurnost</a>.</p>
 
 <h3 id="faq-id-secret">Je li moj ID kontakta tajan? Može li mi bilo tko slati datoteke?</h3>
-<p>ID kontakta nije tajan; funkcionira kao telefonski broj. Svatko tko ga ima može vam ponuditi datoteku. Sami se pokreću samo prijenosi osoba s vašeg popisa primatelja (<span class="ui">Prijenose pokreći automatski, bez pitanja</span>, što možete isključiti u postavkama). Od bilo koga drugog na vašem se računalu ništa ne sprema dok ne odaberete <span class="ui">Prihvati</span>, a takve su ponude označene upozorenjem o nepoznatom pošiljatelju. Pogledajte <a href="#auto-accept">Primanje bez pitanja</a>.</p>
+<p>ID kontakta nije tajan; funkcionira kao telefonski broj. Svatko tko ga ima može vam ponuditi datoteku. Sami se pokreću samo prijenosi osoba s vašeg popisa primatelja (<span class="ui">Prijenose pokreći automatski, bez pitanja</span>, što možete isključiti u postavkama). Od bilo koga drugog na vašem se računalu ništa ne sprema dok ne odaberete <span class="ui">Prihvati</span>, a takve su ponude označene upozorenjem o nepoznatom pošiljatelju. Pogledajte <a href="#auto-accept">Primanje bez pitanja</a>. Ako vam netko stalno šalje ono što ne želite, pogledajte <a href="#blocking">Blokiranje pošiljatelja</a>.</p>
 
 <h3 id="faq-servers">Što Dodavo šalje poslužiteljima na internetu?</h3>
 <p>Samo ono što je potrebno da bi druga računala pronašla vaše. Dodavo pod vašim ID-om kontakta objavljuje adrese na kojima je vaše računalo trenutačno dostupno u usluzi za pronalaženje adresa mreže iroh te održava vezu s relejnim poslužiteljem kako bi se prijenos mogao uspostaviti i kad izravna veza nije moguća. Nazivi i sadržaj vaših datoteka putuju samo unutar šifrirane veze s drugim računalom. Jednom dnevno, kada je uključena postavka <span class="ui">Automatski provjeravaj ima li ažuriranja (jednom dnevno)</span>, Dodavo sa stranice programa Dodavo na GitHubu (github.com) dohvaća i malu datoteku koja opisuje najnoviju verziju, a kada odlučite instalirati ažuriranje, odande preuzima instalacijski program; pogledajte <a href="#update">Ažuriranje programa Dodavo</a>. Dodavo nema korisničkih računa i ne šalje statistiku upotrebe.</p>
