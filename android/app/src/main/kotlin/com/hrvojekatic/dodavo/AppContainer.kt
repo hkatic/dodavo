@@ -7,6 +7,7 @@ import android.provider.Settings
 import androidx.core.os.ConfigurationCompat
 import com.hrvojekatic.dodavo.core.CoreRepository
 import com.hrvojekatic.dodavo.core.NativeCore
+import com.hrvojekatic.dodavo.core.Sending
 import com.hrvojekatic.dodavo.core.StartOptions
 import java.io.File
 import kotlinx.coroutines.CoroutineScope
@@ -19,6 +20,8 @@ class AppContainer(private val context: Context) {
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     val repository = CoreRepository(NativeCore(context), scope)
+
+    val sending = Sending(context, repository)
 
     /** The folders and preferences that only the app can ask the system for. */
     fun startOptions(): StartOptions {

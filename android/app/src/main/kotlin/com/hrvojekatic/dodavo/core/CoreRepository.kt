@@ -105,6 +105,10 @@ class CoreRepository(
     val announcement: StateFlow<Announcement?> = _announcement.asStateFlow()
     private var announcements = 0L
 
+    private val _line = MutableStateFlow("")
+    /** The status line: the latest of the online status and what the core announces. */
+    val line: StateFlow<String> = _line.asStateFlow()
+
     private val _events = MutableSharedFlow<Event>(
         extraBufferCapacity = 64,
         onBufferOverflow = BufferOverflow.DROP_OLDEST,
@@ -144,7 +148,10 @@ class CoreRepository(
 
     internal fun handle(message: Message) {
         when (message) {
-            is Message.Status -> _status.value = Status(message.online, message.text)
+            is Message.Status -> {
+                _status.value = Status(message.online, message.text)
+                _line.value = message.text
+            }
             is Message.RowChanged -> {
                 _transfers.update { it + (message.row.id to message.row) }
                 message.announce?.let(::announce)
@@ -153,10 +160,13 @@ class CoreRepository(
             is Message.TransferNotice -> _events.tryEmit(Event.TransferNotice(message.id, message.notice, message.path))
             is Message.OfferArrived -> {
                 _offers.update { it + (message.offer.id to message.offer) }
+                // Said in the app as well: the offer does not take the focus.
+                announce(message.notice.text)
                 _events.tryEmit(Event.OfferArrived(message.offer, message.notice))
             }
             is Message.OfferGone -> {
                 _offers.update { it - message.id }
+                announce(message.notice.text)
                 _events.tryEmit(Event.OfferGone(message.id, message.notice))
             }
             is Message.Busy -> _busy.value = message.busy
@@ -168,6 +178,7 @@ class CoreRepository(
     private fun announce(text: String) {
         announcements += 1
         _announcement.value = Announcement(text, announcements)
+        _line.value = text
     }
 
     private suspend fun call(call: Call): String = withContext(io) { core.call(call) }

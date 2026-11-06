@@ -82,6 +82,7 @@ pub struct Started {
     profile: Option<String>,
     language: String,
     version: String,
+    author: String,
     copyright: String,
     website: String,
     #[cfg(target_os = "macos")]
@@ -516,6 +517,7 @@ impl Core {
             profile: profile.clone(),
             language: i18n::lang().code().to_string(),
             version: env!("CARGO_PKG_VERSION").to_string(),
+            author: dodavo_core::AUTHOR.to_string(),
             copyright: dodavo_core::COPYRIGHT_YEARS.to_string(),
             website: dodavo_core::WEBSITE.to_string(),
             #[cfg(target_os = "macos")]

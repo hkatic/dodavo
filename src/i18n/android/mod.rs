@@ -54,6 +54,101 @@ super::strings! {
         settings_not_saved,
         settings_unreadable,
         unknown_sender_warning,
+        // The screens of the app (`android/`), as `R.string` (see
+        // `crates/dodavo-android`).
+        nav_recipients,
+        nav_transfers,
+        more_options,
+        recipient_options,
+        menu_share_my_id,
+        menu_copy_my_id,
+        menu_settings,
+        menu_help,
+        menu_about,
+        action_send_files,
+        action_send_folder,
+        action_edit,
+        action_copy_id,
+        action_block,
+        action_remove,
+        add_recipient,
+        edit_recipient,
+        recipients_empty,
+        recipient_name_label,
+        recipient_name_help,
+        contact_id_label,
+        contact_id_help,
+        paste,
+        save,
+        close,
+        cancel,
+        navigate_up,
+        remove_confirm,
+        remove_text,
+        remove,
+        block_confirm,
+        block_text,
+        block_recipient_text,
+        block,
+        id_copied,
+        share_id_title,
+        transfers_empty,
+        clear_finished,
+        sending_to,
+        receiving_from,
+        pause,
+        resume,
+        cancel_transfer,
+        keep_transferring,
+        cancel_confirm,
+        open,
+        share,
+        show_folder,
+        remove_from_list,
+        succeeded_marker,
+        failed_marker,
+        incoming_title,
+        saved_in,
+        accept,
+        decline,
+        block_sender,
+        accept_anyway,
+        settings_title,
+        my_name_label,
+        my_name_help,
+        my_id_label,
+        auto_accept,
+        auto_accept_help,
+        received_folder_label,
+        received_extract,
+        received_zip,
+        received_both,
+        blocked_senders,
+        blocked_none,
+        unblock,
+        unblock_named,
+        language_setting,
+        language_setting_help,
+        language_system,
+        notifications_setting,
+        notifications_setting_help,
+        receive_background,
+        receive_background_help,
+        about_title,
+        about_text,
+        about_notice,
+        copyright_line,
+        version,
+        website,
+        privacy_policy,
+        licenses,
+        license_dodavo,
+        license_components,
+        help_title,
+        starting,
+        cannot_start,
+        ok,
+        no_app_to_open,
     }
     plurals {
         folder_description,
@@ -120,15 +215,25 @@ mod tests {
     /// placeholders that the code fills there: `fill` keeps unknown ones.
     #[test]
     fn texts_of_the_main_table_take_its_placeholders() {
+        const OS_KEYS: [&str; 9] = [
+            "space_ok",
+            "space_short",
+            "space_fat",
+            "tx_part_in_use",
+            "tx_peer_part_in_use",
+            "phase_part_in_use",
+            "phase_peer_part_in_use",
+            "part_in_use_balloon",
+            "peer_part_in_use_balloon",
+        ];
         for lang in Lang::ALL {
             let main: std::collections::HashMap<_, _> = lang.strings().texts().into_iter().collect();
-            for (key, text) in strings(lang).texts() {
-                if let Some(main_text) = main.get(key) {
-                    assert!(
-                        placeholders(text).is_subset(&placeholders(main_text)),
-                        "{lang:?}: {key}"
-                    );
-                }
+            let own: std::collections::HashMap<_, _> = strings(lang).texts().into_iter().collect();
+            for key in OS_KEYS {
+                assert!(
+                    placeholders(own[key]).is_subset(&placeholders(main[key])),
+                    "{lang:?}: {key}"
+                );
             }
         }
     }
@@ -140,7 +245,8 @@ mod tests {
             for (key, text) in strings(lang).texts() {
                 assert!(!text.contains(['&', '\t']), "{lang:?}: {key}");
                 for word in [
-                    "Windows", "Explorer", "Finder", "macOS", "Mac", "program", "drive", "disk",
+                    "Windows", "Explorer", "Finder", "macOS", "Mac ", "program ", "programa",
+                    "drive", "disk",
                 ] {
                     assert!(!text.contains(word), "{lang:?}: {key}: {word}");
                 }

@@ -34,6 +34,17 @@
             </intent-filter>
         </activity>
 
+        <!-- Received files, for the apps that open or get them. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.files"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
         <!-- Keeps the language chosen for the app on Android 12 and earlier. -->
         <service
             android:name="androidx.appcompat.app.AppLocalesMetadataHolderService"

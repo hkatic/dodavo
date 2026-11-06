@@ -15,6 +15,8 @@ data class Started(
     val profile: String? = null,
     val language: String = "en",
     val version: String = "",
+    val author: String = "",
+    /** The years of the copyright notice. */
     val copyright: String = "",
     val website: String = "",
     /** Each language by its code, with its own name for it. */
