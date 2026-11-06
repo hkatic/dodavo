@@ -29,6 +29,8 @@ use crate::i18n::tr;
 mod macos;
 #[cfg(target_os = "macos")]
 use self::macos as os;
+#[cfg(unix)]
+mod unix;
 #[cfg(windows)]
 mod windows;
 #[cfg(windows)]

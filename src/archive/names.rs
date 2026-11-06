@@ -87,8 +87,8 @@ pub(super) fn utf16_units(name: &str) -> usize {
     name.encode_utf16().count()
 }
 
-/// Counts what APFS limits a name to.
-#[cfg(any(target_os = "macos", test))]
+/// Counts what APFS and Linux file systems limit a name to.
+#[cfg(any(unix, test))]
 pub(super) fn bytes(name: &str) -> usize {
     name.len()
 }

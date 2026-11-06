@@ -1,5 +1,7 @@
 //! What differs between the operating systems, below the user interface.
 
+#[cfg(unix)]
+mod unix;
 #[cfg(target_os = "macos")]
 mod macos;
 #[cfg(target_os = "macos")]
