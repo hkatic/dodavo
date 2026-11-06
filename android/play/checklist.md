@@ -5,7 +5,7 @@ What a release on Google Play takes besides the bundle. The bundle comes from
 
 ## Once
 
-- [ ] A Google Play developer account. A personal account created after
+- [x] A Google Play developer account. A personal account created after
       2023-11-13 has to run a closed test with at least 12 testers for 14 days
       before it can publish to production.
 - [ ] Trader status (EEA): declare it in Play Console; a trader's address and
