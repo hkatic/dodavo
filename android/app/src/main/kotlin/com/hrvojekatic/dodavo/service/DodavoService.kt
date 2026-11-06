@@ -93,7 +93,9 @@ class DodavoService : Service() {
 
     private fun notification(need: Need): Notification {
         val open = Notifications.openApp(this)
-        val builder = if (need.busy) {
+        // "Ready to receive" only for Receive in the background: a start for a
+        // transfer that is not yet among the rows already shows that one.
+        val builder = if (need.busy || !need.background) {
             val row = need.moving.singleOrNull()
             NotificationCompat.Builder(this, Notifications.CHANNEL_TRANSFERS)
                 .setContentTitle(row?.item ?: getString(R.string.notify_transfers))

@@ -12,6 +12,7 @@ import android.net.Uri
 import android.os.Build
 import android.provider.Settings as SystemSettings
 import androidx.appcompat.app.AppCompatDelegate
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -298,7 +299,8 @@ private fun LinkRow(title: String, help: String?, onClick: () -> Unit) {
     ListItem(
         headlineContent = { Text(title) },
         supportingContent = help?.let { { Text(it) } },
-        modifier = Modifier.selectable(selected = false, role = Role.Button, onClick = onClick),
+        // A button: `selectable` would make TalkBack say "not selected".
+        modifier = Modifier.clickable(role = Role.Button, onClick = onClick),
     )
 }
 

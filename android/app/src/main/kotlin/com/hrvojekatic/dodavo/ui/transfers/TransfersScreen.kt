@@ -4,6 +4,7 @@ import android.app.DownloadManager
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
+import android.os.Environment
 import android.webkit.MimeTypeMap
 import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
@@ -174,7 +175,9 @@ private fun TransferCard(
                 listOf(row.amount, row.speed, row.remaining).filter { it.isNotEmpty() }
                     .takeIf { it.isNotEmpty() }
                     ?.let { Text(it.joinToString(" – "), style = MaterialTheme.typography.bodySmall) }
-                if (row.detail.isNotEmpty()) Text(row.detail, style = MaterialTheme.typography.bodySmall)
+                if (row.detail.isNotEmpty()) {
+                    Text(shownPaths(row.detail), style = MaterialTheme.typography.bodySmall)
+                }
             }
             if (row.active) {
                 val fraction = row.fraction
@@ -216,6 +219,15 @@ private fun TransferCard(
             }
         }
     }
+}
+
+/** [text] with paths in the shared storage as Android shows them: "Download/Dodavo/a.pdf". */
+private fun shownPaths(text: String): String =
+    text.replace(sharedStorage + "/", "")
+
+/** Where the shared storage is: what holds Download (see AppContainer). */
+private val sharedStorage: String by lazy {
+    Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS).parent.orEmpty()
 }
 
 /** The content URI of a received file, for other apps (res/xml/file_paths.xml). */
