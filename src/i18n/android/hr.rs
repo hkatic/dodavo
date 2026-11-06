@@ -1,5 +1,5 @@
 use super::Strings;
-use crate::i18n::Lang;
+use crate::i18n::{Lang, Plural};
 
 pub const HR: Strings = Strings {
     lang: Lang::Hr,
@@ -17,4 +17,36 @@ pub const HR: Strings = Strings {
     error_name_too_long: "Naziv ili putanja stavke predugi su za ovaj uređaj.",
     error_read_only: "Pohrana se može samo čitati.",
     error_system: "Sustav je prijavio pogrešku (kod {code}).",
+    status_offline: "Izvan mreže – provjerite internetsku vezu. Prijenosi unutar lokalne mreže i dalje rade.",
+    status_online: "Na mreži – spremno za slanje i primanje datoteka.",
+    network_problem: "Problem s mrežom: {error} (ponovni pokušaj…)",
+    space_confirm: "Za ovaj prijenos nema dovoljno slobodnog prostora u pohrani.\n\n{details}\n\nŽelite li ga ipak prihvatiti?",
+    choose_save_folder: "Odaberite mapu u koju će se spremiti primljene datoteke.",
+    contact_invalid: "ID kontakta primatelja „{name}” nije valjan.",
+    name_taken: "Primatelj s imenom „{name}” već postoji. Odaberite drugo ime.",
+    contact_id_taken: "Ovaj ID kontakta već pripada primatelju „{name}”.",
+    invalid_save_folder: "Odaberite valjanu mapu za spremanje primljenih datoteka.",
+    enter_my_name: "Unesite svoje ime. Prikazuje se osobama kojima šaljete datoteke.",
+    own_contact_id: "Ovo je vaš vlastiti ID kontakta. Unesite ID kontakta druge osobe.",
+    invalid_contact_id: "Ovo nije valjan ID kontakta.\n\nID kontakta kôd je od 64 znaka sastavljen od znamenki 0–9 \
+        i slova a–f. Zamolite osobu da vam ga ponovno pošalje.",
+    enter_recipient_name: "Unesite ime ovog primatelja.",
+    panic_message: "Došlo je do neočekivane pogreške i Dodavo se mora zatvoriti.\n\n{info}",
+    add_to_recipients: "Dodaj „{name}” u moje primatelje",
+    wants_folder: "{name} vam želi poslati mapu",
+    wants_file: "{name} vam želi poslati datoteku",
+    file_description: "„{name}”  ({size})",
+    folder_unusable: "Mapa se ne može koristiti:\n{path}\n\n{error}",
+    identity_failed: "Vaš identitet ne može se pročitati ni stvoriti u mapi {path}:\n{error}",
+    settings_backup: "Nečitljiva datoteka sačuvana je kao {backup}. U njoj je vaš popis primatelja.",
+    settings_not_saved: "Postavke se ne mogu spremiti:\n{error}",
+    settings_unreadable: "Datoteka s postavkama ne može se pročitati pa se koriste zadane postavke:\n{path}\n\n{error}",
+    unknown_sender_warning: "Ovaj pošiljatelj nije na vašem popisu primatelja (ID kontakta {id}). \
+        Prihvaćajte datoteke samo od osoba koje poznajete.",
+    folder_description: Plural {
+        one: "„{name}”  ({n} datoteka, {size})",
+        two: "„{name}”  ({n} datoteka, {size})",
+        few: "„{name}”  ({n} datoteke, {size})",
+        other: "„{name}”  ({n} datoteka, {size})",
+    },
 };

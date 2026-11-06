@@ -29,8 +29,35 @@ super::strings! {
         error_name_too_long,
         error_read_only,
         error_system,
+        // What the state of the program says (`crates/dodavo-ffi`).
+        status_offline,
+        status_online,
+        network_problem,
+        space_confirm,
+        choose_save_folder,
+        contact_invalid,
+        name_taken,
+        contact_id_taken,
+        invalid_save_folder,
+        enter_my_name,
+        own_contact_id,
+        invalid_contact_id,
+        enter_recipient_name,
+        panic_message,
+        add_to_recipients,
+        wants_folder,
+        wants_file,
+        file_description,
+        folder_unusable,
+        identity_failed,
+        settings_backup,
+        settings_not_saved,
+        settings_unreadable,
+        unknown_sender_warning,
     }
-    plurals {}
+    plurals {
+        folder_description,
+    }
 }
 
 /// The table of `lang`.

@@ -1,13 +1,15 @@
-//! What the Mac user interface (`macos/`, in Swift) calls: the state of the
-//! program, kept here, behind a few C functions that take and give JSON.
+//! What the Mac user interface (`macos/`, in Swift) and Android's (`android/`,
+//! in Kotlin, through `crates/dodavo-android`) call: the state of the
+//! program, kept here, behind a few functions that take and give JSON.
 //!
-//! Swift draws what this says and passes on what the user does, nothing more,
-//! so that what a transfer shows and what can be done with it are worked out
-//! once and tested in Rust (see `dodavo_core::view`). The functions may be
-//! called from the main thread only. Messages for the user interface wait in a
-//! queue: `wake` says that there are some (from any thread), and the main
-//! thread takes them with `dodavo_poll`, as the Win32 interface does with
-//! `WM_APP_NET`.
+//! The user interface draws what this says and passes on what the user does,
+//! nothing more, so that what a transfer shows and what can be done with it
+//! are worked out once and tested in Rust (see `dodavo_core::view`). On a Mac
+//! the functions may be called from the main thread only. Messages for the
+//! user interface wait in a queue: on a Mac, `wake` says that there are some
+//! (from any thread), and the main thread takes them with `dodavo_poll`, as
+//! the Win32 interface does with `WM_APP_NET`; Android's app has a thread wait
+//! for them ([`wait`]).
 
 use std::{
     ffi::{CStr, CString, c_char, c_void},
@@ -16,7 +18,7 @@ use std::{
 };
 
 mod core;
-#[cfg(test)]
+#[cfg(all(test, target_os = "macos"))]
 mod help;
 
 use core::Core;
@@ -41,6 +43,54 @@ impl Wake {
 }
 
 static CORE: OnceLock<Core> = OnceLock::new();
+
+/// Starts the program: `options` is JSON with its command line (see
+/// [`core::Options`]). Returns JSON with what the user interface needs to
+/// begin (see [`core::Started`]). Only the first call starts it; the later
+/// ones get the same answer, as Android's activities come and go while the
+/// program runs. A panic gives a `fatal` answer.
+pub fn start(options: &str, wake: Option<Wake>) -> String {
+    static STARTED: OnceLock<String> = OnceLock::new();
+    STARTED
+        .get_or_init(|| {
+            catch_unwind(AssertUnwindSafe(|| {
+                let (core, started) = Core::start(options, wake);
+                let _ = CORE.set(core);
+                serde_json::to_string(&started).unwrap_or_default()
+            }))
+            .unwrap_or_else(|_| "{\"fatal\":\"The program could not start.\"}".into())
+        })
+        .clone()
+}
+
+/// Does what `call` (JSON) says and returns the answer as JSON (see
+/// [`core::Call`]): `null` before the start, for what cannot be read, and
+/// after a panic.
+pub fn call(call: &str) -> String {
+    catch_unwind(AssertUnwindSafe(|| {
+        CORE.get()
+            .map_or_else(|| "null".to_string(), |core| core.call(call))
+    }))
+    .unwrap_or_else(|_| "null".into())
+}
+
+/// The next message for the user interface, as JSON, or none.
+pub fn poll() -> Option<String> {
+    catch_unwind(|| CORE.get().and_then(Core::poll)).ok().flatten()
+}
+
+/// The next message, waiting for one at most `timeout` (Android).
+pub fn wait(timeout: std::time::Duration) -> Option<String> {
+    match CORE.get() {
+        Some(core) => catch_unwind(AssertUnwindSafe(|| core.wait(timeout)))
+            .ok()
+            .flatten(),
+        None => {
+            std::thread::sleep(timeout);
+            None
+        }
+    }
+}
 
 fn to_c(text: String) -> *mut c_char {
     // No NUL in JSON, which escapes it.
@@ -73,23 +123,14 @@ pub unsafe extern "C" fn dodavo_start(
         function: wake,
         context,
     };
-    let reply = catch_unwind(AssertUnwindSafe(|| {
-        let (core, started) = Core::start(text_of(options), wake);
-        let _ = CORE.set(core);
-        serde_json::to_string(&started).unwrap_or_default()
-    }));
-    to_c(reply.unwrap_or_else(|_| "{\"fatal\":\"The program could not start.\"}".into()))
+    to_c(start(text_of(options), Some(wake)))
 }
 
 /// The next message for the user interface, as JSON, or null when there is
 /// none. Free it with [`dodavo_free`].
 #[unsafe(no_mangle)]
 pub extern "C" fn dodavo_poll() -> *mut c_char {
-    let next = catch_unwind(|| CORE.get().and_then(Core::poll));
-    match next {
-        Ok(Some(message)) => to_c(message),
-        _ => std::ptr::null_mut(),
-    }
+    poll().map_or(std::ptr::null_mut(), to_c)
 }
 
 /// Does what `call` (JSON) says and returns the answer as JSON (see
@@ -100,12 +141,7 @@ pub extern "C" fn dodavo_poll() -> *mut c_char {
 /// `call` is a NUL-terminated string.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn dodavo_call(call: *const c_char) -> *mut c_char {
-    let call = text_of(call);
-    let reply = catch_unwind(AssertUnwindSafe(|| {
-        CORE.get()
-            .map_or_else(|| "null".to_string(), |core| core.call(call))
-    }));
-    to_c(reply.unwrap_or_else(|_| "null".into()))
+    to_c(self::call(text_of(call)))
 }
 
 /// Frees a string that one of these functions returned.
@@ -122,6 +158,7 @@ pub unsafe extern "C" fn dodavo_free(text: *mut c_char) {
 }
 
 /// The Swift enum of the text keys (`macos/Sources/Dodavo/Keys.generated.swift`).
+#[cfg(target_os = "macos")]
 pub fn swift_keys() -> String {
     let table = dodavo_core::i18n::mac::strings(dodavo_core::i18n::Lang::En);
     let mut out = String::from(
@@ -140,7 +177,7 @@ pub fn swift_keys() -> String {
     out
 }
 
-#[cfg(test)]
+#[cfg(all(test, target_os = "macos"))]
 mod tests {
     #[test]
     fn the_swift_keys_are_current() {

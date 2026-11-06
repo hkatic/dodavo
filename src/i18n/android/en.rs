@@ -1,5 +1,5 @@
 use super::Strings;
-use crate::i18n::Lang;
+use crate::i18n::{Lang, Plural};
 
 pub const EN: Strings = Strings {
     lang: Lang::En,
@@ -17,4 +17,36 @@ pub const EN: Strings = Strings {
     error_name_too_long: "The name or path of an item is too long for this device.",
     error_read_only: "The storage is read-only.",
     error_system: "The system reported an error (code {code}).",
+    status_offline: "Offline – check your internet connection. Transfers within your local network still work.",
+    status_online: "Online – ready to send and receive files.",
+    network_problem: "Network problem: {error} (retrying…)",
+    space_confirm: "There is not enough free storage space for this transfer.\n\n{details}\n\nDo you want to accept it anyway?",
+    choose_save_folder: "Please choose the folder where the received files should be saved.",
+    contact_invalid: "The Contact ID of {name} is not valid.",
+    name_taken: "There is already a recipient called “{name}”. Please choose a different name.",
+    contact_id_taken: "This Contact ID already belongs to “{name}”.",
+    invalid_save_folder: "Please choose a valid folder for saving received files.",
+    enter_my_name: "Please enter your name. It is shown to the people you send files to.",
+    own_contact_id: "This is your own Contact ID. Please enter the Contact ID of the other person.",
+    invalid_contact_id: "This is not a valid Contact ID.\n\nA Contact ID is a 64 character code made of the digits 0–9 \
+        and the letters a–f. Ask the person to send it to you again.",
+    enter_recipient_name: "Please enter a name for this recipient.",
+    panic_message: "An unexpected error occurred and Dodavo has to quit.\n\n{info}",
+    add_to_recipients: "Add “{name}” to my recipients",
+    wants_folder: "{name} wants to send you a folder",
+    wants_file: "{name} wants to send you a file",
+    file_description: "“{name}”  ({size})",
+    folder_unusable: "The folder cannot be used:\n{path}\n\n{error}",
+    identity_failed: "Your identity could not be read or created in {path}:\n{error}",
+    settings_backup: "The unreadable file was kept as {backup}. Your recipient list is in it.",
+    settings_not_saved: "The settings could not be saved:\n{error}",
+    settings_unreadable: "The settings file could not be read, so the default settings are used:\n{path}\n\n{error}",
+    unknown_sender_warning: "This sender is not in your recipient list (Contact ID {id}). \
+        Only accept files from people you know.",
+    folder_description: Plural {
+        one: "“{name}”  ({n} file, {size})",
+        two: "“{name}”  ({n} files, {size})",
+        few: "“{name}”  ({n} files, {size})",
+        other: "“{name}”  ({n} files, {size})",
+    },
 };

@@ -1,5 +1,5 @@
 use super::Strings;
-use crate::i18n::Lang;
+use crate::i18n::{Lang, Plural};
 
 pub const SL: Strings = Strings {
     lang: Lang::Sl,
@@ -17,4 +17,36 @@ pub const SL: Strings = Strings {
     error_name_too_long: "Ime ali pot elementa je predolga za to napravo.",
     error_read_only: "Shramba je samo za branje.",
     error_system: "Sistem je sporočil napako (koda {code}).",
+    status_offline: "Brez povezave – preverite internetno povezavo. Prenosi v lokalnem omrežju še vedno delujejo.",
+    status_online: "Povezano – pripravljeno za pošiljanje in prejemanje datotek.",
+    network_problem: "Težava z omrežjem: {error} (vnovični poskus…)",
+    space_confirm: "Za ta prenos v shrambi ni dovolj prostega prostora.\n\n{details}\n\nAli ga želite vseeno sprejeti?",
+    choose_save_folder: "Izberite mapo, v katero naj se shranijo prejete datoteke.",
+    contact_invalid: "ID stika prejemnika »{name}« ni veljaven.",
+    name_taken: "Prejemnik z imenom »{name}« že obstaja. Izberite drugo ime.",
+    contact_id_taken: "Ta ID stika že pripada prejemniku »{name}«.",
+    invalid_save_folder: "Izberite veljavno mapo za shranjevanje prejetih datotek.",
+    enter_my_name: "Vnesite svoje ime. Prikazano je osebam, ki jim pošiljate datoteke.",
+    own_contact_id: "To je vaš lastni ID stika. Vnesite ID stika druge osebe.",
+    invalid_contact_id: "To ni veljaven ID stika.\n\nID stika je 64-mestna koda iz števk 0–9 \
+        in črk a–f. Prosite osebo, naj vam ga znova pošlje.",
+    enter_recipient_name: "Vnesite ime tega prejemnika.",
+    panic_message: "Prišlo je do nepričakovane napake in Dodavo se mora zapreti.\n\n{info}",
+    add_to_recipients: "Dodaj »{name}« med moje prejemnike",
+    wants_folder: "{name} vam želi poslati mapo",
+    wants_file: "{name} vam želi poslati datoteko",
+    file_description: "»{name}«  ({size})",
+    folder_unusable: "Mape ni mogoče uporabiti:\n{path}\n\n{error}",
+    identity_failed: "Vaše identitete ni bilo mogoče prebrati ali ustvariti v mapi {path}:\n{error}",
+    settings_backup: "Neberljiva datoteka je ohranjena kot {backup}. V njej je vaš seznam prejemnikov.",
+    settings_not_saved: "Nastavitev ni bilo mogoče shraniti:\n{error}",
+    settings_unreadable: "Datoteke z nastavitvami ni mogoče prebrati, zato se uporabljajo privzete nastavitve:\n{path}\n\n{error}",
+    unknown_sender_warning: "Tega pošiljatelja ni na vašem seznamu prejemnikov (ID stika {id}). \
+        Sprejemajte datoteke samo od oseb, ki jih poznate.",
+    folder_description: Plural {
+        one: "»{name}«  ({n} datoteka, {size})",
+        two: "»{name}«  ({n} datoteki, {size})",
+        few: "»{name}«  ({n} datoteke, {size})",
+        other: "»{name}«  ({n} datotek, {size})",
+    },
 };

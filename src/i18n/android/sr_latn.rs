@@ -1,5 +1,5 @@
 use super::Strings;
-use crate::i18n::Lang;
+use crate::i18n::{Lang, Plural};
 
 pub const SR_LATN: Strings = Strings {
     lang: Lang::SrLatn,
@@ -17,4 +17,36 @@ pub const SR_LATN: Strings = Strings {
     error_name_too_long: "Naziv ili putanja stavke su predugi za ovaj uređaj.",
     error_read_only: "Memorija može samo da se čita.",
     error_system: "Sistem je prijavio grešku (kod {code}).",
+    status_offline: "Van mreže – proverite internet vezu. Prenosi unutar lokalne mreže i dalje rade.",
+    status_online: "Na mreži – spremno za slanje i primanje datoteka.",
+    network_problem: "Problem sa mrežom: {error} (ponovni pokušaj…)",
+    space_confirm: "Za ovaj prenos nema dovoljno slobodnog prostora u memoriji.\n\n{details}\n\nŽelite li ipak da ga prihvatite?",
+    choose_save_folder: "Izaberite fasciklu u kojoj će se sačuvati primljene datoteke.",
+    contact_invalid: "ID kontakta primaoca „{name}“ nije važeći.",
+    name_taken: "Primalac sa imenom „{name}“ već postoji. Izaberite drugo ime.",
+    contact_id_taken: "Ovaj ID kontakta već pripada primaocu „{name}“.",
+    invalid_save_folder: "Izaberite važeću fasciklu za čuvanje primljenih datoteka.",
+    enter_my_name: "Unesite svoje ime. Prikazuje se osobama kojima šaljete datoteke.",
+    own_contact_id: "Ovo je vaš sopstveni ID kontakta. Unesite ID kontakta druge osobe.",
+    invalid_contact_id: "Ovo nije važeći ID kontakta.\n\nID kontakta je kôd od 64 znaka sastavljen od cifara 0–9 \
+        i slova a–f. Zamolite osobu da vam ga ponovo pošalje.",
+    enter_recipient_name: "Unesite ime ovog primaoca.",
+    panic_message: "Došlo je do neočekivane greške i Dodavo mora da se zatvori.\n\n{info}",
+    add_to_recipients: "Dodaj „{name}“ u moje primaoce",
+    wants_folder: "{name} želi da vam pošalje fasciklu",
+    wants_file: "{name} želi da vam pošalje datoteku",
+    file_description: "„{name}“  ({size})",
+    folder_unusable: "Fascikla ne može da se koristi:\n{path}\n\n{error}",
+    identity_failed: "Vaš identitet nije moguće pročitati ni kreirati u fascikli {path}:\n{error}",
+    settings_backup: "Nečitljiva datoteka je sačuvana kao {backup}. U njoj je vaša lista primalaca.",
+    settings_not_saved: "Postavke nije moguće sačuvati:\n{error}",
+    settings_unreadable: "Datoteka sa postavkama ne može da se pročita pa se koriste podrazumevane postavke:\n{path}\n\n{error}",
+    unknown_sender_warning: "Ovaj pošiljalac nije na vašoj listi primalaca (ID kontakta {id}). \
+        Prihvatajte datoteke samo od osoba koje poznajete.",
+    folder_description: Plural {
+        one: "„{name}“  ({n} datoteka, {size})",
+        two: "„{name}“  ({n} datoteka, {size})",
+        few: "„{name}“  ({n} datoteke, {size})",
+        other: "„{name}“  ({n} datoteka, {size})",
+    },
 };
