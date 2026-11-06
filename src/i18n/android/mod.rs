@@ -24,6 +24,7 @@ super::strings! {
         phase_peer_part_in_use,
         part_in_use_balloon,
         peer_part_in_use_balloon,
+        notify_saved,
         // The system's errors.
         error_no_access,
         error_name_too_long,
@@ -149,6 +150,16 @@ super::strings! {
         cannot_start,
         ok,
         no_app_to_open,
+        item_unreadable,
+        // Notifications.
+        channel_incoming,
+        channel_transfers,
+        channel_finished,
+        channel_background,
+        notify_transfers,
+        notify_ready,
+        notify_ready_text,
+        review,
     }
     plurals {
         folder_description,
@@ -215,7 +226,7 @@ mod tests {
     /// placeholders that the code fills there: `fill` keeps unknown ones.
     #[test]
     fn texts_of_the_main_table_take_its_placeholders() {
-        const OS_KEYS: [&str; 9] = [
+        const OS_KEYS: [&str; 10] = [
             "space_ok",
             "space_short",
             "space_fat",
@@ -225,6 +236,7 @@ mod tests {
             "phase_peer_part_in_use",
             "part_in_use_balloon",
             "peer_part_in_use_balloon",
+            "notify_saved",
         ];
         for lang in Lang::ALL {
             let main: std::collections::HashMap<_, _> = lang.strings().texts().into_iter().collect();

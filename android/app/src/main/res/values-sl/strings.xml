@@ -13,6 +13,7 @@
     <string name="phase_peer_part_in_use">"Na drugi strani (%1$s) delno prejeto datoteko uporablja druga aplikacija. Prenos se nadaljuje, takoj ko jo ta aplikacija zapre."</string>
     <string name="part_in_use_balloon">"»%1$s«: delno prejeto datoteko uporablja druga aplikacija ali pa Android ni dovolil dostopa do nje. Prenos se nadaljuje, takoj ko se to spremeni."</string>
     <string name="peer_part_in_use_balloon">"»%1$s«: na drugi strani (%2$s) delno prejeto datoteko uporablja druga aplikacija. Prenos se nadaljuje, takoj ko jo ta aplikacija zapre."</string>
+    <string name="notify_saved">"Shranjeno: »%1$s« (pošiljatelj: %2$s). Dotaknite se za prikaz."</string>
     <string name="error_no_access">"Dodavo te postavke ne sme uporabljati."</string>
     <string name="error_name_too_long">"Ime ali pot elementa je predolga za to napravo."</string>
     <string name="error_read_only">"Shramba je samo za branje."</string>
@@ -134,6 +135,15 @@
     <string name="cannot_start">"Dodava ni mogoče zagnati"</string>
     <string name="ok">"V redu"</string>
     <string name="no_app_to_open">"Nobena aplikacija ne more odpreti tega elementa."</string>
+    <string name="item_unreadable">"Dodavo tega elementa ne more prebrati."</string>
+    <string name="channel_incoming">"Dohodni elementi"</string>
+    <string name="channel_transfers">"Prenosi, ki potekajo"</string>
+    <string name="channel_finished">"Končani prenosi"</string>
+    <string name="channel_background">"Prejemanje v ozadju"</string>
+    <string name="notify_transfers">"Prenosi potekajo"</string>
+    <string name="notify_ready">"Pripravljeno za prejemanje"</string>
+    <string name="notify_ready_text">"Drugi vam lahko zdaj pošiljajo datoteke."</string>
+    <string name="review">"Preglej"</string>
     <plurals name="folder_description">
         <item quantity="one">"»%2$s«  (%1$d datoteka, %3$s)"</item>
         <item quantity="two">"»%2$s«  (%1$d datoteki, %3$s)"</item>

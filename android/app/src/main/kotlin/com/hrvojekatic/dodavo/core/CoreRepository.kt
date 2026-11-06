@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -273,7 +274,15 @@ class CoreRepository(
 
     suspend fun networkChanged() { call(Call.NetworkChanged) }
 
-    suspend fun setLanguage(code: String) { call(Call.SetLanguage(code)) }
+    private var language: String? = null
+
+    /** The core speaks [code] from now on, if it did not already. */
+    suspend fun useLanguage(code: String) {
+        val started = state.first { it !is CoreState.Starting } as? CoreState.Running ?: return
+        if ((language ?: started.started.language) == code) return
+        language = code
+        call(Call.SetLanguage(code))
+    }
 
     /** Suspends the transfers; they go on at the next start. */
     suspend fun shutdown() { call(Call.Shutdown) }

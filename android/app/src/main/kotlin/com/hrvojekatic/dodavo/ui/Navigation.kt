@@ -17,6 +17,7 @@ import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffo
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteType
 import androidx.compose.material3.adaptive.currentWindowAdaptiveInfoV2
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -38,9 +39,11 @@ import com.hrvojekatic.dodavo.ui.help.HelpScreen
 import com.hrvojekatic.dodavo.ui.incoming.IncomingScreen
 import com.hrvojekatic.dodavo.ui.recipients.RecipientEditorScreen
 import com.hrvojekatic.dodavo.ui.recipients.RecipientsScreen
+import com.hrvojekatic.dodavo.ui.recipients.SendToScreen
 import com.hrvojekatic.dodavo.ui.settings.BlockedScreen
 import com.hrvojekatic.dodavo.ui.settings.SettingsScreen
 import com.hrvojekatic.dodavo.ui.transfers.TransfersScreen
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.serialization.Serializable
 
 /** The screens. */
@@ -54,6 +57,15 @@ import kotlinx.serialization.Serializable
 @Serializable data object AboutKey : NavKey
 @Serializable data object LicensesKey : NavKey
 @Serializable data object HelpKey : NavKey
+/** Items shared from another app, by their URIs: to whom? */
+@Serializable data class SendToKey(val uris: List<String>) : NavKey
+
+/** Where the activity was asked to go (a notification, another app). */
+sealed interface Request {
+    data class ShowOffer(val id: Long) : Request
+    data object ShowTransfers : Request
+    data class Share(val uris: List<String>) : Request
+}
 
 /** Where the screens go: forward, back, or to a destination of the navigation bar. */
 class Navigator(private val backStack: NavBackStack<NavKey>) {
@@ -79,8 +91,22 @@ class Navigator(private val backStack: NavBackStack<NavKey>) {
 
 /** The app: a navigation bar (or rail) for Recipients and Transfers, and the other screens above them. */
 @Composable
-fun DodavoNav(backStack: NavBackStack<NavKey> = rememberNavBackStack(RecipientsKey)) {
+fun DodavoNav(
+    requests: MutableStateFlow<Request?>,
+    backStack: NavBackStack<NavKey> = rememberNavBackStack(RecipientsKey),
+) {
     val navigator = Navigator(backStack)
+    val request by requests.collectAsStateWithLifecycle()
+    LaunchedEffect(request) {
+        when (val r = request) {
+            is Request.ShowOffer -> navigator.incoming(r.id)
+            Request.ShowTransfers -> navigator.top(TransfersKey)
+            is Request.Share -> navigator.go(SendToKey(r.uris))
+            null -> {}
+        }
+        requests.value = null
+    }
+    FirstStartPermissions()
     val current = backStack.lastOrNull()
     val topLevel = current == RecipientsKey || current == TransfersKey
     val layout = if (topLevel) {
@@ -122,6 +148,7 @@ fun DodavoNav(backStack: NavBackStack<NavKey> = rememberNavBackStack(RecipientsK
                 entry<AboutKey> { AboutScreen(navigator) }
                 entry<LicensesKey> { LicensesScreen(navigator) }
                 entry<HelpKey> { HelpScreen(navigator) }
+                entry<SendToKey> { SendToScreen(it.uris, navigator) }
             },
         )
     }
@@ -156,4 +183,33 @@ fun waitingOffers(): List<Offer> {
     val repository = androidx.compose.ui.platform.LocalContext.current.container.repository
     val offers by repository.offers.collectAsStateWithLifecycle()
     return offers.values.sortedBy { it.id }
+}
+
+/**
+ * At the first start, what Dodavo needs from Android: notifications for
+ * what arrives while it is not in front (13 and later), the local network
+ * for direct connections (17 and later), and storage for received items
+ * (8 to 10, where Download is not open to apps without it).
+ */
+@Composable
+private fun FirstStartPermissions() {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val preferences = context.container.preferences
+    val ask = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestMultiplePermissions(),
+    ) {}
+    LaunchedEffect(Unit) {
+        if (preferences.askedForPermissions()) return@LaunchedEffect
+        val wanted = buildList {
+            val sdk = android.os.Build.VERSION.SDK_INT
+            if (sdk >= 33) add(android.Manifest.permission.POST_NOTIFICATIONS)
+            if (sdk >= 37) add("android.permission.ACCESS_LOCAL_NETWORK")
+            if (sdk <= 29) add(android.Manifest.permission.WRITE_EXTERNAL_STORAGE)
+        }.filter {
+            androidx.core.content.ContextCompat.checkSelfPermission(context, it) !=
+                android.content.pm.PackageManager.PERMISSION_GRANTED
+        }
+        preferences.setAskedForPermissions()
+        if (wanted.isNotEmpty()) ask.launch(wanted.toTypedArray())
+    }
 }

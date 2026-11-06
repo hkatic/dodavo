@@ -254,6 +254,7 @@ pub const EN: Strings = Strings {
     phase_peer_part_in_use: "On the other side ({name}), another app is using the partly received file. The transfer continues as soon as that app closes it.",
     part_in_use_balloon: "“{item}”: another app is using the partly received file, or macOS has not allowed access to it. The transfer continues as soon as that changes.",
     peer_part_in_use_balloon: "“{item}”: on the other side ({name}), another app is using the partly received file. The transfer continues as soon as that app closes it.",
+    notify_saved: "“{item}” from {name} has been saved. Click to show it.",
     update_installing: "Installing the update… Dodavo opens again when it is done.",
     update_err_not_signed: "The downloaded update does not carry the expected signature.",
     update_err_mount: "The downloaded disk image could not be opened: {detail}",

@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.Uri
 import android.provider.DocumentsContract
 import android.provider.OpenableColumns
+import com.hrvojekatic.dodavo.R
 import java.io.File
 import java.util.UUID
 import kotlinx.coroutines.CoroutineDispatcher
@@ -25,27 +26,42 @@ class Sending(
     /** Sends each of the documents [uris] to [peerId]; an error text if that could not be done. */
     suspend fun sendFiles(peerId: String, uris: List<Uri>): String? {
         val paths = withContext(io) {
-            uris.map { uri ->
-                val folder = newFolder()
-                val (name, modified) = describe(uri)
-                val file = File(folder, name)
-                copy(uri, file, modified)
-                file.path
+            copies { made ->
+                uris.map { uri ->
+                    val folder = newFolder().also(made::add)
+                    val (name, modified) = describe(uri)
+                    val file = File(folder, name)
+                    copy(uri, file, modified)
+                    file.path
+                }
             }
-        }
+        } ?: return context.getString(R.string.item_unreadable)
         return repository.send(peerId, paths)
     }
 
     /** Sends the folder [tree] (from the system's folder picker) to [peerId]. */
     suspend fun sendFolder(peerId: String, tree: Uri): String? {
         val path = withContext(io) {
-            val root = DocumentsContract.buildDocumentUriUsingTree(tree, DocumentsContract.getTreeDocumentId(tree))
-            val (name, _) = describe(root)
-            val folder = File(newFolder(), name)
-            copyTree(tree, DocumentsContract.getTreeDocumentId(tree), folder)
-            folder.path
-        }
+            copies { made ->
+                val root = DocumentsContract.buildDocumentUriUsingTree(tree, DocumentsContract.getTreeDocumentId(tree))
+                val (name, _) = describe(root)
+                val folder = File(newFolder().also(made::add), name)
+                copyTree(tree, DocumentsContract.getTreeDocumentId(tree), folder)
+                folder.path
+            }
+        } ?: return context.getString(R.string.item_unreadable)
         return repository.send(peerId, listOf(path))
+    }
+
+    /** Runs [copy], which notes the folders it makes; if it fails, they go and the result is null. */
+    private fun <T> copies(copy: (MutableList<File>) -> T): T? {
+        val made = mutableListOf<File>()
+        return try {
+            copy(made)
+        } catch (e: Exception) {
+            made.forEach { it.deleteRecursively() }
+            null
+        }
     }
 
     private fun newFolder(): File = File(staging, UUID.randomUUID().toString()).apply { mkdirs() }

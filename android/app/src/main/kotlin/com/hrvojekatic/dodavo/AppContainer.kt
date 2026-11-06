@@ -8,6 +8,7 @@ import androidx.core.os.ConfigurationCompat
 import com.hrvojekatic.dodavo.core.CoreRepository
 import com.hrvojekatic.dodavo.core.NativeCore
 import com.hrvojekatic.dodavo.core.Sending
+import com.hrvojekatic.dodavo.service.KeepAlive
 import com.hrvojekatic.dodavo.core.StartOptions
 import java.io.File
 import kotlinx.coroutines.CoroutineScope
@@ -22,6 +23,10 @@ class AppContainer(private val context: Context) {
     val repository = CoreRepository(NativeCore(context), scope)
 
     val sending = Sending(context, repository)
+
+    val preferences = AppPreferences(context)
+
+    val keepAlive = KeepAlive(context, repository, preferences, scope)
 
     /** The folders and preferences that only the app can ask the system for. */
     fun startOptions(): StartOptions {

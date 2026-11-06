@@ -1,6 +1,12 @@
 package com.hrvojekatic.dodavo.ui.settings
 
+import android.Manifest
 import android.content.ClipData
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
+import com.hrvojekatic.dodavo.AppPreferences
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
@@ -78,19 +84,29 @@ import kotlinx.coroutines.launch
 
 data class SettingsUiState(
     val settings: Settings? = null,
+    val receiveInBackground: Boolean = false,
     val myId: String = "",
     /** Each language by its code, with its own name for it. */
     val languages: List<Pair<String, String>> = emptyList(),
     val message: String? = null,
 )
 
-class SettingsViewModel(private val repository: CoreRepository) : ViewModel() {
+class SettingsViewModel(
+    private val repository: CoreRepository,
+    private val preferences: AppPreferences,
+) : ViewModel() {
     private val message = MutableStateFlow<String?>(null)
 
-    val uiState: StateFlow<SettingsUiState> = combine(repository.settings, repository.state, message) { settings, state, message ->
+    val uiState: StateFlow<SettingsUiState> = combine(
+        repository.settings,
+        repository.state,
+        preferences.receiveInBackground,
+        message,
+    ) { settings, state, background, message ->
         val started = (state as? CoreState.Running)?.started
         SettingsUiState(
             settings = settings,
+            receiveInBackground = background,
             myId = started?.myId.orEmpty(),
             languages = started?.languages.orEmpty().filter { it.size == 2 }.map { it[0] to it[1] },
             message = message,
@@ -109,13 +125,21 @@ class SettingsViewModel(private val repository: CoreRepository) : ViewModel() {
     fun name(name: String) = change { it.copy(myName = name.trim()) }
     fun autoAccept(on: Boolean) = change { it.copy(autoAccept = on) }
     fun receivedFolder(folder: ReceivedFolder) = change { it.copy(receivedFolder = folder) }
+    fun receiveInBackground(on: Boolean) {
+        viewModelScope.launch { preferences.setReceiveInBackground(on) }
+    }
+
     fun messageShown() { message.value = null }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(navigator: Navigator) {
-    val viewModel = appViewModel { SettingsViewModel(it.repository) }
+    val viewModel = appViewModel { SettingsViewModel(it.repository, it.preferences) }
+    // Offers arrive as notifications while Dodavo is closed.
+    val notifications = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
+        viewModel.receiveInBackground(true)
+    }
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val clipboard = LocalClipboard.current
@@ -160,6 +184,17 @@ fun SettingsScreen(navigator: Navigator) {
             }
             HorizontalDivider()
             if (settings != null) {
+                SwitchRow(
+                    title = stringResource(R.string.receive_background),
+                    help = stringResource(R.string.receive_background_help),
+                    checked = state.receiveInBackground,
+                    onChange = { on ->
+                        val ask = on && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) !=
+                            PackageManager.PERMISSION_GRANTED
+                        if (ask) notifications.launch(Manifest.permission.POST_NOTIFICATIONS) else viewModel.receiveInBackground(on)
+                    },
+                )
                 SwitchRow(
                     title = stringResource(R.string.auto_accept),
                     help = stringResource(R.string.auto_accept_help),

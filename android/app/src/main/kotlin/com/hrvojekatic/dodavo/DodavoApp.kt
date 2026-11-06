@@ -11,5 +11,6 @@ class DodavoApp : Application() {
         super.onCreate()
         container = AppContainer(this)
         container.repository.start(container.startOptions())
+        container.keepAlive.start()
     }
 }

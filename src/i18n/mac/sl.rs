@@ -254,6 +254,7 @@ pub const SL: Strings = Strings {
     phase_peer_part_in_use: "Na drugi strani ({name}) delno prejeto datoteko uporablja druga aplikacija. Prenos se nadaljuje, takoj ko jo ta aplikacija zapre.",
     part_in_use_balloon: "»{item}«: delno prejeto datoteko uporablja druga aplikacija ali pa macOS ni dovolil dostopa do nje. Prenos se nadaljuje, takoj ko se to spremeni.",
     peer_part_in_use_balloon: "»{item}«: na drugi strani ({name}) delno prejeto datoteko uporablja druga aplikacija. Prenos se nadaljuje, takoj ko jo ta aplikacija zapre.",
+    notify_saved: "Shranjeno: »{item}« (pošiljatelj: {name}). Kliknite za prikaz.",
     update_installing: "Nameščanje posodobitve … Dodavo se znova odpre, ko je končano.",
     update_err_not_signed: "Prenesena posodobitev nima pričakovanega podpisa.",
     update_err_mount: "Prenesene slike diska ni bilo mogoče odpreti: {detail}",
