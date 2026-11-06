@@ -21,6 +21,7 @@ pub mod i18n;
 pub mod identity;
 pub mod net;
 pub mod platform;
+pub mod source;
 pub mod space;
 /// Not on Android, which Google Play alone updates.
 #[cfg(not(target_os = "android"))]

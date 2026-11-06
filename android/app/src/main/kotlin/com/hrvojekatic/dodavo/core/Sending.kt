@@ -2,8 +2,12 @@ package com.hrvojekatic.dodavo.core
 
 import android.content.Context
 import android.net.Uri
+import android.os.ParcelFileDescriptor
 import android.provider.DocumentsContract
 import android.provider.OpenableColumns
+import android.system.ErrnoException
+import android.system.Os
+import android.system.OsConstants
 import com.hrvojekatic.dodavo.R
 import java.io.File
 import java.util.UUID
@@ -12,9 +16,13 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /**
- * Hands what the user picked, or shared from another app, to the core: as a
- * copy in the app's own storage under its name and with its date, which
- * stays readable for as long as the transfer waits, also after a restart.
+ * Hands what the user picked, or shared from another app, to the core. A
+ * picked file is read where it is, with the permission to read it kept for
+ * as long as its transfer waits, also after a restart (see [Documents]); a
+ * picked folder is packed straight from where it is, as the app lists it.
+ * What another app shared, and a file that cannot be read that way (one
+ * that comes as a stream, from a cloud say), goes as a copy in the app's own
+ * storage under its name and with its date, which the transfer deletes.
  */
 class Sending(
     private val context: Context,
@@ -23,11 +31,25 @@ class Sending(
 ) {
     private val staging = File(context.noBackupFilesDir, "tmp/staging")
 
-    /** Sends each of the documents [uris] to [peerId]; an error text if that could not be done. */
-    suspend fun sendFiles(peerId: String, uris: List<Uri>): String? {
+    /**
+     * Sends each of the documents [uris] to [peerId]; an error text if that
+     * could not be done. [shared]: another app shared them, and they can be
+     * read only while this screen lasts, so they go as copies.
+     */
+    suspend fun sendFiles(peerId: String, uris: List<Uri>, shared: Boolean = false): String? {
+        if (!shared) makeRoom(uris.size)
+        val (inPlace, toCopy) = withContext(io) {
+            uris.partition { !shared && readsInPlace(it) }
+        }
+        val documents = withContext(io) {
+            inPlace.map { uri ->
+                val (name, modified) = describe(uri)
+                Document(uri = uri.toString(), name = name, modified = modified)
+            }
+        }
         val paths = withContext(io) {
             copies { made ->
-                uris.map { uri ->
+                toCopy.map { uri ->
                     val folder = newFolder().also(made::add)
                     val (name, modified) = describe(uri)
                     val file = File(folder, name)
@@ -35,22 +57,91 @@ class Sending(
                     file.path
                 }
             }
-        } ?: return context.getString(R.string.item_unreadable)
-        return repository.send(peerId, paths)
+        }
+        if (paths == null) {
+            documents.forEach { Documents.release(it.uri) }
+            return context.getString(R.string.item_unreadable)
+        }
+        if (documents.isNotEmpty()) repository.sendDocuments(peerId, documents)?.let { return it }
+        return if (paths.isNotEmpty()) repository.send(peerId, paths) else null
     }
 
-    /** Sends the folder [tree] (from the system's folder picker) to [peerId]. */
+    /** Sends the folder [tree] (from the system's folder picker) to [peerId], packed where it is. */
     suspend fun sendFolder(peerId: String, tree: Uri): String? {
-        val path = withContext(io) {
-            copies { made ->
-                val root = DocumentsContract.buildDocumentUriUsingTree(tree, DocumentsContract.getTreeDocumentId(tree))
-                val (name, _) = describe(root)
-                val folder = File(newFolder().also(made::add), name)
-                copyTree(tree, DocumentsContract.getTreeDocumentId(tree), folder)
-                folder.path
-            }
+        val document = withContext(io) {
+            runCatching {
+                val rootId = DocumentsContract.getTreeDocumentId(tree)
+                val (name, modified) = describe(DocumentsContract.buildDocumentUriUsingTree(tree, rootId))
+                val items = mutableListOf<DocumentItem>()
+                list(tree, rootId, emptyList(), items)
+                Document(uri = tree.toString(), name = name, modified = modified, items = items)
+            }.getOrNull()
         } ?: return context.getString(R.string.item_unreadable)
-        return repository.send(peerId, listOf(path))
+        return repository.sendDocuments(peerId, listOf(document))
+    }
+
+    /**
+     * Whether [uri] can be read where it is for as long as its transfer
+     * waits: Android keeps the permission, and it opens as a file, which the
+     * core can read from any point (not a stream).
+     */
+    private fun readsInPlace(uri: Uri): Boolean {
+        if (!Documents.keep(uri)) return false
+        val file = runCatching {
+            context.contentResolver.openFileDescriptor(uri, "r")?.use(::isFile)
+        }.getOrNull() == true
+        if (!file) Documents.release(uri.toString())
+        return file
+    }
+
+    private fun isFile(descriptor: ParcelFileDescriptor): Boolean = try {
+        descriptor.statSize >= 0 && Os.lseek(descriptor.fileDescriptor, 0, OsConstants.SEEK_SET) == 0L
+    } catch (_: ErrnoException) {
+        false
+    }
+
+    /**
+     * Android keeps the permissions of an app to a few hundred documents: if
+     * [count] more would come close, those that no send reads any more go (a
+     * permission whose release a stop of the app cut short).
+     */
+    private suspend fun makeRoom(count: Int) {
+        val kept = withContext(io) { Documents.kept() }
+        if (kept.size + count <= ROOM) return
+        val inUse = repository.documentsInUse().toSet()
+        withContext(io) { kept.filterNot(inUse::contains).forEach(Documents::release) }
+    }
+
+    /** Adds what the folder [documentId] of [tree] holds to [items], each folder before what is in it. */
+    private fun list(tree: Uri, documentId: String, path: List<String>, items: MutableList<DocumentItem>) {
+        val children = DocumentsContract.buildChildDocumentsUriUsingTree(tree, documentId)
+        val columns = arrayOf(
+            DocumentsContract.Document.COLUMN_DOCUMENT_ID,
+            DocumentsContract.Document.COLUMN_DISPLAY_NAME,
+            DocumentsContract.Document.COLUMN_MIME_TYPE,
+            DocumentsContract.Document.COLUMN_LAST_MODIFIED,
+            DocumentsContract.Document.COLUMN_SIZE,
+        )
+        val cursor = context.contentResolver.query(children, columns, null, null, null)
+            ?: error("$children cannot be listed")
+        cursor.use {
+            while (it.moveToNext()) {
+                val id = it.getString(0)
+                val itemPath = path + plainName(it.getString(1) ?: id)
+                val modified = if (it.isNull(3)) null else it.getLong(3)
+                if (it.getString(2) == DocumentsContract.Document.MIME_TYPE_DIR) {
+                    items += DocumentItem(path = itemPath, folder = true, modified = modified)
+                    list(tree, id, itemPath, items)
+                } else {
+                    items += DocumentItem(
+                        path = itemPath,
+                        size = if (it.isNull(4)) 0 else it.getLong(4),
+                        modified = modified,
+                        uri = DocumentsContract.buildDocumentUriUsingTree(tree, id).toString(),
+                    )
+                }
+            }
+        }
     }
 
     /** Runs [copy], which notes the folders it makes; if it fails, they go and the result is null. */
@@ -87,32 +178,12 @@ class Sending(
         modified?.takeIf { it > 0 }?.let(to::setLastModified)
     }
 
-    private fun copyTree(tree: Uri, documentId: String, to: File) {
-        to.mkdirs()
-        val children = DocumentsContract.buildChildDocumentsUriUsingTree(tree, documentId)
-        val columns = arrayOf(
-            DocumentsContract.Document.COLUMN_DOCUMENT_ID,
-            DocumentsContract.Document.COLUMN_DISPLAY_NAME,
-            DocumentsContract.Document.COLUMN_MIME_TYPE,
-            DocumentsContract.Document.COLUMN_LAST_MODIFIED,
-        )
-        context.contentResolver.query(children, columns, null, null, null)?.use { cursor ->
-            while (cursor.moveToNext()) {
-                val id = cursor.getString(0)
-                val name = plainName(cursor.getString(1) ?: id)
-                val modified = if (cursor.isNull(3)) null else cursor.getLong(3)
-                val item = File(to, name)
-                if (cursor.getString(2) == DocumentsContract.Document.MIME_TYPE_DIR) {
-                    copyTree(tree, id, item)
-                    modified?.takeIf { it > 0 }?.let(item::setLastModified)
-                } else {
-                    copy(DocumentsContract.buildDocumentUriUsingTree(tree, id), item, modified)
-                }
-            }
-        }
-    }
-
     /** A name from another app as one name here: no folders in it. */
     private fun plainName(name: String): String =
         name.replace('/', '_').replace('\u0000', '_').trim().ifEmpty { "item" }
+
+    private companion object {
+        /** Kept permissions above which those no send reads go (Android allows at least 128). */
+        const val ROOM = 100
+    }
 }

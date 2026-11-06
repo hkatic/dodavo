@@ -501,7 +501,13 @@ impl TransferRecord {
                 data_path,
                 staging,
                 ..
-            } => (staging.is_some() || source.exists()) && data_path.exists(),
+            } => {
+                // A copy of its own, or a document of the app's that was
+                // packed already, which is not needed any more.
+                let without_source = staging.is_some()
+                    || (self.offer.kind == Kind::Folder && crate::source::is_document(source));
+                (without_source || crate::source::exists(source)) && crate::source::exists(data_path)
+            }
             Side::Receive { .. } => self.part_is_there(),
         }
     }
@@ -568,7 +574,7 @@ impl TransferRecord {
                 source_len,
                 source_mtime,
                 ..
-            } => match fs::metadata(data_path) {
+            } => match crate::source::metadata(data_path) {
                 Ok(m) => m.len() == *source_len && m.modified().ok() == *source_mtime,
                 Err(_) => false,
             },
@@ -1287,7 +1293,7 @@ pub fn hash_range(
         return Ok(());
     }
     hash_open(
-        &mut fs::File::open(path)?,
+        &mut crate::source::open(path)?,
         from,
         to,
         hasher,

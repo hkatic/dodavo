@@ -1,7 +1,7 @@
 //! The state of the program, as `app.rs` holds it for the Win32 interface.
 
 use std::{
-    collections::{BTreeMap, HashMap, VecDeque},
+    collections::{BTreeMap, BTreeSet, HashMap, VecDeque},
     fs::File,
     io,
     os::fd::AsRawFd,
@@ -15,7 +15,10 @@ use dodavo_core::{
     config::{self, Config, Contact, ReceivedFolder},
     i18n::{self, Lang, tr},
     identity,
-    net::{self, Accept, Command, Event, Kind, NetHandle, Offer, Outcome, Role},
+    net::{
+        self, Accept, Command, Event, Kind, NetHandle, Offer, Outcome, Role, TransferRecord,
+        session::Side,
+    },
     space::{self, Space},
     view::{Direction, Notice, Row, TransferView},
 };
@@ -128,6 +131,11 @@ enum Out {
         id: u64,
         notice: Notice,
     },
+    /// No send reads the document `uri` any more: the app's permission for
+    /// it can go.
+    DocumentDone {
+        uri: String,
+    },
     /// Whether the computer must stay awake.
     Busy {
         busy: bool,
@@ -212,6 +220,15 @@ enum Call {
         peer_id: String,
         paths: Vec<PathBuf>,
     },
+    /// Documents that the user chose in Android's pickers, read where they
+    /// are (see `dodavo_core::source`).
+    SendDocuments {
+        peer_id: String,
+        documents: Vec<dodavo_core::source::Document>,
+    },
+    /// The documents that sends still read: what the app must keep its
+    /// permission for.
+    Documents,
     /// Without a folder (Android): Downloads.
     Space {
         id: u64,
@@ -353,6 +370,9 @@ struct State {
     /// What was last shown of each transfer, and when.
     shown: HashMap<u64, (Row, Instant)>,
     busy: bool,
+    /// The document file that each send of one reads, for as long as it
+    /// runs (see `Out::DocumentDone`).
+    documents: HashMap<u64, String>,
     /// The running update check or download, if any.
     #[cfg(target_os = "macos")]
     update_job: Option<update::Job>,
@@ -458,6 +478,18 @@ fn folder_unusable(path: &Path, error: &io::Error) -> String {
 }
 
 /// Whether the user can tell a file from a folder with a path.
+/// The document file that a restored send reads, if it reads one.
+fn document_read(record: &TransferRecord) -> Option<String> {
+    match &record.side {
+        Side::Send { source, .. }
+            if record.offer.kind == Kind::File && dodavo_core::source::is_document(source) =>
+        {
+            source.to_str().map(str::to_string)
+        }
+        _ => None,
+    }
+}
+
 fn kind_of(path: &Path) -> Kind {
     if path.is_dir() {
         Kind::Folder
@@ -609,6 +641,7 @@ impl Core {
                 offers: HashMap::new(),
                 shown: HashMap::new(),
                 busy: false,
+                documents: HashMap::new(),
                 #[cfg(target_os = "macos")]
                 update_job: None,
                 #[cfg(target_os = "macos")]
@@ -694,6 +727,14 @@ impl Core {
             }
             Call::Send { peer_id, paths } => {
                 json(serde_json::json!({ "error": self.send(&peer_id, paths) }))
+            }
+            Call::SendDocuments { peer_id, documents } => {
+                json(serde_json::json!({ "error": self.send_documents(&peer_id, documents) }))
+            }
+            Call::Documents => {
+                let state = lock(&self.state);
+                let uris: BTreeSet<&String> = state.documents.values().collect();
+                json(serde_json::json!(uris))
             }
             Call::Space { id, dir } => {
                 let dir = dir.unwrap_or_else(dodavo_core::platform::downloads_dir);
@@ -981,6 +1022,52 @@ impl Core {
         None
     }
 
+    /// Sends each of `documents` to `peer_id`, as [`send`](Self::send) does
+    /// files: an error text if it cannot be done.
+    fn send_documents(
+        &self,
+        peer_id: &str,
+        documents: Vec<dodavo_core::source::Document>,
+    ) -> Option<String> {
+        let mut state = lock(&self.state);
+        let contact = state.cfg.contact_by_id(peer_id)?.clone();
+        let Some(to) = identity::parse_contact_id(&contact.id) else {
+            return Some(ui().contact_invalid.replace("{name}", &contact.name));
+        };
+        for document in documents {
+            let id = net::next_transfer_id();
+            let kind = if document.items.is_some() {
+                Kind::Folder
+            } else {
+                Kind::File
+            };
+            let view = TransferView::new(
+                id,
+                Direction::Send,
+                &contact.id,
+                &contact.name,
+                &document.name,
+                kind,
+                0,
+            );
+            state.transfers.insert(id, view);
+            // A folder is read only while it is packed.
+            if kind == Kind::File {
+                state.documents.insert(id, document.uri.clone());
+            }
+            self.show(&mut state, id, None);
+            let my_name = state.cfg.my_name.clone();
+            state.net.send(Command::SendDocument {
+                id,
+                to,
+                document,
+                my_name,
+                peer_name: contact.name.clone(),
+            });
+        }
+        None
+    }
+
     fn check_accept(&self, id: u64, dir: &Path) -> serde_json::Value {
         let (offer, temp_dir, folder) = {
             let state = lock(&self.state);
@@ -1124,6 +1211,9 @@ impl Core {
                     view.restore_cancel(record.done_sent);
                 }
                 state.transfers.insert(id, view);
+                if let Some(uri) = document_read(&record) {
+                    state.documents.insert(id, uri);
+                }
                 self.show(&mut state, id, None);
                 // One that does not go on is reported as it ends, right after.
                 if goes_on {
@@ -1201,6 +1291,11 @@ impl Core {
                 let status = state.transfers.get(&id).map(|t| t.row().status);
                 self.show(&mut state, id, status);
                 self.give(id, notice, path);
+                if let Some(uri) = state.documents.remove(&id)
+                    && !state.documents.values().any(|other| *other == uri)
+                {
+                    self.outbox.push(Out::DocumentDone { uri });
+                }
             }
         }
     }
@@ -1746,6 +1841,7 @@ mod tests {
                 offers: HashMap::from([(id, pending)]),
                 shown: HashMap::new(),
                 busy: false,
+                documents: HashMap::new(),
                 #[cfg(target_os = "macos")]
                 update_job: None,
                 #[cfg(target_os = "macos")]

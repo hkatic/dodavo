@@ -75,7 +75,7 @@ fun SendToScreen(uris: List<String>, navigator: Navigator) {
                                 busy = true
                                 scope.launch {
                                     val error = runCatching {
-                                        container.sending.sendFiles(contact.id, uris.map(Uri::parse))
+                                        container.sending.sendFiles(contact.id, uris.map(Uri::parse), shared = true)
                                     }.getOrElse { it.message }
                                     busy = false
                                     if (error != null) message = error else navigator.top(TransfersKey)

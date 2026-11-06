@@ -39,6 +39,15 @@ pub enum Command {
         /// The recipient's name as shown in the window, kept for a restart.
         peer_name: String,
     },
+    /// A send of a document that the user chose in Android's pickers, which
+    /// is read where it is (see [`crate::source`]).
+    SendDocument {
+        id: u64,
+        to: EndpointId,
+        document: crate::source::Document,
+        my_name: String,
+        peer_name: String,
+    },
     /// Answer to an incoming offer: `Some` accepts it, `None` declines.
     Respond {
         id: u64,
@@ -607,6 +616,29 @@ pub fn start(
     NetHandle { tx, blocked }
 }
 
+/// Runs a send of `what` to its outcome, as a task of its own.
+fn start_send(
+    shared: &Arc<Shared>,
+    endpoint: &Endpoint,
+    id: u64,
+    to: EndpointId,
+    what: send::What,
+    my_name: String,
+    peer_name: String,
+) {
+    let ctl = shared.register(id, false);
+    let shared = shared.clone();
+    let endpoint = endpoint.clone();
+    tokio::spawn(async move {
+        let task = {
+            let shared = shared.clone();
+            async move { send::run(&shared, &endpoint, id, to, what, my_name, peer_name, ctl).await }
+        };
+        let outcome = guarded(&shared, id, task).await;
+        shared.finish(id, outcome);
+    });
+}
+
 async fn bind(secret: SecretKey) -> anyhow::Result<Endpoint> {
     let endpoint = Endpoint::builder(presets::N0)
         .secret_key(secret)
@@ -777,10 +809,20 @@ fn missing_text(record: &TransferRecord) -> String {
             source,
             staging: None,
             ..
-        } if !source.exists() => match record.offer.kind {
-            Kind::File => tr!(error_file_missing, path = source.display()),
-            Kind::Folder => tr!(error_folder_missing, path = source.display()),
-        },
+        } if !(record.offer.kind == Kind::Folder && crate::source::is_document(source))
+            && !crate::source::exists(source) =>
+        {
+            // A document by its name, as the app shows it.
+            let path = if crate::source::is_document(source) {
+                record.offer.name.clone()
+            } else {
+                source.display().to_string()
+            };
+            match record.offer.kind {
+                Kind::File => tr!(error_file_missing, path = path),
+                Kind::Folder => tr!(error_folder_missing, path = path),
+            }
+        }
         _ => tr!(error_part_missing).into(),
     }
 }
@@ -946,22 +988,22 @@ async fn run(secret: SecretKey, shared: Arc<Shared>, mut rx: mpsc::UnboundedRece
                 my_name,
                 peer_name,
             } => {
-                let ctl = shared.register(id, false);
-                let shared = shared.clone();
-                let endpoint = endpoint.clone();
-                tokio::spawn(async move {
-                    let task = {
-                        let shared = shared.clone();
-                        async move {
-                            send::run(
-                                &shared, &endpoint, id, to, path, kind, my_name, peer_name, ctl,
-                            )
-                            .await
-                        }
-                    };
-                    let outcome = guarded(&shared, id, task).await;
-                    shared.finish(id, outcome);
-                });
+                let what = send::What {
+                    path,
+                    kind,
+                    document: None,
+                };
+                start_send(&shared, &endpoint, id, to, what, my_name, peer_name);
+            }
+            Command::SendDocument {
+                id,
+                to,
+                document,
+                my_name,
+                peer_name,
+            } => {
+                let what = send::What::document(document);
+                start_send(&shared, &endpoint, id, to, what, my_name, peer_name);
             }
             Command::Respond { id, accept } => {
                 if let Some(tx) = shared.pending.lock().unwrap().remove(&id) {
@@ -1451,6 +1493,93 @@ mod tests {
         assert!(matches!(outcome, Outcome::Completed(_)), "{outcome:?}");
         assert_eq!(std::fs::read(received.join("Photos").join("a.txt")).unwrap(), b"alpha");
         assert!(!staging.join("three").exists(), "packed and completed");
+        std::fs::remove_dir_all(&base).ok();
+    }
+
+    /// A document from Android's pickers goes as the app describes it: a
+    /// file under the name and date the app gives, read from where it is,
+    /// and a folder packed from what the app lists of it.
+    #[test]
+    fn a_document_goes_as_the_app_describes_it() {
+        let base = scratch("document");
+        let (tx_a, rx_a) = mpsc::channel();
+        let (tx_b, rx_b) = mpsc::channel();
+        let key_b = SecretKey::generate();
+        let id_b = key_b.public();
+        let a = start(SecretKey::generate(), base.join("a"), base.join("temp-a"), [], sink(tx_a));
+        let b = start(key_b, base.join("b"), base.join("temp-b"), [], sink(tx_b));
+        wait_for(&rx_a, |e| matches!(e, Event::Online(true)));
+        wait_for(&rx_b, |e| matches!(e, Event::Online(true)));
+        let stored = base.join("stored");
+        std::fs::create_dir_all(&stored).unwrap();
+        let data = |name: &str, bytes: &[u8]| {
+            let path = stored.join(name);
+            std::fs::write(&path, bytes).unwrap();
+            path.display().to_string()
+        };
+        let received = base.join("received");
+        let send_and_accept = |document: crate::source::Document| {
+            let id = next_transfer_id();
+            a.send(Command::SendDocument {
+                id,
+                to: id_b,
+                document,
+                my_name: "A".into(),
+                peer_name: "B".into(),
+            });
+            let Event::Offer { id: offered, offer, .. } =
+                wait_for(&rx_b, |e| matches!(e, Event::Offer { .. }))
+            else {
+                unreachable!()
+            };
+            b.send(Command::Respond {
+                id: offered,
+                accept: Some(Accept {
+                    dir: received.clone(),
+                    folder: ReceivedFolder::Extract,
+                }),
+            });
+            (offer, wait_finished(&rx_a, id))
+        };
+
+        let modified = 1_600_000_000_000;
+        let (offer, outcome) = send_and_accept(crate::source::Document {
+            uri: data("1", b"hello"),
+            name: "Report.txt".into(),
+            modified: Some(modified),
+            items: None,
+        });
+        assert!(matches!(outcome, Outcome::Completed(_)), "{outcome:?}");
+        assert_eq!(offer.name, "Report.txt");
+        let report = received.join("Report.txt");
+        assert_eq!(std::fs::read(&report).unwrap(), b"hello");
+        assert_eq!(
+            report.metadata().unwrap().modified().ok(),
+            crate::source::millis_to_system(modified)
+        );
+        assert!(stored.join("1").exists(), "a document is never deleted");
+
+        let item = |path: &[&str], uri: Option<String>| crate::source::Item {
+            path: path.iter().map(|p| p.to_string()).collect(),
+            folder: uri.is_none(),
+            size: uri.as_ref().map_or(0, |u| std::fs::metadata(u).unwrap().len()),
+            modified: None,
+            uri: uri.unwrap_or_default(),
+        };
+        let (offer, outcome) = send_and_accept(crate::source::Document {
+            uri: base.join("not-a-folder").display().to_string(),
+            name: "Trip".into(),
+            modified: None,
+            items: Some(vec![
+                item(&["sub"], None),
+                item(&["sub", "b.txt"], Some(data("2", b"beta"))),
+                item(&["a.txt"], Some(data("3", b"alpha"))),
+            ]),
+        });
+        assert!(matches!(outcome, Outcome::Completed(_)), "{outcome:?}");
+        assert_eq!((offer.kind, offer.file_count, offer.content_size), (Kind::Folder, 2, 9));
+        assert_eq!(std::fs::read(received.join("Trip/a.txt")).unwrap(), b"alpha");
+        assert_eq!(std::fs::read(received.join("Trip/sub/b.txt")).unwrap(), b"beta");
         std::fs::remove_dir_all(&base).ok();
     }
 

@@ -25,7 +25,7 @@ use super::{
     },
     spawn_path_watch,
 };
-use crate::{archive, i18n::tr};
+use crate::{archive, i18n::tr, source};
 
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(40);
 /// How often the record notes how much has gone out (see
@@ -76,6 +76,28 @@ enum End {
     Final(Outcome),
 }
 
+/// What a send sends: a file or folder by its path, or a document that the
+/// app describes (see [`source::Document`]), whose URI is then the path.
+pub(super) struct What {
+    pub path: PathBuf,
+    pub kind: Kind,
+    pub document: Option<source::Document>,
+}
+
+impl What {
+    pub fn document(document: source::Document) -> Self {
+        What {
+            path: PathBuf::from(&document.uri),
+            kind: if document.items.is_some() {
+                Kind::Folder
+            } else {
+                Kind::File
+            },
+            document: Some(document),
+        }
+    }
+}
+
 /// A new transfer: prepares the data, makes the offer and streams it.
 #[allow(clippy::too_many_arguments)]
 pub(super) async fn run(
@@ -83,14 +105,13 @@ pub(super) async fn run(
     endpoint: &Endpoint,
     id: u64,
     to: EndpointId,
-    path: PathBuf,
-    kind: Kind,
+    what: What,
     my_name: String,
     peer_name: String,
     ctl: Arc<Control>,
 ) -> Outcome {
     tokio::select! {
-        outcome = start(shared, endpoint, id, to, path, kind, my_name, peer_name, &ctl) => outcome,
+        outcome = start(shared, endpoint, id, to, what, my_name, peer_name, &ctl) => outcome,
         ending = super::cancelled(shared, id, &ctl) => {
             ending.forget(&shared.data_dir).await;
             Outcome::Cancelled
@@ -202,27 +223,51 @@ async fn start(
     endpoint: &Endpoint,
     id: u64,
     to: EndpointId,
-    path: PathBuf,
-    kind: Kind,
+    what: What,
     my_name: String,
     peer_name: String,
     ctl: &Control,
 ) -> Outcome {
+    let What {
+        path,
+        kind,
+        document,
+    } = what;
     let token = protocol::new_token();
     let (session, _unused) = Session::new(id, token, to, Role::Send);
     shared.add_session(session.clone());
-    let name = path
-        .file_name()
-        .map(|n| n.to_string_lossy().into_owned())
-        .unwrap_or_else(|| tr!(untitled).into());
+    let name = match &document {
+        Some(document) if !document.name.is_empty() => document.name.clone(),
+        _ => path
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_else(|| tr!(untitled).into()),
+    };
     // Any receiver can take it as it is, and shows it as it is (see
     // `archive::names`).
     #[cfg(not(windows))]
     let name = archive::offer_name(&name);
-    // The item's own dates, for the receiver to give to what it saves.
-    let times = std::fs::metadata(&path)
-        .map(|m| archive::ItemTimes::of(&m))
-        .unwrap_or_default();
+    // The item's own dates, for the receiver to give to what it saves: a
+    // document's as the app says.
+    let times = match &document {
+        Some(document) => archive::ItemTimes {
+            modified: document
+                .modified
+                .and_then(source::millis_to_system)
+                .and_then(archive::system_to_filetime),
+            ..Default::default()
+        },
+        None => std::fs::metadata(&path)
+            .map(|m| archive::ItemTimes::of(&m))
+            .unwrap_or_default(),
+    };
+    let items = document.and_then(|d| d.items);
+    // How errors name it: a document by its name, as the app shows it.
+    let shown = if source::is_document(&path) {
+        name.clone()
+    } else {
+        path.display().to_string()
+    };
 
     // A copy of a shared item is the transfer's (see `Side::Send::staging`).
     let staging = session::staged_folder(&shared.temp_dir, &path);
@@ -230,7 +275,13 @@ async fn start(
 
     // 1. Prepare the data (zip folders). `size` is what gets streamed.
     let mut temp = TempFile(None);
-    let prepared = prepare(shared, id, &path, kind, &token, ctl, &mut temp).await;
+    let what = Prepare {
+        path: &path,
+        shown: &shown,
+        kind,
+        items,
+    };
+    let prepared = prepare(shared, id, what, &token, ctl, &mut temp).await;
     let (data_path, packed, size) = match prepared {
         Ok(p) => p,
         Err(e) => return Outcome::Failed(super::failure_text(&e)),
@@ -243,7 +294,7 @@ async fn start(
     }
     // What a later run compares to notice a changed source: the file, or the
     // zip the folder was packed into.
-    let (source_len, source_mtime) = match std::fs::metadata(&data_path) {
+    let (source_len, source_mtime) = match source::metadata(&data_path) {
         Ok(m) => (m.len(), m.modified().ok()),
         Err(_) => (0, None),
     };
@@ -435,23 +486,39 @@ async fn continue_record(
     sender.drive(None, 0).await
 }
 
+/// What [`prepare`] prepares.
+struct Prepare<'a> {
+    path: &'a PathBuf,
+    /// How errors name it.
+    shown: &'a str,
+    kind: Kind,
+    /// Those of a folder that the app listed (see [`source::Document`]).
+    items: Option<Vec<source::Item>>,
+}
+
 /// Zips a folder (reporting progress) or measures a file. Returns what is
 /// streamed: its path, what it holds (see `archive::Packed`), and the stream
 /// size.
 async fn prepare(
     shared: &Arc<Shared>,
     id: u64,
-    path: &PathBuf,
-    kind: Kind,
+    what: Prepare<'_>,
     token: &Token,
     ctl: &Control,
     temp: &mut TempFile,
 ) -> anyhow::Result<(PathBuf, archive::Packed, u64)> {
+    let Prepare {
+        path,
+        shown,
+        kind,
+        items,
+    } = what;
     match kind {
         Kind::File => {
-            let size = tokio::fs::metadata(path)
-                .await
-                .with_context(|| tr!(error_cannot_read, path = path.display()))?
+            let source = path.clone();
+            let size = tokio::task::spawn_blocking(move || source::metadata(&source))
+                .await?
+                .with_context(|| tr!(error_cannot_read, path = shown))?
                 .len();
             let packed = archive::Packed {
                 files: 1,
@@ -474,11 +541,15 @@ async fn prepare(
             let zip_dst = zip_path.clone();
             let packed = tokio::task::spawn_blocking(move || {
                 let mut throttle = Throttle::new();
-                archive::zip_folder(&src, &zip_dst, cancel.flag(), &mut |done, total| {
+                let mut progress = |done, total| {
                     if throttle.ready() || done == total {
                         shared2.emit(Event::Progress { id, done, total });
                     }
-                })
+                };
+                match items {
+                    Some(items) => archive::zip_listed(&items, &zip_dst, cancel.flag(), &mut progress),
+                    None => archive::zip_folder(&src, &zip_dst, cancel.flag(), &mut progress),
+                }
             })
             .await??;
             let size = tokio::fs::metadata(&zip_path).await?.len();
@@ -819,7 +890,9 @@ impl Sender<'_> {
             done: have,
             total: self.size,
         });
-        let mut file = tokio::fs::File::open(&self.data_path).await?;
+        let data = self.data_path.clone();
+        let mut file =
+            tokio::fs::File::from_std(tokio::task::spawn_blocking(move || source::open(&data)).await??);
         file.seek(SeekFrom::Start(have)).await?;
         if self.ctl.is_paused() {
             protocol::write_msg(send, &Msg::Paused)

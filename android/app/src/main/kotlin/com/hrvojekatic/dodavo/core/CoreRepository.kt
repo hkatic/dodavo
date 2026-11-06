@@ -19,6 +19,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
@@ -47,6 +48,9 @@ sealed interface Event {
     data class OfferGone(val id: Long, val notice: Notice) : Event
 
     data class Error(val text: String) : Event
+
+    /** No send reads the document [uri] any more. */
+    data class DocumentDone(val uri: String) : Event
 }
 
 /** The answer of a call that can fail: `{"error": …}` or `{"problem": …}`. */
@@ -171,6 +175,7 @@ class CoreRepository(
                 _events.tryEmit(Event.OfferGone(message.id, message.notice))
             }
             is Message.Busy -> _busy.value = message.busy
+            is Message.DocumentDone -> _events.tryEmit(Event.DocumentDone(message.uri))
             is Message.Error -> _events.tryEmit(Event.Error(message.text))
             is Message.Fatal -> _state.value = CoreState.Failed(message.text)
         }
@@ -202,6 +207,14 @@ class CoreRepository(
     /** Sends each of [paths] to [peerId] as a transfer of its own; an error text if that cannot be. */
     suspend fun send(peerId: String, paths: List<String>): String? =
         reply(Call.Send(peerId, paths)).error
+
+    /** Sends each of [documents] to [peerId], read where they are; an error text if that cannot be. */
+    suspend fun sendDocuments(peerId: String, documents: List<Document>): String? =
+        reply(Call.SendDocuments(peerId, documents)).error
+
+    /** The URIs of the documents that sends still read. */
+    suspend fun documentsInUse(): List<String> =
+        coreJson.decodeFromString(ListSerializer(String.serializer()), call(Call.DocumentsInUse))
 
     suspend fun checkAccept(id: Long): AcceptCheck {
         val reply = reply(Call.CheckAccept(id))

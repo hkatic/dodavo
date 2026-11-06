@@ -72,6 +72,29 @@ data class Offer(
     val space: Space,
 )
 
+/**
+ * A document that the user chose, as the core reads it (`source::Document`):
+ * a file, or a folder with what it holds ([items]), each folder before what
+ * is in it. Times in milliseconds since 1970.
+ */
+@Serializable
+data class Document(
+    val uri: String,
+    val name: String,
+    val modified: Long? = null,
+    val items: List<DocumentItem>? = null,
+)
+
+/** A file or folder in a [Document] that is a folder: its names from the folder down. */
+@Serializable
+data class DocumentItem(
+    val path: List<String>,
+    val folder: Boolean = false,
+    val size: Long = 0,
+    val modified: Long? = null,
+    val uri: String = "",
+)
+
 /** A recipient, or a blocked sender. */
 @Serializable
 data class Contact(val name: String, val id: String)
@@ -125,6 +148,11 @@ sealed interface Message {
     @Serializable
     @SerialName("busy")
     data class Busy(val busy: Boolean) : Message
+
+    /** No send reads the document [uri] any more. */
+    @Serializable
+    @SerialName("document_done")
+    data class DocumentDone(val uri: String) : Message
 
     @Serializable
     @SerialName("error")

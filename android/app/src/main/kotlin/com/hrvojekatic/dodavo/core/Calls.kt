@@ -10,6 +10,16 @@ sealed interface Call {
     @SerialName("send")
     data class Send(@SerialName("peer_id") val peerId: String, val paths: List<String>) : Call
 
+    /** Documents from Android's pickers, read where they are. */
+    @Serializable
+    @SerialName("send_documents")
+    data class SendDocuments(@SerialName("peer_id") val peerId: String, val documents: List<Document>) : Call
+
+    /** The URIs of the documents that sends still read. */
+    @Serializable
+    @SerialName("documents")
+    data object DocumentsInUse : Call
+
     /** Whether an offer fits into Downloads. */
     @Serializable
     @SerialName("space")

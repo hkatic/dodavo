@@ -10,6 +10,7 @@ import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ProcessLifecycleOwner
 import com.hrvojekatic.dodavo.AppPreferences
 import com.hrvojekatic.dodavo.core.CoreRepository
+import com.hrvojekatic.dodavo.core.Documents
 import com.hrvojekatic.dodavo.core.Event
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -80,6 +81,8 @@ class KeepAlive(
                     }
                     is Event.TransferNotice -> if (!inFront.value) Notifications.notice(context, event.id, event.notice)
                     is Event.Error -> {}
+                    // The permission to read it goes, wherever Dodavo is.
+                    is Event.DocumentDone -> Documents.release(event.uri)
                 }
             }
         }

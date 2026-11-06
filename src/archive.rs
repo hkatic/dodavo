@@ -6,6 +6,7 @@ use std::os::macos::fs::FileTimesExt;
 #[cfg(windows)]
 use std::os::windows::fs::FileTimesExt;
 use std::{
+    collections::HashMap,
     fs::{File, FileTimes, Metadata, OpenOptions},
     io::{self, BufWriter, Read, Write},
     path::{Path, PathBuf},
@@ -20,7 +21,7 @@ use zip::{
     write::{FullFileOptions, SimpleFileOptions},
 };
 
-use crate::i18n::tr;
+use crate::{i18n::tr, source};
 
 // What differs between the operating systems. Whatever the file system can and
 // cannot do, what the functions promise stays the same; where a promise cannot
@@ -271,6 +272,16 @@ struct Entry {
 }
 
 impl Entry {
+    /// Where the entry comes from, for an error: its path, or for a
+    /// document, its name in the zip.
+    fn shown_path(&self) -> String {
+        if source::is_document(&self.path) {
+            self.name.clone()
+        } else {
+            self.path.display().to_string()
+        }
+    }
+
     /// The entry's dates go both into the standard MS-DOS field and, exactly,
     /// into the NTFS extra field; its MS-DOS attributes say whether it is a
     /// folder and whether it is hidden, under the Unix mode that the zip
@@ -414,6 +425,77 @@ fn collect(root: &Path, portable: bool) -> anyhow::Result<Vec<Entry>> {
     Ok(out)
 }
 
+/// The items of a folder that the app listed (see [`source::Document`]) as
+/// they go into the zip, as [`collect`] has them of a folder on disk. What
+/// is in a folder that is left out is left out too.
+fn collect_listed(items: &[source::Item], portable: bool) -> Vec<Entry> {
+    let mut out = Vec::new();
+    let mut namer = names::Namer::default();
+    // The name in the zip of each folder, by its names from the top.
+    let mut folders: HashMap<&[String], String> = HashMap::new();
+    for item in items {
+        let Some((own_name, parent)) = item.path.split_last() else {
+            continue;
+        };
+        let prefix = if parent.is_empty() {
+            String::new()
+        } else {
+            match folders.get(&parent) {
+                Some(prefix) => prefix.clone(),
+                None => continue,
+            }
+        };
+        if portable && names::is_system_item(own_name) {
+            continue;
+        }
+        let (short, original) = if portable {
+            let short = namer.name(&prefix, own_name, item.folder);
+            let same = names::composed(own_name) == short;
+            (short, (!same).then(|| own_name.clone()))
+        } else {
+            (own_name.clone(), None)
+        };
+        let name = format!("{prefix}{short}");
+        let times = ItemTimes {
+            modified: item
+                .modified
+                .and_then(source::millis_to_system)
+                .and_then(system_to_filetime),
+            ..ItemTimes::default()
+        };
+        let fidelity = names::Fidelity {
+            name: original,
+            links: Vec::new(),
+        };
+        let hidden = portable && own_name.starts_with('.');
+        if item.folder {
+            folders.insert(item.path.as_slice(), format!("{name}/"));
+            out.push(Entry {
+                path: PathBuf::from(&item.uri),
+                name: format!("{name}/"),
+                is_dir: true,
+                hidden,
+                executable: false,
+                size: 0,
+                times,
+                fidelity,
+            });
+        } else {
+            out.push(Entry {
+                path: PathBuf::from(&item.uri),
+                name,
+                is_dir: false,
+                hidden,
+                executable: false,
+                size: item.size,
+                times,
+                fidelity,
+            });
+        }
+    }
+    out
+}
+
 /// What [`zip_folder`] packed: the number of files, their total
 /// (uncompressed) size and the size of the largest one.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -443,14 +525,34 @@ fn zip_folder_as(
     progress: &mut dyn FnMut(u64, u64),
 ) -> anyhow::Result<Packed> {
     // The folder is walked once; the same list gives the statistics for the offer.
-    let entries = collect(root, portable)?;
+    zip_entries(&collect(root, portable)?, dest, cancel, progress)
+}
+
+/// [`zip_folder`] for a folder that the app listed (see [`source::Document`]):
+/// its files are read where they are.
+pub fn zip_listed(
+    items: &[source::Item],
+    dest: &Path,
+    cancel: &AtomicBool,
+    progress: &mut dyn FnMut(u64, u64),
+) -> anyhow::Result<Packed> {
+    zip_entries(&collect_listed(items, PORTABLE_NAMES), dest, cancel, progress)
+}
+
+/// Packs `entries` into a zip file at `dest` (see [`zip_folder`]).
+fn zip_entries(
+    entries: &[Entry],
+    dest: &Path,
+    cancel: &AtomicBool,
+    progress: &mut dyn FnMut(u64, u64),
+) -> anyhow::Result<Packed> {
     let file_count = entries.iter().filter(|e| !e.is_dir).count() as u64;
     let total: u64 = entries.iter().map(|e| e.size).sum();
     let largest = entries.iter().map(|e| e.size).max().unwrap_or(0);
     let mut zip = ZipWriter::new(BufWriter::with_capacity(BUF_SIZE, File::create(dest)?));
     let mut done = 0u64;
     let mut buf = vec![0u8; BUF_SIZE];
-    for entry in &entries {
+    for entry in entries {
         if cancel.load(Ordering::Relaxed) {
             bail!(Cancelled);
         }
@@ -474,8 +576,8 @@ fn zip_folder_as(
         }
         .large_file(entry.size >= u32::MAX as u64);
         zip.start_file(entry.name.as_str(), entry.options(options)?)?;
-        let mut file = File::open(&entry.path)
-            .with_context(|| tr!(error_cannot_open, path = entry.path.display()))?;
+        let mut file = source::open(&entry.path)
+            .with_context(|| tr!(error_cannot_open, path = entry.shown_path()))?;
         loop {
             let n = file.read(&mut buf)?;
             if n == 0 {
@@ -1267,6 +1369,61 @@ mod tests {
         assert_eq!(std::fs::read(out.join("sub/photo.jpg")).unwrap(), b"jpg");
         assert!(out.join("empty").is_dir());
         assert!(!out.join("a.txt:Zone.Identifier").exists());
+        std::fs::remove_dir_all(&base).ok();
+    }
+
+    /// A folder that the app listed (an Android document) goes into the zip
+    /// with the names and dates the app gives, read from where its files are,
+    /// named as any receiver can take them; what is in a folder that is not
+    /// listed, and what only means something to macOS, is left out.
+    #[test]
+    fn a_listed_folder_zips_from_where_its_files_are() {
+        let base = scratch("listed");
+        let (a, b, c) = (base.join("1"), base.join("2"), base.join("3"));
+        std::fs::write(&a, b"hello").unwrap();
+        std::fs::write(&b, b"why").unwrap();
+        std::fs::write(&c, b".").unwrap();
+        let item = |path: &[&str], folder: bool, file: &Path| source::Item {
+            path: path.iter().map(|p| p.to_string()).collect(),
+            folder,
+            size: if folder { 0 } else { file.metadata().unwrap().len() },
+            modified: Some(1_600_000_000_000),
+            uri: if folder { String::new() } else { file.display().to_string() },
+        };
+        let items = [
+            item(&["Trip"], true, &a),
+            item(&["Trip", "a.txt"], false, &a),
+            item(&["Trip", "what?.txt"], false, &b),
+            item(&[".hidden"], false, &c),
+            item(&[".DS_Store"], false, &c),
+            item(&["Unlisted", "x.txt"], false, &c),
+        ];
+        let entries = collect_listed(&items, true);
+        let names: Vec<_> = entries.iter().map(|e| e.name.as_str()).collect();
+        assert_eq!(names, ["Trip/", "Trip/a.txt", "Trip/what_.txt", ".hidden"]);
+        assert_eq!(entries[2].fidelity.name.as_deref(), Some("what?.txt"));
+        assert!(entries[3].hidden && !entries[1].hidden);
+        assert_eq!(
+            entries[1].times.modified,
+            source::millis_to_system(1_600_000_000_000).and_then(system_to_filetime)
+        );
+
+        let zip = base.join("x.zip");
+        let cancel = AtomicBool::new(false);
+        let packed = zip_entries(&entries, &zip, &cancel, &mut |_, _| {}).unwrap();
+        assert_eq!(
+            packed,
+            Packed {
+                files: 3,
+                size: 9,
+                largest: 5
+            }
+        );
+        let out = base.join("out");
+        unzip(File::open(&zip).unwrap(), &out, false, &cancel, &mut |_, _| {}).unwrap();
+        assert_eq!(std::fs::read(out.join("Trip/a.txt")).unwrap(), b"hello");
+        let what = if cfg!(target_os = "macos") { "what?.txt" } else { "what_.txt" };
+        assert_eq!(std::fs::read(out.join("Trip").join(what)).unwrap(), b"why");
         std::fs::remove_dir_all(&base).ok();
     }
 
