@@ -773,7 +773,11 @@ async fn restore(shared: &Arc<Shared>, endpoint: &Endpoint) {
 fn missing_text(record: &TransferRecord) -> String {
     use crate::i18n::tr;
     match &record.side {
-        session::Side::Send { source, .. } if !source.exists() => match record.offer.kind {
+        session::Side::Send {
+            source,
+            staging: None,
+            ..
+        } if !source.exists() => match record.offer.kind {
             Kind::File => tr!(error_file_missing, path = source.display()),
             Kind::Folder => tr!(error_folder_missing, path = source.display()),
         },
@@ -1383,6 +1387,73 @@ mod tests {
         std::fs::remove_dir_all(&base).ok();
     }
 
+    /// A copy of a shared item in the sender's staging folder goes with its
+    /// transfer: when it completed, when it was declined, and a folder's as
+    /// soon as it is packed.
+    #[test]
+    fn a_shared_copy_goes_with_its_transfer() {
+        let base = scratch("staged");
+        let (tx_a, rx_a) = mpsc::channel();
+        let (tx_b, rx_b) = mpsc::channel();
+        let key_b = SecretKey::generate();
+        let id_b = key_b.public();
+        let temp_a = base.join("temp-a");
+        let a = start(SecretKey::generate(), base.join("a"), temp_a.clone(), [], sink(tx_a));
+        let b = start(key_b, base.join("b"), base.join("temp-b"), [], sink(tx_b));
+        wait_for(&rx_a, |e| matches!(e, Event::Online(true)));
+        wait_for(&rx_b, |e| matches!(e, Event::Online(true)));
+        let staging = session::staging_root(&temp_a);
+        let copy = |folder: &str, name: &str| {
+            let path = staging.join(folder).join(name);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            path
+        };
+        let received = base.join("received");
+        let send_and_answer = |path: PathBuf, kind: Kind, accept: bool| {
+            let id = next_transfer_id();
+            a.send(Command::Send {
+                id,
+                to: id_b,
+                path,
+                kind,
+                my_name: "A".into(),
+                peer_name: "B".into(),
+            });
+            let Event::Offer { id: offered, .. } = wait_for(&rx_b, |e| matches!(e, Event::Offer { .. }))
+            else {
+                unreachable!()
+            };
+            let accept = accept.then(|| Accept {
+                dir: received.clone(),
+                folder: ReceivedFolder::Extract,
+            });
+            b.send(Command::Respond { id: offered, accept });
+            wait_finished(&rx_a, id)
+        };
+
+        let file = copy("one", "note.txt");
+        std::fs::write(&file, b"hello").unwrap();
+        let outcome = send_and_answer(file.clone(), Kind::File, true);
+        assert!(matches!(outcome, Outcome::Completed(_)), "{outcome:?}");
+        assert_eq!(std::fs::read(received.join("note.txt")).unwrap(), b"hello");
+        assert!(!staging.join("one").exists(), "completed");
+
+        let file = copy("two", "declined.txt");
+        std::fs::write(&file, b"no").unwrap();
+        let outcome = send_and_answer(file, Kind::File, false);
+        assert!(matches!(outcome, Outcome::Declined), "{outcome:?}");
+        assert!(!staging.join("two").exists(), "declined");
+
+        let folder = copy("three", "Photos").join("a.txt");
+        std::fs::create_dir_all(folder.parent().unwrap()).unwrap();
+        std::fs::write(&folder, b"alpha").unwrap();
+        let outcome = send_and_answer(staging.join("three").join("Photos"), Kind::Folder, true);
+        assert!(matches!(outcome, Outcome::Completed(_)), "{outcome:?}");
+        assert_eq!(std::fs::read(received.join("Photos").join("a.txt")).unwrap(), b"alpha");
+        assert!(!staging.join("three").exists(), "packed and completed");
+        std::fs::remove_dir_all(&base).ok();
+    }
+
     /// The sender's connection is dropped in the middle; the transfer
     /// continues on a new one and the file is still intact.
     #[test]
@@ -1861,6 +1932,7 @@ mod tests {
                 source_mtime: None,
                 data_path: source.clone(),
                 sent: 0,
+                staging: None,
             },
         );
         sent.done_sent = true;
@@ -2102,6 +2174,7 @@ mod tests {
             source_mtime: None,
             data_path: source.clone(),
             sent: 0,
+            staging: None,
         };
         let record = file_record(1, &peer, 3, side);
         assert_eq!(
@@ -2142,6 +2215,7 @@ mod tests {
                 source_mtime: None,
                 data_path: zip,
                 sent: 0,
+                staging: None,
             },
         );
         record.done_sent = true;
@@ -2208,6 +2282,7 @@ mod tests {
                 source_mtime: None,
                 data_path: dir.join("a.bin"),
                 sent: 0,
+                staging: None,
             },
         );
         record.done_sent = true;
@@ -2267,6 +2342,7 @@ mod tests {
                 source_mtime: None,
                 data_path: dir.join("a.bin"),
                 sent: 0,
+                staging: None,
             },
         );
         let (send, _rx) = Session::new(1, record.token, peer, Role::Send);
@@ -2309,6 +2385,7 @@ mod tests {
                 source_mtime: None,
                 data_path: dir.join("a.bin"),
                 sent: 0,
+                staging: None,
             },
         );
         record.done_sent = true;
@@ -2349,6 +2426,7 @@ mod tests {
             source_mtime: None,
             data_path: dir.join("gone.bin"),
             sent: 0,
+            staging: None,
         };
         let mut record = file_record(3, &peer, 3, side);
         assert!(!record.can_go_on());

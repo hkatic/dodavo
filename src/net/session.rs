@@ -63,6 +63,12 @@ pub enum Side {
         /// which can be less. 0 in records of earlier versions.
         #[serde(default)]
         sent: u64,
+        /// The folder of a copy of what the user chose, which the transfer
+        /// owns and deletes when it ends: Android's copy of an item that
+        /// another app shared (see [`staged_folder`]). A folder's copy is
+        /// deleted as soon as it is packed, so the source is not needed.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        staging: Option<PathBuf>,
     },
     Receive {
         dest_dir: PathBuf,
@@ -491,8 +497,11 @@ impl TransferRecord {
     pub fn files_present(&self) -> bool {
         match &self.side {
             Side::Send {
-                source, data_path, ..
-            } => source.exists() && data_path.exists(),
+                source,
+                data_path,
+                staging,
+                ..
+            } => (staging.is_some() || source.exists()) && data_path.exists(),
             Side::Receive { .. } => self.part_is_there(),
         }
     }
@@ -700,8 +709,16 @@ impl TransferRecord {
     fn delete_files(&self, patient: bool) -> Option<TransferRecord> {
         match &self.side {
             Side::Send {
-                source, data_path, ..
-            } => (data_path != source && !remove_file(data_path, patient)).then(|| self.clone()),
+                source,
+                data_path,
+                staging,
+                ..
+            } => {
+                // A copy that the transfer owns goes with it, the data too.
+                let data = data_path == source || remove_file(data_path, patient);
+                let copy = staging.as_deref().is_none_or(remove_staging);
+                (!(data && copy)).then(|| self.clone())
+            }
             Side::Receive { files, .. } => {
                 let part = self.remove_part(patient);
                 // Every one is tried, whether or not the others go.
@@ -1152,18 +1169,59 @@ fn parts_of<'a>(
         .collect()
 }
 
+/// Where Android puts the copies of what another app shared, each in a
+/// folder of its own: `<temp>/staging/<folder>`.
+pub fn staging_root(temp_dir: &Path) -> PathBuf {
+    temp_dir.join("staging")
+}
+
+/// The folder of the copy that `source` is in, if it is one (see
+/// [`staging_root`]): a send of it owns that folder.
+pub fn staged_folder(temp_dir: &Path, source: &Path) -> Option<PathBuf> {
+    let root = staging_root(temp_dir);
+    let mut inside = source.strip_prefix(&root).ok()?.components();
+    let folder = inside.next()?;
+    inside.next()?;
+    Some(root.join(folder))
+}
+
+/// Deletes the folder of a copy; whether it is gone.
+fn remove_staging(folder: &Path) -> bool {
+    match fs::remove_dir_all(folder) {
+        Ok(()) => true,
+        Err(e) => e.kind() == io::ErrorKind::NotFound,
+    }
+}
+
 /// Deletes temporary archives (`send-*.zip`, `recv-*.zip`) in `dir` that no
 /// record refers to and that are older than a day: leftovers of transfers
 /// that ended before they had a record, such as a crash while packing a
-/// folder or an offer that was never accepted. `dir` must be this profile's
-/// own temporary folder, because the archives of another profile's transfers
+/// folder or an offer that was never accepted. The same for the copies of
+/// shared items (see [`staging_root`]). `dir` must be this profile's own
+/// temporary folder, because the archives of another profile's transfers
 /// are unknown here and would look like leftovers.
 pub fn cleanup_temp<'a>(dir: &Path, records: impl IntoIterator<Item = &'a TransferRecord>) {
+    let records: Vec<&TransferRecord> = records.into_iter().collect();
+    let staged: Vec<&Path> = records
+        .iter()
+        .filter_map(|r| match &r.side {
+            Side::Send { staging, .. } => staging.as_deref(),
+            Side::Receive { .. } => None,
+        })
+        .collect();
+    if let Ok(copies) = fs::read_dir(staging_root(dir)) {
+        for copy in copies.flatten() {
+            let path = copy.path();
+            if !staged.contains(&path.as_path()) && older_than(&path, TEMP_MAX_AGE) {
+                let _ = fs::remove_dir_all(&path);
+            }
+        }
+    }
     let Ok(entries) = fs::read_dir(dir) else {
         return;
     };
     let in_use: Vec<&Path> = records
-        .into_iter()
+        .iter()
         .map(|r| match &r.side {
             Side::Send { data_path, .. } => data_path.as_path(),
             Side::Receive { files, .. } => files.part.as_path(),
@@ -2160,6 +2218,7 @@ mod tests {
                 source_mtime: None,
                 data_path: zip.clone(),
                 sent: 0,
+                staging: None,
             },
         );
         s.save(&dir).unwrap();
@@ -2584,6 +2643,7 @@ mod tests {
                 source_mtime: None,
                 data_path: zip.clone(),
                 sent: 0,
+                staging: None,
             },
         ));
         assert!(!session.handed_over());
@@ -2607,6 +2667,7 @@ mod tests {
                 source_mtime: None,
                 data_path: zip.clone(),
                 sent: 0,
+                staging: None,
             },
         );
         record.save(dir).unwrap();
@@ -3417,6 +3478,7 @@ mod tests {
                 source_mtime: None,
                 data_path: zip.clone(),
                 sent: 0,
+                staging: None,
             },
         );
         s.ended = true;
@@ -3522,6 +3584,65 @@ mod tests {
         assert!(!copy.exists());
         assert!(copy.with_extension("json.bad").exists());
         assert!(record_path(&dir, &r.token).exists());
+        fs::remove_dir_all(&dir).ok();
+    }
+
+    /// A copy of a shared item is the transfer's: told by where it is,
+    /// enough without the item, and deleted with the transfer; one that no
+    /// record names goes once it is old.
+    #[test]
+    fn a_copy_of_a_shared_item_goes_with_its_transfer() {
+        let temp = scratch("staging");
+        let folder = staging_root(&temp).join("copy-1");
+        let file = folder.join("photo.jpg");
+        fs::create_dir_all(&folder).unwrap();
+        fs::write(&file, b"photo").unwrap();
+        assert_eq!(staged_folder(&temp, &file), Some(folder.clone()));
+        assert_eq!(staged_folder(&temp, &folder), None, "the folder alone is no copy");
+        assert_eq!(staged_folder(&temp, &temp.join("photo.jpg")), None);
+        let side = |source: &Path, data: &Path, staging: Option<PathBuf>| Side::Send {
+            source: source.to_path_buf(),
+            source_len: 5,
+            source_mtime: None,
+            data_path: data.to_path_buf(),
+            sent: 0,
+            staging,
+        };
+        let dir = scratch("staging-records");
+        let r = record(41, side(&file, &file, Some(folder.clone())));
+        assert!(r.files_present());
+        r.save(&dir).unwrap();
+        r.complete(&dir);
+        assert!(!folder.exists(), "it went with the transfer");
+        assert!(records(&dir).is_empty());
+
+        // A folder's copy is deleted once it is packed: the zip is enough.
+        let packed = staging_root(&temp).join("copy-2");
+        let zip = temp.join("send-00000000000000000000000000000042.zip");
+        fs::write(&zip, b"zip").unwrap();
+        let r = record(42, side(&packed.join("Photos"), &zip, Some(packed.clone())));
+        assert!(r.files_present());
+        r.save(&dir).unwrap();
+        r.discard(&dir);
+        assert!(!zip.exists());
+        assert!(records(&dir).is_empty());
+
+        // What no record names goes once it is old.
+        let old = SystemTime::now() - Duration::from_secs(2 * 24 * 60 * 60);
+        let orphan = staging_root(&temp).join("copy-3");
+        let kept = staging_root(&temp).join("copy-4");
+        let fresh = staging_root(&temp).join("copy-5");
+        for copy in [&orphan, &kept, &fresh] {
+            fs::create_dir_all(copy).unwrap();
+            fs::write(copy.join("a.txt"), b"a").unwrap();
+        }
+        for copy in [&orphan, &kept] {
+            archive::set_times(copy, Some(old), None).unwrap();
+        }
+        let named = record(43, side(&kept.join("a.txt"), &kept.join("a.txt"), Some(kept.clone())));
+        cleanup_temp(&temp, &[named]);
+        assert!(!orphan.exists() && kept.exists() && fresh.exists());
+        fs::remove_dir_all(&temp).ok();
         fs::remove_dir_all(&dir).ok();
     }
 
@@ -3654,6 +3775,7 @@ mod tests {
                 source_mtime: meta.modified().ok(),
                 data_path: file.clone(),
                 sent: 0,
+                staging: None,
             },
         );
         assert!(r.source_unchanged());
@@ -3675,6 +3797,7 @@ mod tests {
                 source_mtime: meta.modified().ok(),
                 data_path: zip.clone(),
                 sent: 0,
+                staging: None,
             },
         );
         fs::write(folder.join("new.txt"), b"later").unwrap();

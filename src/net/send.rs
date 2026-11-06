@@ -48,6 +48,18 @@ impl Drop for TempFile {
     }
 }
 
+/// Deletes the copy of a shared item when dropped (until the transfer has a
+/// record, which then owns it; see `Side::Send::staging`).
+struct Staged(Option<PathBuf>);
+
+impl Drop for Staged {
+    fn drop(&mut self) {
+        if let Some(folder) = &self.0 {
+            let _ = std::fs::remove_dir_all(folder);
+        }
+    }
+}
+
 pub(crate) struct AbortOnDrop(pub tokio::task::JoinHandle<()>);
 
 impl Drop for AbortOnDrop {
@@ -212,6 +224,10 @@ async fn start(
         .map(|m| archive::ItemTimes::of(&m))
         .unwrap_or_default();
 
+    // A copy of a shared item is the transfer's (see `Side::Send::staging`).
+    let staging = session::staged_folder(&shared.temp_dir, &path);
+    let mut staged = Staged(staging.clone());
+
     // 1. Prepare the data (zip folders). `size` is what gets streamed.
     let mut temp = TempFile(None);
     let prepared = prepare(shared, id, &path, kind, &token, ctl, &mut temp).await;
@@ -219,6 +235,12 @@ async fn start(
         Ok(p) => p,
         Err(e) => return Outcome::Failed(super::failure_text(&e)),
     };
+    // A folder's copy is in the zip now, which is the data from here on.
+    if kind == Kind::Folder
+        && let Some(folder) = staging.clone()
+    {
+        let _ = tokio::task::spawn_blocking(move || std::fs::remove_dir_all(folder)).await;
+    }
     // What a later run compares to notice a changed source: the file, or the
     // zip the folder was packed into.
     let (source_len, source_mtime) = match std::fs::metadata(&data_path) {
@@ -302,6 +324,7 @@ async fn start(
             source_mtime,
             data_path: data_path.clone(),
             sent: 0,
+            staging,
         },
         done_hash: None,
         done_sent: false,
@@ -333,6 +356,7 @@ async fn start(
         };
     }
     temp.0 = None;
+    staged.0 = None;
     if let Some(ending) = session.stop_deferring() {
         ending.forget(&shared.data_dir).await;
         return Outcome::Cancelled;
