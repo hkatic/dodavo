@@ -5,6 +5,7 @@
 //! and the hashing of data that was already transferred.
 
 use std::{
+    collections::HashSet,
     fs,
     io::{self, Read, Seek, SeekFrom},
     path::{Path, PathBuf},
@@ -506,7 +507,8 @@ impl TransferRecord {
                 // packed already, which is not needed any more.
                 let without_source = staging.is_some()
                     || (self.offer.kind == Kind::Folder && crate::source::is_document(source));
-                (without_source || crate::source::exists(source)) && crate::source::exists(data_path)
+                (without_source || crate::source::exists(source))
+                    && crate::source::exists(data_path)
             }
             Side::Receive { .. } => self.part_is_there(),
         }
@@ -985,6 +987,34 @@ pub struct Found {
 /// background: deleting a folder can take a while, and the transfers that
 /// go on would wait for it. A record file whose name is not its token's
 /// (a copy of one, say) is no record, and is set aside like a damaged one.
+/// The paths that the records in `data_dir`, other than that of `except`,
+/// name as the files of a receive: its part, the folder it unpacks into,
+/// where it renames the part to, and what it left over. Where identities are
+/// weak (see [`FileId::weak`]), a receive's new file or folder does not take
+/// one of these names, even when nothing has it now: the record would take
+/// what is there for its own (see `receive::held_in`).
+pub fn held_names(data_dir: &Path, except: Option<&Token>) -> HashSet<PathBuf> {
+    let Ok(entries) = fs::read_dir(records_dir(data_dir)) else {
+        return HashSet::new();
+    };
+    entries
+        .flatten()
+        .map(|entry| entry.path())
+        .filter(|path| path.extension().and_then(|e| e.to_str()) == Some("json"))
+        .filter_map(|path| {
+            let text = fs::read_to_string(&path).ok()?;
+            serde_json::from_str::<TransferRecord>(&text).ok()
+        })
+        .filter(|record| Some(&record.token) != except)
+        .filter_map(|record| record.receive_files().cloned())
+        .flat_map(|files| {
+            let folders = files.unpacking.into_iter().chain(files.moving);
+            std::iter::once(files.part)
+                .chain(folders.chain(files.leftovers).map(|owned| owned.path))
+        })
+        .collect()
+}
+
 pub fn load_all(data_dir: &Path) -> Found {
     let mut found = Found::default();
     let clock = Clock::start(data_dir);
@@ -2379,6 +2409,9 @@ mod tests {
     #[test]
     fn discarding_deletes_only_its_own_files() {
         let dir = scratch("discard");
+        if !archive::testing::tells_new_items_apart(&dir) {
+            return;
+        }
         let with_folder = |token: u8, part: &Path, folder: &Path| {
             let mut r = record(token, receive_side(&dir, part, None));
             if let Some(files) = r.receive_files_mut() {
@@ -2404,6 +2437,7 @@ mod tests {
         fs::create_dir(&partial).unwrap();
         let r = with_folder(11, &part, &partial);
         fs::remove_dir(&partial).unwrap();
+        archive::testing::next_tick();
         fs::create_dir(&partial).unwrap();
         fs::write(partial.join("mine.txt"), b"mine").unwrap();
         r.discard(&dir);
@@ -2566,6 +2600,9 @@ mod tests {
     #[test]
     fn only_its_own_part_is_touched() {
         let dir = scratch("identity");
+        if !archive::testing::tells_new_items_apart(&dir) {
+            return;
+        }
         let zip = dir.join("Photos (2).zip");
         fs::write(&zip, b"received").unwrap();
         let mut r = record(14, receive_side(&dir, &zip, Some(3)));
@@ -2585,6 +2622,7 @@ mod tests {
         assert_eq!(r.placed_item(), Some(zip.as_path()));
 
         fs::remove_file(&zip).unwrap();
+        archive::testing::next_tick();
         fs::write(&zip, b"a download").unwrap();
         assert!(!r.files_present());
         assert_eq!(r.placed_item(), None);
@@ -3604,7 +3642,11 @@ mod tests {
         fs::create_dir_all(&folder).unwrap();
         fs::write(&file, b"photo").unwrap();
         assert_eq!(staged_folder(&temp, &file), Some(folder.clone()));
-        assert_eq!(staged_folder(&temp, &folder), None, "the folder alone is no copy");
+        assert_eq!(
+            staged_folder(&temp, &folder),
+            None,
+            "the folder alone is no copy"
+        );
         assert_eq!(staged_folder(&temp, &temp.join("photo.jpg")), None);
         let side = |source: &Path, data: &Path, staging: Option<PathBuf>| Side::Send {
             source: source.to_path_buf(),
@@ -3645,7 +3687,10 @@ mod tests {
         for copy in [&orphan, &kept] {
             archive::set_times(copy, Some(old), None).unwrap();
         }
-        let named = record(43, side(&kept.join("a.txt"), &kept.join("a.txt"), Some(kept.clone())));
+        let named = record(
+            43,
+            side(&kept.join("a.txt"), &kept.join("a.txt"), Some(kept.clone())),
+        );
         cleanup_temp(&temp, &[named]);
         assert!(!orphan.exists() && kept.exists() && fresh.exists());
         fs::remove_dir_all(&temp).ok();

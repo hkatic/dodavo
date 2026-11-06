@@ -4,6 +4,7 @@
 //! transfer at all.
 
 use std::{
+    collections::HashSet,
     io,
     path::{Path, PathBuf},
     sync::{
@@ -606,7 +607,15 @@ fn new_receive(
     paused: &watch::Receiver<bool>,
     first: &First,
 ) -> anyhow::Result<TransferRecord> {
-    let (part, part_id) = prepare_part(dest_dir, temp_dir, name, offer.kind, folder, &offer.token)?;
+    let (part, part_id) = prepare_part(
+        dest_dir,
+        temp_dir,
+        data_dir,
+        name,
+        offer.kind,
+        folder,
+        &offer.token,
+    )?;
     if !first.take() {
         // Cancelled meanwhile: nothing of it may stay.
         let _ = std::fs::remove_file(&part);
@@ -639,11 +648,25 @@ fn new_receive(
     Ok(record)
 }
 
+/// What a new file or folder of a receive in `dir` must not be named, even
+/// when nothing has the name now: where identities are weak (see
+/// `FileId::weak`), what the records other than `except`'s name (see
+/// `session::held_names`); elsewhere nothing.
+fn held_in(dir: &Path, data_dir: &Path, except: Option<&Token>) -> HashSet<PathBuf> {
+    if archive::file_id(dir).is_ok_and(|id| id.weak()) {
+        session::held_names(data_dir, except)
+    } else {
+        HashSet::new()
+    }
+}
+
 /// Creates the part file of a new receive, without replacing anything, and
 /// returns it with its identity. Blocking.
+#[allow(clippy::too_many_arguments)]
 fn prepare_part(
     dest_dir: &Path,
     temp_dir: &Path,
+    data_dir: &Path,
     name: &str,
     kind: Kind,
     folder: ReceivedFolder,
@@ -665,7 +688,10 @@ fn prepare_part(
         };
         // Created here and not over anything, also when another transfer of
         // the same name starts at the same moment.
-        let part = archive::create_unique_file(dest_dir, &part_name)?;
+        let held = held_in(dest_dir, data_dir, None);
+        let part = archive::create_unique_file_where(dest_dir, &part_name, |candidate| {
+            !held.contains(&dest_dir.join(candidate))
+        })?;
         // Marked from the start: the mark stays with the file when it is
         // renamed into place, so it is never there unmarked.
         let _ = archive::mark_of_the_web(&part);
@@ -1780,7 +1806,10 @@ fn finish_folder(
             Some(stem) if both => stem.to_string_lossy().into_owned(),
             _ => name.to_string(),
         };
-        let target = archive::create_unique_dir(dest, &stem, |_| true)?;
+        let held = held_in(dest, &transfer.data_dir, Some(&transfer.session.token));
+        let target = archive::create_unique_dir(dest, &stem, |candidate| {
+            !held.contains(&dest.join(candidate))
+        })?;
         transfer.note_folder(&mut files, &target)?;
         target
     };
@@ -1812,9 +1841,14 @@ fn new_pair(
     name: &str,
 ) -> anyhow::Result<PathBuf> {
     let zip_of = |stem: &str| dest.join(zip_name(stem));
+    let held = held_in(dest, &transfer.data_dir, Some(&transfer.session.token));
+    let free = |stem: &str| {
+        !held.contains(&dest.join(stem))
+            && !held.contains(&zip_of(stem))
+            && !archive::name_taken(&zip_of(stem))
+    };
     loop {
-        let target =
-            archive::create_unique_dir(dest, name, |stem| !archive::name_taken(&zip_of(stem)))?;
+        let target = archive::create_unique_dir(dest, name, free)?;
         let zip = zip_of(&target.file_name().unwrap_or_default().to_string_lossy());
         files.moving = Some(Owned {
             path: zip.clone(),
@@ -1903,6 +1937,7 @@ mod tests {
         let (part, id) = prepare_part(
             &base,
             &temp,
+            &base.join("data"),
             "a.txt",
             Kind::File,
             ReceivedFolder::Extract,
@@ -1922,6 +1957,44 @@ mod tests {
         std::fs::remove_dir_all(&base).ok();
     }
 
+    /// Where identities are weak (Android's shared storage), a new part
+    /// does not take a name that a record still names, even with nothing
+    /// under it now: the record would take the new part for its own, as the
+    /// file system may give it the number of the one that was deleted.
+    /// Elsewhere the identity tells them apart, and the name is taken.
+    #[test]
+    fn a_new_part_leaves_the_names_of_records_alone() {
+        let base = scratch("held-names");
+        let dest = base.join("dest");
+        let held = dest.join("a.txt.part");
+        std::fs::create_dir_all(&dest).unwrap();
+        std::fs::write(&held, b"old").unwrap();
+        let _transfer = receiving(&base, &held, Kind::File, ReceivedFolder::Extract);
+        std::fs::remove_file(&held).unwrap();
+        let new_part = |weak: bool| {
+            archive::PRETEND_WEAK.set(weak);
+            let made = prepare_part(
+                &dest,
+                &base.join("temp"),
+                &base.join("data"),
+                "a.txt",
+                Kind::File,
+                ReceivedFolder::Extract,
+                &[1; 16],
+            );
+            archive::PRETEND_WEAK.set(false);
+            made.unwrap().0
+        };
+        let weak = new_part(true);
+        assert_ne!(weak, held);
+        assert_eq!(weak.parent(), Some(dest.as_path()));
+        std::fs::remove_file(&weak).unwrap();
+        if !archive::file_id(&dest).unwrap().weak() {
+            assert_eq!(new_part(false), held);
+        }
+        std::fs::remove_dir_all(&base).ok();
+    }
+
     /// The part is opened by its name for each connection, and written to
     /// only while it is still the transfer's, as told by the handle that is
     /// written to: not once the user has deleted it and another file has
@@ -1930,6 +2003,9 @@ mod tests {
     #[test]
     fn only_its_own_part_is_written_to() {
         let base = scratch("still-there");
+        if !archive::testing::tells_new_items_apart(&base) {
+            return;
+        }
         let part = base.join("dest").join("a.txt.part");
         std::fs::create_dir_all(part.parent().unwrap()).unwrap();
         std::fs::write(&part, b"abc").unwrap();
@@ -1945,6 +2021,7 @@ mod tests {
             drop(open);
         }
         std::fs::remove_file(&part).unwrap();
+        archive::testing::next_tick();
         std::fs::write(&part, b"another").unwrap();
         let missing = open_own_part(&transfer.session, &[]).err().unwrap();
         assert_eq!(missing.to_string(), tr!(error_part_missing));
@@ -2332,11 +2409,15 @@ mod tests {
     #[test]
     fn only_its_own_part_is_put_in_place() {
         let base = scratch("own-placed");
+        if !archive::testing::tells_new_items_apart(&base) {
+            return;
+        }
         let part = base.join("a.txt.part");
         std::fs::write(&part, b"new").unwrap();
         let (t, _) = times(1_500_000_000);
         let transfer = receiving(&base, &part, Kind::File, ReceivedFolder::Extract);
         std::fs::remove_file(&part).unwrap();
+        archive::testing::next_tick();
         std::fs::write(&part, b"another").unwrap();
         let e = finish_file(&transfer, &base, "a.txt", t).unwrap_err();
         assert_eq!(e.to_string(), tr!(error_part_missing));
@@ -2352,6 +2433,7 @@ mod tests {
         let transfer = receiving(&base, &part, Kind::Folder, ReceivedFolder::Both);
         let zip = std::fs::read(&part).unwrap();
         std::fs::remove_file(&part).unwrap();
+        archive::testing::next_tick();
         std::fs::write(&part, &zip).unwrap();
         let cancel = AtomicBool::new(false);
         let e = finish_with(
@@ -2677,6 +2759,9 @@ mod tests {
     #[test]
     fn an_interrupted_unpacking_starts_over() {
         let base = scratch("again");
+        if !archive::testing::tells_new_items_apart(&base) {
+            return;
+        }
         let dest = base.join("dest");
         let (t, _) = times(1_400_000_000);
         for folder in [ReceivedFolder::Extract, ReceivedFolder::Both] {
@@ -2706,6 +2791,7 @@ mod tests {
         let transfer = receiving(&base, &part, Kind::Folder, ReceivedFolder::Extract);
         was_unpacking_into(&transfer, &partial);
         std::fs::remove_dir(&partial).unwrap();
+        archive::testing::next_tick();
         std::fs::create_dir(&partial).unwrap();
         std::fs::write(partial.join("mine.txt"), b"mine").unwrap();
         let path = finish(&transfer, &dest, ReceivedFolder::Extract, t);

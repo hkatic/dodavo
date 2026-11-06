@@ -536,7 +536,12 @@ pub fn zip_listed(
     cancel: &AtomicBool,
     progress: &mut dyn FnMut(u64, u64),
 ) -> anyhow::Result<Packed> {
-    zip_entries(&collect_listed(items, PORTABLE_NAMES), dest, cancel, progress)
+    zip_entries(
+        &collect_listed(items, PORTABLE_NAMES),
+        dest,
+        cancel,
+        progress,
+    )
 }
 
 /// Packs `entries` into a zip file at `dest` (see [`zip_folder`]).
@@ -897,6 +902,10 @@ impl FileId {
     /// time, it can take a new file under the name for the item (see
     /// `TransferRecord::part_shorter`).
     pub fn weak(&self) -> bool {
+        #[cfg(test)]
+        if PRETEND_WEAK.get() {
+            return true;
+        }
         cfg!(any(target_os = "linux", target_os = "android"))
             && self.numbered()
             && self.file[8..] == [0; 8]
@@ -962,12 +971,24 @@ fn filetime_now() -> u64 {
 thread_local! {
     /// Tests: this thread sees every volume as FAT or exFAT (see [`FileId`]).
     pub static PRETEND_FAT: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    /// Tests: this thread sees every identity as weak (see [`FileId::weak`]).
+    pub static PRETEND_WEAK: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
 /// Creates an empty file under the first free one of the numbered names. The
 /// name is the caller's from then on.
 pub fn create_unique_file(dir: &Path, name: &str) -> io::Result<PathBuf> {
-    for candidate in numbered(name, false) {
+    create_unique_file_where(dir, name, |_| true)
+}
+
+/// [`create_unique_file`], under the first of the numbered names for which
+/// `also_free(name)` holds as well.
+pub fn create_unique_file_where(
+    dir: &Path,
+    name: &str,
+    also_free: impl Fn(&str) -> bool,
+) -> io::Result<PathBuf> {
+    for candidate in numbered(name, false).filter(|n| also_free(n)) {
         let path = dir.join(candidate);
         match OpenOptions::new().write(true).create_new(true).open(&path) {
             Ok(_) => return Ok(path),
@@ -1082,6 +1103,38 @@ pub fn retried<T>(
 #[cfg(test)]
 pub mod testing {
     use super::*;
+
+    /// Whether identities in `dir` tell an item from one made under its name
+    /// after it was deleted. Not where they are weak (see [`FileId::weak`])
+    /// and the file system gives the number of a deleted item to the next one
+    /// at once (ext4 before Android 11): there only what the records do about
+    /// that (`TransferRecord::part_shorter`, `session::held_names`) holds.
+    pub fn tells_new_items_apart(dir: &Path) -> bool {
+        let probe = dir.join(".identity-probe");
+        std::fs::write(&probe, b"1").unwrap();
+        let before = file_id(&probe).unwrap();
+        std::fs::remove_file(&probe).unwrap();
+        next_tick();
+        std::fs::write(&probe, b"2").unwrap();
+        let after = file_id(&probe).unwrap();
+        std::fs::remove_file(&probe).unwrap();
+        let apart = !before.same_item(&after);
+        if !apart {
+            eprintln!("Skipped: identities here do not tell a new item from a deleted one.");
+        }
+        apart
+    }
+
+    /// Waits until the clock that the file system stamps items with has moved
+    /// on. Linux takes it from a coarse clock, a few milliseconds a tick, and
+    /// ext4 gives the number of an item just deleted to the next one at once:
+    /// made in the same tick, that one would have the same identity (see
+    /// [`FileId`]). A deletion and a new item of a user's are never that close.
+    pub fn next_tick() {
+        if cfg!(any(target_os = "linux", target_os = "android")) {
+            std::thread::sleep(Duration::from_millis(20));
+        }
+    }
     #[cfg(windows)]
     use std::os::windows::fs::OpenOptionsExt;
 
@@ -1386,9 +1439,17 @@ mod tests {
         let item = |path: &[&str], folder: bool, file: &Path| source::Item {
             path: path.iter().map(|p| p.to_string()).collect(),
             folder,
-            size: if folder { 0 } else { file.metadata().unwrap().len() },
+            size: if folder {
+                0
+            } else {
+                file.metadata().unwrap().len()
+            },
             modified: Some(1_600_000_000_000),
-            uri: if folder { String::new() } else { file.display().to_string() },
+            uri: if folder {
+                String::new()
+            } else {
+                file.display().to_string()
+            },
         };
         let items = [
             item(&["Trip"], true, &a),
@@ -1420,9 +1481,20 @@ mod tests {
             }
         );
         let out = base.join("out");
-        unzip(File::open(&zip).unwrap(), &out, false, &cancel, &mut |_, _| {}).unwrap();
+        unzip(
+            File::open(&zip).unwrap(),
+            &out,
+            false,
+            &cancel,
+            &mut |_, _| {},
+        )
+        .unwrap();
         assert_eq!(std::fs::read(out.join("Trip/a.txt")).unwrap(), b"hello");
-        let what = if cfg!(target_os = "macos") { "what?.txt" } else { "what_.txt" };
+        let what = if cfg!(target_os = "macos") {
+            "what?.txt"
+        } else {
+            "what_.txt"
+        };
         assert_eq!(std::fs::read(out.join("Trip").join(what)).unwrap(), b"why");
         std::fs::remove_dir_all(&base).ok();
     }
