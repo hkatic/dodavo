@@ -1,13 +1,9 @@
 //! POSIX: what macOS and Linux (Android among them) share below the user
 //! interface.
 
-use std::{
-    ffi::{CStr, CString, c_char},
-    io,
-    mem::MaybeUninit,
-    os::unix::ffi::OsStrExt,
-    path::Path,
-};
+#[cfg(not(target_os = "android"))]
+use std::ffi::{CStr, c_char};
+use std::{ffi::CString, io, mem::MaybeUninit, os::unix::ffi::OsStrExt, path::Path};
 
 /// What `statfs` says of the volume that holds `path`.
 pub(crate) fn statfs_of(path: &Path) -> io::Result<libc::statfs> {
@@ -22,6 +18,7 @@ pub(crate) fn statfs_of(path: &Path) -> io::Result<libc::statfs> {
 }
 
 /// A string in a fixed buffer of a C structure.
+#[cfg(target_os = "macos")]
 pub(crate) fn c_text(buffer: &[c_char]) -> String {
     // SAFETY: `c_char` and `u8` have the same size and alignment.
     let bytes = unsafe { &*(std::ptr::from_ref(buffer) as *const [u8]) };
@@ -29,7 +26,9 @@ pub(crate) fn c_text(buffer: &[c_char]) -> String {
     String::from_utf8_lossy(&bytes[..len]).into_owned()
 }
 
-/// The full name of the user's account, or else its short name.
+/// The full name of the user's account, or else its short name. Not on
+/// Android, whose accounts are apps.
+#[cfg(not(target_os = "android"))]
 pub(crate) fn account_name() -> Option<String> {
     let mut account = MaybeUninit::<libc::passwd>::uninit();
     let mut found = std::ptr::null_mut();

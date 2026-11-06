@@ -432,20 +432,24 @@ impl TransferRecord {
         }
     }
 
-    /// On FAT and exFAT: whether what has the part's name is shorter than
+    /// On FAT and exFAT, and where the identity is weak (see
+    /// `FileId::weak`): whether what has the part's name is shorter than
     /// what the record knows was written to the part and reached the disk
     /// (`synced`). Then it is not the part, although its identity says so:
     /// there the identity is only the creation time, which Windows also
     /// gives a file made under the part's name moments after the part was
-    /// deleted (see `FileId::same_item`), and such a file must be neither
-    /// written to nor deleted. Where the identity has the part's number, it
+    /// deleted (see `FileId::same_item`), or a number that a new file may
+    /// get again, and such a file must be neither written to nor deleted. Where the identity has the part's number, it
     /// tells the part from any other file, and a part that lost its end goes
     /// on from what is there (see [`have`](Self::have)); on FAT such a part
     /// (of a drive pulled out during a write, say) cannot be told from
     /// another file, so it is left as it is, for the user to delete. (By the
     /// part's name: a connection's handle may not read the size.)
     fn part_shorter(&self) -> bool {
-        if !self.part_identity().is_some_and(|id| id.by_creation_time()) {
+        if !self
+            .part_identity()
+            .is_some_and(|id| id.by_creation_time() || id.weak())
+        {
             return false;
         }
         match (&self.side, self.receive_files()) {
@@ -2780,6 +2784,7 @@ mod tests {
     /// deleted. The part read with another time zone (FAT keeps local time)
     /// is still the part, as far as time zones lie apart.
     #[test]
+    #[cfg(any(windows, target_os = "macos"))]
     fn items_are_told_by_their_creation_time_on_fat() {
         let dir = scratch("created-fat");
         archive::PRETEND_FAT.set(true);
@@ -3576,6 +3581,7 @@ mod tests {
     /// deleted. Elsewhere the part's number tells, and a part that lost its
     /// end stays the part.
     #[test]
+    #[cfg(any(windows, target_os = "macos"))]
     fn a_shorter_file_under_the_parts_name_on_fat_is_not_the_part() {
         #[cfg(target_os = "macos")]
         use std::os::macos::fs::FileTimesExt;

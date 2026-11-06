@@ -9,6 +9,8 @@
 //! The language follows the Windows display language unless one is chosen in
 //! the settings; `DODAVO_LANG=hr` (or `en`, `sr-Latn`, `sl`) overrides both.
 
+#[cfg(any(unix, test))]
+pub mod android;
 mod en;
 mod hr;
 #[cfg(any(target_os = "macos", test))]
@@ -16,7 +18,10 @@ pub mod mac;
 mod sl;
 mod sr_latn;
 
-use std::{fmt::Display, sync::OnceLock};
+use std::{
+    fmt::Display,
+    sync::atomic::{AtomicUsize, Ordering},
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Lang {
@@ -155,7 +160,7 @@ macro_rules! strings {
         }
     };
 }
-#[cfg(any(target_os = "macos", test))]
+#[cfg(any(unix, test))]
 use strings;
 
 strings! {
@@ -554,10 +559,12 @@ impl Strings {
     }
 }
 
-static LANG: OnceLock<Lang> = OnceLock::new();
+/// The language, as its place in `Lang::ALL` plus one; 0 until `init`.
+static LANG: AtomicUsize = AtomicUsize::new(0);
 
 /// Chooses the language: `DODAVO_LANG`, then the setting, then Windows.
-/// Call once at startup, on the UI thread, before any text is shown.
+/// Call once at startup, on the UI thread, before any text is shown. Later
+/// calls change nothing.
 pub fn init(setting: Option<&str>) {
     let chosen = std::env::var("DODAVO_LANG")
         .ok()
@@ -568,11 +575,26 @@ pub fn init(setting: Option<&str>) {
     if chosen.is_some() {
         prefer_for_system_texts(lang);
     }
-    let _ = LANG.set(lang);
+    let _ = LANG.compare_exchange(0, place(lang), Ordering::SeqCst, Ordering::SeqCst);
+}
+
+/// Android: the app's language changed while it runs (the user chose another
+/// one for it in the system's settings). Windows and the Mac keep theirs for
+/// as long as they run.
+#[cfg(any(target_os = "android", test))]
+pub fn switch(lang: Lang) {
+    LANG.store(place(lang), Ordering::SeqCst);
+}
+
+fn place(lang: Lang) -> usize {
+    Lang::ALL.iter().position(|&l| l == lang).unwrap_or(0) + 1
 }
 
 pub fn lang() -> Lang {
-    LANG.get().copied().unwrap_or(Lang::En)
+    match LANG.load(Ordering::SeqCst) {
+        0 => Lang::En,
+        n => Lang::ALL.get(n - 1).copied().unwrap_or(Lang::En),
+    }
 }
 
 /// The texts of the current language (English until `init` was called).
@@ -581,7 +603,7 @@ pub fn s() -> &'static Strings {
 }
 
 /// The first supported language among those the user prefers.
-#[cfg(target_os = "macos")]
+#[cfg(unix)]
 fn system_language() -> Lang {
     crate::platform::preferred_languages()
         .iter()
@@ -590,8 +612,8 @@ fn system_language() -> Lang {
 }
 
 /// The system decides the language of what it draws for an app from the
-/// app's own languages (see `macos/`).
-#[cfg(target_os = "macos")]
+/// app's own languages (see `macos/` and `android/`).
+#[cfg(unix)]
 fn prefer_for_system_texts(_lang: Lang) {}
 
 /// The first supported language in the user's Windows display languages.
@@ -691,14 +713,34 @@ macro_rules! mac_tr {
     };
 }
 
+/// Like [`tr!`], from the table of the Android user interface.
+#[macro_export]
+macro_rules! android_tr {
+    ($key:ident) => {
+        $crate::i18n::android::s().$key
+    };
+    ($key:ident, $($name:ident = $value:expr),+ $(,)?) => {
+        $crate::i18n::fill(
+            $crate::i18n::android::s().$key,
+            &[$((stringify!($name), &$value as &dyn ::std::fmt::Display)),+],
+        )
+    };
+}
+
 /// A text whose wording depends on the system ("app" or "program", a volume's
-/// name or a drive letter): on a Mac from its own table, under the same key.
+/// name or a drive letter): on a Mac and on Android (and Linux) from their
+/// own tables, under the same key.
 #[cfg(target_os = "macos")]
 #[macro_export]
 macro_rules! os_tr {
     ($($args:tt)*) => { $crate::i18n::mac_tr!($($args)*) };
 }
-#[cfg(not(target_os = "macos"))]
+#[cfg(any(target_os = "android", target_os = "linux"))]
+#[macro_export]
+macro_rules! os_tr {
+    ($($args:tt)*) => { $crate::i18n::android_tr!($($args)*) };
+}
+#[cfg(windows)]
 #[macro_export]
 macro_rules! os_tr {
     ($($args:tt)*) => { $crate::i18n::tr!($($args)*) };
@@ -718,7 +760,7 @@ macro_rules! trn {
     }};
 }
 
-pub use crate::{mac_tr, os_tr, tr, trn};
+pub use crate::{android_tr, mac_tr, os_tr, tr, trn};
 
 #[cfg(test)]
 mod tests {

@@ -227,7 +227,7 @@ pub(crate) fn connect_error_text(error: &iroh::endpoint::ConnectError) -> String
 /// See [`failure_text`].
 fn io_error_text(error: &std::io::Error) -> String {
     // The system's own texts are in English here, whatever the user's language.
-    #[cfg(target_os = "macos")]
+    #[cfg(unix)]
     if let Some(text) = error.raw_os_error().and_then(crate::platform::error_text) {
         return text;
     }
@@ -1283,7 +1283,9 @@ mod tests {
         // The dates arrived, and received files carry the mark of the web.
         let meta = std::fs::metadata(recv_dir.join("hello.bin")).unwrap();
         assert_eq!(meta.modified().unwrap(), file_modified);
-        assert_eq!(meta.created().unwrap(), file_created);
+        if crate::archive::testing::CREATION_TIMES {
+            assert_eq!(meta.created().unwrap(), file_created);
+        }
         let marked = crate::archive::testing::has_mark;
         assert!(marked(&recv_dir.join("hello.bin")));
         let modified = |p: PathBuf| std::fs::metadata(p).unwrap().modified().unwrap();
@@ -1789,6 +1791,7 @@ mod tests {
         };
         let receive = |token: u8, name: &str| {
             let part = dir.join(name);
+            std::fs::create_dir_all(part.parent().unwrap()).unwrap();
             std::fs::write(&part, b"abc").unwrap();
             let side = session::Side::Receive {
                 dest_dir: dir.clone(),
@@ -1819,7 +1822,9 @@ mod tests {
         expired.save(&dir).unwrap();
         make_old(3);
         // It was being unpacked; its part cannot be deleted now.
-        let (mut ended, ended_part) = receive(4, "ended.part");
+        // The parts that are held are in folders of their own: on Linux a
+        // hold closes the folder (see `archive::testing::hold`).
+        let (mut ended, ended_part) = receive(4, "held/ended.part");
         let ended_folder = dir.join("ended");
         std::fs::create_dir_all(&ended_folder).unwrap();
         std::fs::write(ended_folder.join("one.txt"), b"1").unwrap();
@@ -1830,7 +1835,7 @@ mod tests {
         }
         ended.save(&dir).unwrap();
         let held_ended = hold(&ended_part);
-        let (mut given_up, given_up_part) = receive(5, "given-up.part");
+        let (mut given_up, given_up_part) = receive(5, "held-too/given-up.part");
         given_up.ended = true;
         given_up.ended_at = Some(month_ago);
         given_up.save(&dir).unwrap();

@@ -448,7 +448,7 @@ struct Receiver<'a> {
     /// after a restart.
     hasher: Option<blake3::Hasher>,
     /// `hasher` is of the part on disk, and no data was written since.
-    #[cfg(target_os = "macos")]
+    #[cfg(unix)]
     hashed_from_disk: bool,
     /// The sender's hash of the whole item, once `Done` arrived.
     done_hash: Option<[u8; 32]>,
@@ -568,7 +568,7 @@ async fn accept(
         size,
         have: 0,
         hasher: Some(blake3::Hasher::new()),
-        #[cfg(target_os = "macos")]
+        #[cfg(unix)]
         hashed_from_disk: false,
         done_hash: None,
         status: Status::new(shared, id, ctl.paused.subscribe()),
@@ -724,14 +724,14 @@ fn open_to_hash(_session: &Session, path: &Path, pauses: &[u64]) -> io::Result<s
 
 /// Opens the part file to hash it (see `Receiver::rehash`): only while it is
 /// still the part, as told by the handle that is read, since no connection
-/// keeps others from replacing it on macOS.
-#[cfg(target_os = "macos")]
+/// keeps others from replacing it on POSIX.
+#[cfg(unix)]
 fn open_to_hash(session: &Session, _path: &Path, pauses: &[u64]) -> io::Result<std::fs::File> {
     open_checked(session, &archive::last_step_options(false), pauses).map(|(part, _)| part)
 }
 
 /// Writes what arrived to the disk.
-#[cfg(windows)]
+#[cfg(not(target_os = "macos"))]
 async fn sync_part(out: &tokio::fs::File) -> io::Result<()> {
     out.sync_data().await
 }
@@ -875,7 +875,7 @@ impl<'a> Receiver<'a> {
             size: record.offer.size,
             have: record.have().min(record.offer.size),
             hasher: None,
-            #[cfg(target_os = "macos")]
+            #[cfg(unix)]
             hashed_from_disk: false,
             done_hash: record.done_hash,
             status: Status::new(shared, id, ctl.paused.subscribe()),
@@ -1177,7 +1177,7 @@ impl<'a> Receiver<'a> {
     /// others from moving or deleting it on macOS during a connection, and
     /// writes to a file that is in the Trash would be lost: better to know
     /// now than after the rest of the data.
-    #[cfg(target_os = "macos")]
+    #[cfg(unix)]
     async fn check_part(&self) -> anyhow::Result<()> {
         let session = self.session.clone();
         let there = off_runtime(move || {
@@ -1229,7 +1229,7 @@ impl<'a> Receiver<'a> {
         // More than arrived means that another program has written to it,
         // and the part cannot be trusted (see `archive::macos`). On Windows
         // the handle that writes keeps others out.
-        #[cfg(target_os = "macos")]
+        #[cfg(unix)]
         if file.metadata()?.len() != have {
             bail!(tr!(error_damaged));
         }
@@ -1255,7 +1255,7 @@ impl<'a> Receiver<'a> {
         })
         .await??;
         self.hasher = Some(hasher);
-        #[cfg(target_os = "macos")]
+        #[cfg(unix)]
         {
             self.hashed_from_disk = true;
         }
@@ -1305,7 +1305,7 @@ impl<'a> Receiver<'a> {
         // On macOS nothing keeps other programs from writing to the part
         // during a connection (see `archive::macos`), and the hash so far is
         // of what arrived: what counts is what is on disk.
-        #[cfg(target_os = "macos")]
+        #[cfg(unix)]
         if !self.hashed_from_disk {
             self.hasher = None;
             self.rehash().await?;
@@ -1365,7 +1365,7 @@ impl<'a> Receiver<'a> {
                     recv.read_exact(&mut buf[..len]).await.map_err(lost)?;
                     out.write_all(&buf[..len]).await?;
                     self.hasher.as_mut().unwrap().update(&buf[..len]);
-                    #[cfg(target_os = "macos")]
+                    #[cfg(unix)]
                     {
                         self.hashed_from_disk = false;
                     }
@@ -1375,7 +1375,7 @@ impl<'a> Receiver<'a> {
                         sync_part(out).await?;
                         self.save_synced().await;
                         unsynced = 0;
-                        #[cfg(target_os = "macos")]
+                        #[cfg(unix)]
                         self.check_part().await?;
                     }
                     if throttle.ready() || self.have == self.size {
@@ -1891,6 +1891,7 @@ mod tests {
     /// on FAT and exFAT the time tells the part from such a file. The time
     /// is a whole multiple of the 10 ms that those file systems keep.
     #[test]
+    #[cfg(any(windows, target_os = "macos"))]
     fn a_new_part_is_created_now() {
         let base = scratch("created-now");
         let old = base.join("a.txt.part");
@@ -1958,17 +1959,20 @@ mod tests {
         assert_eq!(std::fs::read(&part).unwrap(), b"another");
 
         // On FAT and exFAT the creation time tells.
-        archive::PRETEND_FAT.set(true);
-        std::fs::remove_file(&part).unwrap();
-        std::fs::write(&part, b"abc").unwrap();
-        let transfer = receiving(&base, &part, Kind::File, ReceivedFolder::Extract);
-        drop(open_own_part(&transfer.session, &[]).unwrap());
-        let created = std::fs::metadata(&part).unwrap().created().unwrap();
-        std::fs::remove_file(&part).unwrap();
-        std::fs::write(&part, b"another").unwrap();
-        archive::set_times(&part, None, Some(created + Duration::from_secs(2))).unwrap();
-        assert!(open_own_part(&transfer.session, &[]).is_err());
-        archive::PRETEND_FAT.set(false);
+        #[cfg(any(windows, target_os = "macos"))]
+        {
+            archive::PRETEND_FAT.set(true);
+            std::fs::remove_file(&part).unwrap();
+            std::fs::write(&part, b"abc").unwrap();
+            let transfer = receiving(&base, &part, Kind::File, ReceivedFolder::Extract);
+            drop(open_own_part(&transfer.session, &[]).unwrap());
+            let created = std::fs::metadata(&part).unwrap().created().unwrap();
+            std::fs::remove_file(&part).unwrap();
+            std::fs::write(&part, b"another").unwrap();
+            archive::set_times(&part, None, Some(created + Duration::from_secs(2))).unwrap();
+            assert!(open_own_part(&transfer.session, &[]).is_err());
+            archive::PRETEND_FAT.set(false);
+        }
         std::fs::remove_dir_all(&base).ok();
     }
 
@@ -2220,6 +2224,7 @@ mod tests {
 
     /// `transfer` with its last step's word that it waits for another
     /// program, or goes on, noted in the result (see `Transfer::open_part`).
+    #[cfg(any(windows, target_os = "macos"))]
     fn noting_waits(transfer: &mut Transfer) -> Arc<std::sync::Mutex<Vec<bool>>> {
         let noted = Arc::new(std::sync::Mutex::new(Vec::new()));
         let notes = noted.clone();
@@ -2251,6 +2256,8 @@ mod tests {
     /// saying so after a moment and once it goes on, and nothing of what
     /// arrived is lost.
     #[test]
+    // Linux has nothing that keeps a file to its readers.
+    #[cfg(any(windows, target_os = "macos"))]
     fn a_part_that_is_only_unpacked_is_only_read() {
         let base = scratch("only-read");
         let part = received_zip(&base, "recv.zip");
@@ -2518,9 +2525,10 @@ mod tests {
         assert_eq!(std::fs::read(&path).unwrap(), b"new");
         assert!(!part.exists());
         let meta = std::fs::metadata(&path).unwrap();
+        let created = archive::testing::CREATION_TIMES.then(|| meta.created().unwrap());
         assert_eq!(
-            (meta.modified().unwrap(), meta.created().unwrap()),
-            (at, at)
+            (meta.modified().unwrap(), created),
+            (at, archive::testing::kept(at))
         );
         assert!(transfer.session.with_record(|_| ()).is_none());
         std::fs::remove_dir_all(&base).ok();

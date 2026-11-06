@@ -68,11 +68,15 @@ windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_UI_Wind
 [target.'cfg(target_os = "macos")'.dependencies]
 core-foundation = "0.10"
 core-foundation-sys = "0.8"
+
+[target.'cfg(unix)'.dependencies]
 libc = "0.2"
 
 [build-dependencies]
 embed-resource = "3.0.12"
 
+# Never `panic = "abort"`: the Mac and Android bridges catch panics at their
+# edge, and iroh's crates tell a missing Android context by catching one.
 [profile.release]
 lto = true
 codegen-units = 1
