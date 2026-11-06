@@ -6,9 +6,12 @@
 //!
 //!     send <contact id> <path>
 //!     pause <id> | resume <id> | cancel <id>
+//!     netchange   (tells it that the network changed, as an Android app does)
 //!     quit
 //!
 //! Its Contact ID is printed at the start, and stays the same for a profile.
+//! On Android (run through `adb shell`), `DODAVO_DATA_DIR`, `DODAVO_TEMP_DIR`
+//! and `DODAVO_DOWNLOADS_DIR` give it the folders that the app would.
 
 use std::{
     io::BufRead,
@@ -26,14 +29,14 @@ use dodavo_core::{
 
 fn main() {
     let mut profile = "peer".to_string();
-    let mut out = dodavo_core::platform::downloads_dir().join("peer");
+    let mut out = None;
     let mut folder = ReceivedFolder::Extract;
     let mut args = std::env::args().skip(1);
     while let Some(arg) = args.next() {
         let mut value = || args.next().expect("a value after the option");
         match arg.as_str() {
             "--profile" => profile = value(),
-            "--out" => out = PathBuf::from(value()),
+            "--out" => out = Some(PathBuf::from(value())),
             "--keep" => {
                 folder = match value().as_str() {
                     "zip" => ReceivedFolder::KeepZip,
@@ -44,6 +47,7 @@ fn main() {
             other => panic!("unknown option {other}"),
         }
     }
+    let out = out.unwrap_or_else(|| dodavo_core::platform::downloads_dir().join("peer"));
     i18n::init(None);
     let data_dir = config::data_dir(Some(&profile));
     let secret = identity::load_or_create(&data_dir).expect("the identity");
@@ -122,9 +126,10 @@ fn main() {
                     peer_name: "peer".into(),
                 });
             }
+            ("netchange", _) => send(Command::NetworkChange),
             ("quit", _) => break,
             ("", _) => {}
-            _ => println!("send, pause, resume, cancel or quit"),
+            _ => println!("send, pause, resume, cancel, netchange or quit"),
         }
     }
     if let Some(net) = &*handle.lock().unwrap() {

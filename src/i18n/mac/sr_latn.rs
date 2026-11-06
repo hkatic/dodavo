@@ -254,6 +254,7 @@ pub const SR_LATN: Strings = Strings {
     phase_peer_part_in_use: "Na drugoj strani ({name}) delimično primljenu datoteku koristi druga aplikacija. Prenos se nastavlja čim je ta aplikacija zatvori.",
     part_in_use_balloon: "„{item}“: delimično primljenu datoteku koristi druga aplikacija ili macOS nije dozvolio pristup njoj. Prenos se nastavlja čim se to promeni.",
     peer_part_in_use_balloon: "„{item}“: na drugoj strani ({name}) delimično primljenu datoteku koristi druga aplikacija. Prenos se nastavlja čim je ta aplikacija zatvori.",
+    notify_saved: "Sačuvano: „{item}“ (pošiljalac: {name}). Kliknite za prikaz.",
     update_installing: "Instalacija ažuriranja… Dodavo se ponovo otvara kada se završi.",
     update_err_not_signed: "Preuzeto ažuriranje nema očekivani potpis.",
     update_err_mount: "Preuzetu sliku diska nije moguće otvoriti: {detail}",

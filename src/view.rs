@@ -690,7 +690,7 @@ impl TransferView {
         }
         .to_string();
         let text = if completed && self.dir == Direction::Receive {
-            tr!(notify_saved, item = self.item, name = self.peer)
+            os_tr!(notify_saved, item = self.item, name = self.peer)
         } else {
             tr!(notify_status, item = self.item, status = status)
         };

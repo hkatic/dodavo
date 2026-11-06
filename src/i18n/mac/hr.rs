@@ -254,6 +254,7 @@ pub const HR: Strings = Strings {
     phase_peer_part_in_use: "Na drugoj strani ({name}) djelomično primljenu datoteku koristi druga aplikacija. Prijenos se nastavlja čim je ta aplikacija zatvori.",
     part_in_use_balloon: "„{item}”: djelomično primljenu datoteku koristi druga aplikacija ili macOS nije dopustio pristup njoj. Prijenos se nastavlja čim se to promijeni.",
     peer_part_in_use_balloon: "„{item}”: na drugoj strani ({name}) djelomično primljenu datoteku koristi druga aplikacija. Prijenos se nastavlja čim je ta aplikacija zatvori.",
+    notify_saved: "Spremljeno: „{item}” (pošiljatelj: {name}). Kliknite za prikaz.",
     update_installing: "Instalacija ažuriranja… Dodavo se ponovno otvara kada završi.",
     update_err_not_signed: "Preuzeto ažuriranje nema očekivani potpis.",
     update_err_mount: "Preuzetu sliku diska nije moguće otvoriti: {detail}",

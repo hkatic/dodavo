@@ -9,7 +9,9 @@ pub const AUTHOR: &str = env!("CARGO_PKG_AUTHORS");
 pub const WEBSITE: &str = env!("CARGO_PKG_REPOSITORY");
 pub const COPYRIGHT_YEARS: &str = env!("DODAVO_COPYRIGHT_YEARS");
 /// The page that Help → Donate opens. The help pages name it too (a test
-/// checks them).
+/// checks them). Not on Android: Google Play allows no payment outside its
+/// own but to charities.
+#[cfg(not(target_os = "android"))]
 pub const DONATE_URL: &str = "https://paypal.me/hrvix";
 
 pub mod archive;
@@ -19,6 +21,9 @@ pub mod i18n;
 pub mod identity;
 pub mod net;
 pub mod platform;
+pub mod source;
 pub mod space;
+/// Not on Android, which Google Play alone updates.
+#[cfg(not(target_os = "android"))]
 pub mod update;
 pub mod view;

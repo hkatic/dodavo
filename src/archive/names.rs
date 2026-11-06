@@ -87,8 +87,8 @@ pub(super) fn utf16_units(name: &str) -> usize {
     name.encode_utf16().count()
 }
 
-/// Counts what APFS limits a name to.
-#[cfg(any(target_os = "macos", test))]
+/// Counts what APFS and Linux file systems limit a name to.
+#[cfg(any(unix, test))]
 pub(super) fn bytes(name: &str) -> usize {
     name.len()
 }
@@ -166,9 +166,9 @@ pub(super) fn link_stays_inside(levels: usize, target: &str) -> bool {
     true
 }
 
-/// Whether `name` can be a single name on macOS as it is. A name from a peer
-/// must pass this before it is used: it decides where a file goes.
-#[cfg(any(target_os = "macos", test))]
+/// Whether `name` can be a single name on macOS (and Linux) as it is. A name
+/// from a peer must pass this before it is used: it decides where a file goes.
+#[cfg(any(unix, test))]
 pub(super) fn is_mac_name(name: &str) -> bool {
     !name.is_empty()
         && name.len() <= 255

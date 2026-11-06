@@ -39,6 +39,15 @@ pub enum Command {
         /// The recipient's name as shown in the window, kept for a restart.
         peer_name: String,
     },
+    /// A send of a document that the user chose in Android's pickers, which
+    /// is read where it is (see [`crate::source`]).
+    SendDocument {
+        id: u64,
+        to: EndpointId,
+        document: crate::source::Document,
+        my_name: String,
+        peer_name: String,
+    },
     /// Answer to an incoming offer: `Some` accepts it, `None` declines.
     Respond {
         id: u64,
@@ -53,6 +62,10 @@ pub enum Command {
     Resume {
         id: u64,
     },
+    /// The system says that the network changed (another Wi-Fi, mobile
+    /// data, or back from sleep). Android tells only the app, so iroh hears
+    /// it from there; elsewhere iroh watches the network itself.
+    NetworkChange,
     /// Closes the transfer's connection as if the network had dropped it.
     #[cfg(test)]
     DropConnection {
@@ -227,7 +240,7 @@ pub(crate) fn connect_error_text(error: &iroh::endpoint::ConnectError) -> String
 /// See [`failure_text`].
 fn io_error_text(error: &std::io::Error) -> String {
     // The system's own texts are in English here, whatever the user's language.
-    #[cfg(target_os = "macos")]
+    #[cfg(unix)]
     if let Some(text) = error.raw_os_error().and_then(crate::platform::error_text) {
         return text;
     }
@@ -603,6 +616,29 @@ pub fn start(
     NetHandle { tx, blocked }
 }
 
+/// Runs a send of `what` to its outcome, as a task of its own.
+fn start_send(
+    shared: &Arc<Shared>,
+    endpoint: &Endpoint,
+    id: u64,
+    to: EndpointId,
+    what: send::What,
+    my_name: String,
+    peer_name: String,
+) {
+    let ctl = shared.register(id, false);
+    let shared = shared.clone();
+    let endpoint = endpoint.clone();
+    tokio::spawn(async move {
+        let task = {
+            let shared = shared.clone();
+            async move { send::run(&shared, &endpoint, id, to, what, my_name, peer_name, ctl).await }
+        };
+        let outcome = guarded(&shared, id, task).await;
+        shared.finish(id, outcome);
+    });
+}
+
 async fn bind(secret: SecretKey) -> anyhow::Result<Endpoint> {
     let endpoint = Endpoint::builder(presets::N0)
         .secret_key(secret)
@@ -769,10 +805,24 @@ async fn restore(shared: &Arc<Shared>, endpoint: &Endpoint) {
 fn missing_text(record: &TransferRecord) -> String {
     use crate::i18n::tr;
     match &record.side {
-        session::Side::Send { source, .. } if !source.exists() => match record.offer.kind {
-            Kind::File => tr!(error_file_missing, path = source.display()),
-            Kind::Folder => tr!(error_folder_missing, path = source.display()),
-        },
+        session::Side::Send {
+            source,
+            staging: None,
+            ..
+        } if !(record.offer.kind == Kind::Folder && crate::source::is_document(source))
+            && !crate::source::exists(source) =>
+        {
+            // A document by its name, as the app shows it.
+            let path = if crate::source::is_document(source) {
+                record.offer.name.clone()
+            } else {
+                source.display().to_string()
+            };
+            match record.offer.kind {
+                Kind::File => tr!(error_file_missing, path = path),
+                Kind::Folder => tr!(error_folder_missing, path = path),
+            }
+        }
         _ => tr!(error_part_missing).into(),
     }
 }
@@ -938,22 +988,22 @@ async fn run(secret: SecretKey, shared: Arc<Shared>, mut rx: mpsc::UnboundedRece
                 my_name,
                 peer_name,
             } => {
-                let ctl = shared.register(id, false);
-                let shared = shared.clone();
-                let endpoint = endpoint.clone();
-                tokio::spawn(async move {
-                    let task = {
-                        let shared = shared.clone();
-                        async move {
-                            send::run(
-                                &shared, &endpoint, id, to, path, kind, my_name, peer_name, ctl,
-                            )
-                            .await
-                        }
-                    };
-                    let outcome = guarded(&shared, id, task).await;
-                    shared.finish(id, outcome);
-                });
+                let what = send::What {
+                    path,
+                    kind,
+                    document: None,
+                };
+                start_send(&shared, &endpoint, id, to, what, my_name, peer_name);
+            }
+            Command::SendDocument {
+                id,
+                to,
+                document,
+                my_name,
+                peer_name,
+            } => {
+                let what = send::What::document(document);
+                start_send(&shared, &endpoint, id, to, what, my_name, peer_name);
             }
             Command::Respond { id, accept } => {
                 if let Some(tx) = shared.pending.lock().unwrap().remove(&id) {
@@ -974,6 +1024,10 @@ async fn run(secret: SecretKey, shared: Arc<Shared>, mut rx: mpsc::UnboundedRece
                 if let Some(ctl) = shared.control(id) {
                     ctl.paused.send_replace(false);
                 }
+            }
+            Command::NetworkChange => {
+                let endpoint = endpoint.clone();
+                tokio::spawn(async move { endpoint.network_change().await });
             }
             #[cfg(test)]
             Command::DropConnection { id } => {
@@ -1283,7 +1337,9 @@ mod tests {
         // The dates arrived, and received files carry the mark of the web.
         let meta = std::fs::metadata(recv_dir.join("hello.bin")).unwrap();
         assert_eq!(meta.modified().unwrap(), file_modified);
-        assert_eq!(meta.created().unwrap(), file_created);
+        if crate::archive::testing::CREATION_TIMES {
+            assert_eq!(meta.created().unwrap(), file_created);
+        }
         let marked = crate::archive::testing::has_mark;
         assert!(marked(&recv_dir.join("hello.bin")));
         let modified = |p: PathBuf| std::fs::metadata(p).unwrap().modified().unwrap();
@@ -1370,6 +1426,160 @@ mod tests {
         b.send(Command::Respond { id, accept: None });
         let outcome = wait_finished(&rx_a, second);
         assert!(matches!(outcome, Outcome::Declined), "{outcome:?}");
+        std::fs::remove_dir_all(&base).ok();
+    }
+
+    /// A copy of a shared item in the sender's staging folder goes with its
+    /// transfer: when it completed, when it was declined, and a folder's as
+    /// soon as it is packed.
+    #[test]
+    fn a_shared_copy_goes_with_its_transfer() {
+        let base = scratch("staged");
+        let (tx_a, rx_a) = mpsc::channel();
+        let (tx_b, rx_b) = mpsc::channel();
+        let key_b = SecretKey::generate();
+        let id_b = key_b.public();
+        let temp_a = base.join("temp-a");
+        let a = start(SecretKey::generate(), base.join("a"), temp_a.clone(), [], sink(tx_a));
+        let b = start(key_b, base.join("b"), base.join("temp-b"), [], sink(tx_b));
+        wait_for(&rx_a, |e| matches!(e, Event::Online(true)));
+        wait_for(&rx_b, |e| matches!(e, Event::Online(true)));
+        let staging = session::staging_root(&temp_a);
+        let copy = |folder: &str, name: &str| {
+            let path = staging.join(folder).join(name);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            path
+        };
+        let received = base.join("received");
+        let send_and_answer = |path: PathBuf, kind: Kind, accept: bool| {
+            let id = next_transfer_id();
+            a.send(Command::Send {
+                id,
+                to: id_b,
+                path,
+                kind,
+                my_name: "A".into(),
+                peer_name: "B".into(),
+            });
+            let Event::Offer { id: offered, .. } = wait_for(&rx_b, |e| matches!(e, Event::Offer { .. }))
+            else {
+                unreachable!()
+            };
+            let accept = accept.then(|| Accept {
+                dir: received.clone(),
+                folder: ReceivedFolder::Extract,
+            });
+            b.send(Command::Respond { id: offered, accept });
+            wait_finished(&rx_a, id)
+        };
+
+        let file = copy("one", "note.txt");
+        std::fs::write(&file, b"hello").unwrap();
+        let outcome = send_and_answer(file.clone(), Kind::File, true);
+        assert!(matches!(outcome, Outcome::Completed(_)), "{outcome:?}");
+        assert_eq!(std::fs::read(received.join("note.txt")).unwrap(), b"hello");
+        assert!(!staging.join("one").exists(), "completed");
+
+        let file = copy("two", "declined.txt");
+        std::fs::write(&file, b"no").unwrap();
+        let outcome = send_and_answer(file, Kind::File, false);
+        assert!(matches!(outcome, Outcome::Declined), "{outcome:?}");
+        assert!(!staging.join("two").exists(), "declined");
+
+        let folder = copy("three", "Photos").join("a.txt");
+        std::fs::create_dir_all(folder.parent().unwrap()).unwrap();
+        std::fs::write(&folder, b"alpha").unwrap();
+        let outcome = send_and_answer(staging.join("three").join("Photos"), Kind::Folder, true);
+        assert!(matches!(outcome, Outcome::Completed(_)), "{outcome:?}");
+        assert_eq!(std::fs::read(received.join("Photos").join("a.txt")).unwrap(), b"alpha");
+        assert!(!staging.join("three").exists(), "packed and completed");
+        std::fs::remove_dir_all(&base).ok();
+    }
+
+    /// A document from Android's pickers goes as the app describes it: a
+    /// file under the name and date the app gives, read from where it is,
+    /// and a folder packed from what the app lists of it.
+    #[test]
+    fn a_document_goes_as_the_app_describes_it() {
+        let base = scratch("document");
+        let (tx_a, rx_a) = mpsc::channel();
+        let (tx_b, rx_b) = mpsc::channel();
+        let key_b = SecretKey::generate();
+        let id_b = key_b.public();
+        let a = start(SecretKey::generate(), base.join("a"), base.join("temp-a"), [], sink(tx_a));
+        let b = start(key_b, base.join("b"), base.join("temp-b"), [], sink(tx_b));
+        wait_for(&rx_a, |e| matches!(e, Event::Online(true)));
+        wait_for(&rx_b, |e| matches!(e, Event::Online(true)));
+        let stored = base.join("stored");
+        std::fs::create_dir_all(&stored).unwrap();
+        let data = |name: &str, bytes: &[u8]| {
+            let path = stored.join(name);
+            std::fs::write(&path, bytes).unwrap();
+            path.display().to_string()
+        };
+        let received = base.join("received");
+        let send_and_accept = |document: crate::source::Document| {
+            let id = next_transfer_id();
+            a.send(Command::SendDocument {
+                id,
+                to: id_b,
+                document,
+                my_name: "A".into(),
+                peer_name: "B".into(),
+            });
+            let Event::Offer { id: offered, offer, .. } =
+                wait_for(&rx_b, |e| matches!(e, Event::Offer { .. }))
+            else {
+                unreachable!()
+            };
+            b.send(Command::Respond {
+                id: offered,
+                accept: Some(Accept {
+                    dir: received.clone(),
+                    folder: ReceivedFolder::Extract,
+                }),
+            });
+            (offer, wait_finished(&rx_a, id))
+        };
+
+        let modified = 1_600_000_000_000;
+        let (offer, outcome) = send_and_accept(crate::source::Document {
+            uri: data("1", b"hello"),
+            name: "Report.txt".into(),
+            modified: Some(modified),
+            items: None,
+        });
+        assert!(matches!(outcome, Outcome::Completed(_)), "{outcome:?}");
+        assert_eq!(offer.name, "Report.txt");
+        let report = received.join("Report.txt");
+        assert_eq!(std::fs::read(&report).unwrap(), b"hello");
+        assert_eq!(
+            report.metadata().unwrap().modified().ok(),
+            crate::source::millis_to_system(modified)
+        );
+        assert!(stored.join("1").exists(), "a document is never deleted");
+
+        let item = |path: &[&str], uri: Option<String>| crate::source::Item {
+            path: path.iter().map(|p| p.to_string()).collect(),
+            folder: uri.is_none(),
+            size: uri.as_ref().map_or(0, |u| std::fs::metadata(u).unwrap().len()),
+            modified: None,
+            uri: uri.unwrap_or_default(),
+        };
+        let (offer, outcome) = send_and_accept(crate::source::Document {
+            uri: base.join("not-a-folder").display().to_string(),
+            name: "Trip".into(),
+            modified: None,
+            items: Some(vec![
+                item(&["sub"], None),
+                item(&["sub", "b.txt"], Some(data("2", b"beta"))),
+                item(&["a.txt"], Some(data("3", b"alpha"))),
+            ]),
+        });
+        assert!(matches!(outcome, Outcome::Completed(_)), "{outcome:?}");
+        assert_eq!((offer.kind, offer.file_count, offer.content_size), (Kind::Folder, 2, 9));
+        assert_eq!(std::fs::read(received.join("Trip/a.txt")).unwrap(), b"alpha");
+        assert_eq!(std::fs::read(received.join("Trip/sub/b.txt")).unwrap(), b"beta");
         std::fs::remove_dir_all(&base).ok();
     }
 
@@ -1789,6 +1999,7 @@ mod tests {
         };
         let receive = |token: u8, name: &str| {
             let part = dir.join(name);
+            std::fs::create_dir_all(part.parent().unwrap()).unwrap();
             std::fs::write(&part, b"abc").unwrap();
             let side = session::Side::Receive {
                 dest_dir: dir.clone(),
@@ -1819,7 +2030,9 @@ mod tests {
         expired.save(&dir).unwrap();
         make_old(3);
         // It was being unpacked; its part cannot be deleted now.
-        let (mut ended, ended_part) = receive(4, "ended.part");
+        // The parts that are held are in folders of their own: on Linux a
+        // hold closes the folder (see `archive::testing::hold`).
+        let (mut ended, ended_part) = receive(4, "held/ended.part");
         let ended_folder = dir.join("ended");
         std::fs::create_dir_all(&ended_folder).unwrap();
         std::fs::write(ended_folder.join("one.txt"), b"1").unwrap();
@@ -1830,7 +2043,7 @@ mod tests {
         }
         ended.save(&dir).unwrap();
         let held_ended = hold(&ended_part);
-        let (mut given_up, given_up_part) = receive(5, "given-up.part");
+        let (mut given_up, given_up_part) = receive(5, "held-too/given-up.part");
         given_up.ended = true;
         given_up.ended_at = Some(month_ago);
         given_up.save(&dir).unwrap();
@@ -1848,6 +2061,7 @@ mod tests {
                 source_mtime: None,
                 data_path: source.clone(),
                 sent: 0,
+                staging: None,
             },
         );
         sent.done_sent = true;
@@ -2089,6 +2303,7 @@ mod tests {
             source_mtime: None,
             data_path: source.clone(),
             sent: 0,
+            staging: None,
         };
         let record = file_record(1, &peer, 3, side);
         assert_eq!(
@@ -2129,6 +2344,7 @@ mod tests {
                 source_mtime: None,
                 data_path: zip,
                 sent: 0,
+                staging: None,
             },
         );
         record.done_sent = true;
@@ -2195,6 +2411,7 @@ mod tests {
                 source_mtime: None,
                 data_path: dir.join("a.bin"),
                 sent: 0,
+                staging: None,
             },
         );
         record.done_sent = true;
@@ -2254,6 +2471,7 @@ mod tests {
                 source_mtime: None,
                 data_path: dir.join("a.bin"),
                 sent: 0,
+                staging: None,
             },
         );
         let (send, _rx) = Session::new(1, record.token, peer, Role::Send);
@@ -2296,6 +2514,7 @@ mod tests {
                 source_mtime: None,
                 data_path: dir.join("a.bin"),
                 sent: 0,
+                staging: None,
             },
         );
         record.done_sent = true;
@@ -2336,6 +2555,7 @@ mod tests {
             source_mtime: None,
             data_path: dir.join("gone.bin"),
             sent: 0,
+            staging: None,
         };
         let mut record = file_record(3, &peer, 3, side);
         assert!(!record.can_go_on());

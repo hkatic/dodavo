@@ -1,35 +1,51 @@
 //! The state of the program, as `app.rs` holds it for the Win32 interface.
 
 use std::{
-    collections::{BTreeMap, HashMap, VecDeque},
+    collections::{BTreeMap, BTreeSet, HashMap, VecDeque},
     fs::File,
     io,
     os::fd::AsRawFd,
     path::{Path, PathBuf},
-    sync::{Mutex, MutexGuard, mpsc},
+    sync::{Condvar, Mutex, MutexGuard, mpsc},
     time::{Duration, Instant},
 };
 
 use dodavo_core::{
     archive,
     config::{self, Config, Contact, ReceivedFolder},
-    format::format_size,
-    i18n::{self, Lang, mac, tr},
+    i18n::{self, Lang, tr},
     identity,
-    net::{self, Accept, Command, Event, Kind, NetHandle, Offer, Outcome, Role},
+    net::{
+        self, Accept, Command, Event, Kind, NetHandle, Offer, Outcome, Role, TransferRecord,
+        session::Side,
+    },
     space::{self, Space},
-    update,
-    view::{Direction, Notice, Row, TransferView, percent},
+    view::{Direction, Notice, Row, TransferView},
 };
+#[cfg(target_os = "macos")]
+use dodavo_core::{format::format_size, update, view::percent};
+// The texts of this system's user interface: the Mac's or Android's.
+#[cfg(not(target_os = "macos"))]
+use dodavo_core::i18n::android as table;
+#[cfg(target_os = "macos")]
+use dodavo_core::i18n::mac as table;
 use serde::{Deserialize, Serialize};
 
 use crate::Wake;
+
+/// The table of this system's user interface (see `table`).
+fn ui() -> &'static table::Strings {
+    table::s()
+}
 
 /// How often the speed is worked out anew, also when no report comes.
 const TICK: Duration = Duration::from_secs(1);
 /// Copyright years and website, from Cargo.toml through `build.rs`.
 const LICENSE: &str = include_str!("../../../LICENSE");
+#[cfg(target_os = "macos")]
 const COMPONENTS: &str = include_str!("../../../res/third-party-licenses-macos.txt");
+#[cfg(not(target_os = "macos"))]
+const COMPONENTS: &str = include_str!("../../../res/third-party-licenses-android.txt");
 
 /// The command line.
 #[derive(Debug, Default, Deserialize)]
@@ -38,6 +54,22 @@ pub struct Options {
     profile: Option<String>,
     /// Started to run in the background (at login).
     hidden: bool,
+    /// Android: the folders that only the app can ask the system for (see
+    /// `platform::set_dirs`).
+    #[cfg(not(target_os = "macos"))]
+    data_dir: PathBuf,
+    #[cfg(not(target_os = "macos"))]
+    temp_dir: PathBuf,
+    #[cfg(not(target_os = "macos"))]
+    downloads_dir: PathBuf,
+    /// Android: the code of the language that the app's own texts are in, so
+    /// that what this says always matches them.
+    #[cfg(not(target_os = "macos"))]
+    language: Option<String>,
+    #[cfg(not(target_os = "macos"))]
+    languages: Vec<String>,
+    #[cfg(not(target_os = "macos"))]
+    device_name: Option<String>,
 }
 
 /// What the user interface needs to begin.
@@ -53,11 +85,16 @@ pub struct Started {
     profile: Option<String>,
     language: String,
     version: String,
+    author: String,
     copyright: String,
     website: String,
+    #[cfg(target_os = "macos")]
     donate_url: String,
+    #[cfg(target_os = "macos")]
     start_hidden: bool,
+    #[cfg(target_os = "macos")]
     show_in_menu_bar: bool,
+    #[cfg(target_os = "macos")]
     open_at_login: bool,
     /// Each language by its code, with its own name for it.
     languages: Vec<(&'static str, &'static str)>,
@@ -94,28 +131,38 @@ enum Out {
         id: u64,
         notice: Notice,
     },
+    /// No send reads the document `uri` any more: the app's permission for
+    /// it can go.
+    DocumentDone {
+        uri: String,
+    },
     /// Whether the computer must stay awake.
     Busy {
         busy: bool,
     },
+    #[cfg(target_os = "macos")]
     UpdateAvailable {
         headline: String,
         notes: String,
         /// The user asked: comes to the front.
         manual: bool,
     },
+    #[cfg(target_os = "macos")]
     /// What the user asked for has an answer that needs no window.
     UpdateAnswer {
         text: String,
     },
+    #[cfg(target_os = "macos")]
     UpdateProgress {
         text: String,
         fraction: Option<f64>,
     },
+    #[cfg(target_os = "macos")]
     /// The disk image is here and checked.
     UpdateReady {
         path: PathBuf,
     },
+    #[cfg(target_os = "macos")]
     UpdateFailed {
         text: String,
     },
@@ -173,18 +220,31 @@ enum Call {
         peer_id: String,
         paths: Vec<PathBuf>,
     },
+    /// Documents that the user chose in Android's pickers, read where they
+    /// are (see `dodavo_core::source`).
+    SendDocuments {
+        peer_id: String,
+        documents: Vec<dodavo_core::source::Document>,
+    },
+    /// The documents that sends still read: what the app must keep its
+    /// permission for.
+    Documents,
+    /// Without a folder (Android): Downloads.
     Space {
         id: u64,
-        dir: PathBuf,
+        #[serde(default)]
+        dir: Option<PathBuf>,
     },
     /// What stands in the way of accepting into `dir`.
     CheckAccept {
         id: u64,
-        dir: PathBuf,
+        #[serde(default)]
+        dir: Option<PathBuf>,
     },
     Accept {
         id: u64,
-        dir: PathBuf,
+        #[serde(default)]
+        dir: Option<PathBuf>,
     },
     Decline {
         id: u64,
@@ -244,15 +304,30 @@ enum Call {
     CancelAll,
     Licenses,
     Shutdown,
+    #[cfg(target_os = "macos")]
     CheckForUpdates,
+    #[cfg(target_os = "macos")]
     DownloadUpdate,
+    #[cfg(target_os = "macos")]
     CancelUpdate,
+    #[cfg(target_os = "macos")]
     RemindLater,
     /// The update window was closed.
+    #[cfg(target_os = "macos")]
     UpdateClosed,
+    /// Android: the system says that the network changed.
+    #[cfg(not(target_os = "macos"))]
+    NetworkChanged,
+    /// Android: the user chose another language for the app, whose texts
+    /// are in the language with this code now.
+    #[cfg(not(target_os = "macos"))]
+    SetLanguage {
+        code: String,
+    },
 }
 
 /// The settings as the Settings window shows them.
+#[cfg(target_os = "macos")]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct Settings {
     my_name: String,
@@ -264,6 +339,16 @@ struct Settings {
     language: Option<String>,
     always_save: bool,
     always_save_dir: Option<PathBuf>,
+    auto_accept: bool,
+    received_folder: ReceivedFolder,
+}
+
+/// The settings as Android's Settings screen shows them. Received items go to
+/// Downloads (`Download/Dodavo`), and the system keeps the app's language.
+#[cfg(not(target_os = "macos"))]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct Settings {
+    my_name: String,
     auto_accept: bool,
     received_folder: ReceivedFolder,
 }
@@ -285,11 +370,17 @@ struct State {
     /// What was last shown of each transfer, and when.
     shown: HashMap<u64, (Row, Instant)>,
     busy: bool,
+    /// The document file that each send of one reads, for as long as it
+    /// runs (see `Out::DocumentDone`).
+    documents: HashMap<u64, String>,
     /// The running update check or download, if any.
+    #[cfg(target_os = "macos")]
     update_job: Option<update::Job>,
     /// The update that the window shows, if it is open.
+    #[cfg(target_os = "macos")]
     update: Option<update::UpdateInfo>,
     /// When the update check is next looked at (see `update::tick`).
+    #[cfg(target_os = "macos")]
     next_update_look: Instant,
 }
 
@@ -301,10 +392,12 @@ pub struct Core {
     _events: mpsc::Sender<Event>,
 }
 
-/// The messages that wait for the user interface.
+/// The messages that wait for the user interface. Android's waits for them
+/// (`Core::wait`), the Mac's is woken (`wake`).
 pub struct Outbox {
     queue: Mutex<VecDeque<Out>>,
-    wake: Wake,
+    ready: Condvar,
+    wake: Option<Wake>,
 }
 
 impl Outbox {
@@ -334,7 +427,10 @@ impl Outbox {
         }
         queue.push_back(message);
         drop(queue);
-        self.wake.call();
+        self.ready.notify_all();
+        if let Some(wake) = &self.wake {
+            wake.call();
+        }
     }
 }
 
@@ -366,7 +462,7 @@ fn folder_error_text(error: &io::Error) -> String {
     match error.raw_os_error() {
         // To `error_text`, these say that the part of a transfer has gone.
         Some(code @ (libc::ENOENT | libc::ENOTDIR)) => {
-            mac::s().error_system.replace("{code}", &code.to_string())
+            ui().error_system.replace("{code}", &code.to_string())
         }
         Some(code) => dodavo_core::platform::error_text(code).unwrap_or_else(|| error.to_string()),
         None => error.to_string(),
@@ -375,13 +471,25 @@ fn folder_error_text(error: &io::Error) -> String {
 
 /// The message for a folder that cannot be used.
 fn folder_unusable(path: &Path, error: &io::Error) -> String {
-    mac::s()
+    ui()
         .folder_unusable
         .replace("{path}", &path.display().to_string())
         .replace("{error}", &folder_error_text(error))
 }
 
 /// Whether the user can tell a file from a folder with a path.
+/// The document file that a restored send reads, if it reads one.
+fn document_read(record: &TransferRecord) -> Option<String> {
+    match &record.side {
+        Side::Send { source, .. }
+            if record.offer.kind == Kind::File && dodavo_core::source::is_document(source) =>
+        {
+            source.to_str().map(str::to_string)
+        }
+        _ => None,
+    }
+}
+
 fn kind_of(path: &Path) -> Kind {
     if path.is_dir() {
         Kind::Folder
@@ -398,8 +506,16 @@ fn plain_notice(title: &str, text: String) -> Notice {
 }
 
 impl Core {
-    pub fn start(options: &str, wake: Wake) -> (Core, Started) {
+    pub fn start(options: &str, wake: Option<Wake>) -> (Core, Started) {
         let options: Options = serde_json::from_str(options).unwrap_or_default();
+        #[cfg(not(target_os = "macos"))]
+        dodavo_core::platform::set_dirs(dodavo_core::platform::Dirs {
+            data: options.data_dir.clone(),
+            temp: options.temp_dir.clone(),
+            downloads: options.downloads_dir.clone(),
+            languages: options.languages.clone(),
+            device_name: options.device_name.clone(),
+        });
         let profile = options.profile.as_deref().map(|p| {
             p.chars()
                 .filter(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_')
@@ -414,10 +530,16 @@ impl Core {
             Ok(cfg) => (cfg, None),
             Err(e) => (Config::default(), Some(e)),
         };
+        // On Android, the language of the app's own texts, which the system
+        // keeps.
+        #[cfg(not(target_os = "macos"))]
+        i18n::init(options.language.as_deref());
+        #[cfg(target_os = "macos")]
         i18n::init(cfg.language.as_deref());
 
         let outbox: &'static Outbox = Box::leak(Box::new(Outbox {
             queue: Mutex::new(VecDeque::new()),
+            ready: Condvar::new(),
             wake,
         }));
         install_panic_hook(outbox);
@@ -427,11 +549,16 @@ impl Core {
             profile: profile.clone(),
             language: i18n::lang().code().to_string(),
             version: env!("CARGO_PKG_VERSION").to_string(),
+            author: dodavo_core::AUTHOR.to_string(),
             copyright: dodavo_core::COPYRIGHT_YEARS.to_string(),
             website: dodavo_core::WEBSITE.to_string(),
+            #[cfg(target_os = "macos")]
             donate_url: dodavo_core::DONATE_URL.to_string(),
+            #[cfg(target_os = "macos")]
             start_hidden: options.hidden && cfg.start_minimized,
+            #[cfg(target_os = "macos")]
             show_in_menu_bar: cfg.minimize_to_tray,
+            #[cfg(target_os = "macos")]
             open_at_login: cfg.start_with_windows,
             languages: languages(),
             ..Started::default()
@@ -445,14 +572,14 @@ impl Core {
         }
 
         if let Some(e) = cfg_error {
-            let mut text = mac::s()
+            let mut text = ui()
                 .settings_unreadable
                 .replace("{path}", &e.path.display().to_string())
                 .replace("{error}", &e.error);
             if let Some(backup) = &e.backup {
                 text.push_str("\n\n");
                 text.push_str(
-                    &mac::s()
+                    &ui()
                         .settings_backup
                         .replace("{backup}", &backup.display().to_string()),
                 );
@@ -467,7 +594,7 @@ impl Core {
                 Ok(secret) => Some(secret),
                 Err(e) => {
                     started.fatal = Some(
-                        mac::s()
+                        ui()
                             .identity_failed
                             .replace("{path}", &data_dir.display().to_string())
                             .replace("{error}", &format!("{e:#}")),
@@ -514,8 +641,12 @@ impl Core {
                 offers: HashMap::new(),
                 shown: HashMap::new(),
                 busy: false,
+                documents: HashMap::new(),
+                #[cfg(target_os = "macos")]
                 update_job: None,
+                #[cfg(target_os = "macos")]
                 update: None,
+                #[cfg(target_os = "macos")]
                 next_update_look: Instant::now() + update::START_DELAY,
             }),
             my_id,
@@ -529,8 +660,44 @@ impl Core {
         (core, started)
     }
 
+    /// Shows again what the user interface shows, in the language it has now
+    /// (Android: the user chose another one for the app).
+    #[cfg(not(target_os = "macos"))]
+    fn restate(&self) {
+        let mut state = lock(&self.state);
+        if let Some(online) = state.online {
+            let text = if online {
+                ui().status_online
+            } else {
+                ui().status_offline
+            };
+            self.outbox.push(Out::Status {
+                online,
+                text: text.to_string(),
+            });
+        }
+        let ids: Vec<u64> = state.transfers.keys().copied().collect();
+        for id in ids {
+            self.show(&mut state, id, None);
+        }
+    }
+
     pub fn poll(&self) -> Option<String> {
         let message = lock(&self.outbox.queue).pop_front()?;
+        serde_json::to_string(&message).ok()
+    }
+
+    /// The next message, waiting for one at most `timeout`: Android's app has
+    /// a thread wait here, so that nothing here calls into Java.
+    pub fn wait(&self, timeout: Duration) -> Option<String> {
+        let queue = lock(&self.outbox.queue);
+        let (mut queue, _) = self
+            .outbox
+            .ready
+            .wait_timeout_while(queue, timeout, |queue| queue.is_empty())
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let message = queue.pop_front()?;
+        drop(queue);
         serde_json::to_string(&message).ok()
     }
 
@@ -545,11 +712,11 @@ impl Core {
         let json = |value: serde_json::Value| value.to_string();
         match call {
             Call::Texts => {
-                let texts: BTreeMap<_, _> = mac::s().texts().into_iter().collect();
+                let texts: BTreeMap<_, _> = ui().texts().into_iter().collect();
                 serde_json::to_string(&texts).unwrap_or_default()
             }
             Call::Plural { key, n } => {
-                let table = mac::s();
+                let table = ui();
                 let text = table
                     .plurals()
                     .into_iter()
@@ -561,7 +728,16 @@ impl Core {
             Call::Send { peer_id, paths } => {
                 json(serde_json::json!({ "error": self.send(&peer_id, paths) }))
             }
+            Call::SendDocuments { peer_id, documents } => {
+                json(serde_json::json!({ "error": self.send_documents(&peer_id, documents) }))
+            }
+            Call::Documents => {
+                let state = lock(&self.state);
+                let uris: BTreeSet<&String> = state.documents.values().collect();
+                json(serde_json::json!(uris))
+            }
             Call::Space { id, dir } => {
+                let dir = dir.unwrap_or_else(dodavo_core::platform::downloads_dir);
                 let state = lock(&self.state);
                 match state.offers.get(&id) {
                     Some(pending) => {
@@ -577,8 +753,12 @@ impl Core {
                     None => "null".into(),
                 }
             }
-            Call::CheckAccept { id, dir } => json(self.check_accept(id, &dir)),
+            Call::CheckAccept { id, dir } => {
+                let dir = dir.unwrap_or_else(dodavo_core::platform::downloads_dir);
+                json(self.check_accept(id, &dir))
+            }
             Call::Accept { id, dir } => {
+                let dir = dir.unwrap_or_else(dodavo_core::platform::downloads_dir);
                 self.accept(id, dir);
                 "null".into()
             }
@@ -750,28 +930,46 @@ impl Core {
                 "dodavo": LICENSE,
                 "components": COMPONENTS,
             })),
+            #[cfg(target_os = "macos")]
             Call::CheckForUpdates => {
                 self.check_now();
                 "null".into()
             }
+            #[cfg(target_os = "macos")]
             Call::DownloadUpdate => {
                 self.download_update();
                 "null".into()
             }
+            #[cfg(target_os = "macos")]
             Call::CancelUpdate => {
                 if let Some(job) = lock(&self.state).update_job.take() {
                     job.cancel.cancel();
                 }
                 "null".into()
             }
+            #[cfg(target_os = "macos")]
             Call::RemindLater => {
                 let mut state = lock(&self.state);
                 state.cfg.update_remind_after = Some(now_secs() + update::SNOOZE.as_secs());
                 let _ = save(&state);
                 "null".into()
             }
+            #[cfg(target_os = "macos")]
             Call::UpdateClosed => {
                 lock(&self.state).update = None;
+                "null".into()
+            }
+            #[cfg(not(target_os = "macos"))]
+            Call::NetworkChanged => {
+                lock(&self.state).net.send(Command::NetworkChange);
+                "null".into()
+            }
+            #[cfg(not(target_os = "macos"))]
+            Call::SetLanguage { code } => {
+                if let Some(lang) = Lang::from_code(&code) {
+                    i18n::switch(lang);
+                    self.restate();
+                }
                 "null".into()
             }
             Call::Shutdown => {
@@ -789,7 +987,7 @@ impl Core {
         let mut state = lock(&self.state);
         let contact = state.cfg.contact_by_id(peer_id)?.clone();
         let Some(to) = identity::parse_contact_id(&contact.id) else {
-            return Some(mac::s().contact_invalid.replace("{name}", &contact.name));
+            return Some(ui().contact_invalid.replace("{name}", &contact.name));
         };
         for path in paths {
             let id = net::next_transfer_id();
@@ -824,6 +1022,52 @@ impl Core {
         None
     }
 
+    /// Sends each of `documents` to `peer_id`, as [`send`](Self::send) does
+    /// files: an error text if it cannot be done.
+    fn send_documents(
+        &self,
+        peer_id: &str,
+        documents: Vec<dodavo_core::source::Document>,
+    ) -> Option<String> {
+        let mut state = lock(&self.state);
+        let contact = state.cfg.contact_by_id(peer_id)?.clone();
+        let Some(to) = identity::parse_contact_id(&contact.id) else {
+            return Some(ui().contact_invalid.replace("{name}", &contact.name));
+        };
+        for document in documents {
+            let id = net::next_transfer_id();
+            let kind = if document.items.is_some() {
+                Kind::Folder
+            } else {
+                Kind::File
+            };
+            let view = TransferView::new(
+                id,
+                Direction::Send,
+                &contact.id,
+                &contact.name,
+                &document.name,
+                kind,
+                0,
+            );
+            state.transfers.insert(id, view);
+            // A folder is read only while it is packed.
+            if kind == Kind::File {
+                state.documents.insert(id, document.uri.clone());
+            }
+            self.show(&mut state, id, None);
+            let my_name = state.cfg.my_name.clone();
+            state.net.send(Command::SendDocument {
+                id,
+                to,
+                document,
+                my_name,
+                peer_name: contact.name.clone(),
+            });
+        }
+        None
+    }
+
     fn check_accept(&self, id: u64, dir: &Path) -> serde_json::Value {
         let (offer, temp_dir, folder) = {
             let state = lock(&self.state);
@@ -837,7 +1081,7 @@ impl Core {
             )
         };
         if !dir.is_absolute() {
-            return serde_json::json!({ "problem": mac::s().choose_save_folder });
+            return serde_json::json!({ "problem": ui().choose_save_folder });
         }
         if let Err(e) = std::fs::create_dir_all(dir) {
             return serde_json::json!({ "problem": folder_unusable(dir, &e) });
@@ -847,7 +1091,7 @@ impl Core {
             return serde_json::json!({ "problem": space.text });
         }
         if space.enough == Some(false) {
-            let details = mac::s().space_confirm.replace("{details}", &space.text);
+            let details = ui().space_confirm.replace("{details}", &space.text);
             return serde_json::json!({ "confirm": details });
         }
         serde_json::json!({})
@@ -910,7 +1154,7 @@ impl Core {
         let mut state = lock(&self.state);
         match event {
             Event::BindFailed(error) => {
-                let text = mac::s().network_problem.replace("{error}", &error);
+                let text = ui().network_problem.replace("{error}", &error);
                 self.outbox.push(Out::Status {
                     online: false,
                     text,
@@ -918,14 +1162,15 @@ impl Core {
             }
             Event::Online(online) => {
                 state.online = Some(online);
+                // A check that was waiting for the connection.
+                #[cfg(target_os = "macos")]
                 if online {
-                    // A check that was waiting for the connection.
                     self.look_for_update(&mut state);
                 }
                 let text = if online {
-                    mac::s().status_online
+                    ui().status_online
                 } else {
-                    mac::s().status_offline
+                    ui().status_offline
                 };
                 self.outbox.push(Out::Status {
                     online,
@@ -966,6 +1211,9 @@ impl Core {
                     view.restore_cancel(record.done_sent);
                 }
                 state.transfers.insert(id, view);
+                if let Some(uri) = document_read(&record) {
+                    state.documents.insert(id, uri);
+                }
                 self.show(&mut state, id, None);
                 // One that does not go on is reported as it ends, right after.
                 if goes_on {
@@ -1043,6 +1291,11 @@ impl Core {
                 let status = state.transfers.get(&id).map(|t| t.row().status);
                 self.show(&mut state, id, status);
                 self.give(id, notice, path);
+                if let Some(uri) = state.documents.remove(&id)
+                    && !state.documents.values().any(|other| *other == uri)
+                {
+                    self.outbox.push(Out::DocumentDone { uri });
+                }
             }
         }
     }
@@ -1090,12 +1343,12 @@ impl Core {
             return;
         };
         let description = match pending.offer.kind {
-            Kind::File => mac_description_file(&pending.offer),
-            Kind::Folder => mac_description_folder(&pending.offer),
+            Kind::File => description_file(&pending.offer),
+            Kind::Folder => description_folder(&pending.offer),
         };
         let headline = match pending.offer.kind {
-            Kind::File => mac::s().wants_file,
-            Kind::Folder => mac::s().wants_folder,
+            Kind::File => ui().wants_file,
+            Kind::Folder => ui().wants_folder,
         }
         .replace("{name}", &name);
         let out = OfferOut {
@@ -1106,11 +1359,11 @@ impl Core {
             headline,
             description,
             unknown_warning: (!known).then(|| {
-                mac::s()
+                ui()
                     .unknown_sender_warning
                     .replace("{id}", &short_id(&from))
             }),
-            add_label: (!known).then(|| mac::s().add_to_recipients.replace("{name}", &name)),
+            add_label: (!known).then(|| ui().add_to_recipients.replace("{name}", &name)),
             dir,
             space,
         };
@@ -1122,6 +1375,7 @@ impl Core {
         self.outbox.push(Out::Offer { offer: out, notice });
     }
 
+    #[cfg(target_os = "macos")]
     /// The daily check, when it is due: only when online, without a window
     /// or a job already, not while "Remind Me Later" lasts.
     fn tick_updates(&self, state: &mut State, now: Instant) {
@@ -1132,6 +1386,7 @@ impl Core {
         self.look_for_update(state);
     }
 
+    #[cfg(target_os = "macos")]
     fn look_for_update(&self, state: &mut State) {
         if !state.cfg.check_updates
             || state.online != Some(true)
@@ -1152,6 +1407,7 @@ impl Core {
         }
     }
 
+    #[cfg(target_os = "macos")]
     /// Check for Updates…
     fn check_now(&self) {
         let mut state = lock(&self.state);
@@ -1167,6 +1423,7 @@ impl Core {
         start_check(&mut state, update::Trigger::Manual);
     }
 
+    #[cfg(target_os = "macos")]
     fn download_update(&self) {
         let mut state = lock(&self.state);
         let Some(info) = state.update.clone() else {
@@ -1197,6 +1454,7 @@ impl Core {
         update::spawn_download(job, info, dest, update_sink);
     }
 
+    #[cfg(target_os = "macos")]
     fn on_update(&self, event: update::Event) {
         let mut state = lock(&self.state);
         // A job that was given up, by a cancel, say.
@@ -1217,7 +1475,7 @@ impl Core {
                                 state.update = Some(info);
                             }
                             None if manual => self.outbox.push(Out::UpdateAnswer {
-                                text: mac::s()
+                                text: ui()
                                     .update_latest
                                     .replace("{version}", env!("CARGO_PKG_VERSION")),
                             }),
@@ -1225,14 +1483,14 @@ impl Core {
                         }
                     }
                     Err(e) if manual => self.outbox.push(Out::UpdateAnswer {
-                        text: mac::s().update_check_failed.replace("{error}", &e.text()),
+                        text: ui().update_check_failed.replace("{error}", &e.text()),
                     }),
                     Err(_) => {}
                 }
             }
             update::Event::Progress { done, total, .. } => {
                 let fraction = (total > 0).then(|| done as f64 / total as f64);
-                let text = mac::s()
+                let text = ui()
                     .update_downloading
                     .replace("{done}", &format_size(done))
                     .replace("{total}", &format_size(total))
@@ -1240,7 +1498,7 @@ impl Core {
                 self.outbox.push(Out::UpdateProgress { text, fraction });
             }
             update::Event::Verifying { .. } => self.outbox.push(Out::UpdateProgress {
-                text: mac::s().update_verifying.to_string(),
+                text: ui().update_verifying.to_string(),
                 fraction: None,
             }),
             update::Event::Downloaded { result, .. } => {
@@ -1257,6 +1515,7 @@ impl Core {
     fn tick(&self) {
         let mut state = lock(&self.state);
         let now = Instant::now();
+        #[cfg(target_os = "macos")]
         self.tick_updates(&mut state, now);
         let ids: Vec<u64> = state.transfers.keys().copied().collect();
         for id in ids {
@@ -1273,21 +1532,24 @@ impl Core {
     }
 }
 
+#[cfg(target_os = "macos")]
 fn update_sink(event: update::Event) {
     if let Some(core) = crate::CORE.get() {
         core.on_update(event);
     }
 }
 
+#[cfg(target_os = "macos")]
 fn start_check(state: &mut State, trigger: update::Trigger) {
     let job = update::Job::new(trigger);
     state.update_job = Some(job.clone());
     update::spawn_check(job, i18n::lang().code().to_string(), update_sink);
 }
 
+#[cfg(target_os = "macos")]
 fn update_available(info: &update::UpdateInfo, manual: bool) -> Out {
     Out::UpdateAvailable {
-        headline: mac::s()
+        headline: ui()
             .update_headline
             .replace("{version}", &info.version)
             .replace("{current}", env!("CARGO_PKG_VERSION")),
@@ -1296,6 +1558,7 @@ fn update_available(info: &update::UpdateInfo, manual: bool) -> Out {
     }
 }
 
+#[cfg(target_os = "macos")]
 fn now_secs() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -1318,7 +1581,7 @@ fn handle_events(events: mpsc::Receiver<Event>) {
 /// A failure on a thread is told, and the program ends if nothing can go on.
 fn install_panic_hook(outbox: &'static Outbox) {
     std::panic::set_hook(Box::new(move |info| {
-        let text = mac::s().panic_message.replace("{info}", &info.to_string());
+        let text = ui().panic_message.replace("{info}", &info.to_string());
         match std::thread::current().name() {
             // The thread of the network, or this library's own: nothing can
             // be sent or received any more.
@@ -1334,7 +1597,7 @@ fn install_panic_hook(outbox: &'static Outbox) {
 fn save(state: &State) -> Option<String> {
     state.net.set_blocked(state.cfg.blocked_ids());
     state.cfg.save(&state.data_dir).err().map(|e| {
-        mac::s()
+        ui()
             .settings_not_saved
             .replace("{error}", &e.to_string())
     })
@@ -1355,13 +1618,13 @@ fn recipient_problem(
     let name = name.trim();
     let id = cleaned_id(contact_id);
     if name.is_empty() {
-        return Some(mac::s().enter_recipient_name.to_string());
+        return Some(ui().enter_recipient_name.to_string());
     }
     if identity::parse_contact_id(&id).is_none() {
-        return Some(mac::s().invalid_contact_id.to_string());
+        return Some(ui().invalid_contact_id.to_string());
     }
     if id.eq_ignore_ascii_case(my_id) {
-        return Some(mac::s().own_contact_id.to_string());
+        return Some(ui().own_contact_id.to_string());
     }
     let others = || {
         cfg.contacts
@@ -1369,10 +1632,10 @@ fn recipient_problem(
             .filter(|c| editing.is_none_or(|old| !c.id.eq_ignore_ascii_case(old)))
     };
     if let Some(c) = others().find(|c| c.id.eq_ignore_ascii_case(&id)) {
-        return Some(mac::s().contact_id_taken.replace("{name}", &c.name));
+        return Some(ui().contact_id_taken.replace("{name}", &c.name));
     }
     if let Some(c) = others().find(|c| c.name.to_lowercase() == name.to_lowercase()) {
-        return Some(mac::s().name_taken.replace("{name}", &c.name));
+        return Some(ui().name_taken.replace("{name}", &c.name));
     }
     None
 }
@@ -1401,15 +1664,15 @@ fn short_id(id: &str) -> String {
     }
 }
 
-fn mac_description_file(offer: &Offer) -> String {
-    mac::s()
+fn description_file(offer: &Offer) -> String {
+    ui()
         .file_description
         .replace("{name}", &offer.name)
         .replace("{size}", &dodavo_core::format::format_size(offer.size))
 }
 
-fn mac_description_folder(offer: &Offer) -> String {
-    let table = mac::s();
+fn description_folder(offer: &Offer) -> String {
+    let table = ui();
     i18n::pick_plural(i18n::lang(), &table.folder_description, offer.file_count)
         .replace("{n}", &offer.file_count.to_string())
         .replace("{name}", &offer.name)
@@ -1419,6 +1682,7 @@ fn mac_description_folder(offer: &Offer) -> String {
         )
 }
 
+#[cfg(target_os = "macos")]
 impl Settings {
     fn of(cfg: &Config) -> Settings {
         Settings {
@@ -1455,7 +1719,7 @@ impl Settings {
 
     fn problem(&self) -> Option<&'static str> {
         if self.my_name.trim().is_empty() {
-            return Some(mac::s().enter_my_name);
+            return Some(ui().enter_my_name);
         }
         if self.always_save {
             // Downloads exists, and creating it might ask for permission
@@ -1465,10 +1729,37 @@ impl Settings {
                     || (d.is_absolute() && std::fs::create_dir_all(d).is_ok())
             });
             if !usable {
-                return Some(mac::s().invalid_save_folder);
+                return Some(ui().invalid_save_folder);
             }
         }
         None
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+impl Settings {
+    fn of(cfg: &Config) -> Settings {
+        Settings {
+            my_name: cfg.my_name.clone(),
+            auto_accept: cfg.auto_accept,
+            received_folder: cfg.received_folder,
+        }
+    }
+
+    fn apply_to(&self, cfg: &mut Config) {
+        cfg.my_name = self.my_name.trim().to_string();
+        // Always into Downloads, without asking where.
+        cfg.always_save = true;
+        cfg.always_save_dir = None;
+        cfg.auto_accept = self.auto_accept;
+        cfg.received_folder = self.received_folder;
+    }
+
+    fn problem(&self) -> Option<&'static str> {
+        self.my_name
+            .trim()
+            .is_empty()
+            .then_some(ui().enter_my_name)
     }
 }
 
@@ -1513,7 +1804,7 @@ mod tests {
         assert_eq!(error.raw_os_error(), Some(libc::ENOTDIR));
         assert_eq!(
             folder_error_text(&error),
-            mac::s()
+            ui()
                 .error_system
                 .replace("{code}", &libc::ENOTDIR.to_string())
         );
@@ -1522,7 +1813,6 @@ mod tests {
 
     /// A `Core` without a network, with one offer waiting.
     fn core_with_offer(id: u64, dir: &Path) -> Core {
-        extern "C" fn nothing(_: *mut std::ffi::c_void) {}
         let offer = Offer {
             kind: Kind::File,
             name: "file.txt".into(),
@@ -1551,17 +1841,19 @@ mod tests {
                 offers: HashMap::from([(id, pending)]),
                 shown: HashMap::new(),
                 busy: false,
+                documents: HashMap::new(),
+                #[cfg(target_os = "macos")]
                 update_job: None,
+                #[cfg(target_os = "macos")]
                 update: None,
+                #[cfg(target_os = "macos")]
                 next_update_look: Instant::now(),
             }),
             my_id: String::new(),
             outbox: Box::leak(Box::new(Outbox {
                 queue: Mutex::new(VecDeque::new()),
-                wake: Wake {
-                    function: nothing,
-                    context: std::ptr::null_mut(),
-                },
+                ready: Condvar::new(),
+                wake: None,
             })),
             _events: mpsc::channel().0,
         }
@@ -1577,7 +1869,7 @@ mod tests {
         let answer = core_with_offer(1, &dir).check_accept(1, &chosen);
 
         let problem = answer["problem"].as_str().unwrap();
-        let reason = mac::s()
+        let reason = ui()
             .error_system
             .replace("{code}", &libc::ENOTDIR.to_string());
         assert!(problem.contains(chosen.to_str().unwrap()), "{problem}");
@@ -1603,11 +1895,11 @@ mod tests {
 
         assert_eq!(
             recipient_problem(&cfg, "", "Someone", &taken, None),
-            Some(mac::s().contact_id_taken.replace("{name}", "Ana"))
+            Some(ui().contact_id_taken.replace("{name}", "Ana"))
         );
         assert_eq!(
             recipient_problem(&cfg, "", "ANA", &free, None),
-            Some(mac::s().name_taken.replace("{name}", "Ana"))
+            Some(ui().name_taken.replace("{name}", "Ana"))
         );
         // Editing that recipient: nobody else has them.
         assert_eq!(

@@ -5,6 +5,7 @@
 //! and the hashing of data that was already transferred.
 
 use std::{
+    collections::HashSet,
     fs,
     io::{self, Read, Seek, SeekFrom},
     path::{Path, PathBuf},
@@ -63,6 +64,12 @@ pub enum Side {
         /// which can be less. 0 in records of earlier versions.
         #[serde(default)]
         sent: u64,
+        /// The folder of a copy of what the user chose, which the transfer
+        /// owns and deletes when it ends: Android's copy of an item that
+        /// another app shared (see [`staged_folder`]). A folder's copy is
+        /// deleted as soon as it is packed, so the source is not needed.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        staging: Option<PathBuf>,
     },
     Receive {
         dest_dir: PathBuf,
@@ -432,20 +439,24 @@ impl TransferRecord {
         }
     }
 
-    /// On FAT and exFAT: whether what has the part's name is shorter than
+    /// On FAT and exFAT, and where the identity is weak (see
+    /// `FileId::weak`): whether what has the part's name is shorter than
     /// what the record knows was written to the part and reached the disk
     /// (`synced`). Then it is not the part, although its identity says so:
     /// there the identity is only the creation time, which Windows also
     /// gives a file made under the part's name moments after the part was
-    /// deleted (see `FileId::same_item`), and such a file must be neither
-    /// written to nor deleted. Where the identity has the part's number, it
+    /// deleted (see `FileId::same_item`), or a number that a new file may
+    /// get again, and such a file must be neither written to nor deleted. Where the identity has the part's number, it
     /// tells the part from any other file, and a part that lost its end goes
     /// on from what is there (see [`have`](Self::have)); on FAT such a part
     /// (of a drive pulled out during a write, say) cannot be told from
     /// another file, so it is left as it is, for the user to delete. (By the
     /// part's name: a connection's handle may not read the size.)
     fn part_shorter(&self) -> bool {
-        if !self.part_identity().is_some_and(|id| id.by_creation_time()) {
+        if !self
+            .part_identity()
+            .is_some_and(|id| id.by_creation_time() || id.weak())
+        {
             return false;
         }
         match (&self.side, self.receive_files()) {
@@ -487,8 +498,18 @@ impl TransferRecord {
     pub fn files_present(&self) -> bool {
         match &self.side {
             Side::Send {
-                source, data_path, ..
-            } => source.exists() && data_path.exists(),
+                source,
+                data_path,
+                staging,
+                ..
+            } => {
+                // A copy of its own, or a document of the app's that was
+                // packed already, which is not needed any more.
+                let without_source = staging.is_some()
+                    || (self.offer.kind == Kind::Folder && crate::source::is_document(source));
+                (without_source || crate::source::exists(source))
+                    && crate::source::exists(data_path)
+            }
             Side::Receive { .. } => self.part_is_there(),
         }
     }
@@ -555,7 +576,7 @@ impl TransferRecord {
                 source_len,
                 source_mtime,
                 ..
-            } => match fs::metadata(data_path) {
+            } => match crate::source::metadata(data_path) {
                 Ok(m) => m.len() == *source_len && m.modified().ok() == *source_mtime,
                 Err(_) => false,
             },
@@ -696,8 +717,16 @@ impl TransferRecord {
     fn delete_files(&self, patient: bool) -> Option<TransferRecord> {
         match &self.side {
             Side::Send {
-                source, data_path, ..
-            } => (data_path != source && !remove_file(data_path, patient)).then(|| self.clone()),
+                source,
+                data_path,
+                staging,
+                ..
+            } => {
+                // A copy that the transfer owns goes with it, the data too.
+                let data = data_path == source || remove_file(data_path, patient);
+                let copy = staging.as_deref().is_none_or(remove_staging);
+                (!(data && copy)).then(|| self.clone())
+            }
             Side::Receive { files, .. } => {
                 let part = self.remove_part(patient);
                 // Every one is tried, whether or not the others go.
@@ -958,6 +987,34 @@ pub struct Found {
 /// background: deleting a folder can take a while, and the transfers that
 /// go on would wait for it. A record file whose name is not its token's
 /// (a copy of one, say) is no record, and is set aside like a damaged one.
+/// The paths that the records in `data_dir`, other than that of `except`,
+/// name as the files of a receive: its part, the folder it unpacks into,
+/// where it renames the part to, and what it left over. Where identities are
+/// weak (see [`FileId::weak`]), a receive's new file or folder does not take
+/// one of these names, even when nothing has it now: the record would take
+/// what is there for its own (see `receive::held_in`).
+pub fn held_names(data_dir: &Path, except: Option<&Token>) -> HashSet<PathBuf> {
+    let Ok(entries) = fs::read_dir(records_dir(data_dir)) else {
+        return HashSet::new();
+    };
+    entries
+        .flatten()
+        .map(|entry| entry.path())
+        .filter(|path| path.extension().and_then(|e| e.to_str()) == Some("json"))
+        .filter_map(|path| {
+            let text = fs::read_to_string(&path).ok()?;
+            serde_json::from_str::<TransferRecord>(&text).ok()
+        })
+        .filter(|record| Some(&record.token) != except)
+        .filter_map(|record| record.receive_files().cloned())
+        .flat_map(|files| {
+            let folders = files.unpacking.into_iter().chain(files.moving);
+            std::iter::once(files.part)
+                .chain(folders.chain(files.leftovers).map(|owned| owned.path))
+        })
+        .collect()
+}
+
 pub fn load_all(data_dir: &Path) -> Found {
     let mut found = Found::default();
     let clock = Clock::start(data_dir);
@@ -1148,18 +1205,59 @@ fn parts_of<'a>(
         .collect()
 }
 
+/// Where Android puts the copies of what another app shared, each in a
+/// folder of its own: `<temp>/staging/<folder>`.
+pub fn staging_root(temp_dir: &Path) -> PathBuf {
+    temp_dir.join("staging")
+}
+
+/// The folder of the copy that `source` is in, if it is one (see
+/// [`staging_root`]): a send of it owns that folder.
+pub fn staged_folder(temp_dir: &Path, source: &Path) -> Option<PathBuf> {
+    let root = staging_root(temp_dir);
+    let mut inside = source.strip_prefix(&root).ok()?.components();
+    let folder = inside.next()?;
+    inside.next()?;
+    Some(root.join(folder))
+}
+
+/// Deletes the folder of a copy; whether it is gone.
+fn remove_staging(folder: &Path) -> bool {
+    match fs::remove_dir_all(folder) {
+        Ok(()) => true,
+        Err(e) => e.kind() == io::ErrorKind::NotFound,
+    }
+}
+
 /// Deletes temporary archives (`send-*.zip`, `recv-*.zip`) in `dir` that no
 /// record refers to and that are older than a day: leftovers of transfers
 /// that ended before they had a record, such as a crash while packing a
-/// folder or an offer that was never accepted. `dir` must be this profile's
-/// own temporary folder, because the archives of another profile's transfers
+/// folder or an offer that was never accepted. The same for the copies of
+/// shared items (see [`staging_root`]). `dir` must be this profile's own
+/// temporary folder, because the archives of another profile's transfers
 /// are unknown here and would look like leftovers.
 pub fn cleanup_temp<'a>(dir: &Path, records: impl IntoIterator<Item = &'a TransferRecord>) {
+    let records: Vec<&TransferRecord> = records.into_iter().collect();
+    let staged: Vec<&Path> = records
+        .iter()
+        .filter_map(|r| match &r.side {
+            Side::Send { staging, .. } => staging.as_deref(),
+            Side::Receive { .. } => None,
+        })
+        .collect();
+    if let Ok(copies) = fs::read_dir(staging_root(dir)) {
+        for copy in copies.flatten() {
+            let path = copy.path();
+            if !staged.contains(&path.as_path()) && older_than(&path, TEMP_MAX_AGE) {
+                let _ = fs::remove_dir_all(&path);
+            }
+        }
+    }
     let Ok(entries) = fs::read_dir(dir) else {
         return;
     };
     let in_use: Vec<&Path> = records
-        .into_iter()
+        .iter()
         .map(|r| match &r.side {
             Side::Send { data_path, .. } => data_path.as_path(),
             Side::Receive { files, .. } => files.part.as_path(),
@@ -1225,7 +1323,7 @@ pub fn hash_range(
         return Ok(());
     }
     hash_open(
-        &mut fs::File::open(path)?,
+        &mut crate::source::open(path)?,
         from,
         to,
         hasher,
@@ -2156,6 +2254,7 @@ mod tests {
                 source_mtime: None,
                 data_path: zip.clone(),
                 sent: 0,
+                staging: None,
             },
         );
         s.save(&dir).unwrap();
@@ -2310,6 +2409,9 @@ mod tests {
     #[test]
     fn discarding_deletes_only_its_own_files() {
         let dir = scratch("discard");
+        if !archive::testing::tells_new_items_apart(&dir) {
+            return;
+        }
         let with_folder = |token: u8, part: &Path, folder: &Path| {
             let mut r = record(token, receive_side(&dir, part, None));
             if let Some(files) = r.receive_files_mut() {
@@ -2335,6 +2437,7 @@ mod tests {
         fs::create_dir(&partial).unwrap();
         let r = with_folder(11, &part, &partial);
         fs::remove_dir(&partial).unwrap();
+        archive::testing::next_tick();
         fs::create_dir(&partial).unwrap();
         fs::write(partial.join("mine.txt"), b"mine").unwrap();
         r.discard(&dir);
@@ -2497,6 +2600,9 @@ mod tests {
     #[test]
     fn only_its_own_part_is_touched() {
         let dir = scratch("identity");
+        if !archive::testing::tells_new_items_apart(&dir) {
+            return;
+        }
         let zip = dir.join("Photos (2).zip");
         fs::write(&zip, b"received").unwrap();
         let mut r = record(14, receive_side(&dir, &zip, Some(3)));
@@ -2516,6 +2622,7 @@ mod tests {
         assert_eq!(r.placed_item(), Some(zip.as_path()));
 
         fs::remove_file(&zip).unwrap();
+        archive::testing::next_tick();
         fs::write(&zip, b"a download").unwrap();
         assert!(!r.files_present());
         assert_eq!(r.placed_item(), None);
@@ -2580,6 +2687,7 @@ mod tests {
                 source_mtime: None,
                 data_path: zip.clone(),
                 sent: 0,
+                staging: None,
             },
         ));
         assert!(!session.handed_over());
@@ -2603,6 +2711,7 @@ mod tests {
                 source_mtime: None,
                 data_path: zip.clone(),
                 sent: 0,
+                staging: None,
             },
         );
         record.save(dir).unwrap();
@@ -2780,6 +2889,7 @@ mod tests {
     /// deleted. The part read with another time zone (FAT keeps local time)
     /// is still the part, as far as time zones lie apart.
     #[test]
+    #[cfg(any(windows, target_os = "macos"))]
     fn items_are_told_by_their_creation_time_on_fat() {
         let dir = scratch("created-fat");
         archive::PRETEND_FAT.set(true);
@@ -3412,6 +3522,7 @@ mod tests {
                 source_mtime: None,
                 data_path: zip.clone(),
                 sent: 0,
+                staging: None,
             },
         );
         s.ended = true;
@@ -3520,6 +3631,72 @@ mod tests {
         fs::remove_dir_all(&dir).ok();
     }
 
+    /// A copy of a shared item is the transfer's: told by where it is,
+    /// enough without the item, and deleted with the transfer; one that no
+    /// record names goes once it is old.
+    #[test]
+    fn a_copy_of_a_shared_item_goes_with_its_transfer() {
+        let temp = scratch("staging");
+        let folder = staging_root(&temp).join("copy-1");
+        let file = folder.join("photo.jpg");
+        fs::create_dir_all(&folder).unwrap();
+        fs::write(&file, b"photo").unwrap();
+        assert_eq!(staged_folder(&temp, &file), Some(folder.clone()));
+        assert_eq!(
+            staged_folder(&temp, &folder),
+            None,
+            "the folder alone is no copy"
+        );
+        assert_eq!(staged_folder(&temp, &temp.join("photo.jpg")), None);
+        let side = |source: &Path, data: &Path, staging: Option<PathBuf>| Side::Send {
+            source: source.to_path_buf(),
+            source_len: 5,
+            source_mtime: None,
+            data_path: data.to_path_buf(),
+            sent: 0,
+            staging,
+        };
+        let dir = scratch("staging-records");
+        let r = record(41, side(&file, &file, Some(folder.clone())));
+        assert!(r.files_present());
+        r.save(&dir).unwrap();
+        r.complete(&dir);
+        assert!(!folder.exists(), "it went with the transfer");
+        assert!(records(&dir).is_empty());
+
+        // A folder's copy is deleted once it is packed: the zip is enough.
+        let packed = staging_root(&temp).join("copy-2");
+        let zip = temp.join("send-00000000000000000000000000000042.zip");
+        fs::write(&zip, b"zip").unwrap();
+        let r = record(42, side(&packed.join("Photos"), &zip, Some(packed.clone())));
+        assert!(r.files_present());
+        r.save(&dir).unwrap();
+        r.discard(&dir);
+        assert!(!zip.exists());
+        assert!(records(&dir).is_empty());
+
+        // What no record names goes once it is old.
+        let old = SystemTime::now() - Duration::from_secs(2 * 24 * 60 * 60);
+        let orphan = staging_root(&temp).join("copy-3");
+        let kept = staging_root(&temp).join("copy-4");
+        let fresh = staging_root(&temp).join("copy-5");
+        for copy in [&orphan, &kept, &fresh] {
+            fs::create_dir_all(copy).unwrap();
+            fs::write(copy.join("a.txt"), b"a").unwrap();
+        }
+        for copy in [&orphan, &kept] {
+            archive::set_times(copy, Some(old), None).unwrap();
+        }
+        let named = record(
+            43,
+            side(&kept.join("a.txt"), &kept.join("a.txt"), Some(kept.clone())),
+        );
+        cleanup_temp(&temp, &[named]);
+        assert!(!orphan.exists() && kept.exists() && fresh.exists());
+        fs::remove_dir_all(&temp).ok();
+        fs::remove_dir_all(&dir).ok();
+    }
+
     #[test]
     fn temp_cleanup_removes_only_old_orphans() {
         let temp = scratch("cleanup-temp");
@@ -3576,6 +3753,7 @@ mod tests {
     /// deleted. Elsewhere the part's number tells, and a part that lost its
     /// end stays the part.
     #[test]
+    #[cfg(any(windows, target_os = "macos"))]
     fn a_shorter_file_under_the_parts_name_on_fat_is_not_the_part() {
         #[cfg(target_os = "macos")]
         use std::os::macos::fs::FileTimesExt;
@@ -3648,6 +3826,7 @@ mod tests {
                 source_mtime: meta.modified().ok(),
                 data_path: file.clone(),
                 sent: 0,
+                staging: None,
             },
         );
         assert!(r.source_unchanged());
@@ -3669,6 +3848,7 @@ mod tests {
                 source_mtime: meta.modified().ok(),
                 data_path: zip.clone(),
                 sent: 0,
+                staging: None,
             },
         );
         fs::write(folder.join("new.txt"), b"later").unwrap();

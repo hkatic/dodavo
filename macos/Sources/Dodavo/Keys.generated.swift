@@ -216,6 +216,7 @@ enum K: String {
     case phase_peer_part_in_use
     case part_in_use_balloon
     case peer_part_in_use_balloon
+    case notify_saved
     case update_installing
     case update_err_not_signed
     case update_err_mount

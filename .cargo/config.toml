@@ -15,3 +15,12 @@ rustflags = ["-C", "target-feature=+crt-static"]
 
 [target.i686-win7-windows-msvc]
 rustflags = ["-C", "target-feature=+crt-static"]
+
+# Android: shared libraries aligned to 16 KB pages, as Google Play requires
+# (NDK r28 and later link that way by default; this keeps it so). The tests
+# run on a device through android/test-on-device.sh.
+[target.aarch64-linux-android]
+rustflags = ["-C", "link-arg=-Wl,-z,max-page-size=16384"]
+
+[target.x86_64-linux-android]
+rustflags = ["-C", "link-arg=-Wl,-z,max-page-size=16384"]

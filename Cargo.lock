@@ -604,6 +604,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "dodavo-android"
+version = "1.0.1"
+dependencies = [
+ "dodavo",
+ "dodavo-ffi",
+ "jni 0.22.4",
+]
+
+[[package]]
 name = "dodavo-ffi"
 version = "1.0.1"
 dependencies = [

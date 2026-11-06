@@ -6,6 +6,7 @@ use std::os::macos::fs::FileTimesExt;
 #[cfg(windows)]
 use std::os::windows::fs::FileTimesExt;
 use std::{
+    collections::HashMap,
     fs::{File, FileTimes, Metadata, OpenOptions},
     io::{self, BufWriter, Read, Write},
     path::{Path, PathBuf},
@@ -20,7 +21,7 @@ use zip::{
     write::{FullFileOptions, SimpleFileOptions},
 };
 
-use crate::i18n::tr;
+use crate::{i18n::tr, source};
 
 // What differs between the operating systems. Whatever the file system can and
 // cannot do, what the functions promise stays the same; where a promise cannot
@@ -29,6 +30,12 @@ use crate::i18n::tr;
 mod macos;
 #[cfg(target_os = "macos")]
 use self::macos as os;
+#[cfg(any(target_os = "linux", target_os = "android"))]
+mod linux;
+#[cfg(any(target_os = "linux", target_os = "android"))]
+use self::linux as os;
+#[cfg(unix)]
+mod unix;
 #[cfg(windows)]
 mod windows;
 #[cfg(windows)]
@@ -218,9 +225,13 @@ fn file_times(modified: Option<SystemTime>, created: Option<SystemTime>) -> Opti
     if let Some(modified) = modified {
         times = times.set_modified(modified);
     }
+    // Linux has no creation time that can be set.
+    #[cfg(any(windows, target_os = "macos"))]
     if let Some(created) = created {
         times = times.set_created(created);
     }
+    #[cfg(not(any(windows, target_os = "macos")))]
+    let _ = created;
     Some(times)
 }
 
@@ -261,6 +272,16 @@ struct Entry {
 }
 
 impl Entry {
+    /// Where the entry comes from, for an error: its path, or for a
+    /// document, its name in the zip.
+    fn shown_path(&self) -> String {
+        if source::is_document(&self.path) {
+            self.name.clone()
+        } else {
+            self.path.display().to_string()
+        }
+    }
+
     /// The entry's dates go both into the standard MS-DOS field and, exactly,
     /// into the NTFS extra field; its MS-DOS attributes say whether it is a
     /// folder and whether it is hidden, under the Unix mode that the zip
@@ -296,7 +317,7 @@ impl Entry {
 
 /// Whether this system writes zips for any receiver (see [`names`]). Windows'
 /// own names are fine as they are.
-const PORTABLE_NAMES: bool = cfg!(target_os = "macos");
+const PORTABLE_NAMES: bool = cfg!(not(windows));
 
 /// The folder's items as they go into the zip. With `portable`, as [`names`]
 /// says.
@@ -404,6 +425,77 @@ fn collect(root: &Path, portable: bool) -> anyhow::Result<Vec<Entry>> {
     Ok(out)
 }
 
+/// The items of a folder that the app listed (see [`source::Document`]) as
+/// they go into the zip, as [`collect`] has them of a folder on disk. What
+/// is in a folder that is left out is left out too.
+fn collect_listed(items: &[source::Item], portable: bool) -> Vec<Entry> {
+    let mut out = Vec::new();
+    let mut namer = names::Namer::default();
+    // The name in the zip of each folder, by its names from the top.
+    let mut folders: HashMap<&[String], String> = HashMap::new();
+    for item in items {
+        let Some((own_name, parent)) = item.path.split_last() else {
+            continue;
+        };
+        let prefix = if parent.is_empty() {
+            String::new()
+        } else {
+            match folders.get(&parent) {
+                Some(prefix) => prefix.clone(),
+                None => continue,
+            }
+        };
+        if portable && names::is_system_item(own_name) {
+            continue;
+        }
+        let (short, original) = if portable {
+            let short = namer.name(&prefix, own_name, item.folder);
+            let same = names::composed(own_name) == short;
+            (short, (!same).then(|| own_name.clone()))
+        } else {
+            (own_name.clone(), None)
+        };
+        let name = format!("{prefix}{short}");
+        let times = ItemTimes {
+            modified: item
+                .modified
+                .and_then(source::millis_to_system)
+                .and_then(system_to_filetime),
+            ..ItemTimes::default()
+        };
+        let fidelity = names::Fidelity {
+            name: original,
+            links: Vec::new(),
+        };
+        let hidden = portable && own_name.starts_with('.');
+        if item.folder {
+            folders.insert(item.path.as_slice(), format!("{name}/"));
+            out.push(Entry {
+                path: PathBuf::from(&item.uri),
+                name: format!("{name}/"),
+                is_dir: true,
+                hidden,
+                executable: false,
+                size: 0,
+                times,
+                fidelity,
+            });
+        } else {
+            out.push(Entry {
+                path: PathBuf::from(&item.uri),
+                name,
+                is_dir: false,
+                hidden,
+                executable: false,
+                size: item.size,
+                times,
+                fidelity,
+            });
+        }
+    }
+    out
+}
+
 /// What [`zip_folder`] packed: the number of files, their total
 /// (uncompressed) size and the size of the largest one.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -433,14 +525,39 @@ fn zip_folder_as(
     progress: &mut dyn FnMut(u64, u64),
 ) -> anyhow::Result<Packed> {
     // The folder is walked once; the same list gives the statistics for the offer.
-    let entries = collect(root, portable)?;
+    zip_entries(&collect(root, portable)?, dest, cancel, progress)
+}
+
+/// [`zip_folder`] for a folder that the app listed (see [`source::Document`]):
+/// its files are read where they are.
+pub fn zip_listed(
+    items: &[source::Item],
+    dest: &Path,
+    cancel: &AtomicBool,
+    progress: &mut dyn FnMut(u64, u64),
+) -> anyhow::Result<Packed> {
+    zip_entries(
+        &collect_listed(items, PORTABLE_NAMES),
+        dest,
+        cancel,
+        progress,
+    )
+}
+
+/// Packs `entries` into a zip file at `dest` (see [`zip_folder`]).
+fn zip_entries(
+    entries: &[Entry],
+    dest: &Path,
+    cancel: &AtomicBool,
+    progress: &mut dyn FnMut(u64, u64),
+) -> anyhow::Result<Packed> {
     let file_count = entries.iter().filter(|e| !e.is_dir).count() as u64;
     let total: u64 = entries.iter().map(|e| e.size).sum();
     let largest = entries.iter().map(|e| e.size).max().unwrap_or(0);
     let mut zip = ZipWriter::new(BufWriter::with_capacity(BUF_SIZE, File::create(dest)?));
     let mut done = 0u64;
     let mut buf = vec![0u8; BUF_SIZE];
-    for entry in &entries {
+    for entry in entries {
         if cancel.load(Ordering::Relaxed) {
             bail!(Cancelled);
         }
@@ -464,8 +581,8 @@ fn zip_folder_as(
         }
         .large_file(entry.size >= u32::MAX as u64);
         zip.start_file(entry.name.as_str(), entry.options(options)?)?;
-        let mut file = File::open(&entry.path)
-            .with_context(|| tr!(error_cannot_open, path = entry.path.display()))?;
+        let mut file = source::open(&entry.path)
+            .with_context(|| tr!(error_cannot_open, path = entry.shown_path()))?;
         loop {
             let n = file.read(&mut buf)?;
             if n == 0 {
@@ -708,9 +825,9 @@ pub fn sanitize_file_name(name: &str) -> String {
     if is_device_name(&s) {
         return format!("_{s}");
     }
-    // APFS counts bytes, not characters, and the part and a number still have
-    // to fit (`.zip.part`, " (99)").
-    #[cfg(target_os = "macos")]
+    // APFS and Linux count bytes, not characters, and the part and a number
+    // still have to fit (`.zip.part`, " (99)").
+    #[cfg(not(windows))]
     let s = names::cut_to(&s, 240, names::bytes);
     s
 }
@@ -779,6 +896,21 @@ impl FileId {
         self.created.is_some()
     }
 
+    /// Whether the identity is only the volume and a number that the file
+    /// system gives again to a later item: on Linux where no birth time is
+    /// known, as on Android's shared storage. Like an identity by creation
+    /// time, it can take a new file under the name for the item (see
+    /// `TransferRecord::part_shorter`).
+    pub fn weak(&self) -> bool {
+        #[cfg(test)]
+        if PRETEND_WEAK.get() {
+            return true;
+        }
+        cfg!(any(target_os = "linux", target_os = "android"))
+            && self.numbered()
+            && self.file[8..] == [0; 8]
+    }
+
     /// Whether `now`, the identity of what has the item's name now, is this
     /// item: the same volume and number, and on FAT and exFAT the same
     /// creation time (see [`same_creation`]). Where this identity has no
@@ -839,12 +971,24 @@ fn filetime_now() -> u64 {
 thread_local! {
     /// Tests: this thread sees every volume as FAT or exFAT (see [`FileId`]).
     pub static PRETEND_FAT: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    /// Tests: this thread sees every identity as weak (see [`FileId::weak`]).
+    pub static PRETEND_WEAK: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
 /// Creates an empty file under the first free one of the numbered names. The
 /// name is the caller's from then on.
 pub fn create_unique_file(dir: &Path, name: &str) -> io::Result<PathBuf> {
-    for candidate in numbered(name, false) {
+    create_unique_file_where(dir, name, |_| true)
+}
+
+/// [`create_unique_file`], under the first of the numbered names for which
+/// `also_free(name)` holds as well.
+pub fn create_unique_file_where(
+    dir: &Path,
+    name: &str,
+    also_free: impl Fn(&str) -> bool,
+) -> io::Result<PathBuf> {
+    for candidate in numbered(name, false).filter(|n| also_free(n)) {
         let path = dir.join(candidate);
         match OpenOptions::new().write(true).create_new(true).open(&path) {
             Ok(_) => return Ok(path),
@@ -959,6 +1103,38 @@ pub fn retried<T>(
 #[cfg(test)]
 pub mod testing {
     use super::*;
+
+    /// Whether identities in `dir` tell an item from one made under its name
+    /// after it was deleted. Not where they are weak (see [`FileId::weak`])
+    /// and the file system gives the number of a deleted item to the next one
+    /// at once (ext4 before Android 11): there only what the records do about
+    /// that (`TransferRecord::part_shorter`, `session::held_names`) holds.
+    pub fn tells_new_items_apart(dir: &Path) -> bool {
+        let probe = dir.join(".identity-probe");
+        std::fs::write(&probe, b"1").unwrap();
+        let before = file_id(&probe).unwrap();
+        std::fs::remove_file(&probe).unwrap();
+        next_tick();
+        std::fs::write(&probe, b"2").unwrap();
+        let after = file_id(&probe).unwrap();
+        std::fs::remove_file(&probe).unwrap();
+        let apart = !before.same_item(&after);
+        if !apart {
+            eprintln!("Skipped: identities here do not tell a new item from a deleted one.");
+        }
+        apart
+    }
+
+    /// Waits until the clock that the file system stamps items with has moved
+    /// on. Linux takes it from a coarse clock, a few milliseconds a tick, and
+    /// ext4 gives the number of an item just deleted to the next one at once:
+    /// made in the same tick, that one would have the same identity (see
+    /// [`FileId`]). A deletion and a new item of a user's are never that close.
+    pub fn next_tick() {
+        if cfg!(any(target_os = "linux", target_os = "android")) {
+            std::thread::sleep(Duration::from_millis(20));
+        }
+    }
     #[cfg(windows)]
     use std::os::windows::fs::OpenOptionsExt;
 
@@ -966,8 +1142,11 @@ pub mod testing {
     pub struct Held {
         #[cfg(windows)]
         _file: File,
-        #[cfg(target_os = "macos")]
+        #[cfg(unix)]
         path: PathBuf,
+        /// The modes of the file and of its folder before the hold.
+        #[cfg(any(target_os = "linux", target_os = "android"))]
+        modes: (u32, u32),
     }
 
     /// Holds `path` as another program that has it open and shares nothing
@@ -1052,6 +1231,49 @@ pub mod testing {
         }
     }
 
+    /// Nothing can keep a file to itself on Linux either. What comes closest
+    /// for the code under test, for a user who is not root, is to make the
+    /// file read-only and its folder closed to changes: writing to it,
+    /// renaming it and deleting it are then refused (`EACCES`, which counts
+    /// as busy), until the modes are back. Reading it still works.
+    #[cfg(any(target_os = "linux", target_os = "android"))]
+    pub fn hold(path: &Path) -> Held {
+        use std::{fs::Permissions, os::unix::fs::PermissionsExt};
+        let parent = path.parent().unwrap();
+        let mode = |p: &Path| p.metadata().unwrap().permissions().mode();
+        let modes = (mode(path), mode(parent));
+        std::fs::set_permissions(path, Permissions::from_mode(0o444)).unwrap();
+        std::fs::set_permissions(parent, Permissions::from_mode(0o555)).unwrap();
+        Held {
+            path: path.to_path_buf(),
+            modes,
+        }
+    }
+
+    /// See [`hold`].
+    #[cfg(any(target_os = "linux", target_os = "android"))]
+    pub fn hold_readable(path: &Path) -> Held {
+        hold(path)
+    }
+
+    /// See [`hold`].
+    #[cfg(any(target_os = "linux", target_os = "android"))]
+    pub fn hold_writing(path: &Path) -> Held {
+        hold(path)
+    }
+
+    #[cfg(any(target_os = "linux", target_os = "android"))]
+    impl Drop for Held {
+        fn drop(&mut self) {
+            use std::{fs::Permissions, os::unix::fs::PermissionsExt};
+            let (file, folder) = self.modes;
+            if let Some(parent) = self.path.parent() {
+                let _ = std::fs::set_permissions(parent, Permissions::from_mode(folder));
+            }
+            let _ = std::fs::set_permissions(&self.path, Permissions::from_mode(file));
+        }
+    }
+
     /// Whether `path` has the mark of the web (see [`mark_of_the_web`]).
     #[cfg(windows)]
     pub fn has_mark(path: &Path) -> bool {
@@ -1096,15 +1318,40 @@ pub mod testing {
         assert!(status.success());
     }
 
+    /// Linux has no mark of the web (see [`mark_of_the_web`]): there is
+    /// nothing to look for.
+    #[cfg(any(target_os = "linux", target_os = "android"))]
+    pub fn has_mark(_path: &Path) -> bool {
+        true
+    }
+
     /// Makes `link`, a link to the folder `target`.
-    #[cfg(target_os = "macos")]
+    #[cfg(unix)]
     pub fn link_folder(link: &Path, target: &Path) {
         std::os::unix::fs::symlink(target, link).unwrap();
     }
 
+    /// Whether a creation time can be given to an item here: not on Linux.
+    pub const CREATION_TIMES: bool = cfg!(any(windows, target_os = "macos"));
+
+    /// What is left of the creation time `created` where it is kept (see
+    /// [`CREATION_TIMES`]).
+    pub fn kept(created: SystemTime) -> Option<SystemTime> {
+        CREATION_TIMES.then_some(created)
+    }
+
     /// When the item at `path` was created, as a Windows file time.
+    #[cfg(any(windows, target_os = "macos"))]
     pub fn created(path: &Path) -> u64 {
         system_to_filetime(path.symlink_metadata().unwrap().created().unwrap()).unwrap()
+    }
+
+    /// When the item at `path` was born, as a Windows file time: std does not
+    /// tell that on Android.
+    #[cfg(any(target_os = "linux", target_os = "android"))]
+    pub fn created(path: &Path) -> u64 {
+        let born = os::birth_time(path).expect("a file system that keeps birth times");
+        FILETIME_UNIX_EPOCH + born / 100
     }
 
     /// Whether the item at `path` is hidden.
@@ -1175,6 +1422,81 @@ mod tests {
         assert_eq!(std::fs::read(out.join("sub/photo.jpg")).unwrap(), b"jpg");
         assert!(out.join("empty").is_dir());
         assert!(!out.join("a.txt:Zone.Identifier").exists());
+        std::fs::remove_dir_all(&base).ok();
+    }
+
+    /// A folder that the app listed (an Android document) goes into the zip
+    /// with the names and dates the app gives, read from where its files are,
+    /// named as any receiver can take them; what is in a folder that is not
+    /// listed, and what only means something to macOS, is left out.
+    #[test]
+    fn a_listed_folder_zips_from_where_its_files_are() {
+        let base = scratch("listed");
+        let (a, b, c) = (base.join("1"), base.join("2"), base.join("3"));
+        std::fs::write(&a, b"hello").unwrap();
+        std::fs::write(&b, b"why").unwrap();
+        std::fs::write(&c, b".").unwrap();
+        let item = |path: &[&str], folder: bool, file: &Path| source::Item {
+            path: path.iter().map(|p| p.to_string()).collect(),
+            folder,
+            size: if folder {
+                0
+            } else {
+                file.metadata().unwrap().len()
+            },
+            modified: Some(1_600_000_000_000),
+            uri: if folder {
+                String::new()
+            } else {
+                file.display().to_string()
+            },
+        };
+        let items = [
+            item(&["Trip"], true, &a),
+            item(&["Trip", "a.txt"], false, &a),
+            item(&["Trip", "what?.txt"], false, &b),
+            item(&[".hidden"], false, &c),
+            item(&[".DS_Store"], false, &c),
+            item(&["Unlisted", "x.txt"], false, &c),
+        ];
+        let entries = collect_listed(&items, true);
+        let names: Vec<_> = entries.iter().map(|e| e.name.as_str()).collect();
+        assert_eq!(names, ["Trip/", "Trip/a.txt", "Trip/what_.txt", ".hidden"]);
+        assert_eq!(entries[2].fidelity.name.as_deref(), Some("what?.txt"));
+        assert!(entries[3].hidden && !entries[1].hidden);
+        assert_eq!(
+            entries[1].times.modified,
+            source::millis_to_system(1_600_000_000_000).and_then(system_to_filetime)
+        );
+
+        let zip = base.join("x.zip");
+        let cancel = AtomicBool::new(false);
+        let packed = zip_entries(&entries, &zip, &cancel, &mut |_, _| {}).unwrap();
+        assert_eq!(
+            packed,
+            Packed {
+                files: 3,
+                size: 9,
+                largest: 5
+            }
+        );
+        let out = base.join("out");
+        unzip(
+            File::open(&zip).unwrap(),
+            &out,
+            false,
+            &cancel,
+            &mut |_, _| {},
+        )
+        .unwrap();
+        assert_eq!(std::fs::read(out.join("Trip/a.txt")).unwrap(), b"hello");
+        // Restored where the system takes it (see `os::takes_name`).
+        let what = if cfg!(any(target_os = "macos", target_os = "linux")) {
+            "what?.txt"
+        } else {
+            "what_.txt"
+        };
+        assert_eq!(std::fs::read(out.join("Trip").join(what)).unwrap(), b"why");
         std::fs::remove_dir_all(&base).ok();
     }
 
@@ -1303,9 +1625,12 @@ mod tests {
         SystemTime::UNIX_EPOCH + Duration::from_secs(secs)
     }
 
-    fn dates(path: &Path) -> (SystemTime, SystemTime) {
+    /// The modified date of `path`, and its created date where there is
+    /// one (see [`testing::CREATION_TIMES`]).
+    fn dates(path: &Path) -> (SystemTime, Option<SystemTime>) {
         let meta = std::fs::metadata(path).unwrap();
-        (meta.modified().unwrap(), meta.created().unwrap())
+        let created = testing::CREATION_TIMES.then(|| meta.created().unwrap());
+        (meta.modified().unwrap(), created)
     }
 
     /// Files and folders keep their modified and created dates through
@@ -1345,10 +1670,14 @@ mod tests {
             times.modified.and_then(filetime_to_system),
             Some(at(1_500_000_000))
         );
-        assert_eq!(
-            times.created.and_then(filetime_to_system),
-            Some(at(1_400_000_000))
-        );
+        // Where it cannot be given (Linux), the zip has the file's own
+        // birth time, if the file system keeps one.
+        if testing::CREATION_TIMES {
+            assert_eq!(
+                times.created.and_then(filetime_to_system),
+                Some(at(1_400_000_000))
+            );
+        }
         drop(entry);
         assert!(
             archive.file_names().all(|n| !n.unwrap().starts_with("src")),
@@ -1365,7 +1694,11 @@ mod tests {
         )
         .unwrap();
         for (name, modified, created) in items {
-            assert_eq!(dates(&out.join(name)), (modified, created), "{name}");
+            assert_eq!(
+                dates(&out.join(name)),
+                (modified, testing::kept(created)),
+                "{name}"
+            );
         }
         assert!(testing::has_mark(&out.join("a.txt")));
         std::fs::remove_dir_all(&base).ok();
@@ -1374,6 +1707,8 @@ mod tests {
     /// Hidden files and folders of a sent folder arrive hidden, with their
     /// dates and the mark of the web; nothing else of the attributes is kept.
     #[test]
+    // Linux hides by the name alone, which travels as it is.
+    #[cfg(any(windows, target_os = "macos"))]
     fn zip_keeps_hidden_items_hidden() {
         let base = scratch("zip-hidden");
         let src = base.join("src");
@@ -1423,9 +1758,12 @@ mod tests {
         );
         assert_eq!(
             dates(&out.join("desktop.ini")),
-            (at(1_500_000_000), created)
+            (at(1_500_000_000), Some(created))
         );
-        assert_eq!(dates(&out.join("secret")), (at(1_600_000_000), created));
+        assert_eq!(
+            dates(&out.join("secret")),
+            (at(1_600_000_000), Some(created))
+        );
         assert!(testing::has_mark(&out.join("desktop.ini")));
 
         let mut writable = src.join("locked.txt").metadata().unwrap().permissions();
@@ -1531,11 +1869,14 @@ mod tests {
             &mut |_, _| {},
         )
         .unwrap();
-        let created = testing::created(&out);
-        assert!(
-            filetime_now() - created < 10 * 60 * 10_000_000,
-            "its own date"
-        );
+        #[cfg(any(windows, target_os = "macos"))]
+        {
+            let created = testing::created(&out);
+            assert!(
+                filetime_now() - created < 10 * 60 * 10_000_000,
+                "its own date"
+            );
+        }
         assert_eq!(std::fs::read(out.join("b.txt")).unwrap(), b"b");
         assert!(!out.join("a").exists());
 
@@ -1563,6 +1904,7 @@ mod tests {
     /// exFAT), the sender's creation time waits until the transfer's record
     /// is gone; elsewhere, and without an identity, nothing waits.
     #[test]
+    #[cfg(any(windows, target_os = "macos"))]
     fn a_creation_time_that_tells_waits() {
         let base = scratch("split");
         let path = base.join("a.txt");
@@ -1598,6 +1940,7 @@ mod tests {
     /// that was deleted moments before, and which a renamed one gets back.
     /// Elsewhere the number tells.
     #[test]
+    #[cfg(any(windows, target_os = "macos"))]
     fn creation_times_tell_items_apart_on_fat() {
         let base = scratch("created");
         PRETEND_FAT.set(true);

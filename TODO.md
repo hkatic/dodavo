@@ -15,6 +15,10 @@ Remove an item in the commit that settles it. This file is public, so keep secre
 - **Try what macOS decides at a login and on older systems.** Telling a start at login (`LoginItem.launchedAtLogin`), also with `SMAppService`; the Local Network and Files and Folders prompts during an automatic receive at login; opening a received app that has the quarantine mark; `LSSharedFileList` on macOS 11 and 12.
 - **Try the changed settings on a Mac.** The Settings window shows Downloads with "Always save" on, and "Start transfers automatically" is unavailable with it off; an offer from a recipient then asks where to save.
 
+- **Finish the TalkBack pass of the Android app on a phone.** Gone through on 2026-11-06 (Android 16): recipients, the editor, the recipient menu and its questions, an offer in front and in the background, Transfers, Settings, About, Licenses and Help. Left from `android/tests/talkback-checklist.md`: sharing to Dodavo, the actions of the offer notification, Blocked senders with a blocked sender, the largest font and display size, and braille.
+- **Exchange transfers between Android and released Windows 1.0.0.** Both directions, file and folder in all three ways of keeping one, names Windows cannot take, pause, cancel on each side, a restart of the phone during a transfer and airplane mode.
+- **Prepare the release on Google Play.** `android/play/checklist.md`: the developer account and its closed test with 12 testers for 14 days, the store listing with screenshots, Data safety (the answers marked "Decide"), the foreground service declarations with their videos.
+
 - **Try blocking senders by hand on Windows and on a Mac.** Block Sender in the Incoming window (with several of the sender's offers waiting), Block on a recipient, and unblocking: on Windows the Blocked Senders dialog with NVDA, JAWS and Narrator, in light and dark mode; on a Mac the Blocked tab with VoiceOver (see `macos/tests/voiceover-checklist.md`). Check that an offer from a blocked sender shows nothing and is declined on the other side.
 
 - **Install the published 1.0.0 from the release page.** Try a new installation for the current user and for all users, an installation over an older copy, and uninstalling.
@@ -23,6 +27,13 @@ Remove an item in the commit that settles it. This file is public, so keep secre
 - **Back up the update signing key.** Keep copies in at least two places besides the PC that signs the releases. If the key is lost, installed copies can never accept an automatic update again.
 
 ## Medium
+
+- **Use user-initiated data transfer jobs on Android 14 and later.** For transfers that the user starts (Send, Accept): Google recommends them over `dataSync`, which Android 15 limits to 6 hours a day. Transfers that start by themselves have to stay with the service.
+- **Try the Android app on a phone with Android 8 to 10.** The emulator was the only one; such phones keep the shared storage on sdcardfs, not FUSE.
+- **Let the user choose where received items go on Android.** Only `Download/Dodavo` now: another folder (from the folder picker) would need the core to write through the app, as it reads documents (`src/source.rs`).
+- **Offer Accept and Block in the notification of an offer.** Only Review and Decline now; Accept would have to check the free space without a screen.
+- **Show a running transfer as a Live Update on Android 16 and later** (`NotificationCompat.ProgressStyle`), and offer recent recipients as Direct Share targets.
+- **Move the Android app to Material 3 Expressive** once Compose Material 3 1.5 is stable.
 
 - **Run the Mac version on the oldest macOS at hand.** A virtual machine should reach macOS 12, if this Mac can boot one. macOS 11 needs a Mac that has it.
 - **Have Windows' progress window use `view::TransferView`.** It follows the same rules with its own state, so a change has to be made in both. Do it with live tests on Windows at hand.
@@ -38,6 +49,7 @@ Remove an item in the commit that settles it. This file is public, so keep secre
 
 ## Low
 
+- **Open the folder of a received folder on Android.** Show folder opens Android's view of the downloads, as there is no standard way to open a folder in a file manager.
 - **Trim the Mac's license file.** `macos/licenses.sh` takes all of Rust's `COPYRIGHT-library.html`, 1.4 MB of it; `installer/licenses.ps1` picks what is linked.
 - **Make a Liquid Glass icon for macOS 26 and later.** `macos/Resources/make-icon.swift` draws one for the older grid, which those systems show as it is.
 

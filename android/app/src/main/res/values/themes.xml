@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Compose draws the screens; AppCompat is there for per-app languages. -->
+    <style name="Theme.Dodavo" parent="Theme.AppCompat.DayNight.NoActionBar" />
+</resources>

@@ -227,6 +227,7 @@ super::strings! {
         phase_peer_part_in_use,
         part_in_use_balloon,
         peer_part_in_use_balloon,
+        notify_saved,
         update_installing,
         update_err_not_signed,
         update_err_mount,
