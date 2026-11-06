@@ -1330,6 +1330,10 @@ mod tests {
             [key_a.public()],
             sink(tx_b),
         );
+        // Both can be found once they are online, also where the local
+        // network is closed to the test (GitHub's Mac runner).
+        wait_for(&rx_a, |e| matches!(e, Event::Online(true)));
+        wait_for(&rx_b, |e| matches!(e, Event::Online(true)));
         let file = base.join("note.txt");
         std::fs::write(&file, b"hello").unwrap();
         let send = |id| {

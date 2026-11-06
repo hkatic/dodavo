@@ -48,10 +48,6 @@ Each offer gets its own `IncomingWindowController`, centred on the same spot, so
 
 ## Low
 
-### A test of the free space fails when other tests write at the same time
-
-`space::tests::several_offers_count_together` measures the free space of the temporary folder and then expects an offer of half of it to fit and two not to. When the network tests write their files in parallel, the free space changes between the two looks and the test fails; it passes alone and with `--test-threads=1`. It needs a margin, or a disk of its own.
-
 ### Automatic acceptance checks the free space of each item alone
 
 Each offer from a recipient is checked by itself (`Event::Offer` in `src/app.rs`), so several large items that fit one by one all start, and the later ones fail once the disk is full. The Incoming Transfer window counts them together. The check would have to include what is still to arrive for the transfers already running.
