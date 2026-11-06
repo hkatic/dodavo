@@ -1,6 +1,7 @@
 package com.hrvojekatic.dodavo.service
 
 import android.Manifest
+import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -40,9 +41,16 @@ object Notifications {
         )
     }
 
-    private fun allowed(context: Context): Boolean =
-        Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
-            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+    /** Shows [notification] as [id], if Android lets Dodavo show notifications. */
+    private fun post(context: Context, id: Int, notification: Notification) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) !=
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            return
+        }
+        NotificationManagerCompat.from(context).notify(id, notification)
+    }
 
     /** Opens the app, at the offer [offerId] or at the transfers. */
     fun openApp(context: Context, offerId: Long? = null, request: Int = 0): PendingIntent {
@@ -54,7 +62,6 @@ object Notifications {
 
     /** Someone wants to send something: a tap or Review opens it; Decline declines it. */
     fun offer(context: Context, offer: Offer, notice: Notice) {
-        if (!allowed(context)) return
         val id = OFFER_BASE + (offer.id % OFFER_BASE).toInt()
         val decline = PendingIntent.getBroadcast(
             context,
@@ -77,7 +84,7 @@ object Notifications {
             .addAction(0, context.getString(R.string.decline), decline)
             .setAutoCancel(true)
             .build()
-        NotificationManagerCompat.from(context).notify(id, notification)
+        post(context, id, notification)
     }
 
     fun cancelOffer(context: Context, offerId: Long) {
@@ -86,7 +93,6 @@ object Notifications {
 
     /** What happened to a transfer while Dodavo was not in front. */
     fun notice(context: Context, id: Long, notice: Notice) {
-        if (!allowed(context)) return
         val notification = NotificationCompat.Builder(context, CHANNEL_FINISHED)
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(notice.title)
@@ -95,6 +101,6 @@ object Notifications {
             .setContentIntent(openApp(context, request = NOTICE_BASE))
             .setAutoCancel(true)
             .build()
-        NotificationManagerCompat.from(context).notify(NOTICE_BASE + (id % OFFER_BASE).toInt(), notification)
+        post(context, NOTICE_BASE + (id % OFFER_BASE).toInt(), notification)
     }
 }

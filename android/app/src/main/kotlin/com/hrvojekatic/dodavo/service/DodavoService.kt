@@ -71,9 +71,12 @@ class DodavoService : Service() {
     }
 
     private fun promote(need: Need) {
+        // Android 9 knows no types, and takes none.
         var type = 0
-        if (need.busy && !dataSyncTimedOut) type = type or ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
-        if (need.background || type == 0) type = type or ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            if (need.busy && !dataSyncTimedOut) type = type or ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
+            if (need.background || type == 0) type = type or ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE
+        }
         runCatching { ServiceCompat.startForeground(this, Notifications.SERVICE_ID, notification(need), type) }
     }
 

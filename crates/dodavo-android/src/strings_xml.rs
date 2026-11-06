@@ -9,6 +9,10 @@
 //! numbered in the order in which they first come in the English text, the
 //! same in every language. In a plural, `{n}` is always `%1$d`, and the others
 //! follow from `%2$s`. Each value is quoted, so that its spaces stay as they are.
+//!
+//! Only the texts that the app shows itself go there: the core's own come to
+//! the app already made (rows, notices, errors), and Android's lint would
+//! report them as unused.
 
 use dodavo_core::i18n::{Category, Lang, Plural, android};
 
@@ -20,6 +24,13 @@ pub const FOLDERS: [(&str, Lang); 4] = [
     ("values-b+sr+Latn", Lang::SrLatn),
     ("values-sl", Lang::Sl),
 ];
+
+/// The first of the texts that the app shows itself: those before it in the
+/// table are the core's.
+const FIRST_APP_TEXT: &str = "nav_recipients";
+
+/// The plurals that only the core uses.
+const CORE_PLURALS: [&str; 1] = ["folder_description"];
 
 /// The names of the placeholders of `text`, in the order they first come.
 fn placeholders(text: &str) -> Vec<String> {
@@ -122,13 +133,18 @@ pub fn strings_xml(lang: Lang) -> String {
     );
     out.push_str(&format!(
         "    <!-- The language of these texts, which the app gives Dodavo's core. -->\n    \
-         <string name=\"dodavo_lang\" translatable=\"false\">{}</string>\n",
+         <string name=\"dodavo_lang\">{}</string>\n",
         lang.code()
     ));
     if lang == Lang::En {
         out.push_str("    <string name=\"app_name\" translatable=\"false\">Dodavo</string>\n");
     }
-    for ((key, text), (_, english_text)) in table.texts().into_iter().zip(english.texts()) {
+    let texts = table
+        .texts()
+        .into_iter()
+        .zip(english.texts())
+        .skip_while(|((key, _), _)| *key != FIRST_APP_TEXT);
+    for ((key, text), (_, english_text)) in texts {
         let order = text_order(english_text);
         let formatted = if order.is_empty() && text.contains('%') {
             " formatted=\"false\""
@@ -140,7 +156,12 @@ pub fn strings_xml(lang: Lang) -> String {
             value(text, &order)
         ));
     }
-    for ((key, plural), (_, english_plural)) in table.plurals().into_iter().zip(english.plurals()) {
+    let plurals = table
+        .plurals()
+        .into_iter()
+        .zip(english.plurals())
+        .filter(|((key, _), _)| !CORE_PLURALS.contains(key));
+    for ((key, plural), (_, english_plural)) in plurals {
         let order = plural_order(english_plural.other);
         out.push_str(&format!("    <plurals name=\"{key}\">\n"));
         for &category in categories(lang) {
@@ -173,6 +194,19 @@ mod tests {
             value("„{name}”  ({n} datoteke, {size})", &order),
             "\"„%2$s”  (%1$d datoteke, %3$s)\""
         );
+    }
+
+    /// The keys that divide the core's texts from the app's are in the table.
+    #[test]
+    fn the_core_texts_are_known() {
+        let table = android::strings(Lang::En);
+        assert!(table.texts().iter().any(|(key, _)| *key == FIRST_APP_TEXT));
+        for plural in CORE_PLURALS {
+            assert!(table.plurals().iter().any(|(key, _)| *key == plural), "{plural}");
+        }
+        let xml = strings_xml(Lang::En);
+        assert!(!xml.contains("name=\"status_online\""));
+        assert!(xml.contains("name=\"nav_recipients\""));
     }
 
     /// Every key is a name that Kotlin can use, and none is a keyword.

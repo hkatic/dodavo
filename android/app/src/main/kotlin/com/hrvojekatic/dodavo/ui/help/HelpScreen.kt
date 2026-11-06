@@ -1,7 +1,8 @@
 package com.hrvojekatic.dodavo.ui.help
 
-import android.annotation.SuppressLint
 import android.content.Intent
+import android.view.ViewGroup
+import android.webkit.RenderProcessGoneDetail
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebView
@@ -26,7 +27,6 @@ import com.hrvojekatic.dodavo.ui.Navigator
 
 /** The help in the app's language (assets/help, from res/help/android). */
 @OptIn(ExperimentalMaterial3Api::class)
-@SuppressLint("SetJavaScriptEnabled")
 @Composable
 fun HelpScreen(navigator: Navigator) {
     val language = stringResource(R.string.dodavo_lang)
@@ -53,6 +53,14 @@ fun HelpScreen(navigator: Navigator) {
                     webViewClient = object : WebViewClient() {
                         override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? =
                             assets.shouldInterceptRequest(request.url)
+
+                        /** Android ended the page's renderer (to free memory, say): back to the app. */
+                        override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean {
+                            (view.parent as? ViewGroup)?.removeView(view)
+                            view.destroy()
+                            navigator.back()
+                            return true
+                        }
 
                         /** Other sites open in the browser. */
                         override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {

@@ -56,7 +56,8 @@ super::strings! {
         settings_unreadable,
         unknown_sender_warning,
         // The screens of the app (`android/`), as `R.string` (see
-        // `crates/dodavo-android`).
+        // `crates/dodavo-android`): from here on, the texts go into the
+        // app's resources, and those above do not.
         nav_recipients,
         nav_transfers,
         more_options,

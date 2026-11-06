@@ -3,45 +3,7 @@
      crates/dodavo-android. Do not edit. -->
 <resources>
     <!-- The language of these texts, which the app gives Dodavo's core. -->
-    <string name="dodavo_lang" translatable="false">hr</string>
-    <string name="space_ok">"Ima dovoljno slobodnog prostora: potrebno je %1$s, a dostupno je %2$s."</string>
-    <string name="space_short">"Nema dovoljno slobodnog prostora: potrebno je %1$s, a dostupno je samo %2$s."</string>
-    <string name="space_fat">"Ova pohrana koristi format FAT, koji ne može spremiti datoteke od 4 GB ili veće, a prijenos bi ondje spremio datoteku od %1$s."</string>
-    <string name="tx_part_in_use">"Čeka se druga aplikacija"</string>
-    <string name="tx_peer_part_in_use">"Čeka se aplikacija na drugoj strani"</string>
-    <string name="phase_part_in_use">"Djelomično primljenu datoteku koristi druga aplikacija ili Android nije dopustio pristup njoj. Prijenos se nastavlja čim se to promijeni."</string>
-    <string name="phase_peer_part_in_use">"Na drugoj strani (%1$s) djelomično primljenu datoteku koristi druga aplikacija. Prijenos se nastavlja čim je ta aplikacija zatvori."</string>
-    <string name="part_in_use_balloon">"„%1$s”: djelomično primljenu datoteku koristi druga aplikacija ili Android nije dopustio pristup njoj. Prijenos se nastavlja čim se to promijeni."</string>
-    <string name="peer_part_in_use_balloon">"„%1$s”: na drugoj strani (%2$s) djelomično primljenu datoteku koristi druga aplikacija. Prijenos se nastavlja čim je ta aplikacija zatvori."</string>
-    <string name="notify_saved">"Spremljeno: „%1$s” (pošiljatelj: %2$s). Dodirnite za prikaz."</string>
-    <string name="error_no_access">"Dodavo ne smije koristiti ovu stavku."</string>
-    <string name="error_name_too_long">"Naziv ili putanja stavke predugi su za ovaj uređaj."</string>
-    <string name="error_read_only">"Pohrana se može samo čitati."</string>
-    <string name="error_system">"Sustav je prijavio pogrešku (kod %1$s)."</string>
-    <string name="status_offline">"Izvan mreže – provjerite internetsku vezu. Prijenosi unutar lokalne mreže i dalje rade."</string>
-    <string name="status_online">"Na mreži – spremno za slanje i primanje datoteka."</string>
-    <string name="network_problem">"Problem s mrežom: %1$s (ponovni pokušaj…)"</string>
-    <string name="space_confirm">"Za ovaj prijenos nema dovoljno slobodnog prostora u pohrani.\n\n%1$s\n\nŽelite li ga ipak prihvatiti?"</string>
-    <string name="choose_save_folder">"Odaberite mapu u koju će se spremiti primljene datoteke."</string>
-    <string name="contact_invalid">"ID kontakta primatelja „%1$s” nije valjan."</string>
-    <string name="name_taken">"Primatelj s imenom „%1$s” već postoji. Odaberite drugo ime."</string>
-    <string name="contact_id_taken">"Ovaj ID kontakta već pripada primatelju „%1$s”."</string>
-    <string name="invalid_save_folder">"Odaberite valjanu mapu za spremanje primljenih datoteka."</string>
-    <string name="enter_my_name">"Unesite svoje ime. Prikazuje se osobama kojima šaljete datoteke."</string>
-    <string name="own_contact_id">"Ovo je vaš vlastiti ID kontakta. Unesite ID kontakta druge osobe."</string>
-    <string name="invalid_contact_id">"Ovo nije valjan ID kontakta.\n\nID kontakta kôd je od 64 znaka sastavljen od znamenki 0–9 i slova a–f. Zamolite osobu da vam ga ponovno pošalje."</string>
-    <string name="enter_recipient_name">"Unesite ime ovog primatelja."</string>
-    <string name="panic_message">"Došlo je do neočekivane pogreške i Dodavo se mora zatvoriti.\n\n%1$s"</string>
-    <string name="add_to_recipients">"Dodaj „%1$s” u moje primatelje"</string>
-    <string name="wants_folder">"%1$s vam želi poslati mapu"</string>
-    <string name="wants_file">"%1$s vam želi poslati datoteku"</string>
-    <string name="file_description">"„%1$s”  (%2$s)"</string>
-    <string name="folder_unusable">"Mapa se ne može koristiti:\n%1$s\n\n%2$s"</string>
-    <string name="identity_failed">"Vaš identitet ne može se pročitati ni stvoriti u mapi %1$s:\n%2$s"</string>
-    <string name="settings_backup">"Nečitljiva datoteka sačuvana je kao %1$s. U njoj je vaš popis primatelja."</string>
-    <string name="settings_not_saved">"Postavke se ne mogu spremiti:\n%1$s"</string>
-    <string name="settings_unreadable">"Datoteka s postavkama ne može se pročitati pa se koriste zadane postavke:\n%1$s\n\n%2$s"</string>
-    <string name="unknown_sender_warning">"Ovaj pošiljatelj nije na vašem popisu primatelja (ID kontakta %1$s). Prihvaćajte datoteke samo od osoba koje poznajete."</string>
+    <string name="dodavo_lang">hr</string>
     <string name="nav_recipients">"Primatelji"</string>
     <string name="nav_transfers">"Prijenosi"</string>
     <string name="more_options">"Više opcija"</string>
@@ -144,9 +106,4 @@
     <string name="notify_ready">"Spremno za primanje"</string>
     <string name="notify_ready_text">"Drugi vam sada mogu slati datoteke."</string>
     <string name="review">"Pregledaj"</string>
-    <plurals name="folder_description">
-        <item quantity="one">"„%2$s”  (%1$d datoteka, %3$s)"</item>
-        <item quantity="few">"„%2$s”  (%1$d datoteke, %3$s)"</item>
-        <item quantity="other">"„%2$s”  (%1$d datoteka, %3$s)"</item>
-    </plurals>
 </resources>

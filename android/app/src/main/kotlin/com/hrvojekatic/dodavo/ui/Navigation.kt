@@ -202,7 +202,9 @@ private fun FirstStartPermissions() {
         if (preferences.askedForPermissions()) return@LaunchedEffect
         val wanted = buildList {
             val sdk = android.os.Build.VERSION.SDK_INT
-            if (sdk >= 33) add(android.Manifest.permission.POST_NOTIFICATIONS)
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                add(android.Manifest.permission.POST_NOTIFICATIONS)
+            }
             if (sdk >= 37) add("android.permission.ACCESS_LOCAL_NETWORK")
             if (sdk <= 29) add(android.Manifest.permission.WRITE_EXTERNAL_STORAGE)
         }.filter {

@@ -3,46 +3,8 @@
      crates/dodavo-android. Do not edit. -->
 <resources>
     <!-- The language of these texts, which the app gives Dodavo's core. -->
-    <string name="dodavo_lang" translatable="false">en</string>
+    <string name="dodavo_lang">en</string>
     <string name="app_name" translatable="false">Dodavo</string>
-    <string name="space_ok">"There is enough free space: %1$s needed, %2$s available."</string>
-    <string name="space_short">"Not enough free space: %1$s needed, but only %2$s available."</string>
-    <string name="space_fat">"This storage uses the FAT format, which cannot hold files of 4 GB or more, but this transfer would save a file of %1$s there."</string>
-    <string name="tx_part_in_use">"Waiting for another app"</string>
-    <string name="tx_peer_part_in_use">"Waiting for an app on the other side"</string>
-    <string name="phase_part_in_use">"Another app is using the partly received file, or Android has not allowed access to it. The transfer continues as soon as that changes."</string>
-    <string name="phase_peer_part_in_use">"On the other side (%1$s), another app is using the partly received file. The transfer continues as soon as that app closes it."</string>
-    <string name="part_in_use_balloon">"“%1$s”: another app is using the partly received file, or Android has not allowed access to it. The transfer continues as soon as that changes."</string>
-    <string name="peer_part_in_use_balloon">"“%1$s”: on the other side (%2$s), another app is using the partly received file. The transfer continues as soon as that app closes it."</string>
-    <string name="notify_saved">"“%1$s” from %2$s has been saved. Tap to show it."</string>
-    <string name="error_no_access">"Dodavo may not use this item."</string>
-    <string name="error_name_too_long">"The name or path of an item is too long for this device."</string>
-    <string name="error_read_only">"The storage is read-only."</string>
-    <string name="error_system">"The system reported an error (code %1$s)."</string>
-    <string name="status_offline">"Offline – check your internet connection. Transfers within your local network still work."</string>
-    <string name="status_online">"Online – ready to send and receive files."</string>
-    <string name="network_problem">"Network problem: %1$s (retrying…)"</string>
-    <string name="space_confirm">"There is not enough free storage space for this transfer.\n\n%1$s\n\nDo you want to accept it anyway?"</string>
-    <string name="choose_save_folder">"Please choose the folder where the received files should be saved."</string>
-    <string name="contact_invalid">"The Contact ID of %1$s is not valid."</string>
-    <string name="name_taken">"There is already a recipient called “%1$s”. Please choose a different name."</string>
-    <string name="contact_id_taken">"This Contact ID already belongs to “%1$s”."</string>
-    <string name="invalid_save_folder">"Please choose a valid folder for saving received files."</string>
-    <string name="enter_my_name">"Please enter your name. It is shown to the people you send files to."</string>
-    <string name="own_contact_id">"This is your own Contact ID. Please enter the Contact ID of the other person."</string>
-    <string name="invalid_contact_id">"This is not a valid Contact ID.\n\nA Contact ID is a 64 character code made of the digits 0–9 and the letters a–f. Ask the person to send it to you again."</string>
-    <string name="enter_recipient_name">"Please enter a name for this recipient."</string>
-    <string name="panic_message">"An unexpected error occurred and Dodavo has to quit.\n\n%1$s"</string>
-    <string name="add_to_recipients">"Add “%1$s” to my recipients"</string>
-    <string name="wants_folder">"%1$s wants to send you a folder"</string>
-    <string name="wants_file">"%1$s wants to send you a file"</string>
-    <string name="file_description">"“%1$s”  (%2$s)"</string>
-    <string name="folder_unusable">"The folder cannot be used:\n%1$s\n\n%2$s"</string>
-    <string name="identity_failed">"Your identity could not be read or created in %1$s:\n%2$s"</string>
-    <string name="settings_backup">"The unreadable file was kept as %1$s. Your recipient list is in it."</string>
-    <string name="settings_not_saved">"The settings could not be saved:\n%1$s"</string>
-    <string name="settings_unreadable">"The settings file could not be read, so the default settings are used:\n%1$s\n\n%2$s"</string>
-    <string name="unknown_sender_warning">"This sender is not in your recipient list (Contact ID %1$s). Only accept files from people you know."</string>
     <string name="nav_recipients">"Recipients"</string>
     <string name="nav_transfers">"Transfers"</string>
     <string name="more_options">"More options"</string>
@@ -145,8 +107,4 @@
     <string name="notify_ready">"Ready to receive"</string>
     <string name="notify_ready_text">"Others can send you files now."</string>
     <string name="review">"Review"</string>
-    <plurals name="folder_description">
-        <item quantity="one">"“%2$s”  (%1$d file, %3$s)"</item>
-        <item quantity="other">"“%2$s”  (%1$d files, %3$s)"</item>
-    </plurals>
 </resources>

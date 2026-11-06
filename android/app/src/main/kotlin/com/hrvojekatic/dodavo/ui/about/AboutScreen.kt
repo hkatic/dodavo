@@ -1,7 +1,6 @@
 package com.hrvojekatic.dodavo.ui.about
 
 import android.content.Intent
-import android.net.Uri
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -26,6 +25,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import androidx.core.net.toUri
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.hrvojekatic.dodavo.R
 import com.hrvojekatic.dodavo.core.CoreState
@@ -43,7 +43,7 @@ fun AboutScreen(navigator: Navigator) {
     val context = LocalContext.current
     val state by context.container.repository.state.collectAsStateWithLifecycle()
     val started = (state as? CoreState.Running)?.started
-    fun browse(url: String) = context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+    fun browse(url: String) = context.startActivity(Intent(Intent.ACTION_VIEW, url.toUri()))
     Scaffold(
         topBar = {
             TopAppBar(
