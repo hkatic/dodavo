@@ -24,7 +24,7 @@ use iroh::{Endpoint, EndpointId, SecretKey, Watcher, endpoint::Connection, endpo
 use iroh_mdns_address_lookup::MdnsAddressLookup;
 use tokio::sync::{mpsc, oneshot, watch};
 
-pub use crate::config::ReceivedFolder;
+pub use crate::config::{OverLimit, ReceivedFolder};
 pub use protocol::{Kind, Offer};
 use session::{Control, Fate, Session, Streams};
 pub use session::{Role, TransferRecord};
@@ -292,6 +292,13 @@ pub enum Event {
         from: EndpointId,
         offer: Offer,
     },
+    /// An offer was declined because its item is larger than the sender's
+    /// limit, and the user wants to be told (`OverLimit::DeclineAndTell`).
+    /// It is no transfer: it has no id, and nothing follows.
+    OverLimit {
+        from: EndpointId,
+        offer: Offer,
+    },
     /// An unfinished transfer from an earlier run; its phases follow.
     Restored {
         id: u64,
@@ -399,10 +406,31 @@ pub(crate) struct Shared {
     /// Senders whose offers are declined without asking (see
     /// `NetHandle::set_blocked`).
     blocked: Blocked,
+    /// How large an item each sender may offer (see
+    /// `NetHandle::set_limits`).
+    limits: Arc<Mutex<Limits>>,
 }
 
 /// The blocked senders, shared by the network and its handle.
 type Blocked = Arc<Mutex<HashSet<EndpointId>>>;
+
+/// How large an item each sender may offer, and what happens to a larger
+/// one (see `config::Config::limits`).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Limits {
+    pub action: OverLimit,
+    /// For everyone who is not in `per_peer`; `None` for any size.
+    pub general: Option<u64>,
+    /// Senders with a limit of their own, `None` being any size.
+    pub per_peer: HashMap<EndpointId, Option<u64>>,
+}
+
+impl Limits {
+    /// The largest item, in bytes, that `peer` may offer; `None` for any size.
+    pub fn limit_for(&self, peer: &EndpointId) -> Option<u64> {
+        self.per_peer.get(peer).copied().unwrap_or(self.general)
+    }
+}
 
 impl Shared {
     pub(crate) fn emit(&self, event: Event) {
@@ -571,6 +599,7 @@ pub(crate) fn spawn_path_watch(
 pub struct NetHandle {
     tx: mpsc::UnboundedSender<Command>,
     blocked: Blocked,
+    limits: Arc<Mutex<Limits>>,
 }
 
 impl NetHandle {
@@ -580,6 +609,7 @@ impl NetHandle {
         NetHandle {
             tx: mpsc::unbounded_channel().0,
             blocked: Blocked::default(),
+            limits: Arc::default(),
         }
     }
 
@@ -592,6 +622,17 @@ impl NetHandle {
     /// sees it. Transfers with them that are under way go on.
     pub fn set_blocked(&self, ids: impl IntoIterator<Item = EndpointId>) {
         *self.blocked.lock().unwrap() = ids.into_iter().collect();
+    }
+
+    /// From now on, an offer of an item larger than its sender's limit is
+    /// declined where `limits.action` says so: the sender learns only that
+    /// the offer was declined, and here it is either not seen at all or
+    /// reported with `Event::OverLimit`. With `OverLimit::Ask` every offer
+    /// is emitted as without limits, and the user interface keeps a larger
+    /// one from starting by itself (`Config::auto_save_dir_for`). Offers
+    /// that wait for an answer and transfers under way go on.
+    pub fn set_limits(&self, limits: Limits) {
+        *self.limits.lock().unwrap() = limits;
     }
 
     /// Suspends all transfers and closes connections so that peers learn
@@ -642,16 +683,19 @@ const IDENTITY_WAIT: Duration = Duration::from_secs(5);
 /// every event. `data_dir` holds the records of unfinished transfers and
 /// `temp_dir` the temporary archives of folder transfers. Offers from the
 /// `blocked` senders are declined from the start (see
-/// `NetHandle::set_blocked`).
+/// `NetHandle::set_blocked`), and `limits` hold from the start (see
+/// `NetHandle::set_limits`).
 pub fn start(
     secret: SecretKey,
     data_dir: PathBuf,
     temp_dir: PathBuf,
     blocked: impl IntoIterator<Item = EndpointId>,
+    limits: Limits,
     sink: impl Fn(Event) + Send + Sync + 'static,
 ) -> NetHandle {
     let (tx, rx) = mpsc::unbounded_channel();
     let blocked = Blocked::new(Mutex::new(blocked.into_iter().collect()));
+    let limits = Arc::new(Mutex::new(limits));
     let shared = Arc::new(Shared {
         sink: Box::new(sink),
         data_dir,
@@ -662,6 +706,7 @@ pub fn start(
         restoring: Mutex::new(HashSet::new()),
         shutting_down: AtomicBool::new(false),
         blocked: blocked.clone(),
+        limits: limits.clone(),
     });
     std::thread::Builder::new()
         .name("network".into())
@@ -673,7 +718,11 @@ pub fn start(
             rt.block_on(run(secret, shared, rx));
         })
         .expect("spawn network thread");
-    NetHandle { tx, blocked }
+    NetHandle {
+        tx,
+        blocked,
+        limits,
+    }
 }
 
 /// Runs a send of `what` to its outcome, as a task of its own.
@@ -787,7 +836,24 @@ async fn accept(shared: Arc<Shared>, endpoint: Endpoint, conn: Connection) {
             return;
         }
         Msg::Offer(offer) => {
-            receive::handle(shared, endpoint, conn, send, recv, offer).await;
+            let declined = {
+                let limits = shared.limits.lock().unwrap();
+                crate::limit::over(&offer, limits.limit_for(&peer))
+                    .then_some(limits.action)
+                    .filter(|action| *action != OverLimit::Ask)
+            };
+            let Some(action) = declined else {
+                receive::handle(shared, endpoint, conn, send, recv, offer).await;
+                return;
+            };
+            // Declined as a blocked sender's is. The user is told once the
+            // sender has the answer, or has gone.
+            let _ = protocol::write_msg(&mut send, &Msg::Decline).await;
+            let _ = send.finish();
+            if action == OverLimit::DeclineAndTell {
+                shared.emit(Event::OverLimit { from: peer, offer });
+            }
+            let _ = tokio::time::timeout(Duration::from_secs(5), conn.closed()).await;
             return;
         }
         Msg::Continue { token } => {
@@ -1299,6 +1365,7 @@ mod tests {
             base.join("a"),
             base.join("temp"),
             [],
+            Limits::default(),
             sink(tx_a),
         );
         let b = Arc::new(start(
@@ -1306,6 +1373,7 @@ mod tests {
             base.join("b"),
             base.join("temp"),
             [],
+            Limits::default(),
             sink(tx_b),
         ));
 
@@ -1511,6 +1579,7 @@ mod tests {
             base.join("a"),
             base.join("temp"),
             [],
+            Limits::default(),
             sink(tx_a),
         );
         let b = start(
@@ -1518,6 +1587,7 @@ mod tests {
             base.join("b"),
             base.join("temp"),
             [key_a.public()],
+            Limits::default(),
             sink(tx_b),
         );
         // Both can be found once they are online, also where the local
@@ -1563,6 +1633,110 @@ mod tests {
         std::fs::remove_dir_all(&base).ok();
     }
 
+    /// An item over its sender's limit is declined where the limits say so,
+    /// unseen or with a word to the user; where they say to ask, and for a
+    /// sender whose own limit allows it, the offer is shown.
+    #[test]
+    fn an_item_over_the_limit_is_declined() {
+        let base = scratch("limit");
+        let (tx_a, rx_a) = mpsc::channel();
+        let (tx_b, rx_b) = mpsc::channel();
+        let key_a = SecretKey::generate();
+        let key_b = SecretKey::generate();
+        let id_b = key_b.public();
+        let limits = |action, own: Option<Option<u64>>| Limits {
+            action,
+            general: Some(4),
+            per_peer: own.map(|limit| (key_a.public(), limit)).into_iter().collect(),
+        };
+        let a = start(
+            key_a.clone(),
+            base.join("a"),
+            base.join("temp"),
+            [],
+            Limits::default(),
+            sink(tx_a),
+        );
+        let b = start(
+            key_b,
+            base.join("b"),
+            base.join("temp"),
+            [],
+            limits(OverLimit::Decline, None),
+            sink(tx_b),
+        );
+        wait_for(&rx_a, |e| matches!(e, Event::Online(true)));
+        wait_for(&rx_b, |e| matches!(e, Event::Online(true)));
+        let file = base.join("note.txt");
+        std::fs::write(&file, b"hello").unwrap();
+        let send = || {
+            let id = next_transfer_id();
+            a.send(Command::Send {
+                id,
+                to: id_b,
+                path: file.clone(),
+                kind: Kind::File,
+                my_name: "A".into(),
+                peer_name: "B".into(),
+            });
+            id
+        };
+        let declined = |id| {
+            let outcome = wait_finished(&rx_a, id);
+            assert!(matches!(outcome, Outcome::Declined), "{outcome:?}");
+        };
+        let seen = |e: &Event| {
+            matches!(
+                e,
+                Event::Offer { .. } | Event::Finished { .. } | Event::OverLimit { .. }
+            )
+        };
+
+        // Five bytes against a limit of four: declined, and nothing is seen.
+        declined(send());
+        let events: Vec<Event> = rx_b.try_iter().collect();
+        assert!(!events.iter().any(seen), "{events:?}");
+
+        // Declined, and the user is told what it was.
+        b.set_limits(limits(OverLimit::DeclineAndTell, None));
+        declined(send());
+        let Event::OverLimit { from, offer } = wait_for(&rx_b, seen) else {
+            panic!("the offer was not declined for its size");
+        };
+        assert_eq!(from, key_a.public());
+        assert_eq!((offer.name.as_str(), offer.size), ("note.txt", 5));
+
+        // The user is asked, as about any offer.
+        b.set_limits(limits(OverLimit::Ask, None));
+        let third = send();
+        let Event::Offer { id, .. } = wait_for(&rx_b, seen) else {
+            panic!("the offer was not shown");
+        };
+        b.send(Command::Respond { id, accept: None });
+        declined(third);
+        wait_for(&rx_b, |e| matches!(e, Event::Finished { .. }));
+
+        // The sender's own limit comes first: any size, and five bytes.
+        for own in [None, Some(5)] {
+            b.set_limits(limits(OverLimit::Decline, Some(own)));
+            let shown = send();
+            let Event::Offer { id, .. } = wait_for(&rx_b, seen) else {
+                panic!("the offer was not shown with the sender's limit {own:?}");
+            };
+            b.send(Command::Respond { id, accept: None });
+            declined(shown);
+            wait_for(&rx_b, |e| matches!(e, Event::Finished { .. }));
+        }
+        // And is the one that declines, whatever the general one allows.
+        let mut tight = limits(OverLimit::Decline, Some(Some(4)));
+        tight.general = None;
+        b.set_limits(tight);
+        declined(send());
+        let events: Vec<Event> = rx_b.try_iter().collect();
+        assert!(!events.iter().any(seen), "{events:?}");
+        std::fs::remove_dir_all(&base).ok();
+    }
+
     /// A new identity ends what was under way, which the other side learns,
     /// is the key of the next start, and is where the peer reaches this side
     /// from then on.
@@ -1575,8 +1749,8 @@ mod tests {
         let dir_b = base.join("b");
         let key_b = crate::identity::load_or_create(&dir_b).unwrap();
         let id_b = key_b.public();
-        let a = start(key_a, base.join("a"), base.join("temp"), [], sink(tx_a));
-        let b = start(key_b, dir_b.clone(), base.join("temp"), [], sink(tx_b));
+        let a = start(key_a, base.join("a"), base.join("temp"), [], Limits::default(), sink(tx_a));
+        let b = start(key_b, dir_b.clone(), base.join("temp"), [], Limits::default(), sink(tx_b));
         wait_for(&rx_a, |e| matches!(e, Event::Online(true)));
         wait_for(&rx_b, |e| matches!(e, Event::Online(true)));
         let recv_dir = base.join("received");
@@ -1683,8 +1857,8 @@ mod tests {
         let key_b = SecretKey::generate();
         let id_b = key_b.public();
         let temp_a = base.join("temp-a");
-        let a = start(SecretKey::generate(), base.join("a"), temp_a.clone(), [], sink(tx_a));
-        let b = start(key_b, base.join("b"), base.join("temp-b"), [], sink(tx_b));
+        let a = start(SecretKey::generate(), base.join("a"), temp_a.clone(), [], Limits::default(), sink(tx_a));
+        let b = start(key_b, base.join("b"), base.join("temp-b"), [], Limits::default(), sink(tx_b));
         wait_for(&rx_a, |e| matches!(e, Event::Online(true)));
         wait_for(&rx_b, |e| matches!(e, Event::Online(true)));
         let staging = session::staging_root(&temp_a);
@@ -1749,8 +1923,8 @@ mod tests {
         let (tx_b, rx_b) = mpsc::channel();
         let key_b = SecretKey::generate();
         let id_b = key_b.public();
-        let a = start(SecretKey::generate(), base.join("a"), base.join("temp-a"), [], sink(tx_a));
-        let b = start(key_b, base.join("b"), base.join("temp-b"), [], sink(tx_b));
+        let a = start(SecretKey::generate(), base.join("a"), base.join("temp-a"), [], Limits::default(), sink(tx_a));
+        let b = start(key_b, base.join("b"), base.join("temp-b"), [], Limits::default(), sink(tx_b));
         wait_for(&rx_a, |e| matches!(e, Event::Online(true)));
         wait_for(&rx_b, |e| matches!(e, Event::Online(true)));
         let stored = base.join("stored");
@@ -1840,6 +2014,7 @@ mod tests {
             base.join("a"),
             base.join("temp"),
             [],
+            Limits::default(),
             sink(tx_a),
         );
         let b = Arc::new(start(
@@ -1847,6 +2022,7 @@ mod tests {
             base.join("b"),
             base.join("temp"),
             [],
+            Limits::default(),
             sink(tx_b),
         ));
         let recv_dir = base.join("received");
@@ -1942,6 +2118,7 @@ mod tests {
             base.join("a"),
             base.join("temp"),
             [],
+            Limits::default(),
             sink(tx_a),
         );
         let b = start(
@@ -1949,6 +2126,7 @@ mod tests {
             dir_b.clone(),
             base.join("temp"),
             [],
+            Limits::default(),
             sink(tx_b),
         );
         let recv_dir = base.join("received");
@@ -1997,7 +2175,7 @@ mod tests {
             )
         });
         let (tx_b2, rx_b2) = mpsc::channel();
-        let b2 = start(key_b, dir_b.clone(), base.join("temp"), [], sink(tx_b2));
+        let b2 = start(key_b, dir_b.clone(), base.join("temp"), [], Limits::default(), sink(tx_b2));
         let Event::Restored {
             id: id_b2, have, ..
         } = wait_for(&rx_b2, |e| matches!(e, Event::Restored { .. }))
@@ -2055,6 +2233,7 @@ mod tests {
             base.join("a"),
             base.join("temp"),
             [],
+            Limits::default(),
             sink(tx_a),
         );
         let b = start(
@@ -2062,6 +2241,7 @@ mod tests {
             dir_b.clone(),
             base.join("temp"),
             [],
+            Limits::default(),
             sink(tx_b),
         );
         let recv_dir = base.join("received");
@@ -2136,7 +2316,7 @@ mod tests {
         record.save(&dir_b).unwrap();
 
         let (tx_b2, rx_b2) = mpsc::channel();
-        let b2 = start(key_b, dir_b.clone(), base.join("temp"), [], sink(tx_b2));
+        let b2 = start(key_b, dir_b.clone(), base.join("temp"), [], Limits::default(), sink(tx_b2));
         let Event::Restored { id: id_b2, .. } =
             wait_for(&rx_b2, |e| matches!(e, Event::Restored { .. }))
         else {
@@ -2437,6 +2617,7 @@ mod tests {
             restoring: Mutex::new(HashSet::new()),
             shutting_down: AtomicBool::new(false),
             blocked: Blocked::default(),
+            limits: Arc::default(),
         });
         (shared, events)
     }
@@ -2849,6 +3030,7 @@ mod tests {
             data_dir.clone(),
             base.join("temp"),
             [],
+            Limits::default(),
             sink(tx),
         );
         let Event::Restored { id, .. } = wait_for(&rx, |e| matches!(e, Event::Restored { .. }))
@@ -2901,6 +3083,7 @@ mod tests {
             dir_a.clone(),
             base.join("temp"),
             [],
+            Limits::default(),
             sink(tx_a),
         );
         let b = start(
@@ -2908,6 +3091,7 @@ mod tests {
             dir_b.clone(),
             base.join("temp"),
             [],
+            Limits::default(),
             sink(tx_b),
         );
         let id = next_transfer_id();
@@ -2965,7 +3149,7 @@ mod tests {
     fn restart(base: &std::path::Path, s: &Stopped) -> (Restarted, Restarted) {
         let restored = |key: &SecretKey, dir: &PathBuf| {
             let (tx, rx) = mpsc::channel();
-            let net = start(key.clone(), dir.clone(), base.join("temp"), [], sink(tx));
+            let net = start(key.clone(), dir.clone(), base.join("temp"), [], Limits::default(), sink(tx));
             let Event::Restored { id, .. } = wait_for(&rx, |e| matches!(e, Event::Restored { .. }))
             else {
                 unreachable!()
@@ -3018,6 +3202,7 @@ mod tests {
             stopped.dir_a.clone(),
             base.join("temp"),
             [],
+            Limits::default(),
             sink(tx),
         );
         wait_for(&rx, |e| matches!(e, Event::Restored { .. }));

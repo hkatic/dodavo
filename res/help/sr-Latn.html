@@ -154,6 +154,7 @@
 <li>ID kontakta već pripada drugom primaocu.</li>
 </ul>
 <p>Lista je sortirana abecedno po imenu, a nova osoba ostaje izabrana.</p>
+<p>Lista <span class="ui">Najveća stavka koju ova osoba može da mi pošalje</span> određuje koliko veliku stavku osoba može da vam pošalje; pogledajte <a href="#size-limit">Ograničavanje veličine onoga što primate</a>.</p>
 
 <h3 id="edit-recipient">Uređivanje ili uklanjanje primaoca</h3>
 <p>Izaberite osobu na listi, a zatim:</p>
@@ -223,6 +224,7 @@
 <dt><span class="ui">Blokiraj pošiljaoca</span> (<kbd>Alt</kbd>+<kbd>B</kbd>)</dt>
 <dd>Odbija ono što osoba šalje i blokira je, pošto potvrdite dugmetom <span class="ui">Da</span>. Pogledajte <a href="#blocking">Blokiranje pošiljaoca</a>.</dd>
 </dl>
+<p>Ako je stavka veća od ograničenja veličine koje ste postavili, red ispod njenog naziva i veličine to kaže. I dalje možete da je prihvatite. Pogledajte <a href="#size-limit">Ograničavanje veličine onoga što primate</a>.</p>
 <p>Kada vam ista osoba šalje više stavki odjednom, one dele jedan prozor, a vaš odgovor se odnosi na sve. Podebljani red kaže koliko ih je, sledeći red navodi njihovu ukupnu veličinu, a polje <span class="ui">Stavke</span> (<kbd>Alt</kbd>+<kbd>T</kbd>) ih navodi. Stavke koje stignu dok je prozor otvoren dodaju se u njega, a one koje su stigle u poslednjoj sekundi vaš odgovor još ne obuhvata: ostaju u prozoru.</p>
 <p>Ako nema dovoljno slobodnog prostora, Dodavo pita da li ipak želite da prihvatite prenos. Ako pošiljalac otkaže pre nego što odgovorite, prozor se zatvara, a obaveštenje vas o tome izveštava.</p>
 <p>Kada prihvatite prenos, prozor napretka prikazuje njegov tok. Ako u fascikli već postoji stavka sa istim nazivom, nova se čuva sa dodatim brojem, na primer <code>Izveštaj (2).pdf</code>; ništa se ne zamenjuje.</p>
@@ -239,7 +241,7 @@
 <p>Ako izaberete <span class="ui">Ne pitaj me ponovo</span>, Dodavo će sledeći put umesto pitanja prikazati obaveštenje. Izborom obaveštenja stavka se prikazuje u Istraživaču datoteka. Pitanje možete ponovo da uključite u postavkama opcijom <span class="ui">Posle prijema pitaj da li da se otvori datoteka ili fascikla</span>. Dok su u toku drugi prenosi sa istom osobom, Dodavo ne pita, već prikazuje obaveštenje; pitanje dolazi posle poslednjeg.</p>
 
 <h3 id="auto-accept">Primanje bez pitanja</h3>
-<p>Prenosi od osoba sa vaše liste primalaca počinju odmah, bez prozora Dolazni prenos, ako su u postavkama uključene obe opcije: <span class="ui">Uvek čuvaj primljene datoteke u ovoj fascikli</span> i <span class="ui">Prenose pokreći automatski, bez pitanja</span>. Uključene su dok ih ne isključite. Dodavo prikazuje obaveštenje <span class="ui">Primanje</span> i čuva stavku u fascikli iz prve opcije, a to je vaša fascikla Preuzimanja ako niste izabrali drugu. Za prenose od nepoznatih pošiljalaca i prenose koji ne bi stali na disk Dodavo i dalje pita. Na ovaj način prenos mogu da pokrenu samo osobe koje ste sami dodali: njihov ID kontakta ne može da se falsifikuje.</p>
+<p>Prenosi od osoba sa vaše liste primalaca počinju odmah, bez prozora Dolazni prenos, ako su u postavkama uključene obe opcije: <span class="ui">Uvek čuvaj primljene datoteke u ovoj fascikli</span> i <span class="ui">Prenose pokreći automatski, bez pitanja</span>. Uključene su dok ih ne isključite. Dodavo prikazuje obaveštenje <span class="ui">Primanje</span> i čuva stavku u fascikli iz prve opcije, a to je vaša fascikla Preuzimanja ako niste izabrali drugu. Prenosi od nepoznatih pošiljalaca, prenosi koji ne bi stali na disk i stavke veće od ograničenja koje ste postavili nikada ne počinju na ovaj način. Na ovaj način prenos mogu da pokrenu samo osobe koje ste sami dodali: njihov ID kontakta ne može da se falsifikuje.</p>
 <p>Ako želite da birate gde se čuva svaka stavka, opozovite izbor opcije <span class="ui">Uvek čuvaj primljene datoteke u ovoj fascikli</span>: svaki prenos tada otvara prozor Dolazni prenos. Ako želite da odlučujete o svakom prenosu, a da se vaša fascikla i dalje predlaže, umesto toga opozovite izbor opcije <span class="ui">Prenose pokreći automatski, bez pitanja</span>.</p>
 <h3 id="blocking">Blokiranje pošiljaoca</h3>
 <p>Ako vam neko šalje ono što ne želite, možete da ga blokirate. Dodavo tada bez pitanja i bez obaveštenja odbija sve što vam ta osoba pošalje. Ona vidi samo da je njena ponuda odbijena i ne saznaje da je blokirana. Prenosi sa njom koji su već u toku se nastavljaju; ako želite da prestanu, otkažite ih u njihovim prozorima napretka.</p>
@@ -248,6 +250,15 @@
 <li>U glavnom prozoru izaberite osobu i pritisnite <kbd>Ctrl</kbd>+<kbd>B</kbd>, ili u meniju <span class="ui">Datoteka</span> izaberite <span class="ui">Blokiraj primaoca</span>, ili u meniju radnji <span class="ui">Blokiraj</span>. Blokirana osoba se uklanja sa liste primalaca.</li>
 </ul>
 <p>Da biste nekoga deblokirali, otvorite postavke, aktivirajte <span class="ui">Blokirani pošiljaoci…</span> (<kbd>Alt</kbd>+<kbd>L</kbd>), u dijalogu <span class="ui">Blokirani pošiljaoci</span> izaberite osobu i aktivirajte <span class="ui">Deblokiraj</span> (<kbd>Alt</kbd>+<kbd>D</kbd>). Kada blokiranu osobu dodate u primaoce, ona se takođe deblokira.</p>
+<h3 id="size-limit">Ograničavanje veličine onoga što primate</h3>
+<p>Možete da postavite najveću veličinu stavke koju neko može da vam pošalje, tako da vam niko ne napuni disk, slučajno ili namerno. Otvorite postavke, izaberite <span class="ui">Ograniči veličinu stavke koju neko može da mi pošalje</span> (<kbd>Alt</kbd>+<kbd>G</kbd>), u polje <span class="ui">Najveća veličina</span> (<kbd>Alt</kbd>+<kbd>Ć</kbd>) upišite ceo broj i na listi iza njega izaberite MB ili GB. Ograničenje važi za svaku stavku zasebno: za datoteku se gleda njena veličina, a za fasciklu njena veličina zapakovana ili raspakovana, u zavisnosti od toga koja je veća. Važi za sve, i za pošiljaoce koji nisu na vašoj listi primalaca.</p>
+<p>Lista <span class="ui">Kada je stavka veća od ograničenja</span> (<kbd>Alt</kbd>+<kbd>Č</kbd>) određuje šta se dešava sa većom stavkom:</p>
+<ul>
+<li><span class="ui">Pitaj me pre nego što počne</span>: stavka se nikada ne pokreće sama. Otvara se prozor Dolazni prenos, u kojem piše da je stavka veća od ograničenja koje ste postavili, a vi i dalje možete da je prihvatite. To je izabrano dok ne izaberete drugo.</li>
+<li><span class="ui">Odbij je i nemoj da me obavestiš</span>: Dodavo odmah odbija stavku i ništa ne prikazuje.</li>
+<li><span class="ui">Odbij je i obavesti me</span>: Dodavo odmah odbija stavku, a obaveštenje <span class="ui">Stavka je odbijena</span> kaže ko je šta ponudio.</li>
+</ul>
+<p>Kada Dodavo odbije stavku, pošiljalac vidi samo da je ponuda odbijena, ali ne i zašto. Primalac može da ima sopstveno ograničenje, koje ima prednost nad onim u postavkama: u dijalogu <span class="ui">Dodaj primaoca</span> ili <span class="ui">Uredi primaoca</span> na listi <span class="ui">Najveća stavka koju ova osoba može da mi pošalje</span> (<kbd>Alt</kbd>+<kbd>N</kbd>) izaberite <span class="ui">Bilo koja veličina</span> ili <span class="ui">Ova veličina:</span>; uz <span class="ui">Ova veličina:</span> upišite veličinu u polje iza liste i izaberite jedinicu. Za novog primaoca izabrano je <span class="ui">Kao u postavkama</span>. Promenjeno ograničenje važi za ono što se ponudi posle promene.</p>
 </section>
 
 <section aria-labelledby="progress">
@@ -334,6 +345,12 @@
 <dd>Lista sa opcijama <span class="ui">Zadrži samo raspakovanu fasciklu</span>, <span class="ui">Zadrži samo ZIP datoteku (bez raspakivanja)</span> i <span class="ui">Zadrži raspakovanu fasciklu i ZIP datoteku</span>. Primljena fascikla stiže kao ZIP datoteka; ova postavka određuje da li će je Dodavo raspakovati i da li će zadržati ZIP datoteku. Zadržavanje ZIP datoteke je korisno ako fasciklu želite da sačuvate ili prosledite tačno onakvu kakva je stigla. Izbor važi za prenose koje prihvatite posle promene. Pogledajte <a href="#after-receiving">Kada je prenos završen</a> i <a href="#faq-dates">Da li datoteke i fascikle zadržavaju svoje datume?</a></dd>
 <dt><span class="ui">Posle prijema pitaj da li da se otvori datoteka ili fascikla</span></dt>
 <dd>Pita šta da se uradi pošto je stavka primljena. Pogledajte <a href="#after-receiving">Kada je prenos završen</a>.</dd>
+<dt><span class="ui">Ograniči veličinu stavke koju neko može da mi pošalje</span></dt>
+<dd>Postavlja najveću veličinu stavke koju neko može da vam pošalje. Isključeno je dok ga ne uključite. Pogledajte <a href="#size-limit">Ograničavanje veličine onoga što primate</a>.</dd>
+<dt><span class="ui">Najveća veličina</span></dt>
+<dd>Ograničenje kao ceo broj, a iza njega lista sa jedinicama MB i GB. Oba su nedostupna dok je ograničenje isključeno.</dd>
+<dt><span class="ui">Kada je stavka veća od ograničenja</span></dt>
+<dd>Lista sa opcijama <span class="ui">Pitaj me pre nego što počne</span>, <span class="ui">Odbij je i nemoj da me obavestiš</span> i <span class="ui">Odbij je i obavesti me</span>. Važi i za ograničenja koja primaoci imaju sami za sebe, pa je dostupna i bez ograničenja iznad.</dd>
 <dt><span class="ui">Blokirani pošiljaoci…</span></dt>
 <dd>Otvara listu pošiljalaca koje ste blokirali, na kojoj možete da ih deblokirate. Pogledajte <a href="#blocking">Blokiranje pošiljaoca</a>.</dd>
 </dl>
@@ -537,7 +554,7 @@
 <p>Za pokretanje prenosa da: Dodavo mora da bude pokrenut na oba računara, inače vidite <span class="ui">Povezivanje sa računarom (…) nije uspelo.</span> Kada je prenos jednom prihvaćen, bilo koja strana može da ode van mreže, pređe u stanje spavanja ili izađe iz programa Dodavo; prenos se nastavlja kada su obe ponovo tu, kako je opisano u prethodnom odgovoru.</p>
 
 <h3 id="faq-size">Da li postoji ograničenje veličine?</h3>
-<p>Ne. Dodavo ne ograničava veličinu datoteke ni fascikle; jedina ograničenja su slobodan prostor na disku koji prima i, na disku sa sistemom datoteka FAT32 (mnogi USB fleš diskovi i memorijske kartice), to da nijedna datoteka ne može biti od 4 GB ili veća. Za fasciklu je računaru koji prima potrebno mesta i za arhivu i za raspakovanu fasciklu, dakle otprilike dvostruka veličina fascikle dok traje raspakivanje (osim ako zadržava samo ZIP datoteku). Prozor Dolazni prenos kaže da li ima dovoljno prostora pre nego što prihvatite.</p>
+<p>Ne, osim ako ga sami postavite. Dodavo sam ne ograničava veličinu datoteke ni fascikle; jedina ograničenja su slobodan prostor na disku koji prima i, na disku sa sistemom datoteka FAT32 (mnogi USB fleš diskovi i memorijske kartice), to da nijedna datoteka ne može biti od 4 GB ili veća. Za fasciklu je računaru koji prima potrebno mesta i za arhivu i za raspakovanu fasciklu, dakle otprilike dvostruka veličina fascikle dok traje raspakivanje (osim ako zadržava samo ZIP datoteku). Prozor Dolazni prenos kaže da li ima dovoljno prostora pre nego što prihvatite. Kako da postavite najveću veličinu stavke koju drugi mogu da vam pošalju, pogledajte u odeljku <a href="#size-limit">Ograničavanje veličine onoga što primate</a>.</p>
 
 <h3 id="faq-several">Da li mogu da pošaljem više stavki odjednom ili većem broju osoba?</h3>
 <p>Da. Možete da pokrenete koliko god prenosa želite, istoj osobi ili različitim osobama, a svaki ima sopstveni prozor napretka. Da biste poslali više datoteka ili fascikli u jednom potezu, prevucite ih iz Istraživača datoteka na osobu na listi primalaca; nakon što potvrdite, svaka stavka se šalje kao zaseban prenos. Pogledajte <a href="#drag-and-drop">Prevlačenje stavki na osobu</a>. Možete i da ih izaberete u Istraživaču datoteka i pošaljete odatle: pogledajte <a href="#send-from-explorer">Slanje iz Istraživača datoteka</a>. Kolona <span class="ui">Prenos</span> na listi primalaca i meni <span class="ui">Prenosi</span> prate ih sve.</p>

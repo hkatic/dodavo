@@ -465,6 +465,10 @@ final class RecipientSheet: NSWindowController {
     private let done: () -> Void
     private let nameField = NSTextField()
     private let idField = NSTextField()
+    /// Which limit holds for the recipient, and the size of one of their own.
+    private let limitKind = NSPopUpButton()
+    private let limitNumber = NSTextField()
+    private let limitUnit = NSPopUpButton()
 
     init(editing: Contact?, done: @escaping () -> Void) {
         self.editing = editing
@@ -490,7 +494,49 @@ final class RecipientSheet: NSWindowController {
         name(idField, by: idLabel)
         nameField.setAccessibilityHelp(L[.recipient_name_help])
         idField.setAccessibilityHelp(L[.recipient_hint])
-        let grid = NSGridView(views: [[nameLabel, nameField], [idLabel, idField]])
+
+        let limitLabel = NSTextField(labelWithString: L[.recipient_limit_label])
+        for (title, value) in [
+            (L[.recipient_limit_general], "general"), (L[.recipient_limit_none], "none"),
+            (L[.recipient_limit_own], "own"),
+        ] {
+            limitKind.addItem(withTitle: title)
+            limitKind.lastItem?.representedObject = value
+        }
+        limitKind.target = self
+        limitKind.action = #selector(limitChanged)
+        name(limitKind, by: limitLabel)
+        limitKind.setAccessibilityHelp(L[.recipient_limit_help])
+        limitKind.toolTip = L[.recipient_limit_help]
+        for (title, value) in [(L[.unit_mb], "mb"), (L[.unit_gb], "gb")] {
+            limitUnit.addItem(withTitle: title)
+            limitUnit.lastItem?.representedObject = value
+        }
+        limitUnit.setAccessibilityLabel(L[.limit_unit_name])
+        var sizeName = L[.limit_size_label]
+        if sizeName.hasSuffix(":") { sizeName.removeLast() }
+        limitNumber.setAccessibilityLabel(sizeName)
+        limitNumber.alignment = .right
+        limitNumber.widthAnchor.constraint(equalToConstant: 80).isActive = true
+        // A limit of their own starts from the one in the settings.
+        let general = Core.settings()
+        let limit = editing?.limit
+        let kindIndex = limitKind.itemArray.firstIndex {
+            ($0.representedObject as? String) == limit?.kind
+        }
+        limitKind.selectItem(at: kindIndex ?? 0)
+        limitNumber.stringValue = limit?.number ?? general?.limitNumber ?? "1"
+        let unit = limit?.unit ?? general?.limitUnit ?? "gb"
+        let unitIndex = limitUnit.itemArray.firstIndex {
+            ($0.representedObject as? String) == unit
+        }
+        limitUnit.selectItem(at: unitIndex ?? 0)
+        limitChanged()
+
+        let grid = NSGridView(views: [
+            [nameLabel, nameField], [idLabel, idField],
+            [limitLabel, makeRow([limitKind, limitNumber, limitUnit])],
+        ])
         grid.column(at: 0).xPlacement = .trailing
         grid.rowAlignment = .firstBaseline
         grid.translatesAutoresizingMaskIntoConstraints = false
@@ -507,7 +553,10 @@ final class RecipientSheet: NSWindowController {
         buttons.widthAnchor.constraint(equalTo: column.widthAnchor).isActive = true
         panel.initialFirstResponder = nameField
         nameField.nextKeyView = idField
-        idField.nextKeyView = cancel
+        idField.nextKeyView = limitKind
+        limitKind.nextKeyView = limitNumber
+        limitNumber.nextKeyView = limitUnit
+        limitUnit.nextKeyView = cancel
         cancel.nextKeyView = ok
         ok.nextKeyView = nameField
     }
@@ -517,11 +566,23 @@ final class RecipientSheet: NSWindowController {
         panel.sheetParent?.endSheet(panel)
     }
 
+    /// The size and its unit are for a limit of the recipient's own.
+    @objc private func limitChanged() {
+        let own = limitKind.selectedItem?.representedObject as? String == "own"
+        limitNumber.isEnabled = own
+        limitUnit.isEnabled = own
+    }
+
     @objc private func confirm() {
         guard let panel = window else { return }
         let name = nameField.stringValue
         let id = idField.stringValue
-        var arguments: [String: Any] = ["name": name, "contact_id": id]
+        let limit: [String: Any] = [
+            "kind": limitKind.selectedItem?.representedObject as? String ?? "general",
+            "number": limitNumber.stringValue,
+            "unit": limitUnit.selectedItem?.representedObject as? String ?? "mb",
+        ]
+        var arguments: [String: Any] = ["name": name, "contact_id": id, "limit": limit]
         if let old = editing?.id { arguments["editing"] = old }
         if let problem = Core.problemOf("check_recipient", arguments) {
             showAlert(problem, on: panel)
@@ -530,9 +591,11 @@ final class RecipientSheet: NSWindowController {
         let error: String?
         if let old = editing?.id {
             error = Core.errorOf(
-                "edit_recipient", ["old_id": old, "name": name, "contact_id": id])
+                "edit_recipient",
+                ["old_id": old, "name": name, "contact_id": id, "limit": limit])
         } else {
-            error = Core.errorOf("add_recipient", ["name": name, "contact_id": id])
+            error = Core.errorOf(
+                "add_recipient", ["name": name, "contact_id": id, "limit": limit])
         }
         if let error = error {
             showAlert(error, on: panel)

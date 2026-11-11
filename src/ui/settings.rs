@@ -13,8 +13,9 @@ use super::{
 };
 use crate::{
     app,
-    config::{CloseAction, ConnectionLostAction, ReceivedFolder},
+    config::{CloseAction, ConnectionLostAction, OverLimit, ReceivedFolder},
     i18n::{Lang, tr},
+    limit::{self, Unit},
 };
 
 const ID_OK: u16 = 1;
@@ -37,6 +38,10 @@ const ID_RECEIVED_FOLDER: u16 = 25;
 const ID_EXPLORER_MENU: u16 = 26;
 const ID_BLOCKED: u16 = 27;
 const ID_CHANGE_ID: u16 = 28;
+const ID_LIMIT: u16 = 29;
+const ID_LIMIT_SIZE: u16 = 30;
+const ID_LIMIT_UNIT: u16 = 31;
+const ID_OVER_LIMIT: u16 = 32;
 
 /// The two columns (96-DPI units): headings start at their `x`, the
 /// settings under them are indented.
@@ -54,6 +59,13 @@ struct SettingsDialog {
     auto: HWND,
     received_folder: HWND,
     ask_after: HWND,
+    /// The general limit on the size of an item: whether there is one, its
+    /// size with the label and the unit, and what happens to a larger item.
+    limit: HWND,
+    limit_label: HWND,
+    limit_size: HWND,
+    limit_unit: HWND,
+    over_limit: HWND,
     show_after_send: HWND,
     autostart: HWND,
     minimized: HWND,
@@ -79,6 +91,11 @@ pub fn show(owner: HWND) {
         auto: std::ptr::null_mut(),
         received_folder: std::ptr::null_mut(),
         ask_after: std::ptr::null_mut(),
+        limit: std::ptr::null_mut(),
+        limit_label: std::ptr::null_mut(),
+        limit_size: std::ptr::null_mut(),
+        limit_unit: std::ptr::null_mut(),
+        over_limit: std::ptr::null_mut(),
         show_after_send: std::ptr::null_mut(),
         autostart: std::ptr::null_mut(),
         minimized: std::ptr::null_mut(),
@@ -113,6 +130,12 @@ impl SettingsDialog {
         // Without that folder Dodavo asks where to save, so nothing can start
         // by itself. The setting keeps its value for when the folder is back.
         window::enable(self.auto, on);
+        // What happens to a larger item stays: it also holds for the limits
+        // that recipients have of their own.
+        let limited = window::is_checked(self.limit);
+        window::enable(self.limit_label, limited);
+        window::enable(self.limit_size, limited);
+        window::enable(self.limit_unit, limited);
     }
 
     fn save(&self, w: &Window) -> bool {
@@ -138,6 +161,23 @@ impl SettingsDialog {
             .and_then(|i| ReceivedFolder::ALL.get(i).copied())
             .unwrap_or_default();
         let ask_after = window::is_checked(self.ask_after);
+        let limited = window::is_checked(self.limit);
+        let unit = window::combo_selection(self.limit_unit)
+            .and_then(|i| Unit::ALL.get(i).copied())
+            .unwrap_or(Unit::Mb);
+        // Without the box, a size that cannot be used is left as it was.
+        let size_limit = match limit::from_input(&get_text(self.limit_size), unit) {
+            Ok(bytes) => Some(bytes),
+            Err(text) if limited => {
+                error(w.hwnd, &text);
+                window::focus(self.limit_size);
+                return false;
+            }
+            Err(_) => None,
+        };
+        let over_limit = window::combo_selection(self.over_limit)
+            .and_then(|i| OverLimit::ALL.get(i).copied())
+            .unwrap_or_default();
         let show_after_send = window::is_checked(self.show_after_send);
         let autostart = window::is_checked(self.autostart);
         let minimized = window::is_checked(self.minimized);
@@ -168,6 +208,11 @@ impl SettingsDialog {
             c.auto_accept = auto;
             c.received_folder = received_folder;
             c.ask_after_receive = ask_after;
+            c.limit_size = limited;
+            if let Some(bytes) = size_limit {
+                c.size_limit = bytes;
+            }
+            c.over_limit = over_limit;
             c.show_after_send = show_after_send;
             c.start_with_windows = autostart;
             c.start_minimized = minimized;
@@ -272,6 +317,46 @@ impl Handler for SettingsDialog {
             (inner_x, y, inner_w, 20),
         );
         y += 30;
+        self.limit = w.checkbox(
+            tr!(limit_size),
+            ID_LIMIT,
+            cfg.limit_size,
+            (inner_x, y, inner_w, 20),
+        );
+        y += 26;
+        // The size and its unit follow their label on one line.
+        let label = tr!(limit_size_label);
+        let label_w = (w.text_width(label) + 8).min(sub_w - 190);
+        self.limit_label = w.caption(label, (sub_x, y + 3, label_w, 18));
+        let (number, unit) = limit::to_input(cfg.size_limit);
+        let size_x = sub_x + label_w + 6;
+        self.limit_size =
+            w.number_edit(&number.to_string(), 7, ID_LIMIT_SIZE, (size_x, y, 84, 24));
+        let units = Unit::ALL.map(Unit::name);
+        let unit = Unit::ALL.iter().position(|&u| u == unit).unwrap_or(0);
+        self.limit_unit = w.combobox(&units, unit, ID_LIMIT_UNIT, (size_x + 90, y, 84, 24));
+        // It follows a field, not a label, so it gets its name.
+        w.set_accessible_name(self.limit_unit, tr!(limit_unit_name));
+        y += 34;
+        w.caption(tr!(over_limit_label), (inner_x, y, inner_w, 18));
+        let actions = [tr!(over_ask), tr!(over_decline), tr!(over_decline_tell)];
+        let selected = OverLimit::ALL
+            .iter()
+            .position(|&a| a == cfg.over_limit)
+            .unwrap_or(0);
+        let combo_w = actions
+            .iter()
+            .map(|a| w.text_width(a) + 40)
+            .max()
+            .unwrap_or(0)
+            .clamp(300, inner_w);
+        self.over_limit = w.combobox(
+            &actions,
+            selected,
+            ID_OVER_LIMIT,
+            (inner_x, y + 20, combo_w, 24),
+        );
+        y += 56;
         let blocked_w = w.button_width(tr!(blocked_senders_button), 160);
         w.button(
             tr!(blocked_senders_button),
@@ -382,7 +467,7 @@ impl Handler for SettingsDialog {
 
     fn on_command(&mut self, w: &Window, id: u16, code: u16) -> bool {
         match id {
-            ID_ALWAYS if code == BN_CLICKED as u16 => self.update_enabled(),
+            ID_ALWAYS | ID_LIMIT if code == BN_CLICKED as u16 => self.update_enabled(),
             ID_BROWSE => {
                 let current = PathBuf::from(get_text(self.dir).trim());
                 if let Some(dir) = shell::pick_folder(w.hwnd, tr!(pick_save_folder), Some(&current))

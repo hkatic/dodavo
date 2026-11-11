@@ -87,6 +87,7 @@
 <h2 id="recipients">Upravljanje primaocima</h2>
 <p>Dodaj primaoca traži ime, koje vidite samo vi, i ID kontakta osobe. Nalepi umeće ID kontakta koji ste kopirali. Ako nešto nije u redu, polje kaže šta, a ekran ostaje otvoren dok to ne ispravite.</p>
 <p>Svaki primalac ima dugme Još opcija za tu osobu, sa komandama Pošalji datoteke, Pošalji fasciklu, Uredi, Kopiraj ID kontakta, Blokiraj i Ukloni. Ukloni i Blokiraj najpre pitaju.</p>
+<p>Pod Najveća stavka koju ova osoba može da vam pošalje izaberite Kao za sve ostale, Bilo koja veličina ili Ova veličina sa sopstvenom veličinom, koja ima prednost nad ograničenjem iz odeljka <a href="#settings">Podešavanja</a>.</p>
 </section>
 
 <section aria-labelledby="sending">
@@ -102,6 +103,7 @@
 <p>Kada vam neko nešto pošalje, red stanja to kaže, a kartica na vrhu glavnih ekrana pokazuje šta je to, sa dugmetom Dolazni prenos. Kada Dodavo nije u prvom planu, umesto toga to javlja obaveštenje, sa dugmadima Pregledaj i Odbij.</p>
 <p>Ekran Dolazni prenos govori ko šalje šta i da li ima dovoljno slobodnog prostora. Pošiljalac koji nije među vašim primaocima dolazi sa upozorenjem i sa poljem za potvrdu za dodavanje među vaše primaoce. Prihvati prihvata ponudu, Odbij je odbija, a Još opcija sadrži Blokiraj pošiljaoca. Povratak ostavlja ponudu da čeka.</p>
 <p>Primljene stavke idu u fasciklu Download/Dodavo. Ako je tamo već stavka sa istim nazivom, nova dobija broj, na primer <code>Izveštaj (2).pdf</code>; ništa se ne zamenjuje. Od osoba među vašim primaocima prenos može da počne sam: pogledajte Prenose pokreći automatski u odeljku <a href="#settings">Podešavanja</a>.</p>
+<p>Možete da ograničite veličinu stavke koju neko može da vam pošalje: pogledajte Ograniči veličinu stavki u odeljku <a href="#settings">Podešavanja</a>.</p>
 </section>
 
 <section aria-labelledby="progress">
@@ -132,6 +134,8 @@
 <li>Prijem u pozadini: pogledajte <a href="#background">Prijem u pozadini</a>.</li>
 <li>Prenose pokreći automatski: Samo od osoba među vašim primaocima, u Download/Dodavo. Za sve ostale Dodavo uvek najpre pita.</li>
 <li>Kada stigne fascikla: Zadrži samo raspakovanu fasciklu, Zadrži samo ZIP arhivu ili Zadrži raspakovanu fasciklu i ZIP datoteku.</li>
+<li>Ograniči veličinu stavki: Najveća stavka koju neko može da vam pošalje. Primalac može da ima sopstveno ograničenje. Kada je uključeno, u polje Najveća veličina upisuje se ceo broj MB ili GB. Ograničenje važi za svaku stavku zasebno, od bilo koga; fascikla se računa po veličini, zapakovana ili raspakovana, u zavisnosti od toga koja je veća.</li>
+<li>Kada je stavka veća od ograničenja: Pitaj me pre nego što počne (stavka se nikada ne pokreće sama, a na ekranu Dolazni prenos piše da je veća od ograničenja koje ste postavili), Odbij je i nemoj da me obavestiš ili Odbij je i obavesti me (red stanja ili obaveštenje kaže ko je šta ponudio). Pošiljalac vidi samo da je ponuda odbijena.</li>
 <li>Blokirani pošiljaoci: pogledajte <a href="#blocking">Blokiranje pošiljaoca</a>.</li>
 <li>Jezik: na Androidu 13 i novijem otvara Android izbor jezika za Dodavo; na starijim verzijama Dodavo prikazuje listu svojih jezika.</li>
 <li>Obaveštenja: Android podešavanja obaveštenja Dodava.</li>
@@ -160,7 +164,7 @@
 <p><strong>Mogu li da pošaljem nekome ko ima Windows ili Mac?</strong> Da. Radi jednako u oba smera.</p>
 <p><strong>Može li druga osoba da bude van mreže?</strong> Ne kada prenos počinje: Dodavo mora da bude pokrenut na oba uređaja, inače javlja da ne može da se poveže. Kada je prenos prihvaćen, bilo koja strana može da bude van mreže, a prenos se nastavlja čim se obe strane vrate.</p>
 <p><strong>Da li datoteka ide preko servera?</strong> Samo preko releja, šifrovana, ako ne može da se pronađe direktan put.</p>
-<p><strong>Postoji li ograničenje veličine?</strong> Samo slobodan prostor: drugoj strani treba mesta za stavku, a vašem uređaju za ZIP arhivu fascikle koju šaljete i za kopiju onoga što deli druga aplikacija. Pre prihvatanja Dodavo kaže da li ga ima dovoljno.</p>
+<p><strong>Postoji li ograničenje veličine?</strong> Samo slobodan prostor: drugoj strani treba mesta za stavku, a vašem uređaju za ZIP arhivu fascikle koju šaljete i za kopiju onoga što deli druga aplikacija. Pre prihvatanja Dodavo kaže da li ga ima dovoljno. Za ono što primate možete da postavite ograničenje: pogledajte <a href="#settings">Podešavanja</a>.</p>
 </section>
 
 <section aria-labelledby="troubleshooting">

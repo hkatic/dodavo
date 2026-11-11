@@ -60,6 +60,7 @@ fn main() {
         data_dir,
         archive::temp_dir_for(Some(&profile)),
         [],
+        net::Limits::default(),
         move |event| match event {
             Event::Progress { id, done, total } => {
                 println!("{id}: {} of {}", format_size(done), format_size(total));

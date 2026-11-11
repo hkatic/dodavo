@@ -28,6 +28,7 @@ object Notifications {
     const val SERVICE_ID = 1
     private const val OFFER_BASE = 1_000_000
     private const val NOTICE_BASE = 2_000_000
+    private const val DECLINED_BASE = 3_000_000
 
     fun createChannels(context: Context) {
         val manager = context.getSystemService(NotificationManager::class.java)
@@ -93,6 +94,15 @@ object Notifications {
 
     /** What happened to a transfer while Dodavo was not in front. */
     fun notice(context: Context, id: Long, notice: Notice) {
+        show(context, NOTICE_BASE + (id % OFFER_BASE).toInt(), notice)
+    }
+
+    /** An offer was declined for its size while Dodavo was not in front; [serial] tells one from the next. */
+    fun declined(context: Context, serial: Long, notice: Notice) {
+        show(context, DECLINED_BASE + (serial % OFFER_BASE).toInt(), notice)
+    }
+
+    private fun show(context: Context, id: Int, notice: Notice) {
         val notification = NotificationCompat.Builder(context, CHANNEL_FINISHED)
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(notice.title)
@@ -101,6 +111,6 @@ object Notifications {
             .setContentIntent(openApp(context, request = NOTICE_BASE))
             .setAutoCancel(true)
             .build()
-        post(context, NOTICE_BASE + (id % OFFER_BASE).toInt(), notification)
+        post(context, id, notification)
     }
 }

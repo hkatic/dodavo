@@ -70,10 +70,12 @@ import androidx.lifecycle.viewModelScope
 import com.hrvojekatic.dodavo.R
 import com.hrvojekatic.dodavo.core.CoreRepository
 import com.hrvojekatic.dodavo.core.CoreState
+import com.hrvojekatic.dodavo.core.OverLimit
 import com.hrvojekatic.dodavo.core.ReceivedFolder
 import com.hrvojekatic.dodavo.core.Settings
 import com.hrvojekatic.dodavo.ui.BlockedKey
 import com.hrvojekatic.dodavo.ui.Navigator
+import com.hrvojekatic.dodavo.ui.common.LimitSizeFields
 import com.hrvojekatic.dodavo.ui.common.MessageDialog
 import com.hrvojekatic.dodavo.ui.common.appViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -126,6 +128,10 @@ class SettingsViewModel(
     fun name(name: String) = change { it.copy(myName = name.trim()) }
     fun autoAccept(on: Boolean) = change { it.copy(autoAccept = on) }
     fun receivedFolder(folder: ReceivedFolder) = change { it.copy(receivedFolder = folder) }
+    fun limitSize(on: Boolean) = change { it.copy(limitSize = on) }
+    fun limitNumber(number: String) = change { it.copy(limitNumber = number) }
+    fun limitUnit(unit: String) = change { it.copy(limitUnit = unit) }
+    fun overLimit(action: OverLimit) = change { it.copy(overLimit = action) }
     fun receiveInBackground(on: Boolean) {
         viewModelScope.launch { preferences.setReceiveInBackground(on) }
     }
@@ -226,6 +232,40 @@ fun SettingsScreen(navigator: Navigator) {
                     }
                 }
                 HorizontalDivider()
+                SwitchRow(
+                    title = stringResource(R.string.limit_size),
+                    help = stringResource(R.string.limit_size_help),
+                    checked = settings.limitSize,
+                    onChange = viewModel::limitSize,
+                )
+                if (settings.limitSize) {
+                    LimitSize(settings.limitNumber, settings.limitUnit, viewModel::limitNumber, viewModel::limitUnit)
+                }
+                // Also without the general limit: a recipient can have one of their own.
+                Heading(stringResource(R.string.over_limit_label))
+                Column(Modifier.selectableGroup()) {
+                    for ((action, label) in listOf(
+                        OverLimit.Ask to R.string.over_ask,
+                        OverLimit.Decline to R.string.over_decline,
+                        OverLimit.DeclineAndTell to R.string.over_decline_tell,
+                    )) {
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .selectable(
+                                    selected = settings.overLimit == action,
+                                    role = Role.RadioButton,
+                                    onClick = { viewModel.overLimit(action) },
+                                )
+                                .padding(horizontal = 16.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            RadioButton(selected = settings.overLimit == action, onClick = null)
+                            Text(stringResource(label), modifier = Modifier.padding(start = 16.dp))
+                        }
+                    }
+                }
+                HorizontalDivider()
             }
             LinkRow(stringResource(R.string.blocked_senders), null) { navigator.go(BlockedKey) }
             LinkRow(stringResource(R.string.language_setting), stringResource(R.string.language_setting_help)) {
@@ -280,6 +320,21 @@ private fun NameField(saved: String, onCommit: (String) -> Unit) {
             .fillMaxWidth()
             .padding(16.dp)
             .onFocusChanged { if (!it.isFocused && text != saved) onCommit(text) },
+    )
+}
+
+/** The size of the general limit, saved when the field is left or Done is pressed; the unit at once. */
+@Composable
+private fun LimitSize(saved: String, unit: String, onCommit: (String) -> Unit, onUnit: (String) -> Unit) {
+    var text by remember(saved) { mutableStateOf(saved) }
+    LimitSizeFields(
+        number = text,
+        unit = unit,
+        onNumber = { text = it },
+        onUnit = onUnit,
+        modifier = Modifier.padding(horizontal = 16.dp),
+        onNumberLeft = { if (text != saved) onCommit(text) },
+        onDone = { onCommit(text) },
     )
 }
 

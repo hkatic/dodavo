@@ -19,6 +19,10 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSTe
     private let chooseFolder = NSButton()
     private let autoAccept = NSButton(checkboxWithTitle: L[.auto_accept], target: nil, action: nil)
     private let keep = NSPopUpButton()
+    private let limitSize = NSButton(checkboxWithTitle: L[.limit_size], target: nil, action: nil)
+    private let limitNumber = NSTextField()
+    private let limitUnit = NSPopUpButton()
+    private let overLimit = NSPopUpButton()
     private let idText = NSTextField(labelWithString: "")
     private let blockedTable = NSTableView()
     private let blockedNone = makeLabel(L[.blocked_none])
@@ -34,7 +38,8 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSTe
             ?? Settings(
                 myName: "", openAtLogin: false, hideAtLogin: false, showInMenuBar: true,
                 checkUpdates: true, language: nil, alwaysSave: true, alwaysSaveDir: nil,
-                autoAccept: true, receivedFolder: "extract")
+                autoAccept: true, receivedFolder: "extract", limitSize: false,
+                limitNumber: "1", limitUnit: "gb", overLimit: "ask")
         settings.openAtLogin = LoginItem.isEnabled ?? settings.openAtLogin
         let tabs = NSTabViewController()
         tabs.tabStyle = .toolbar
@@ -162,6 +167,32 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSTe
         keep.action = #selector(changed)
         name(keep, by: keepLabel)
 
+        limitSize.target = self
+        limitSize.action = #selector(changed)
+        let sizeLabel = NSTextField(labelWithString: L[.limit_size_label])
+        limitNumber.delegate = self
+        limitNumber.alignment = .right
+        limitNumber.widthAnchor.constraint(equalToConstant: 80).isActive = true
+        name(limitNumber, by: sizeLabel)
+        for (title, value) in [(L[.unit_mb], "mb"), (L[.unit_gb], "gb")] {
+            limitUnit.addItem(withTitle: title)
+            limitUnit.lastItem?.representedObject = value
+        }
+        limitUnit.target = self
+        limitUnit.action = #selector(changed)
+        limitUnit.setAccessibilityLabel(L[.limit_unit_name])
+        let overLabel = NSTextField(labelWithString: L[.over_limit_label])
+        for (title, value) in [
+            (L[.over_ask], "ask"), (L[.over_decline], "decline"),
+            (L[.over_decline_tell], "decline_and_tell"),
+        ] {
+            overLimit.addItem(withTitle: title)
+            overLimit.lastItem?.representedObject = value
+        }
+        overLimit.target = self
+        overLimit.action = #selector(changed)
+        name(overLimit, by: overLabel)
+
         let grid = NSGridView(views: [
             [NSGridCell.emptyContentView, alwaysSave],
             [NSGridCell.emptyContentView, folderLabel],
@@ -169,6 +200,9 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSTe
             [NSGridCell.emptyContentView, autoAccept],
             [NSGridCell.emptyContentView, note],
             [keepLabel, keep],
+            [NSGridCell.emptyContentView, limitSize],
+            [sizeLabel, makeRow([limitNumber, limitUnit])],
+            [overLabel, overLimit],
         ])
         grid.column(at: 0).xPlacement = .trailing
         grid.rowAlignment = .firstBaseline
@@ -295,6 +329,20 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSTe
             ($0.representedObject as? String) == settings.receivedFolder
         }
         keep.selectItem(at: keepIndex ?? 0)
+        limitSize.state = settings.limitSize ? .on : .off
+        limitNumber.stringValue = settings.limitNumber
+        // The size is for the limit. What happens to a larger item stays: it
+        // also holds for the limits that recipients have of their own.
+        limitNumber.isEnabled = settings.limitSize
+        limitUnit.isEnabled = settings.limitSize
+        let unitIndex = limitUnit.itemArray.firstIndex {
+            ($0.representedObject as? String) == settings.limitUnit
+        }
+        limitUnit.selectItem(at: unitIndex ?? 0)
+        let overIndex = overLimit.itemArray.firstIndex {
+            ($0.representedObject as? String) == settings.overLimit
+        }
+        overLimit.selectItem(at: overIndex ?? 0)
     }
 
     /// Takes what the window says, and saves it where it can be used.
@@ -309,6 +357,10 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSTe
         next.alwaysSave = alwaysSave.state == .on
         next.autoAccept = autoAccept.state == .on
         next.receivedFolder = keep.selectedItem?.representedObject as? String ?? "extract"
+        next.limitSize = limitSize.state == .on
+        next.limitNumber = limitNumber.stringValue
+        next.limitUnit = limitUnit.selectedItem?.representedObject as? String ?? "mb"
+        next.overLimit = overLimit.selectedItem?.representedObject as? String ?? "ask"
         if next.alwaysSave, next.alwaysSaveDir == nil {
             // Nothing to save to yet: the panel comes first.
             alwaysSave.state = .off

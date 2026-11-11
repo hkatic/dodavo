@@ -11,7 +11,7 @@ mod ui;
 #[cfg(windows)]
 // The Win32 user interface reaches the library through `crate::net` and so on.
 pub(crate) use dodavo_core::{
-    archive, config, format, i18n, identity, net, platform, space, update, view,
+    archive, config, format, i18n, identity, limit, net, platform, space, update, view,
 };
 
 #[cfg(windows)]
@@ -376,6 +376,7 @@ fn main() {
         data_dir.clone(),
         archive::temp_dir_for(profile),
         cfg.blocked_ids(),
+        cfg.limits(),
         app::event_sink,
     );
     app::install(app::App {

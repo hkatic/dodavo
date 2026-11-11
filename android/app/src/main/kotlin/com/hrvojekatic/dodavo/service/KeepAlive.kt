@@ -80,6 +80,7 @@ class KeepAlive(
                         if (!inFront.value) Notifications.notice(context, event.id, event.notice)
                     }
                     is Event.TransferNotice -> if (!inFront.value) Notifications.notice(context, event.id, event.notice)
+                    is Event.OfferDeclined -> if (!inFront.value) Notifications.declined(context, event.serial, event.notice)
                     is Event.Error -> {}
                     // The permission to read it goes, wherever Dodavo is.
                     is Event.DocumentDone -> Documents.release(event.uri)

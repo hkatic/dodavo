@@ -12,9 +12,10 @@ use std::{
 
 use dodavo_core::{
     archive,
-    config::{self, Config, Contact, ReceivedFolder},
+    config::{self, Config, Contact, ContactLimit, OverLimit, ReceivedFolder},
     i18n::{self, Lang, tr},
     identity,
+    limit::{self, Unit},
     net::{
         self, Accept, Command, Event, Kind, NetHandle, Offer, Outcome, Role, TransferRecord,
         session::Side,
@@ -131,6 +132,11 @@ enum Out {
         id: u64,
         notice: Notice,
     },
+    /// An offer was declined because its item is over the sender's limit,
+    /// and the user wants to be told. Nothing follows.
+    Declined {
+        notice: Notice,
+    },
     /// No send reads the document `uri` any more: the app's permission for
     /// it can go.
     DocumentDone {
@@ -188,6 +194,8 @@ struct OfferOut {
     add_label: Option<String>,
     dir: PathBuf,
     space: SpaceOut,
+    /// Says that the item is over the sender's limit, when it is.
+    over_limit: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -262,20 +270,29 @@ enum Call {
         id: u64,
     },
     ClearFinished,
+    /// The recipients, as `[{name, id, limit}]` (see `RecipientLimit`).
     Contacts,
     CheckRecipient {
         name: String,
         contact_id: String,
         editing: Option<String>,
+        #[serde(default)]
+        limit: Option<RecipientLimit>,
     },
+    /// Without `limit`, the recipient is under the general one.
     AddRecipient {
         name: String,
         contact_id: String,
+        #[serde(default)]
+        limit: Option<RecipientLimit>,
     },
+    /// Without `limit`, the recipient keeps the one they have.
     EditRecipient {
         old_id: String,
         name: String,
         contact_id: String,
+        #[serde(default)]
+        limit: Option<RecipientLimit>,
     },
     RemoveRecipient {
         contact_id: String,
@@ -347,6 +364,8 @@ struct Settings {
     always_save_dir: Option<PathBuf>,
     auto_accept: bool,
     received_folder: ReceivedFolder,
+    #[serde(flatten)]
+    limit: LimitSettings,
 }
 
 /// The settings as Android's Settings screen shows them. Received items go to
@@ -357,6 +376,101 @@ struct Settings {
     my_name: String,
     auto_accept: bool,
     received_folder: ReceivedFolder,
+    #[serde(flatten)]
+    limit: LimitSettings,
+}
+
+/// The general limit on the size of an item, as the settings show it: these
+/// are fields of `Settings` for the user interface.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct LimitSettings {
+    limit_size: bool,
+    /// A whole number of `limit_unit`, as the user typed it.
+    limit_number: String,
+    /// "mb" or "gb" (see `Unit::code`).
+    limit_unit: String,
+    over_limit: OverLimit,
+}
+
+impl LimitSettings {
+    fn of(cfg: &Config) -> LimitSettings {
+        let (number, unit) = limit::to_input(cfg.size_limit);
+        LimitSettings {
+            limit_size: cfg.limit_size,
+            limit_number: number.to_string(),
+            limit_unit: unit.code().to_string(),
+            over_limit: cfg.over_limit,
+        }
+    }
+
+    fn bytes(&self) -> Result<u64, String> {
+        limit_bytes(&self.limit_number, &self.limit_unit)
+    }
+
+    /// Without the limit, a size that cannot be used is left as it was.
+    fn apply_to(&self, cfg: &mut Config) {
+        cfg.limit_size = self.limit_size;
+        if let Ok(bytes) = self.bytes() {
+            cfg.size_limit = bytes;
+        }
+        cfg.over_limit = self.over_limit;
+    }
+
+    fn problem(&self) -> Option<String> {
+        self.limit_size.then(|| self.bytes().err()).flatten()
+    }
+}
+
+/// The limit that the user entered as `number` of the unit with the code
+/// `unit`, or what to tell them.
+fn limit_bytes(number: &str, unit: &str) -> Result<u64, String> {
+    limit::from_input(number, Unit::from_code(unit).unwrap_or(Unit::Mb))
+}
+
+/// A recipient's limit as the user interface shows and gives it.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct RecipientLimit {
+    /// "general" (as the settings say), "none" (any size) or "own".
+    kind: String,
+    /// The size of a limit of their own, as in `LimitSettings`. For the
+    /// other kinds: what the editor offers when the user chooses "own".
+    #[serde(default)]
+    number: String,
+    #[serde(default)]
+    unit: String,
+}
+
+impl RecipientLimit {
+    fn of(contact: &Contact, cfg: &Config) -> RecipientLimit {
+        let (kind, bytes) = match contact.limit {
+            ContactLimit::General => ("general", cfg.size_limit),
+            ContactLimit::Unlimited => ("none", cfg.size_limit),
+            ContactLimit::Bytes(bytes) => ("own", bytes),
+        };
+        let (number, unit) = limit::to_input(bytes);
+        RecipientLimit {
+            kind: kind.to_string(),
+            number: number.to_string(),
+            unit: unit.code().to_string(),
+        }
+    }
+
+    /// The limit it stands for, or what to tell the user.
+    fn limit(&self) -> Result<ContactLimit, String> {
+        match self.kind.as_str() {
+            "own" => limit_bytes(&self.number, &self.unit).map(ContactLimit::Bytes),
+            "none" => Ok(ContactLimit::Unlimited),
+            _ => Ok(ContactLimit::General),
+        }
+    }
+}
+
+/// A recipient as the user interface lists them.
+#[derive(Debug, Serialize)]
+struct RecipientOut<'a> {
+    name: &'a str,
+    id: &'a str,
+    limit: RecipientLimit,
 }
 
 struct PendingOffer {
@@ -627,6 +741,7 @@ impl Core {
                     data_dir.clone(),
                     temp_dir.clone(),
                     cfg.blocked_ids(),
+                    cfg.limits(),
                     move |event| {
                         let _ = sink.send(event);
                     },
@@ -818,12 +933,23 @@ impl Core {
             }
             Call::Contacts => {
                 let state = lock(&self.state);
-                serde_json::to_string(&state.cfg.contacts).unwrap_or_default()
+                let recipients: Vec<RecipientOut> = state
+                    .cfg
+                    .contacts
+                    .iter()
+                    .map(|contact| RecipientOut {
+                        name: &contact.name,
+                        id: &contact.id,
+                        limit: RecipientLimit::of(contact, &state.cfg),
+                    })
+                    .collect();
+                serde_json::to_string(&recipients).unwrap_or_default()
             }
             Call::CheckRecipient {
                 name,
                 contact_id,
                 editing,
+                limit,
             } => {
                 let state = lock(&self.state);
                 let problem = recipient_problem(
@@ -832,15 +958,23 @@ impl Core {
                     &name,
                     &contact_id,
                     editing.as_deref(),
-                );
+                )
+                .or_else(|| limit.and_then(|limit| limit.limit().err()));
                 json(serde_json::json!({ "problem": problem }))
             }
-            Call::AddRecipient { name, contact_id } => {
+            Call::AddRecipient {
+                name,
+                contact_id,
+                limit,
+            } => {
                 let mut state = lock(&self.state);
-                let contact_id = cleaned_id(&contact_id);
+                // What cannot be used was reported by `CheckRecipient`.
+                let limit = limit
+                    .and_then(|limit| limit.limit().ok())
+                    .unwrap_or_default();
                 state.cfg.add_contact(Contact {
-                    name: name.trim().to_string(),
-                    id: contact_id,
+                    limit,
+                    ..Contact::new(name.trim(), cleaned_id(&contact_id))
                 });
                 json(serde_json::json!({ "error": save(&state) }))
             }
@@ -848,12 +982,9 @@ impl Core {
                 old_id,
                 name,
                 contact_id,
+                limit,
             } => {
                 let mut state = lock(&self.state);
-                let contact = Contact {
-                    name: name.trim().to_string(),
-                    id: cleaned_id(&contact_id),
-                };
                 let old = state
                     .cfg
                     .contacts
@@ -861,6 +992,13 @@ impl Core {
                     .find(|c| c.id.eq_ignore_ascii_case(&old_id))
                     .cloned();
                 if let Some(old) = old {
+                    let limit = limit
+                        .and_then(|limit| limit.limit().ok())
+                        .unwrap_or(old.limit);
+                    let contact = Contact {
+                        limit,
+                        ..Contact::new(name.trim(), cleaned_id(&contact_id))
+                    };
                     state.cfg.replace_contact(&old, contact);
                 }
                 json(serde_json::json!({ "error": save(&state) }))
@@ -1232,6 +1370,13 @@ impl Core {
                 drop(state);
                 self.on_offer(id, from.to_string(), offer);
             }
+            Event::OverLimit { from, offer } => {
+                let (name, _) = peer_name(&state.cfg, &from.to_string(), &offer.sender_name);
+                let (title, text) = limit::declined_notice(&name, &offer);
+                self.outbox.push(Out::Declined {
+                    notice: plain_notice(&title, text),
+                });
+            }
             Event::Restored {
                 id,
                 record,
@@ -1362,10 +1507,11 @@ impl Core {
             from_name: name.clone(),
             offer,
         };
-        // Without enough disk space, or on a volume that cannot hold a file
-        // this large, ask instead (the window explains why). Off the lock: the
-        // first use of Downloads may wait for the user to allow it.
-        let auto_dir = cfg.auto_save_dir(known).filter(|d| {
+        // Without enough disk space, on a volume that cannot hold a file this
+        // large, or for an item over the sender's limit, ask instead (the
+        // window explains why). Off the lock: the first use of Downloads may
+        // wait for the user to allow it.
+        let auto_dir = cfg.auto_save_dir_for(&from, &pending.offer).filter(|d| {
             std::fs::create_dir_all(d).is_ok() && {
                 let space = space::check_space(&pending.offer, d, &temp_dir, cfg.received_folder);
                 space.fits && space.enough != Some(false)
@@ -1417,6 +1563,7 @@ impl Core {
             add_label: (!known).then(|| ui().add_to_recipients.replace("{name}", &name)),
             dir,
             space,
+            over_limit: limit::notice(&[&pending.offer], cfg.limit_for(&from)),
         };
         let notice = plain_notice(
             tr!(incoming_balloon_title),
@@ -1643,10 +1790,12 @@ fn install_panic_hook(outbox: &'static Outbox) {
     }));
 }
 
-/// Saves the settings, which also tells the network whom they block (also
-/// if the file cannot be saved). Returns the text of an error.
+/// Saves the settings, which also tells the network whom they block and
+/// what the limits are (also if the file cannot be saved). Returns the text
+/// of an error.
 fn save(state: &State) -> Option<String> {
     state.net.set_blocked(state.cfg.blocked_ids());
+    state.net.set_limits(state.cfg.limits());
     state.cfg.save(&state.data_dir).err().map(|e| {
         ui()
             .settings_not_saved
@@ -1748,10 +1897,12 @@ impl Settings {
             always_save_dir: Some(cfg.always_save_folder()),
             auto_accept: cfg.auto_accept,
             received_folder: cfg.received_folder,
+            limit: LimitSettings::of(cfg),
         }
     }
 
     fn apply_to(&self, cfg: &mut Config) {
+        self.limit.apply_to(cfg);
         cfg.my_name = self.my_name.trim().to_string();
         cfg.start_with_windows = self.open_at_login;
         cfg.start_minimized = self.hide_at_login;
@@ -1768,9 +1919,9 @@ impl Settings {
         cfg.received_folder = self.received_folder;
     }
 
-    fn problem(&self) -> Option<&'static str> {
+    fn problem(&self) -> Option<String> {
         if self.my_name.trim().is_empty() {
-            return Some(ui().enter_my_name);
+            return Some(ui().enter_my_name.to_string());
         }
         if self.always_save {
             // Downloads exists, and creating it might ask for permission
@@ -1780,10 +1931,10 @@ impl Settings {
                     || (d.is_absolute() && std::fs::create_dir_all(d).is_ok())
             });
             if !usable {
-                return Some(ui().invalid_save_folder);
+                return Some(ui().invalid_save_folder.to_string());
             }
         }
-        None
+        self.limit.problem()
     }
 }
 
@@ -1794,10 +1945,12 @@ impl Settings {
             my_name: cfg.my_name.clone(),
             auto_accept: cfg.auto_accept,
             received_folder: cfg.received_folder,
+            limit: LimitSettings::of(cfg),
         }
     }
 
     fn apply_to(&self, cfg: &mut Config) {
+        self.limit.apply_to(cfg);
         cfg.my_name = self.my_name.trim().to_string();
         // Always into Downloads, without asking where.
         cfg.always_save = true;
@@ -1806,11 +1959,11 @@ impl Settings {
         cfg.received_folder = self.received_folder;
     }
 
-    fn problem(&self) -> Option<&'static str> {
-        self.my_name
-            .trim()
-            .is_empty()
-            .then_some(ui().enter_my_name)
+    fn problem(&self) -> Option<String> {
+        if self.my_name.trim().is_empty() {
+            return Some(ui().enter_my_name.to_string());
+        }
+        self.limit.problem()
     }
 }
 
@@ -1929,6 +2082,97 @@ mod tests {
         std::fs::remove_dir_all(&dir).unwrap();
     }
 
+    /// An item over the limit of a recipient whose transfers start by
+    /// themselves waits for an answer, and its window says why.
+    #[test]
+    fn an_item_over_the_limit_waits_for_an_answer() {
+        let dir = test_dir("offer-over-limit");
+        let from = identity::load_or_create(&dir).unwrap().public().to_string();
+        let core = core_with_offer(1, &dir);
+        let offer = {
+            let mut state = lock(&core.state);
+            state.cfg.contacts.push(Contact::new("Ana", from.clone()));
+            state.cfg.always_save_dir = Some(dir.clone());
+            state.cfg.limit_size = true;
+            state.cfg.size_limit = 4;
+            Offer {
+                size: 5,
+                ..state.offers[&1].offer.clone()
+            }
+        };
+
+        core.on_offer(2, from.clone(), offer.clone());
+
+        let shown = lock(&core.outbox.queue).pop_front();
+        let Some(Out::Offer { offer: shown, .. }) = shown else {
+            panic!("the offer was not shown: {shown:?}");
+        };
+        assert_eq!(shown.id, 2);
+        let said = shown.over_limit.expect("the window says why");
+        assert!(!said.contains('{'), "{said}");
+        assert!(lock(&core.state).transfers.is_empty());
+
+        // Within the limit, it starts by itself, as it would without one.
+        lock(&core.state).cfg.size_limit = 5;
+        core.on_offer(3, from, offer);
+        assert!(lock(&core.state).transfers.contains_key(&3));
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /// The settings and a recipient's limit take a whole number of a unit,
+    /// and say what is wrong with anything else.
+    #[test]
+    fn a_limit_is_a_whole_number_of_a_unit() {
+        let mut cfg = Config::default();
+        let mut settings = LimitSettings::of(&cfg);
+        assert!(!settings.limit_size);
+        assert_eq!((settings.limit_number.as_str(), settings.limit_unit.as_str()), ("1", "gb"));
+        // Without the limit, what the field holds is not looked at.
+        settings.limit_number = "none".into();
+        assert_eq!(settings.problem(), None);
+        settings.apply_to(&mut cfg);
+        assert_eq!(cfg.size_limit, 1 << 30);
+        settings.limit_size = true;
+        assert!(settings.problem().is_some());
+        settings.limit_number = "250".into();
+        settings.limit_unit = "mb".into();
+        settings.over_limit = OverLimit::DeclineAndTell;
+        assert_eq!(settings.problem(), None);
+        settings.apply_to(&mut cfg);
+        assert!(cfg.limit_size);
+        assert_eq!(cfg.size_limit, 250 << 20);
+        assert_eq!(cfg.over_limit, OverLimit::DeclineAndTell);
+
+        let own = Contact {
+            limit: ContactLimit::Bytes(2 << 30),
+            ..Contact::new("Ana", "id")
+        };
+        let shown = RecipientLimit::of(&own, &cfg);
+        assert_eq!(
+            (shown.kind.as_str(), shown.number.as_str(), shown.unit.as_str()),
+            ("own", "2", "gb")
+        );
+        assert_eq!(shown.limit(), Ok(own.limit));
+        // The editor offers the general size for a limit of their own.
+        let general = RecipientLimit::of(&Contact::new("Bo", "id"), &cfg);
+        assert_eq!(
+            (general.kind.as_str(), general.number.as_str(), general.unit.as_str()),
+            ("general", "250", "mb")
+        );
+        assert_eq!(general.limit(), Ok(ContactLimit::General));
+        let none = RecipientLimit {
+            kind: "none".into(),
+            ..general.clone()
+        };
+        assert_eq!(none.limit(), Ok(ContactLimit::Unlimited));
+        let bad = RecipientLimit {
+            kind: "own".into(),
+            number: "0".into(),
+            unit: "mb".into(),
+        };
+        assert!(bad.limit().is_err());
+    }
+
     #[test]
     fn a_taken_contact_id_or_name_says_who_has_it() {
         let new_id = |name| {
@@ -1939,10 +2183,7 @@ mod tests {
         };
         let (taken, free) = (new_id("recipient-taken"), new_id("recipient-free"));
         let mut cfg = Config::default();
-        cfg.contacts.push(Contact {
-            name: "Ana".into(),
-            id: taken.clone(),
-        });
+        cfg.contacts.push(Contact::new("Ana", taken.clone()));
 
         assert_eq!(
             recipient_problem(&cfg, "", "Someone", &taken, None),

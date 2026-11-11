@@ -19,9 +19,21 @@ struct Started: Decodable {
     let languages: [[String]]
 }
 
+/// How large an item a recipient may send: as for everyone ("general"), any
+/// size ("none") or a limit of their own ("own"), whose size is `number` of
+/// `unit` ("mb" or "gb"). For the other kinds, that is the size to offer when
+/// the user chooses a limit of their own.
+struct RecipientLimit: Decodable, Equatable {
+    let kind: String
+    let number: String
+    let unit: String
+}
+
 struct Contact: Decodable, Equatable {
     let name: String
     let id: String
+    /// A blocked sender has none.
+    let limit: RecipientLimit?
 }
 
 struct Row: Decodable, Equatable {
@@ -73,6 +85,8 @@ struct OfferInfo: Decodable {
     let addLabel: String?
     let dir: String
     let space: SpaceInfo
+    /// Says that the item is over the sender's limit, when it is.
+    let overLimit: String?
 }
 
 struct Settings: Codable {
@@ -86,6 +100,13 @@ struct Settings: Codable {
     var alwaysSaveDir: String?
     var autoAccept: Bool
     var receivedFolder: String
+    /// The general limit on the size of an item: whether there is one, its
+    /// size as typed, in `limitUnit` ("mb" or "gb"), and what happens to a
+    /// larger item ("ask", "decline" or "decline_and_tell").
+    var limitSize: Bool
+    var limitNumber: String
+    var limitUnit: String
+    var overLimit: String
 }
 
 /// A message from Rust. An unknown one is decoded as nothing at all.
@@ -96,6 +117,8 @@ enum Message: Decodable {
     case notice(id: UInt64, notice: Notice, path: String?)
     case offer(OfferInfo, notice: Notice)
     case offerGone(id: UInt64, notice: Notice)
+    /// An offer was declined for its size, and the user wants to be told.
+    case declined(Notice)
     case busy(Bool)
     case error(String)
     case fatal(String)
@@ -136,6 +159,8 @@ enum Message: Decodable {
             self = .offerGone(
                 id: try c.decode(UInt64.self, forKey: .id),
                 notice: try c.decode(Notice.self, forKey: .notice))
+        case "declined":
+            self = .declined(try c.decode(Notice.self, forKey: .notice))
         case "busy":
             self = .busy(try c.decode(Bool.self, forKey: .busy))
         case "error":

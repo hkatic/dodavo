@@ -39,6 +39,9 @@ final class IncomingWindowController: NSWindowController, NSWindowDelegate {
             sized(makeLabel(offer.headline, bold: true)),
             sized(makeLabel(offer.description)),
         ]
+        if let overLimit = offer.overLimit {
+            views.append(sized(makeLabel(overLimit)))
+        }
         if let warning = offer.unknownWarning, let label = offer.addLabel {
             views.append(sized(makeLabel(warning)))
             addCheck.title = label

@@ -19,6 +19,7 @@ pub mod config;
 pub mod format;
 pub mod i18n;
 pub mod identity;
+pub mod limit;
 pub mod net;
 pub mod platform;
 pub mod source;

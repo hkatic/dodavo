@@ -211,6 +211,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             incoming[id]?.closeWithoutAnswer()
             incoming[id] = nil
             notifier?.post(notice, action: .none)
+        case .declined(let notice):
+            notifier?.post(notice, action: .none)
         case .busy(let busy):
             setMovingData(busy)
         case .error(let text):

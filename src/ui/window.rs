@@ -520,6 +520,31 @@ impl Window {
         )
     }
 
+    /// An edit field that takes only digits, at most `digits` of them.
+    pub fn number_edit(
+        &self,
+        text: &str,
+        digits: usize,
+        id: u16,
+        rect: (i32, i32, i32, i32),
+    ) -> HWND {
+        let h = self.add_ex(
+            "EDIT",
+            text,
+            WS_TABSTOP | (ES_AUTOHSCROLL | ES_NUMBER) as u32,
+            WS_EX_CLIENTEDGE,
+            id,
+            rect,
+        );
+        super::send(
+            h,
+            windows_sys::Win32::UI::Controls::EM_SETLIMITTEXT,
+            digits,
+            0,
+        );
+        h
+    }
+
     /// Read-only text of several lines for the user to read with the arrow
     /// keys, such as release notes. Unlike an edit field, it does not select
     /// its whole text when Tab or its access key moves the focus to it (the

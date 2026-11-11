@@ -53,6 +53,14 @@ Each offer gets its own `IncomingWindowController`, centred on the same spot, so
 
 Android tells Dodavo no birth time of a file before Android 11, nor on its shared storage (`FileId::weak`), and ext4 gives the number of a deleted file to the next one at once. So a part file that the user deletes while its transfer waits, followed by another file of the same name, looks like the part to the record. Dodavo's own new parts and folders leave the names of records alone (`session::held_names`), and a file shorter than what reached the disk is not taken for the part (`TransferRecord::part_shorter`); a longer one that another app saves into `Download/Dodavo` under that name is. `FS_IOC_GETVERSION` (the inode generation) would tell them apart on ext4 where the app may ask for it.
 
+### A folder can unpack to more than its offer says
+
+The data that arrives is held to the size in the offer (`Receiver::read_frames`), but what a folder's zip unpacks to is not held to the `content_size` that the offer gave (`archive::unzip`). So a sender whose program was changed can get a folder past the size limit and past the check of the free space, which both go by the offer. A sender's own count can differ from what it packs when a file grows meanwhile, so the two cannot simply be required to match; unpacking would have to stop at the larger of the offer's size and the limit that held when the offer was accepted, which the record would have to keep.
+
+### The size limit counts each item alone
+
+Each item is its own transfer, so several items that are each within the limit can together be larger than it. A limit on what one sender may send in total would have to count what is waiting and under way from them.
+
 ### Automatic acceptance checks the free space of each item alone
 
 Each offer from a recipient is checked by itself (`Event::Offer` in `src/app.rs`), so several large items that fit one by one all start, and the later ones fail once the disk is full. The Incoming Transfer window counts them together. The check would have to include what is still to arrive for the transfers already running.

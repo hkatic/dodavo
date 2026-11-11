@@ -70,6 +70,8 @@ data class Offer(
     @SerialName("add_label") val addLabel: String? = null,
     val dir: String,
     val space: Space,
+    /** Says that the item is over the sender's limit, when it is. */
+    @SerialName("over_limit") val overLimit: String? = null,
 )
 
 /**
@@ -95,9 +97,24 @@ data class DocumentItem(
     val uri: String = "",
 )
 
-/** A recipient, or a blocked sender. */
+/**
+ * How large an item a recipient may send: as for everyone ([kind] "general"),
+ * any size ("none") or a limit of their own ("own"), whose size is [number]
+ * of [unit] ("mb" or "gb"). For the other kinds, that is the size to offer
+ * when the user chooses a limit of their own.
+ */
 @Serializable
-data class Contact(val name: String, val id: String)
+data class RecipientLimit(val kind: String, val number: String, val unit: String) {
+    companion object {
+        const val GENERAL = "general"
+        const val NONE = "none"
+        const val OWN = "own"
+    }
+}
+
+/** A recipient, or a blocked sender (who has no [limit]). */
+@Serializable
+data class Contact(val name: String, val id: String, val limit: RecipientLimit? = null)
 
 /** What is kept of a received folder. */
 @Serializable
@@ -107,12 +124,29 @@ enum class ReceivedFolder {
     @SerialName("both") Both,
 }
 
-/** The settings as the Settings screen shows them. */
+/** What happens to an offered item that is over its sender's limit. */
+@Serializable
+enum class OverLimit {
+    @SerialName("ask") Ask,
+    @SerialName("decline") Decline,
+    @SerialName("decline_and_tell") DeclineAndTell,
+}
+
+/**
+ * The settings as the Settings screen shows them. The general limit on the
+ * size of an item is [limitNumber] of [limitUnit] ("mb" or "gb"), as typed,
+ * and holds while [limitSize] is on. None of them has a default: the core
+ * needs every one of them back.
+ */
 @Serializable
 data class Settings(
     @SerialName("my_name") val myName: String,
     @SerialName("auto_accept") val autoAccept: Boolean,
     @SerialName("received_folder") val receivedFolder: ReceivedFolder,
+    @SerialName("limit_size") val limitSize: Boolean,
+    @SerialName("limit_number") val limitNumber: String,
+    @SerialName("limit_unit") val limitUnit: String,
+    @SerialName("over_limit") val overLimit: OverLimit,
 )
 
 /** What the core says, as it happens (`core::Out` in Rust). */
@@ -143,6 +177,11 @@ sealed interface Message {
     @Serializable
     @SerialName("offer_gone")
     data class OfferGone(val id: Long, val notice: Notice) : Message
+
+    /** An offer was declined for its size, and the user wants to be told. */
+    @Serializable
+    @SerialName("declined")
+    data class OfferDeclined(val notice: Notice) : Message
 
     /** Whether data moves, so that the app keeps running. */
     @Serializable

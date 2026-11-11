@@ -154,6 +154,7 @@
 <li>The Contact ID already belongs to another recipient.</li>
 </ul>
 <p>The list is sorted alphabetically by name, and the new person is selected.</p>
+<p>The list <span class="ui">Largest item this person can send me</span> sets how large an item the person can send you; see <a href="#size-limit">Limiting the size of what you receive</a>.</p>
 
 <h3 id="edit-recipient">Editing or removing a recipient</h3>
 <p>Select the person in the list, then:</p>
@@ -223,6 +224,7 @@
 <dt><span class="ui">Block Sender</span> (<kbd>Alt</kbd>+<kbd>K</kbd>)</dt>
 <dd>Declines what the person sends and blocks them, after you confirm with <span class="ui">Yes</span>. See <a href="#blocking">Blocking a sender</a>.</dd>
 </dl>
+<p>If an item is larger than a size limit you set, a line under its name and size says so. You can still accept it. See <a href="#size-limit">Limiting the size of what you receive</a>.</p>
 <p>When one person sends several items at once, they share one window, and your answer applies to all of them. The bold line says how many there are, the next line gives their total size, and the <span class="ui">Items</span> field (<kbd>Alt</kbd>+<kbd>I</kbd>) lists them. Items that arrive while the window is open are added to it, and those that arrived within the last second are not covered by your answer yet: they stay in the window.</p>
 <p>If there is not enough free space, Dodavo asks whether you want to accept anyway. If the sender cancels before you answer, the window closes and a notification tells you so.</p>
 <p>After you accept, a progress window shows the transfer. If an item with the same name already exists in the folder, the new one is saved with a number added, for example <code>Report (2).pdf</code>; nothing is overwritten.</p>
@@ -239,7 +241,7 @@
 <p>If you select <span class="ui">Don't ask me again</span>, Dodavo shows a notification instead next time. Selecting the notification shows the item in File Explorer. You can turn the question back on in Settings with <span class="ui">After receiving, ask whether to open the file or folder</span>. While other transfers with the same person are still running, Dodavo does not ask, and shows the notification instead; the question comes after the last one.</p>
 
 <h3 id="auto-accept">Receiving without being asked</h3>
-<p>Transfers from people in your recipient list start immediately, without the Incoming Transfer window, as long as <span class="ui">Always save received files to this folder</span> and <span class="ui">Start transfers automatically, without asking</span> are both on in Settings. They are on unless you clear them. Dodavo shows a notification, <span class="ui">Receiving</span>, and saves the item in the folder from the first option, which is your Downloads folder unless you chose another one. Transfers from unknown senders, and transfers that would not fit on the disk, are still asked about. Only the people you added yourself can start a transfer this way: their Contact ID cannot be forged.</p>
+<p>Transfers from people in your recipient list start immediately, without the Incoming Transfer window, as long as <span class="ui">Always save received files to this folder</span> and <span class="ui">Start transfers automatically, without asking</span> are both on in Settings. They are on unless you clear them. Dodavo shows a notification, <span class="ui">Receiving</span>, and saves the item in the folder from the first option, which is your Downloads folder unless you chose another one. Transfers from unknown senders, transfers that would not fit on the disk and items larger than a limit you set never start this way. Only the people you added yourself can start a transfer this way: their Contact ID cannot be forged.</p>
 <p>To choose where to save each item, clear <span class="ui">Always save received files to this folder</span>: every transfer then opens the Incoming Transfer window. To decide about every transfer but keep your folder as the suggestion, clear <span class="ui">Start transfers automatically, without asking</span> instead.</p>
 <h3 id="blocking">Blocking a sender</h3>
 <p>If someone sends you things you do not want, you can block them. Dodavo then declines everything they send you, without asking and without a notification. They see only that their offer was declined, and are not told that they are blocked. Transfers with them that are already under way go on; cancel them in their progress windows if you want them to stop.</p>
@@ -248,6 +250,15 @@
 <li>In the main window, select the person and press <kbd>Ctrl</kbd>+<kbd>B</kbd>, or choose <span class="ui">Block Recipient</span> from the <span class="ui">File</span> menu or <span class="ui">Block</span> from the menu of actions. A blocked person is removed from your recipients.</li>
 </ul>
 <p>To unblock someone, open Settings, activate <span class="ui">Blocked Senders…</span> (<kbd>Alt</kbd>+<kbd>E</kbd>), select the person in the <span class="ui">Blocked Senders</span> dialog and activate <span class="ui">Unblock</span> (<kbd>Alt</kbd>+<kbd>U</kbd>). Adding a blocked person as a recipient also unblocks them.</p>
+<h3 id="size-limit">Limiting the size of what you receive</h3>
+<p>You can set the largest size of an item that someone can send you, so that nobody fills your disk, by mistake or on purpose. Open Settings, select <span class="ui">Limit the size of an item that someone can send me</span> (<kbd>Alt</kbd>+<kbd>Z</kbd>), type a whole number in <span class="ui">Largest size</span> (<kbd>Alt</kbd>+<kbd>G</kbd>) and choose MB or GB in the list after it. The limit applies to each item by itself: a file by its size, and a folder by its size packed or unpacked, whichever is larger. It applies to everyone, also to senders who are not in your recipient list.</p>
+<p>The list <span class="ui">When an item is over the limit</span> (<kbd>Alt</kbd>+<kbd>H</kbd>) decides what happens to a larger item:</p>
+<ul>
+<li><span class="ui">Ask me before it starts</span>: the item never starts by itself. The Incoming Transfer window opens, says that the item is larger than the limit you set, and you can still accept it. This is the choice unless you change it.</li>
+<li><span class="ui">Decline it without telling me</span>: Dodavo declines the item at once and shows nothing.</li>
+<li><span class="ui">Decline it and tell me</span>: Dodavo declines the item at once, and a notification, <span class="ui">Item declined</span>, tells you who offered what.</li>
+</ul>
+<p>When Dodavo declines an item, the sender sees only that the offer was declined, not why. A recipient can have a limit of their own, which comes before the one in Settings: in the <span class="ui">Add Recipient</span> or <span class="ui">Edit Recipient</span> dialog, choose <span class="ui">Any size</span> or <span class="ui">This size:</span> in the list <span class="ui">Largest item this person can send me</span> (<kbd>Alt</kbd>+<kbd>L</kbd>); with <span class="ui">This size:</span>, type the size in the field after the list and choose its unit. <span class="ui">As set in Settings</span> is the choice for a new recipient. A changed limit applies to what is offered from then on.</p>
 </section>
 
 <section aria-labelledby="progress">
@@ -334,6 +345,12 @@
 <dd>A list with <span class="ui">Keep only the unpacked folder</span>, <span class="ui">Keep only the ZIP file (don't unpack)</span> and <span class="ui">Keep both the unpacked folder and the ZIP file</span>. A received folder arrives as a ZIP file; this decides whether Dodavo unpacks it and whether it keeps the ZIP file. Keeping the ZIP file is useful if you want to store or pass on the folder exactly as it arrived. The choice applies to transfers you accept after changing it. See <a href="#after-receiving">When the transfer is complete</a> and <a href="#faq-dates">Are the dates of files and folders kept?</a></dd>
 <dt><span class="ui">After receiving, ask whether to open the file or folder</span></dt>
 <dd>Asks what to do after an item has been received. See <a href="#after-receiving">When the transfer is complete</a>.</dd>
+<dt><span class="ui">Limit the size of an item that someone can send me</span></dt>
+<dd>Sets the largest size of an item that someone can send you. It is cleared unless you select it. See <a href="#size-limit">Limiting the size of what you receive</a>.</dd>
+<dt><span class="ui">Largest size</span></dt>
+<dd>The limit, as a whole number, followed by a list with MB and GB. Both are unavailable while the limit is cleared.</dd>
+<dt><span class="ui">When an item is over the limit</span></dt>
+<dd>A list with <span class="ui">Ask me before it starts</span>, <span class="ui">Decline it without telling me</span> and <span class="ui">Decline it and tell me</span>. It also applies to the limits that recipients have of their own, so it is available without the limit above.</dd>
 <dt><span class="ui">Blocked Senders…</span></dt>
 <dd>Opens the list of the senders you blocked, where you can unblock them. See <a href="#blocking">Blocking a sender</a>.</dd>
 </dl>
@@ -537,7 +554,7 @@
 <p>To start a transfer, yes: Dodavo must be running on both computers, otherwise you see <span class="ui">Could not connect to …</span>. Once a transfer has been accepted, either side may go offline, go to sleep or exit Dodavo; the transfer continues when both are back, as described in the previous answer.</p>
 
 <h3 id="faq-size">Is there a size limit?</h3>
-<p>No. Dodavo has no limit on the size of a file or folder; the only limits are the free space on the receiving drive and, on a drive with the FAT32 file system (many USB sticks and memory cards), that no single file can be 4 GB or larger. For a folder, the receiving computer needs room for the archive and for the unpacked folder, so roughly twice the folder's size while unpacking (unless it keeps only the ZIP file). The Incoming Transfer window says whether there is enough space before you accept.</p>
+<p>Not unless you set one. Dodavo itself has no limit on the size of a file or folder; the only limits are the free space on the receiving drive and, on a drive with the FAT32 file system (many USB sticks and memory cards), that no single file can be 4 GB or larger. For a folder, the receiving computer needs room for the archive and for the unpacked folder, so roughly twice the folder's size while unpacking (unless it keeps only the ZIP file). The Incoming Transfer window says whether there is enough space before you accept. To set the largest size of an item that others can send you, see <a href="#size-limit">Limiting the size of what you receive</a>.</p>
 
 <h3 id="faq-several">Can I send several items at once, or to several people?</h3>
 <p>Yes. You can start as many transfers as you like, to the same person or to different people, and each has its own progress window. To send several files or folders in one go, drag them from File Explorer onto the person in your recipient list; after you confirm, each item is sent as a separate transfer. See <a href="#drag-and-drop">Dragging items onto a person</a>. You can also select them in File Explorer and send them from there: see <a href="#send-from-explorer">Sending from File Explorer</a>. The <span class="ui">Transfer</span> column of the recipient list and the <span class="ui">Transfers</span> menu keep track of all of them.</p>

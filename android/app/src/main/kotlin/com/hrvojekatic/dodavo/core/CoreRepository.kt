@@ -47,6 +47,9 @@ sealed interface Event {
 
     data class OfferGone(val id: Long, val notice: Notice) : Event
 
+    /** An offer was declined for its size; [serial] tells one from the next. */
+    data class OfferDeclined(val serial: Long, val notice: Notice) : Event
+
     data class Error(val text: String) : Event
 
     /** No send reads the document [uri] any more. */
@@ -109,6 +112,8 @@ class CoreRepository(
     private val _announcement = MutableStateFlow<Announcement?>(null)
     val announcement: StateFlow<Announcement?> = _announcement.asStateFlow()
     private var announcements = 0L
+
+    private var declined = 0L
 
     private val _line = MutableStateFlow("")
     /** The status line: the latest of the online status and what the core announces. */
@@ -173,6 +178,12 @@ class CoreRepository(
                 _offers.update { it - message.id }
                 announce(message.notice.text)
                 _events.tryEmit(Event.OfferGone(message.id, message.notice))
+            }
+            is Message.OfferDeclined -> {
+                // Said in the app as well: nothing on the screen shows it.
+                announce(message.notice.text)
+                declined += 1
+                _events.tryEmit(Event.OfferDeclined(declined, message.notice))
             }
             is Message.Busy -> _busy.value = message.busy
             is Message.DocumentDone -> _events.tryEmit(Event.DocumentDone(message.uri))
@@ -248,15 +259,24 @@ class CoreRepository(
 
     suspend fun clearFinished() { call(Call.ClearFinished) }
 
-    /** Why a recipient cannot be added (or edited, from [editing]) like this; null if it can. */
-    suspend fun recipientProblem(name: String, contactId: String, editing: String? = null): String? =
-        reply(Call.CheckRecipient(name, contactId, editing)).problem
+    /**
+     * Why a recipient cannot be added (or edited, from [editing]) like this; null if it can.
+     * With [limit], also why that cannot be their limit.
+     */
+    suspend fun recipientProblem(
+        name: String,
+        contactId: String,
+        editing: String? = null,
+        limit: RecipientLimit? = null,
+    ): String? = reply(Call.CheckRecipient(name, contactId, editing, limit)).problem
 
-    suspend fun addRecipient(name: String, contactId: String): String? =
-        reply(Call.AddRecipient(name, contactId)).error.also { refreshContacts(); refreshBlocked() }
+    /** Without [limit], the recipient is under the general one. */
+    suspend fun addRecipient(name: String, contactId: String, limit: RecipientLimit? = null): String? =
+        reply(Call.AddRecipient(name, contactId, limit)).error.also { refreshContacts(); refreshBlocked() }
 
-    suspend fun editRecipient(oldId: String, name: String, contactId: String): String? =
-        reply(Call.EditRecipient(oldId, name, contactId)).error.also { refreshContacts(); refreshBlocked() }
+    /** Without [limit], the recipient keeps the one they have. */
+    suspend fun editRecipient(oldId: String, name: String, contactId: String, limit: RecipientLimit? = null): String? =
+        reply(Call.EditRecipient(oldId, name, contactId, limit)).error.also { refreshContacts(); refreshBlocked() }
 
     suspend fun removeRecipient(contactId: String): String? =
         reply(Call.RemoveRecipient(contactId)).error.also { refreshContacts() }
@@ -276,8 +296,9 @@ class CoreRepository(
     /** Why the settings cannot be like this; null if they can. */
     suspend fun settingsProblem(settings: Settings): String? = reply(Call.SettingsProblem(settings)).problem
 
+    /** The recipients follow: a limit of their own starts from the general one. */
     suspend fun setSettings(settings: Settings): String? =
-        reply(Call.SetSettings(settings)).error.also { refreshSettings() }
+        reply(Call.SetSettings(settings)).error.also { refreshSettings(); refreshContacts() }
 
     /** Dodavo's license and those of its components. */
     suspend fun licenses(): Pair<String, String> {

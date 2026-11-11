@@ -270,6 +270,7 @@ pub fn update_cfg(f: impl FnOnce(&mut Config)) {
         f(&mut a.cfg);
         // Whoever is blocked now is, also if the file cannot be saved.
         a.net.set_blocked(a.cfg.blocked_ids());
+        a.net.set_limits(a.cfg.limits());
         a.cfg.save(&a.data_dir)
     });
     if let Err(e) = result {
@@ -627,9 +628,10 @@ fn handle_net_event(event: Event) -> Option<Event> {
             let from = from.to_string();
             let (name, known) = peer_name(&from, &offer.sender_name);
             let cfg = cfg();
-            // Without enough disk space, or on a drive that cannot hold a
-            // file this large, ask instead (the window explains why).
-            let auto_dir = cfg.auto_save_dir(known).filter(|d| {
+            // Without enough disk space, on a drive that cannot hold a file
+            // this large, or for an item over the sender's limit, ask
+            // instead (the window explains why).
+            let auto_dir = cfg.auto_save_dir_for(&from, &offer).filter(|d| {
                 std::fs::create_dir_all(d).is_ok() && {
                     let space = incoming::check_space(&offer, d, cfg.received_folder);
                     space.fits && space.enough != Some(false)
@@ -647,6 +649,11 @@ fn handle_net_event(event: Event) -> Option<Event> {
                 let hwnd = incoming::open_or_add(id, &from, &name, known, offer);
                 with(|a| a.offers.insert(id, hwnd));
             }
+        }
+        Event::OverLimit { from, offer } => {
+            let (name, _) = peer_name(&from.to_string(), &offer.sender_name);
+            let (title, text) = crate::limit::declined_notice(&name, &offer);
+            tray::balloon(main_window(), &title, &text, None);
         }
         Event::Restored {
             id,

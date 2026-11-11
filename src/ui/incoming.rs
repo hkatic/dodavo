@@ -88,6 +88,9 @@ struct Incoming {
     pending_height: Cell<Option<i32>>,
     headline: HWND,
     description: HWND,
+    /// Says that something here is over the sender's limit; empty and
+    /// hidden otherwise.
+    limit: HWND,
     items_caption: HWND,
     items: HWND,
     warning: HWND,
@@ -154,6 +157,7 @@ fn open(id: u64, from: &str, name: &str, known: bool, offer: Offer) -> HWND {
         pending_height: Cell::new(None),
         headline: null,
         description: null,
+        limit: null,
         items_caption: null,
         items: null,
         warning: null,
@@ -339,6 +343,10 @@ impl Incoming {
         };
         set_text(self.headline, &headline);
         set_text(self.description, &description);
+        let offers: Vec<&Offer> = self.offers.iter().map(|item| &item.offer).collect();
+        let limit = app::with(|a| a.cfg.limit_for(&self.from));
+        let notice = crate::limit::notice(&offers, limit).unwrap_or_default();
+        set_text(self.limit, &notice);
         let lines: Vec<String> = self.offers.iter().map(|i| describe(&i.offer)).collect();
         set_text(self.items, &crlf(&lines.join("\n")));
         self.layout(w);
@@ -359,6 +367,13 @@ impl Incoming {
             window::show(self.add_contact, !self.known);
         }
         let mut y = 66;
+        let notice = get_text(self.limit);
+        window::show(self.limit, !notice.is_empty());
+        if !notice.is_empty() {
+            let height = w.text_height(&notice, CONTENT_W).max(18);
+            w.place(self.limit, (14, 60, CONTENT_W, height));
+            y += height + 6;
+        }
         if several {
             w.place(self.items_caption, (14, y - 4, CONTENT_W, 18));
             w.place(self.items, (14, y + 16, CONTENT_W, ITEMS_H - 26));
@@ -433,10 +448,7 @@ impl Incoming {
         }
         let mut sender = self.name.clone();
         if !self.known && window::is_checked(self.add_contact) {
-            let contact = Contact {
-                name: self.name.clone(),
-                id: self.from.clone(),
-            };
+            let contact = Contact::new(self.name.clone(), self.from.clone());
             // The name is what the sender said, so it is only stored as is when
             // it is a usable, free name; otherwise the user chooses one, with
             // the same checks as "Add Recipient".
@@ -497,6 +509,7 @@ impl Handler for Incoming {
         w.make_bold(self.headline);
         w.live_region(self.headline);
         self.description = w.label("", (14, 36, CONTENT_W, 18));
+        self.limit = w.label("", later);
         // A label and a list that only appear when there are several items.
         self.items_caption = w.caption(tr!(incoming_items_label), later);
         self.items = w.read_only_text("", ID_ITEMS, later);

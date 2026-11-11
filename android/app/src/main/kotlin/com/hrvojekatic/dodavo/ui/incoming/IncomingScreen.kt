@@ -169,6 +169,7 @@ fun IncomingScreen(offerId: Long, navigator: Navigator) {
         ) {
             Text(offer.headline, style = MaterialTheme.typography.headlineSmall, modifier = Modifier.semantics { heading() })
             Text(offer.description, style = MaterialTheme.typography.bodyLarge)
+            offer.overLimit?.let { Text(it) }
             val warning = offer.unknownWarning
             val addLabel = offer.addLabel
             if (warning != null) {

@@ -10,6 +10,63 @@ pub struct Contact {
     pub name: String,
     /// The recipient's Contact ID (iroh endpoint id / public key).
     pub id: String,
+    /// How large an item this recipient may send (see `Config::limit_for`).
+    /// A blocked sender's entry has none.
+    #[serde(default, skip_serializing_if = "ContactLimit::is_general")]
+    pub limit: ContactLimit,
+}
+
+impl Contact {
+    /// A contact under the general limit.
+    pub fn new(name: impl Into<String>, id: impl Into<String>) -> Contact {
+        Contact {
+            name: name.into(),
+            id: id.into(),
+            limit: ContactLimit::General,
+        }
+    }
+}
+
+/// How large an item a recipient may send.
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ContactLimit {
+    /// As the settings say for everyone.
+    #[default]
+    General,
+    /// Any size, whatever the settings say.
+    Unlimited,
+    /// At most this many bytes, whatever the settings say.
+    Bytes(u64),
+}
+
+impl ContactLimit {
+    fn is_general(&self) -> bool {
+        *self == ContactLimit::General
+    }
+}
+
+/// What happens to an offered item that is larger than its sender's limit.
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum OverLimit {
+    /// It never starts by itself: it waits for the user's answer, which may
+    /// be to accept it.
+    #[default]
+    Ask,
+    /// It is declined, and nothing here shows it.
+    Decline,
+    /// It is declined, and a notification says so.
+    DeclineAndTell,
+}
+
+impl OverLimit {
+    /// In the order shown in the settings.
+    pub const ALL: [OverLimit; 3] = [
+        OverLimit::Ask,
+        OverLimit::Decline,
+        OverLimit::DeclineAndTell,
+    ];
 }
 
 /// What happens when the window of a running transfer is closed.
@@ -90,6 +147,13 @@ pub struct Config {
     /// time: blocking one removes the recipient, and adding a recipient
     /// unblocks them.
     pub blocked: Vec<Contact>,
+    /// Whether `size_limit` applies to everyone who has no limit of their own.
+    pub limit_size: bool,
+    /// The largest item, in bytes, that someone may send (see `limit_for`);
+    /// kept while `limit_size` is off.
+    pub size_limit: u64,
+    /// What happens to an item over its sender's limit.
+    pub over_limit: OverLimit,
     /// When set, received files go to `always_save_folder`. Otherwise the
     /// user is asked where to save each one.
     pub always_save: bool,
@@ -138,6 +202,9 @@ impl Default for Config {
                 .unwrap_or_else(|| crate::i18n::s().unknown_user.into()),
             contacts: Vec::new(),
             blocked: Vec::new(),
+            limit_size: false,
+            size_limit: 1 << 30,
+            over_limit: OverLimit::Ask,
             always_save: true,
             always_save_dir: None,
             auto_accept: true,
@@ -272,10 +339,7 @@ impl Config {
     pub fn block(&mut self, name: &str, id: &str) {
         self.contacts.retain(|c| !c.id.eq_ignore_ascii_case(id));
         if !self.is_blocked(id) {
-            self.blocked.push(Contact {
-                name: name.to_string(),
-                id: id.to_string(),
-            });
+            self.blocked.push(Contact::new(name, id));
         }
     }
 
@@ -295,6 +359,36 @@ impl Config {
             .iter()
             .filter_map(|c| c.id.to_ascii_lowercase().parse().ok())
             .collect()
+    }
+
+    /// The largest item, in bytes, that the sender `id` may send; `None` for
+    /// any size. A recipient's own limit comes first, then the general one,
+    /// which also holds for senders who are not recipients.
+    pub fn limit_for(&self, id: &str) -> Option<u64> {
+        match self.contact_by_id(id).map(|c| c.limit) {
+            Some(ContactLimit::Bytes(bytes)) => Some(bytes),
+            Some(ContactLimit::Unlimited) => None,
+            Some(ContactLimit::General) | None => self.limit_size.then_some(self.size_limit),
+        }
+    }
+
+    /// The limits as the network needs them (`net::start`,
+    /// `net::NetHandle::set_limits`). A recipient whose entry is not a
+    /// Contact ID cannot send anything, so it is left out.
+    pub fn limits(&self) -> crate::net::Limits {
+        crate::net::Limits {
+            action: self.over_limit,
+            general: self.limit_size.then_some(self.size_limit),
+            per_peer: self
+                .contacts
+                .iter()
+                .filter(|c| c.limit != ContactLimit::General)
+                .filter_map(|c| {
+                    let id = c.id.to_ascii_lowercase().parse().ok()?;
+                    Some((id, self.limit_for(&c.id)))
+                })
+                .collect(),
+        }
     }
 
     /// The folder of "Always save received files to this folder".
@@ -319,6 +413,16 @@ impl Config {
     /// recipient starts by itself; `None` if the user has to answer the offer.
     pub fn auto_save_dir(&self, known: bool) -> Option<PathBuf> {
         (known && self.auto_accept && self.always_save).then(|| self.always_save_folder())
+    }
+
+    /// Where `offer` from the sender `from` starts by itself; `None` if the
+    /// user has to answer it, which is so for every item over the sender's
+    /// limit, whatever `over_limit` says (where that is to decline, the
+    /// network has declined it already).
+    pub fn auto_save_dir_for(&self, from: &str, offer: &crate::net::Offer) -> Option<PathBuf> {
+        let known = self.contact_by_id(from).is_some();
+        self.auto_save_dir(known)
+            .filter(|_| !crate::limit::over(offer, self.limit_for(from)))
     }
 }
 
@@ -365,14 +469,19 @@ mod tests {
     fn roundtrip() {
         let dir = std::env::temp_dir().join(format!("dodavo-cfg-test-{}", std::process::id()));
         let mut cfg = Config::default();
+        cfg.contacts.push(Contact::new("Ana", "abc"));
         cfg.contacts.push(Contact {
-            name: "Ana".into(),
-            id: "abc".into(),
+            limit: ContactLimit::Bytes(5 << 20),
+            ..Contact::new("Bo", "abd")
         });
-        cfg.blocked.push(Contact {
-            name: "Spam".into(),
-            id: "def".into(),
+        cfg.contacts.push(Contact {
+            limit: ContactLimit::Unlimited,
+            ..Contact::new("Cy", "abe")
         });
+        cfg.blocked.push(Contact::new("Spam", "def"));
+        cfg.limit_size = true;
+        cfg.size_limit = 3 << 30;
+        cfg.over_limit = OverLimit::DeclineAndTell;
         cfg.always_save = false;
         cfg.always_save_dir = Some(PathBuf::from(r"C:\Temp"));
         cfg.language = Some("hr".into());
@@ -396,10 +505,7 @@ mod tests {
     fn a_blocked_sender_is_no_recipient() {
         let id = iroh::SecretKey::generate().public().to_string();
         let mut cfg = Config::default();
-        cfg.contacts.push(Contact {
-            name: "Ana".into(),
-            id: id.clone(),
-        });
+        cfg.contacts.push(Contact::new("Ana", id.clone()));
         cfg.block("Ana", &id.to_uppercase());
         assert!(cfg.contact_by_id(&id).is_none());
         assert!(cfg.is_blocked(&id));
@@ -413,21 +519,12 @@ mod tests {
         assert!(!cfg.is_blocked(&id));
         // Whoever becomes a recipient is unblocked.
         cfg.block("Ana", &id);
-        cfg.add_contact(Contact {
-            name: "Ana".into(),
-            id: id.to_uppercase(),
-        });
+        cfg.add_contact(Contact::new("Ana", id.to_uppercase()));
         assert!(!cfg.is_blocked(&id));
         let other = iroh::SecretKey::generate().public().to_string();
         cfg.block("Bo", &other);
         let ana = cfg.contacts[0].clone();
-        cfg.replace_contact(
-            &ana,
-            Contact {
-                name: "Ana".into(),
-                id: other.clone(),
-            },
-        );
+        cfg.replace_contact(&ana, Contact::new("Ana", other.clone()));
         assert!(!cfg.is_blocked(&other));
         assert_eq!(cfg.contacts[0].id, other);
         // What is not a Contact ID never reaches the network.
@@ -478,6 +575,93 @@ mod tests {
         assert_eq!(cfg.update_last_check, None);
         assert_eq!(cfg.update_remind_after, None);
         assert!(cfg.blocked.is_empty());
+        assert!(!cfg.limit_size);
+        assert_eq!(cfg.size_limit, 1 << 30);
+        assert_eq!(cfg.over_limit, OverLimit::Ask);
+    }
+
+    /// A file of a version without limits reads, and its recipients are
+    /// under the general limit; an entry is written as it was unless it has
+    /// a limit of its own.
+    #[test]
+    fn recipients_of_earlier_versions_have_the_general_limit() {
+        let cfg: Config =
+            serde_json::from_str(r#"{"contacts":[{"name":"Ana","id":"abc"}]}"#).unwrap();
+        assert_eq!(cfg.contacts, vec![Contact::new("Ana", "abc")]);
+        assert_eq!(
+            serde_json::to_string(&cfg.contacts[0]).unwrap(),
+            r#"{"name":"Ana","id":"abc"}"#
+        );
+        let own = Contact {
+            limit: ContactLimit::Bytes(7),
+            ..Contact::new("Ana", "abc")
+        };
+        let json = serde_json::to_string(&own).unwrap();
+        assert_eq!(json, r#"{"name":"Ana","id":"abc","limit":{"bytes":7}}"#);
+        assert_eq!(serde_json::from_str::<Contact>(&json).unwrap(), own);
+    }
+
+    #[test]
+    fn a_recipients_own_limit_comes_before_the_general_one() {
+        let ids: Vec<String> = (0..4)
+            .map(|_| iroh::SecretKey::generate().public().to_string())
+            .collect();
+        let mut cfg = Config::default();
+        cfg.contacts = vec![
+            Contact::new("General", ids[0].clone()),
+            Contact {
+                limit: ContactLimit::Unlimited,
+                ..Contact::new("Any", ids[1].clone())
+            },
+            Contact {
+                limit: ContactLimit::Bytes(10),
+                ..Contact::new("Own", ids[2].clone())
+            },
+        ];
+        // Without the general limit, only a recipient's own counts.
+        assert_eq!(cfg.limit_for(&ids[0]), None);
+        assert_eq!(cfg.limit_for(&ids[1]), None);
+        assert_eq!(cfg.limit_for(&ids[2].to_uppercase()), Some(10));
+        assert_eq!(cfg.limit_for(&ids[3]), None);
+        cfg.limit_size = true;
+        cfg.size_limit = 500;
+        assert_eq!(cfg.limit_for(&ids[0]), Some(500));
+        assert_eq!(cfg.limit_for(&ids[1]), None);
+        assert_eq!(cfg.limit_for(&ids[2]), Some(10));
+        // Someone who is not a recipient.
+        assert_eq!(cfg.limit_for(&ids[3]), Some(500));
+
+        cfg.over_limit = OverLimit::Decline;
+        let limits = cfg.limits();
+        assert_eq!(limits.action, OverLimit::Decline);
+        let peer = |i: usize| ids[i].parse::<iroh::EndpointId>().unwrap();
+        assert_eq!(limits.limit_for(&peer(0)), Some(500));
+        assert_eq!(limits.limit_for(&peer(1)), None);
+        assert_eq!(limits.limit_for(&peer(2)), Some(10));
+        assert_eq!(limits.limit_for(&peer(3)), Some(500));
+    }
+
+    /// An item over its sender's limit never starts by itself.
+    #[test]
+    fn an_item_over_the_limit_waits_for_an_answer() {
+        let id = iroh::SecretKey::generate().public().to_string();
+        let mut cfg = Config {
+            always_save_dir: Some(std::env::temp_dir()),
+            limit_size: true,
+            size_limit: 100,
+            ..Config::default()
+        };
+        cfg.contacts.push(Contact::new("Ana", id.clone()));
+        let mut offer = crate::limit::tests::offer(100, 0);
+        assert!(cfg.auto_save_dir_for(&id, &offer).is_some());
+        offer.size = 101;
+        assert_eq!(cfg.auto_save_dir_for(&id, &offer), None);
+        cfg.contacts[0].limit = ContactLimit::Unlimited;
+        assert!(cfg.auto_save_dir_for(&id, &offer).is_some());
+        // Not a recipient: asked anyway.
+        let other = iroh::SecretKey::generate().public().to_string();
+        offer.size = 1;
+        assert_eq!(cfg.auto_save_dir_for(&other, &offer), None);
     }
 
     fn load_json(name: &str, json: &str) -> Config {

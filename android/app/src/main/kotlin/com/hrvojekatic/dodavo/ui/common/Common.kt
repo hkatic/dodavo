@@ -1,18 +1,32 @@
 package com.hrvojekatic.dodavo.ui.common
 
 import android.content.Context
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.error
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider.AndroidViewModelFactory.Companion.APPLICATION_KEY
@@ -55,6 +69,54 @@ fun StatusLine(text: String, modifier: Modifier = Modifier) {
             .padding(horizontal = 16.dp, vertical = 8.dp)
             .semantics { liveRegion = LiveRegionMode.Polite },
     )
+}
+
+/**
+ * The size of a limit: a whole [number] and its [unit] ("mb" or "gb"). The
+ * field takes digits only, and [onNumber] gets every change; [onNumberLeft]
+ * is called when the focus leaves the field, and [onDone] for Done on the
+ * keyboard. [error] takes the place under the field and is said with it.
+ */
+@Composable
+fun LimitSizeFields(
+    number: String,
+    unit: String,
+    onNumber: (String) -> Unit,
+    onUnit: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    error: String? = null,
+    onNumberLeft: () -> Unit = {},
+    onDone: () -> Unit = {},
+) {
+    Column(modifier) {
+        OutlinedTextField(
+            value = number,
+            onValueChange = { text -> onNumber(text.filter(Char::isDigit).take(7)) },
+            label = { Text(stringResource(R.string.limit_number_label)) },
+            supportingText = error?.let { { Text(it) } },
+            isError = error != null,
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
+            keyboardActions = KeyboardActions(onDone = { onDone() }),
+            modifier = Modifier
+                .fillMaxWidth()
+                .onFocusChanged { if (!it.isFocused) onNumberLeft() }
+                .semantics { if (error != null) error(error) },
+        )
+        Row(Modifier.selectableGroup()) {
+            for ((code, label) in listOf("mb" to R.string.unit_mb, "gb" to R.string.unit_gb)) {
+                Row(
+                    Modifier
+                        .selectable(selected = unit == code, role = Role.RadioButton, onClick = { onUnit(code) })
+                        .padding(end = 32.dp, top = 12.dp, bottom = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    RadioButton(selected = unit == code, onClick = null)
+                    Text(stringResource(label), modifier = Modifier.padding(start = 16.dp))
+                }
+            }
+        }
+    }
 }
 
 /** A question with a button that does it and one that does not. */

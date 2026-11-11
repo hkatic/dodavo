@@ -328,6 +328,17 @@ mod tests {
                 s.updated_balloon_title,
                 s.error_recipient_failed,
                 s.error_sender_failed,
+                s.limit_size,
+                s.limit_size_label,
+                s.over_limit_label,
+                s.over_ask,
+                s.over_decline,
+                s.over_decline_tell,
+                s.limit_declined_title,
+                s.recipient_limit_label,
+                s.recipient_limit_general,
+                s.recipient_limit_none,
+                s.recipient_limit_own,
             ];
             for text in texts {
                 let text = visible(text);

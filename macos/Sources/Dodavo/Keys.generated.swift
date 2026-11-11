@@ -193,6 +193,20 @@ enum K: String {
     case always_save
     case auto_accept
     case auto_accept_note
+    case limit_size
+    case limit_size_label
+    case limit_unit_name
+    case unit_mb
+    case unit_gb
+    case over_limit_label
+    case over_ask
+    case over_decline
+    case over_decline_tell
+    case recipient_limit_label
+    case recipient_limit_help
+    case recipient_limit_general
+    case recipient_limit_none
+    case recipient_limit_own
     case received_folder_label
     case received_zip
     case login_item_failed

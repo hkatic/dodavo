@@ -93,6 +93,7 @@
 <p>Block Recipient (<kbd>⌘B</kbd>) blocks the person, after asking: they leave your recipients, and from now on Dodavo declines everything they send you, without asking. They are not told that they are blocked; they see only that their offer was declined. Transfers that are already under way go on.</p>
 <p>Copy My Contact ID (<kbd>⇧⌘C</kbd>) puts your own Contact ID on the clipboard. You also find it in General in Settings.</p>
 <p>Change My Contact ID… in the File menu gives you a new Contact ID, after asking; Change… in General in Settings does the same. The current one then stops working for good, so everyone who sends you files has to get the new one from you and replace the old one. No transfer can continue under another Contact ID: Dodavo says how many are under way or waiting for your answer, and cancels them when you confirm. A send whose data has all been sent and that the recipient has not confirmed yet cannot be cancelled this way; while there is one, Dodavo says so and keeps your Contact ID. Your recipients and blocked senders stay as they are.</p>
+<p>In both, the pop-up menu Largest item sets how large an item the person can send you: Same as for everyone, Any size, or This size with a size of their own, which comes before the limit in <a href="#settings">Settings</a>.</p>
 </section>
 
 <section aria-labelledby="sending">
@@ -114,6 +115,7 @@
 <p>The window says who sends what, and whether there is enough free space. Save to: shows where it goes, and Choose… changes that. Accept takes it (<kbd>Return</kbd>), Decline refuses it (<kbd>Esc</kbd>). VoiceOver reads the window when you go to it.</p>
 <p>Block Sender (<kbd>⌘B</kbd>) declines the offer and blocks the sender, after asking: from now on, Dodavo declines everything they send you, without asking, and they see only that their offer was declined. The Blocked page of <a href="#settings">Settings</a> lists the people you blocked, and Unblock lets them send to you again. Adding a blocked person as a recipient also unblocks them.</p>
 <p>From people in your recipients, a transfer can start by itself: see Start transfers automatically, without asking in <a href="#settings">Settings</a>. From anyone else, Dodavo always asks first, and says that the sender is not one of your recipients.</p>
+<p>You can limit the size of an item that someone can send you: see Limit the size of an item that someone can send me in <a href="#settings">Settings</a>.</p>
 <p>Received items get the same mark as downloads from the internet, so macOS asks before opening an app that came this way.</p>
 <p>Volumes in MS-DOS (FAT) format cannot hold files of 4 GB or more; Dodavo says so before it accepts.</p>
 </section>
@@ -152,6 +154,8 @@
 <li>Always save received items to this folder, with Choose…. It is your Downloads folder until you choose another one.</li>
 <li>Start transfers automatically, without asking. Only from people in your recipients, into the folder above. Without that folder, Dodavo always asks where to save.</li>
 <li>When a folder arrives: Keep only the unpacked folder, Keep only the ZIP archive, or Keep both the unpacked folder and the ZIP file.</li>
+<li>Limit the size of an item that someone can send me. Largest size: a whole number of MB or GB. The limit applies to each item by itself, from anyone; a folder counts by its size packed or unpacked, whichever is larger.</li>
+<li>When an item is over the limit: Ask me before it starts (the item never starts by itself, and the Incoming Transfer window says that it is larger than the limit you set), Decline it without telling me, or Decline it and tell me (a notification says who offered what). The sender sees only that the offer was declined.</li>
 </ul>
 <p>Blocked: the senders you blocked, with Unblock.</p>
 </section>
@@ -196,7 +200,7 @@
 <p><strong>Can I send to someone on Windows?</strong> Yes. It works the same way in both directions.</p>
 <p><strong>Can the other person be offline?</strong> Not when a transfer starts: Dodavo has to be running on both computers, otherwise it says that it could not connect. Once a transfer has been accepted, either side may go offline, and it continues when both are back.</p>
 <p><strong>Does a file go through a server?</strong> Only through a relay, encrypted, if no direct path can be found.</p>
-<p><strong>Is there a limit to the size?</strong> Only the free space on the other side, and 4 GB per file on MS-DOS (FAT) volumes.</p>
+<p><strong>Is there a limit to the size?</strong> Only the free space on the other side, and 4 GB per file on MS-DOS (FAT) volumes. You can set a limit for what you receive: see <a href="#settings">Settings</a>.</p>
 </section>
 
 <section aria-labelledby="troubleshooting">

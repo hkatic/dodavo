@@ -87,6 +87,7 @@
 <h2 id="recipients">Upravljanje prejemnikov</h2>
 <p>Dodaj prejemnika zahteva ime, ki ga vidite samo vi, in ID stika osebe. Prilepi vstavi ID stika, ki ste ga kopirali. Če kaj ni v redu, polje pove, kaj, zaslon pa ostane odprt, dokler tega ne popravite.</p>
 <p>Vsak prejemnik ima gumb Več možnosti za to osebo, z ukazi Pošlji datoteke, Pošlji mapo, Uredi, Kopiraj ID stika, Blokiraj in Odstrani. Odstrani in Blokiraj najprej vprašata.</p>
+<p>Pod Največji element, ki vam ga ta oseba lahko pošlje izberite Kot za vse druge, Katera koli velikost ali Ta velikost z lastno velikostjo, ki ima prednost pred omejitvijo iz razdelka <a href="#settings">Nastavitve</a>.</p>
 </section>
 
 <section aria-labelledby="sending">
@@ -102,6 +103,7 @@
 <p>Ko vam nekdo kaj pošlje, to pove vrstica stanja, kartica na vrhu glavnih zaslonov pa pokaže, kaj je to, z gumbom Dohodni prenos. Ko Dodavo ni v ospredju, to namesto tega sporoči obvestilo, z gumboma Preglej in Zavrni.</p>
 <p>Zaslon Dohodni prenos pove, kdo pošilja kaj in ali je dovolj prostega prostora. Pošiljatelj, ki ni med vašimi prejemniki, pride z opozorilom in s potrditvenim poljem, s katerim ga dodate med prejemnike. Sprejmi ponudbo sprejme, Zavrni jo zavrne, Več možnosti pa ima Blokiraj pošiljatelja. Vrnitev nazaj pusti ponudbo čakati.</p>
 <p>Prejeti elementi gredo v mapo Download/Dodavo. Če je tam že element z enakim imenom, dobi novi številko, na primer <code>Poročilo (2).pdf</code>; nič se ne prepiše. Od oseb med vašimi prejemniki se prenos lahko začne sam: glejte Prenose začni samodejno v razdelku <a href="#settings">Nastavitve</a>.</p>
+<p>Velikost elementa, ki vam ga lahko kdo pošlje, lahko omejite: glejte Omeji velikost elementov v razdelku <a href="#settings">Nastavitve</a>.</p>
 </section>
 
 <section aria-labelledby="progress">
@@ -132,6 +134,8 @@
 <li>Prejemanje v ozadju: glejte <a href="#background">Prejemanje v ozadju</a>.</li>
 <li>Prenose začni samodejno: Samo od oseb med vašimi prejemniki, v Download/Dodavo. Pri vseh drugih Dodavo vedno najprej vpraša.</li>
 <li>Ko prispe mapa: Obdrži samo razpakirano mapo, Obdrži samo arhiv ZIP ali Obdrži razpakirano mapo in datoteko ZIP.</li>
+<li>Omeji velikost elementov: Največji element, ki vam ga lahko kdo pošlje. Prejemnik ima lahko svojo omejitev. Ko je vklopljeno, v polje Največja velikost vnesete celo število MB ali GB. Omejitev velja za vsak element posebej, od kogar koli; pri mapi šteje njena velikost, zapakirana ali razpakirana, katera koli je večja.</li>
+<li>Ko je element večji od omejitve: Vprašaj me, preden se začne (element se nikoli ne začne sam, na zaslonu Dohodni prenos pa piše, da je večji od omejitve, ki ste jo nastavili), Zavrni ga in me ne obvesti ali Zavrni ga in me obvesti (vrstica stanja ali obvestilo pove, kdo je kaj ponudil). Pošiljatelj vidi le, da je bila ponudba zavrnjena.</li>
 <li>Blokirani pošiljatelji: glejte <a href="#blocking">Blokiranje pošiljatelja</a>.</li>
 <li>Jezik: v Androidu 13 in novejšem odpre Androidovo izbiro jezika za Dodavo; v starejših različicah Dodavo prikaže seznam svojih jezikov.</li>
 <li>Obvestila: Androidove nastavitve obvestil Dodava.</li>
@@ -160,7 +164,7 @@
 <p><strong>Ali lahko pošljem nekomu z Windows ali Macom?</strong> Da. Deluje enako v obe smeri.</p>
 <p><strong>Ali je druga oseba lahko brez povezave?</strong> Ne ob začetku prenosa: Dodavo mora biti zagnan v obeh napravah, sicer sporoči, da se ne more povezati. Ko je prenos sprejet, je lahko katera koli stran brez povezave, prenos pa se nadaljuje, ko sta obe spet povezani.</p>
 <p><strong>Ali datoteka gre prek strežnika?</strong> Samo prek posrednika, šifrirana, če ni mogoče najti neposredne poti.</p>
-<p><strong>Ali obstaja omejitev velikosti?</strong> Samo prosti prostor: druga stran potrebuje prostor za element, vaša naprava pa za arhiv ZIP mape, ki jo pošiljate, in za kopijo tega, kar deli druga aplikacija. Pred sprejemom Dodavo pove, ali ga je dovolj.</p>
+<p><strong>Ali obstaja omejitev velikosti?</strong> Samo prosti prostor: druga stran potrebuje prostor za element, vaša naprava pa za arhiv ZIP mape, ki jo pošiljate, in za kopijo tega, kar deli druga aplikacija. Pred sprejemom Dodavo pove, ali ga je dovolj. Za tisto, kar prejemate, lahko nastavite omejitev: glejte <a href="#settings">Nastavitve</a>.</p>
 </section>
 
 <section aria-labelledby="troubleshooting">

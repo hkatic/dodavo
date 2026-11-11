@@ -73,18 +73,26 @@ sealed interface Call {
         val name: String,
         @SerialName("contact_id") val contactId: String,
         val editing: String? = null,
+        val limit: RecipientLimit? = null,
     ) : Call
 
+    /** Without [limit], the recipient is under the general one. */
     @Serializable
     @SerialName("add_recipient")
-    data class AddRecipient(val name: String, @SerialName("contact_id") val contactId: String) : Call
+    data class AddRecipient(
+        val name: String,
+        @SerialName("contact_id") val contactId: String,
+        val limit: RecipientLimit? = null,
+    ) : Call
 
+    /** Without [limit], the recipient keeps the one they have. */
     @Serializable
     @SerialName("edit_recipient")
     data class EditRecipient(
         @SerialName("old_id") val oldId: String,
         val name: String,
         @SerialName("contact_id") val contactId: String,
+        val limit: RecipientLimit? = null,
     ) : Call
 
     @Serializable

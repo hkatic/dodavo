@@ -372,11 +372,18 @@ strings! {
         space_folder_note,
         space_confirm,
         space_fat,
+        limit_notice,
+        limit_declined_title,
+        limit_declined,
         // Recipient dialog.
         add_recipient_title,
         edit_recipient_title,
         recipient_name_label,
         contact_id_label,
+        recipient_limit_label,
+        recipient_limit_general,
+        recipient_limit_none,
+        recipient_limit_own,
         recipient_hint,
         enter_recipient_name,
         invalid_contact_id,
@@ -418,6 +425,15 @@ strings! {
         copy,
         change_id_button,
         blocked_senders_button,
+        limit_size,
+        limit_size_label,
+        limit_number_name,
+        limit_unit_name,
+        over_limit_label,
+        over_ask,
+        over_decline,
+        over_decline_tell,
+        limit_invalid,
         // The Blocked Senders dialog.
         blocked_title,
         blocked_list_label,
@@ -534,6 +550,7 @@ strings! {
     }
     plurals {
         wants_items,
+        limit_notice_items,
         send_to_count,
         drop_confirm,
         exit_instruction,
@@ -912,6 +929,9 @@ mod tests {
                         s.language_label,
                         s.copy,
                         s.blocked_senders_button,
+                        s.limit_size,
+                        s.limit_size_label,
+                        s.over_limit_label,
                     ],
                 ),
                 (
@@ -951,7 +971,11 @@ mod tests {
                 ("sent", vec![s.dont_show_again]),
                 (
                     "recipient",
-                    vec![s.recipient_name_label, s.contact_id_label],
+                    vec![
+                        s.recipient_name_label,
+                        s.contact_id_label,
+                        s.recipient_limit_label,
+                    ],
                 ),
                 (
                     "incoming",

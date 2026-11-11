@@ -87,6 +87,7 @@
 <h2 id="recipients">Managing recipients</h2>
 <p>Add recipient asks for a name, which only you see, and the person's Contact ID. Paste puts in a Contact ID that you copied. If something is wrong, the field says what, and the screen stays open until it is right.</p>
 <p>Each recipient has a button More options for that person, with Send files, Send a folder, Edit, Copy Contact ID, Block and Remove. Remove and Block ask first.</p>
+<p>Under Largest item this person can send you, choose Same as for everyone, Any size, or This size with a size of their own, which comes before the limit in <a href="#settings">Settings</a>.</p>
 </section>
 
 <section aria-labelledby="sending">
@@ -102,6 +103,7 @@
 <p>When someone sends you something, the status line says so, and a card at the top of the main screens shows what it is, with the button Incoming transfer. When Dodavo is not in front, a notification says so instead, with Review and Decline.</p>
 <p>The Incoming transfer screen says who sends what, and whether there is enough free space. A sender who is not one of your recipients comes with a warning, and with a check box to add them to your recipients. Accept takes it, Decline refuses it, and More options has Block sender. Going back leaves the offer waiting.</p>
 <p>Received items go to the folder Download/Dodavo. If an item with the same name is there already, the new one gets a number, for example <code>Report (2).pdf</code>; nothing is overwritten. From people in your recipients, a transfer can start by itself: see Start transfers automatically in <a href="#settings">Settings</a>.</p>
+<p>You can limit the size of an item that someone can send you: see Limit the size of items in <a href="#settings">Settings</a>.</p>
 </section>
 
 <section aria-labelledby="progress">
@@ -132,6 +134,8 @@
 <li>Receive in the background: see <a href="#background">Receiving in the background</a>.</li>
 <li>Start transfers automatically: Only from your recipients, into Download/Dodavo. Dodavo always asks first for anyone else.</li>
 <li>When a folder arrives: Keep only the unpacked folder, Keep only the ZIP archive, or Keep both the unpacked folder and the ZIP file.</li>
+<li>Limit the size of items: The largest item that someone can send you. A recipient can have a limit of their own. With it on, Largest size takes a whole number of MB or GB. The limit applies to each item by itself, from anyone; a folder counts by its size packed or unpacked, whichever is larger.</li>
+<li>When an item is over the limit: Ask me before it starts (the item never starts by itself, and the Incoming transfer screen says that it is larger than the limit you set), Decline it without telling me, or Decline it and tell me (the status line or a notification says who offered what). The sender sees only that the offer was declined.</li>
 <li>Blocked senders: see <a href="#blocking">Blocking a sender</a>.</li>
 <li>Language: on Android 13 and later, it opens Android's own choice of language for Dodavo; before, Dodavo lists its languages.</li>
 <li>Notifications: Android's settings of Dodavo's notifications.</li>
@@ -160,7 +164,7 @@
 <p><strong>Can I send to someone on Windows or a Mac?</strong> Yes. It works the same way in both directions.</p>
 <p><strong>Can the other person be offline?</strong> Not when a transfer starts: Dodavo has to be running on both devices, otherwise it says that it could not connect. Once a transfer has been accepted, either side may go offline, and it continues when both are back.</p>
 <p><strong>Does a file go through a server?</strong> Only through a relay, encrypted, if no direct path can be found.</p>
-<p><strong>Is there a limit to the size?</strong> Only the free space: the other side needs room for the item, and your device for the ZIP archive of a folder you send, and for the copy of what another app shares. Before it accepts, Dodavo says whether there is enough.</p>
+<p><strong>Is there a limit to the size?</strong> Only the free space: the other side needs room for the item, and your device for the ZIP archive of a folder you send, and for the copy of what another app shares. Before it accepts, Dodavo says whether there is enough. You can set a limit for what you receive: see <a href="#settings">Settings</a>.</p>
 </section>
 
 <section aria-labelledby="troubleshooting">

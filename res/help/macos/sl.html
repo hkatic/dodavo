@@ -93,6 +93,7 @@
 <p>Blokiraj prejemnika (<kbd>⌘B</kbd>) osebo po vprašanju blokira: oseba se odstrani iz vaših prejemnikov, Dodavo pa odslej brez vprašanja zavrne vse, kar vam pošlje. Oseba ne izve, da je blokirana; vidi le, da je bila njena ponudba zavrnjena. Prenosi, ki že potekajo, se nadaljujejo.</p>
 <p>Kopiraj moj ID stika (<kbd>⇧⌘C</kbd>) postavi vaš ID stika v odložišče. Najdete ga tudi na zavihku Splošno v nastavitvah.</p>
 <p>Spremeni moj ID stika … v meniju Datoteka vam po vprašanju dodeli nov ID stika; enako stori Spremeni … na zavihku Splošno v nastavitvah. Dosedanji takrat za vedno preneha veljati, zato morajo vsi, ki vam pošiljajo datoteke, od vas dobiti novega in z njim zamenjati starega. Noben prenos se ne more nadaljevati pod drugim ID-jem stika: Dodavo pove, koliko jih poteka ali čaka na vaš odgovor, in jih po vaši potrditvi prekliče. Pošiljanja, pri katerem so bili vsi podatki že poslani, prejemnik pa jih še ni potrdil, tako ni mogoče preklicati; dokler tako obstaja, Dodavo to pove in ohrani vaš ID stika. Vaši prejemniki in blokirani pošiljatelji ostanejo, kakršni so.</p>
+<p>V obeh primerih pojavni meni Največji element določa, kako velik element vam oseba lahko pošlje: Kot za vse druge, Katera koli velikost ali Ta velikost z lastno velikostjo, ki ima prednost pred omejitvijo iz razdelka <a href="#settings">Nastavitve</a>.</p>
 </section>
 
 <section aria-labelledby="sending">
@@ -114,6 +115,7 @@
 <p>Okno pove, kdo pošilja kaj in ali je dovolj prostega prostora. Shrani v: pokaže, kam gre, Izberi … pa to spremeni. Sprejmi sprejme (<kbd>Return</kbd>), Zavrni zavrne (<kbd>Esc</kbd>). VoiceOver prebere okno, ko pridete do njega.</p>
 <p>Blokiraj pošiljatelja (<kbd>⌘B</kbd>) po vprašanju zavrne ponudbo in blokira pošiljatelja: Dodavo odslej brez vprašanja zavrne vse, kar vam pošlje ta oseba, ona pa vidi le, da je bila njena ponudba zavrnjena. Stran Blokirani v razdelku <a href="#settings">Nastavitve</a> navaja osebe, ki ste jih blokirali, z gumbom Odblokiraj pa vam lahko spet pošiljajo. Če blokirano osebo dodate med prejemnike, se tudi odblokira.</p>
 <p>Od oseb med vašimi prejemniki se lahko prenos začne sam: glejte Prenose začni samodejno, brez vprašanja v razdelku <a href="#settings">Nastavitve</a>. Pri vseh drugih Dodavo vedno najprej vpraša in pove, da pošiljatelj ni med vašimi prejemniki.</p>
+<p>Velikost elementa, ki vam ga lahko kdo pošlje, lahko omejite: glejte Omeji velikost elementa, ki mi ga lahko kdo pošlje v razdelku <a href="#settings">Nastavitve</a>.</p>
 <p>Prejeti elementi dobijo enako oznako kot prenosi iz interneta, zato macOS vpraša, preden odpre aplikacijo, ki je prispela na ta način.</p>
 <p>Diski v obliki MS-DOS (FAT) ne morejo shraniti datotek, velikih 4 GB ali več; Dodavo to pove pred sprejemom.</p>
 </section>
@@ -152,6 +154,8 @@
 <li>Vedno shrani prejete elemente v to mapo, z gumbom Izberi …. To je vaša mapa Prenosi, dokler ne izberete druge.</li>
 <li>Prenose začni samodejno, brez vprašanja. Samo od oseb med vašimi prejemniki, v zgornjo mapo. Brez te mape Dodavo vedno vpraša, kam naj shrani.</li>
 <li>Ko prispe mapa: Obdrži samo razpakirano mapo, Obdrži samo arhiv ZIP ali Obdrži razpakirano mapo in datoteko ZIP.</li>
+<li>Omeji velikost elementa, ki mi ga lahko kdo pošlje. Največja velikost: celo število MB ali GB. Omejitev velja za vsak element posebej, od kogar koli; pri mapi šteje njena velikost, zapakirana ali razpakirana, katera koli je večja.</li>
+<li>Ko je element večji od omejitve: Vprašaj me, preden se začne (element se nikoli ne začne sam, v oknu Dohodni prenos pa piše, da je večji od omejitve, ki ste jo nastavili), Zavrni ga in me ne obvesti ali Zavrni ga in me obvesti (obvestilo pove, kdo je kaj ponudil). Pošiljatelj vidi le, da je bila ponudba zavrnjena.</li>
 </ul>
 <p>Blokirani: pošiljatelji, ki ste jih blokirali, z gumbom Odblokiraj.</p>
 </section>
@@ -196,7 +200,7 @@
 <p><strong>Ali lahko pošljem nekomu z Windows?</strong> Da. Deluje enako v obe smeri.</p>
 <p><strong>Ali je druga oseba lahko brez povezave?</strong> Ne ob začetku prenosa: Dodavo mora biti zagnan v obeh računalnikih, sicer sporoči, da se ne more povezati. Ko je prenos sprejet, je lahko katera koli stran brez povezave, prenos pa se nadaljuje, ko sta obe spet povezani.</p>
 <p><strong>Ali datoteka gre prek strežnika?</strong> Samo prek posrednika, šifrirana, če ni mogoče najti neposredne poti.</p>
-<p><strong>Ali obstaja omejitev velikosti?</strong> Samo prosti prostor na drugi strani in 4 GB na datoteko na diskih MS-DOS (FAT).</p>
+<p><strong>Ali obstaja omejitev velikosti?</strong> Samo prosti prostor na drugi strani in 4 GB na datoteko na diskih MS-DOS (FAT). Za tisto, kar prejemate, lahko nastavite omejitev: glejte <a href="#settings">Nastavitve</a>.</p>
 </section>
 
 <section aria-labelledby="troubleshooting">

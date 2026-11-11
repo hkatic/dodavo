@@ -154,6 +154,7 @@
 <li>ID stika že pripada drugemu prejemniku.</li>
 </ul>
 <p>Seznam je razvrščen po abecedi imen, nova oseba pa je izbrana.</p>
+<p>Seznam <span class="ui">Največji element, ki mi ga ta oseba lahko pošlje</span> določa, kako velik element vam oseba lahko pošlje; glejte <a href="#size-limit">Omejevanje velikosti tega, kar prejemate</a>.</p>
 
 <h3 id="edit-recipient">Urejanje ali odstranjevanje prejemnika</h3>
 <p>Na seznamu izberite osebo in nato:</p>
@@ -223,6 +224,7 @@
 <dt><span class="ui">Blokiraj pošiljatelja</span> (<kbd>Alt</kbd>+<kbd>B</kbd>)</dt>
 <dd>Zavrne, kar pošilja oseba, in jo blokira, ko potrdite z gumbom <span class="ui">Da</span>. Glejte <a href="#blocking">Blokiranje pošiljatelja</a>.</dd>
 </dl>
+<p>Če je element večji od omejitve velikosti, ki ste jo nastavili, to pove vrstica pod njegovim imenom in velikostjo. Še vedno ga lahko sprejmete. Glejte <a href="#size-limit">Omejevanje velikosti tega, kar prejemate</a>.</p>
 <p>Ko vam ista oseba pošlje več elementov hkrati, si delijo eno okno, vaš odgovor pa velja za vse. Krepka vrstica pove, koliko jih je, naslednja vrstica navede njihovo skupno velikost, polje <span class="ui">Elementi</span> (<kbd>Alt</kbd>+<kbd>E</kbd>) pa jih našteje. Elementi, ki prispejo, medtem ko je okno odprto, se dodajo vanj, tistih, ki so prispeli v zadnji sekundi, pa vaš odgovor še ne zajame: ostanejo v oknu.</p>
 <p>Če prostora ni dovolj, vas Dodavo vpraša, ali želite prenos vseeno sprejeti. Če pošiljatelj prenos prekliče, preden odgovorite, se okno zapre, obvestilo pa vas o tem obvesti.</p>
 <p>Ko prenos sprejmete, okno napredka prikazuje njegov potek. Če v mapi že obstaja element z enakim imenom, se novi shrani z dodano številko, na primer <code>Poročilo (2).pdf</code>; nič se ne prepiše.</p>
@@ -239,7 +241,7 @@
 <p>Če izberete <span class="ui">Ne sprašuj me več</span>, bo Dodavo naslednjič namesto vprašanja prikazal obvestilo. Če izberete obvestilo, se element prikaže v Raziskovalcu. Vprašanje lahko znova vklopite v nastavitvah z možnostjo <span class="ui">Po prejemu vprašaj, ali naj se datoteka ali mapa odpre</span>. Dokler potekajo drugi prenosi z isto osebo, Dodavo ne vpraša, ampak prikaže obvestilo; vprašanje pride po zadnjem.</p>
 
 <h3 id="auto-accept">Prejemanje brez vprašanja</h3>
-<p>Prenosi od oseb z vašega seznama prejemnikov se začnejo takoj, brez okna Dohodni prenos, če sta v nastavitvah vklopljeni obe možnosti: <span class="ui">Vedno shrani prejete datoteke v to mapo</span> in <span class="ui">Prenose začni samodejno, brez vprašanja</span>. Vklopljeni sta, dokler ju ne izklopite. Dodavo prikaže obvestilo <span class="ui">Prejemanje</span> in shrani element v mapo iz prve možnosti, to pa je vaša mapa Prenosi, če niste izbrali druge. Za prenose od neznanih pošiljateljev in prenose, za katere na disku ne bi bilo dovolj prostora, Dodavo še vedno vpraša. Tako lahko prenos začnejo le osebe, ki ste jih dodali sami: njihovega ID-ja stika ni mogoče ponarediti.</p>
+<p>Prenosi od oseb z vašega seznama prejemnikov se začnejo takoj, brez okna Dohodni prenos, če sta v nastavitvah vklopljeni obe možnosti: <span class="ui">Vedno shrani prejete datoteke v to mapo</span> in <span class="ui">Prenose začni samodejno, brez vprašanja</span>. Vklopljeni sta, dokler ju ne izklopite. Dodavo prikaže obvestilo <span class="ui">Prejemanje</span> in shrani element v mapo iz prve možnosti, to pa je vaša mapa Prenosi, če niste izbrali druge. Prenosi od neznanih pošiljateljev, prenosi, za katere na disku ne bi bilo dovolj prostora, in elementi, večji od omejitve, ki ste jo nastavili, se nikoli ne začnejo na ta način. Tako lahko prenos začnejo le osebe, ki ste jih dodali sami: njihovega ID-ja stika ni mogoče ponarediti.</p>
 <p>Če želite sami izbrati, kam se shrani vsak element, počistite možnost <span class="ui">Vedno shrani prejete datoteke v to mapo</span>: vsak prenos nato odpre okno Dohodni prenos. Če želite odločati o vsakem prenosu, vaša mapa pa naj se še naprej predlaga, namesto tega počistite možnost <span class="ui">Prenose začni samodejno, brez vprašanja</span>.</p>
 <h3 id="blocking">Blokiranje pošiljatelja</h3>
 <p>Če vam kdo pošilja, česar ne želite, ga lahko blokirate. Dodavo nato brez vprašanja in brez obvestila zavrne vse, kar vam ta oseba pošlje. Oseba vidi le, da je bila njena ponudba zavrnjena, in ne izve, da je blokirana. Prenosi z njo, ki že potekajo, se nadaljujejo; če želite, da se ustavijo, jih prekličite v njihovih oknih napredka.</p>
@@ -248,6 +250,15 @@
 <li>V glavnem oknu izberite osebo in pritisnite <kbd>Ctrl</kbd>+<kbd>B</kbd> ali v meniju <span class="ui">Datoteka</span> izberite <span class="ui">Blokiraj prejemnika</span> ali v meniju dejanj <span class="ui">Blokiraj</span>. Blokirana oseba se odstrani s seznama prejemnikov.</li>
 </ul>
 <p>Če želite koga odblokirati, odprite nastavitve, aktivirajte <span class="ui">Blokirani pošiljatelji…</span> (<kbd>Alt</kbd>+<kbd>Š</kbd>), v pogovornem oknu <span class="ui">Blokirani pošiljatelji</span> izberite osebo in aktivirajte <span class="ui">Odblokiraj</span> (<kbd>Alt</kbd>+<kbd>O</kbd>). Če blokirano osebo dodate med prejemnike, se tudi odblokira.</p>
+<h3 id="size-limit">Omejevanje velikosti tega, kar prejemate</h3>
+<p>Nastavite lahko največjo velikost elementa, ki vam ga lahko kdo pošlje, da vam nihče ne napolni diska, po pomoti ali namerno. Odprite nastavitve, izberite <span class="ui">Omeji velikost elementa, ki mi ga lahko kdo pošlje</span> (<kbd>Alt</kbd>+<kbd>H</kbd>), v polje <span class="ui">Največja velikost</span> (<kbd>Alt</kbd>+<kbd>Č</kbd>) vnesite celo število in na seznamu za njim izberite MB ali GB. Omejitev velja za vsak element posebej: pri datoteki šteje njena velikost, pri mapi pa njena velikost, zapakirana ali razpakirana, katera koli je večja. Velja za vse, tudi za pošiljatelje, ki jih ni na vašem seznamu prejemnikov.</p>
+<p>Seznam <span class="ui">Ukrep, ko je element večji od omejitve</span> (<kbd>Alt</kbd>+<kbd>U</kbd>) določa, kaj se zgodi z večjim elementom:</p>
+<ul>
+<li><span class="ui">Vprašaj me, preden se začne</span>: element se nikoli ne začne sam. Odpre se okno Dohodni prenos, v katerem piše, da je element večji od omejitve, ki ste jo nastavili, vi pa ga lahko še vedno sprejmete. To je izbrano, dokler ne izberete drugega.</li>
+<li><span class="ui">Zavrni ga in me ne obvesti</span>: Dodavo element takoj zavrne in ne prikaže ničesar.</li>
+<li><span class="ui">Zavrni ga in me obvesti</span>: Dodavo element takoj zavrne, obvestilo <span class="ui">Element je bil zavrnjen</span> pa pove, kdo je kaj ponudil.</li>
+</ul>
+<p>Ko Dodavo element zavrne, pošiljatelj vidi le, da je bila ponudba zavrnjena, ne pa tudi zakaj. Prejemnik ima lahko svojo omejitev, ki ima prednost pred tisto v nastavitvah: v pogovornem oknu <span class="ui">Dodaj prejemnika</span> ali <span class="ui">Uredi prejemnika</span> na seznamu <span class="ui">Največji element, ki mi ga ta oseba lahko pošlje</span> (<kbd>Alt</kbd>+<kbd>N</kbd>) izberite <span class="ui">Katera koli velikost</span> ali <span class="ui">Ta velikost:</span>; pri možnosti <span class="ui">Ta velikost:</span> vnesite velikost v polje za seznamom in izberite enoto. Za novega prejemnika je izbrano <span class="ui">Kot v nastavitvah</span>. Spremenjena omejitev velja za tisto, kar je ponujeno po spremembi.</p>
 </section>
 
 <section aria-labelledby="progress">
@@ -334,6 +345,12 @@
 <dd>Seznam z možnostmi <span class="ui">Obdrži samo razpakirano mapo</span>, <span class="ui">Obdrži samo datoteko ZIP (brez razpakiranja)</span> in <span class="ui">Obdrži razpakirano mapo in datoteko ZIP</span>. Prejeta mapa prispe kot datoteka ZIP; ta nastavitev določa, ali jo Dodavo razpakira in ali obdrži datoteko ZIP. Datoteka ZIP je koristna, če želite mapo shraniti ali posredovati natanko takšno, kot je prispela. Izbira velja za prenose, ki jih sprejmete po spremembi. Glejte <a href="#after-receiving">Ko je prenos končan</a> in <a href="#faq-dates">Ali datoteke in mape obdržijo svoje datume?</a></dd>
 <dt><span class="ui">Po prejemu vprašaj, ali naj se datoteka ali mapa odpre</span></dt>
 <dd>Vpraša, kaj naj se zgodi, ko je element prejet. Glejte <a href="#after-receiving">Ko je prenos končan</a>.</dd>
+<dt><span class="ui">Omeji velikost elementa, ki mi ga lahko kdo pošlje</span></dt>
+<dd>Nastavi največjo velikost elementa, ki vam ga lahko kdo pošlje. Izklopljeno je, dokler ga ne vklopite. Glejte <a href="#size-limit">Omejevanje velikosti tega, kar prejemate</a>.</dd>
+<dt><span class="ui">Največja velikost</span></dt>
+<dd>Omejitev kot celo število, za njo pa seznam z enotama MB in GB. Oboje ni na voljo, dokler je omejitev izklopljena.</dd>
+<dt><span class="ui">Ukrep, ko je element večji od omejitve</span></dt>
+<dd>Seznam z možnostmi <span class="ui">Vprašaj me, preden se začne</span>, <span class="ui">Zavrni ga in me ne obvesti</span> in <span class="ui">Zavrni ga in me obvesti</span>. Velja tudi za omejitve, ki jih imajo prejemniki sami zase, zato je na voljo tudi brez zgornje omejitve.</dd>
 <dt><span class="ui">Blokirani pošiljatelji…</span></dt>
 <dd>Odpre seznam pošiljateljev, ki ste jih blokirali, na katerem jih lahko odblokirate. Glejte <a href="#blocking">Blokiranje pošiljatelja</a>.</dd>
 </dl>
@@ -537,7 +554,7 @@
 <p>Za začetek prenosa da: Dodavo se mora izvajati v obeh računalnikih, sicer vidite <span class="ui">Povezave z računalnikom (…) ni bilo mogoče vzpostaviti.</span> Ko je prenos enkrat sprejet, lahko katera koli stran izgubi povezavo, preide v spanje ali konča Dodavo; prenos se nadaljuje, ko sta obe spet tu, kot je opisano v prejšnjem odgovoru.</p>
 
 <h3 id="faq-size">Ali obstaja omejitev velikosti?</h3>
-<p>Ne. Dodavo ne omejuje velikosti datoteke ali mape; edini omejitvi sta prosti prostor na pogonu, ki prejema, in to, da na pogonu z datotečnim sistemom FAT32 (veliko pogonov USB in pomnilniških kartic) nobena datoteka ne more biti velika 4 GB ali več. Za mapo potrebuje računalnik, ki prejema, prostor tako za arhiv kot za razpakirano mapo, torej med razpakiranjem približno dvakratno velikost mape (razen če obdrži le datoteko ZIP). Okno Dohodni prenos pove, ali je prostora dovolj, še preden sprejmete.</p>
+<p>Ne, razen če jo nastavite sami. Dodavo sam ne omejuje velikosti datoteke ali mape; edini omejitvi sta prosti prostor na pogonu, ki prejema, in to, da na pogonu z datotečnim sistemom FAT32 (veliko pogonov USB in pomnilniških kartic) nobena datoteka ne more biti velika 4 GB ali več. Za mapo potrebuje računalnik, ki prejema, prostor tako za arhiv kot za razpakirano mapo, torej med razpakiranjem približno dvakratno velikost mape (razen če obdrži le datoteko ZIP). Okno Dohodni prenos pove, ali je prostora dovolj, še preden sprejmete. Kako nastavite največjo velikost elementa, ki vam ga lahko pošljejo drugi, preberite v razdelku <a href="#size-limit">Omejevanje velikosti tega, kar prejemate</a>.</p>
 
 <h3 id="faq-several">Ali lahko pošljem več elementov hkrati ali več osebam?</h3>
 <p>Da. Začnete lahko poljubno število prenosov, isti osebi ali različnim osebam, vsak pa ima svoje okno napredka. Če želite poslati več datotek ali map naenkrat, jih iz Raziskovalca povlecite na osebo na seznamu prejemnikov; ko potrdite, se vsak element pošlje kot ločen prenos. Glejte <a href="#drag-and-drop">Vlečenje elementov na osebo</a>. Lahko jih tudi izberete v Raziskovalcu in pošljete od tam: glejte <a href="#send-from-explorer">Pošiljanje iz Raziskovalca</a>. Stolpec <span class="ui">Prenos</span> na seznamu prejemnikov in meni <span class="ui">Prenosi</span> spremljata vse.</p>

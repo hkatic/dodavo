@@ -154,6 +154,7 @@
 <li>ID kontakta već pripada drugom primatelju.</li>
 </ul>
 <p>Popis je poredan abecedno po imenu, a nova osoba ostaje odabrana.</p>
+<p>Popis <span class="ui">Najveća stavka koju mi ova osoba može poslati</span> određuje koliko veliku stavku vam osoba može poslati; pogledajte <a href="#size-limit">Ograničavanje veličine onoga što primate</a>.</p>
 
 <h3 id="edit-recipient">Uređivanje ili uklanjanje primatelja</h3>
 <p>Odaberite osobu na popisu, a zatim:</p>
@@ -223,6 +224,7 @@
 <dt><span class="ui">Blokiraj pošiljatelja</span> (<kbd>Alt</kbd>+<kbd>B</kbd>)</dt>
 <dd>Odbija ono što osoba šalje i blokira je, nakon što potvrdite gumbom <span class="ui">Da</span>. Pogledajte <a href="#blocking">Blokiranje pošiljatelja</a>.</dd>
 </dl>
+<p>Ako je stavka veća od ograničenja veličine koje ste postavili, redak ispod njezina naziva i veličine to kaže. I dalje je možete prihvatiti. Pogledajte <a href="#size-limit">Ograničavanje veličine onoga što primate</a>.</p>
 <p>Kada vam ista osoba šalje više stavki odjednom, one dijele jedan prozor, a vaš se odgovor odnosi na sve. Podebljani redak kaže koliko ih je, sljedeći redak navodi njihovu ukupnu veličinu, a polje <span class="ui">Stavke</span> (<kbd>Alt</kbd>+<kbd>T</kbd>) ih navodi. Stavke koje stignu dok je prozor otvoren dodaju se u njega, a one koje su stigle u posljednjoj sekundi vaš odgovor još ne obuhvaća: ostaju u prozoru.</p>
 <p>Ako nema dovoljno slobodnog prostora, Dodavo pita želite li ipak prihvatiti prijenos. Ako pošiljatelj otkaže prije nego što odgovorite, prozor se zatvara, a obavijest vas o tome izvješćuje.</p>
 <p>Kada prihvatite prijenos, prozor napretka prikazuje njegov tijek. Ako u mapi već postoji stavka istog naziva, nova se sprema s dodanim brojem, na primjer <code>Izvještaj (2).pdf</code>; ništa se ne prebrisuje.</p>
@@ -239,7 +241,7 @@
 <p>Ako odaberete <span class="ui">Ne pitaj me ponovno</span>, Dodavo će sljedeći put umjesto pitanja prikazati obavijest. Odabirom obavijesti stavka se prikazuje u Eksploreru za datoteke. Pitanje možete ponovno uključiti u postavkama mogućnošću <span class="ui">Nakon primanja pitaj želim li otvoriti datoteku ili mapu</span>. Dok su u tijeku drugi prijenosi s istom osobom, Dodavo ne pita, nego prikazuje obavijest; pitanje dolazi nakon posljednjeg.</p>
 
 <h3 id="auto-accept">Primanje bez pitanja</h3>
-<p>Prijenosi od osoba s vašeg popisa primatelja počinju odmah, bez prozora Dolazni prijenos, ako su u postavkama uključene obje mogućnosti: <span class="ui">Uvijek spremaj primljene datoteke u ovu mapu</span> i <span class="ui">Prijenose pokreći automatski, bez pitanja</span>. Uključene su dok ih ne isključite. Dodavo prikazuje obavijest <span class="ui">Primanje</span> i sprema stavku u mapu iz prve mogućnosti, a to je vaša mapa Preuzimanja ako niste odabrali drugu. Za prijenose od nepoznatih pošiljatelja i prijenose koji ne bi stali na disk Dodavo i dalje pita. Na taj način prijenos mogu pokrenuti samo osobe koje ste sami dodali: njihov se ID kontakta ne može krivotvoriti.</p>
+<p>Prijenosi od osoba s vašeg popisa primatelja počinju odmah, bez prozora Dolazni prijenos, ako su u postavkama uključene obje mogućnosti: <span class="ui">Uvijek spremaj primljene datoteke u ovu mapu</span> i <span class="ui">Prijenose pokreći automatski, bez pitanja</span>. Uključene su dok ih ne isključite. Dodavo prikazuje obavijest <span class="ui">Primanje</span> i sprema stavku u mapu iz prve mogućnosti, a to je vaša mapa Preuzimanja ako niste odabrali drugu. Prijenosi od nepoznatih pošiljatelja, prijenosi koji ne bi stali na disk i stavke veće od ograničenja koje ste postavili nikada ne počinju na taj način. Na taj način prijenos mogu pokrenuti samo osobe koje ste sami dodali: njihov se ID kontakta ne može krivotvoriti.</p>
 <p>Ako želite birati gdje se sprema svaka stavka, poništite odabir mogućnosti <span class="ui">Uvijek spremaj primljene datoteke u ovu mapu</span>: svaki prijenos tada otvara prozor Dolazni prijenos. Ako želite odlučivati o svakom prijenosu, a da se vaša mapa i dalje predlaže, umjesto toga poništite odabir mogućnosti <span class="ui">Prijenose pokreći automatski, bez pitanja</span>.</p>
 <h3 id="blocking">Blokiranje pošiljatelja</h3>
 <p>Ako vam netko šalje ono što ne želite, možete ga blokirati. Dodavo tada bez pitanja i bez obavijesti odbija sve što vam ta osoba pošalje. Ona vidi samo da je njezina ponuda odbijena i ne saznaje da je blokirana. Prijenosi s njom koji su već u tijeku nastavljaju se; ako želite da prestanu, otkažite ih u njihovim prozorima napretka.</p>
@@ -248,6 +250,15 @@
 <li>U glavnom prozoru odaberite osobu i pritisnite <kbd>Ctrl</kbd>+<kbd>B</kbd>, ili na izborniku <span class="ui">Datoteka</span> odaberite <span class="ui">Blokiraj primatelja</span>, ili u izborniku radnji <span class="ui">Blokiraj</span>. Blokirana osoba uklanja se s popisa primatelja.</li>
 </ul>
 <p>Da biste nekoga deblokirali, otvorite postavke, aktivirajte <span class="ui">Blokirani pošiljatelji…</span> (<kbd>Alt</kbd>+<kbd>L</kbd>), u dijaloškom okviru <span class="ui">Blokirani pošiljatelji</span> odaberite osobu i aktivirajte <span class="ui">Deblokiraj</span> (<kbd>Alt</kbd>+<kbd>D</kbd>). Kada blokiranu osobu dodate u primatelje, ona se također deblokira.</p>
+<h3 id="size-limit">Ograničavanje veličine onoga što primate</h3>
+<p>Možete postaviti najveću veličinu stavke koju vam netko može poslati, tako da vam nitko ne napuni disk, slučajno ili namjerno. Otvorite postavke, odaberite <span class="ui">Ograniči veličinu stavke koju mi netko može poslati</span> (<kbd>Alt</kbd>+<kbd>G</kbd>), u polje <span class="ui">Najveća veličina</span> (<kbd>Alt</kbd>+<kbd>Ć</kbd>) upišite cijeli broj i na popisu iza njega odaberite MB ili GB. Ograničenje vrijedi za svaku stavku zasebno: za datoteku se gleda njezina veličina, a za mapu njezina veličina zapakirana ili raspakirana, ovisno o tome koja je veća. Vrijedi za sve, i za pošiljatelje koji nisu na vašem popisu primatelja.</p>
+<p>Popis <span class="ui">Kad je stavka veća od ograničenja</span> (<kbd>Alt</kbd>+<kbd>Č</kbd>) određuje što se događa s većom stavkom:</p>
+<ul>
+<li><span class="ui">Pitaj me prije nego što počne</span>: stavka se nikada ne pokreće sama. Otvara se prozor Dolazni prijenos, u kojem piše da je stavka veća od ograničenja koje ste postavili, a vi je i dalje možete prihvatiti. To je odabrano dok ne odaberete drugo.</li>
+<li><span class="ui">Odbij je i nemoj me obavijestiti</span>: Dodavo odmah odbija stavku i ništa ne prikazuje.</li>
+<li><span class="ui">Odbij je i obavijesti me</span>: Dodavo odmah odbija stavku, a obavijest <span class="ui">Stavka je odbijena</span> kaže tko je što ponudio.</li>
+</ul>
+<p>Kada Dodavo odbije stavku, pošiljatelj vidi samo da je ponuda odbijena, ali ne i zašto. Primatelj može imati vlastito ograničenje, koje ima prednost pred onim u postavkama: u dijaloškom okviru <span class="ui">Dodaj primatelja</span> ili <span class="ui">Uredi primatelja</span> na popisu <span class="ui">Najveća stavka koju mi ova osoba može poslati</span> (<kbd>Alt</kbd>+<kbd>N</kbd>) odaberite <span class="ui">Bilo koja veličina</span> ili <span class="ui">Ova veličina:</span>; uz <span class="ui">Ova veličina:</span> upišite veličinu u polje iza popisa i odaberite jedinicu. Za novog je primatelja odabrano <span class="ui">Kao u postavkama</span>. Promijenjeno ograničenje vrijedi za ono što se ponudi nakon promjene.</p>
 </section>
 
 <section aria-labelledby="progress">
@@ -334,6 +345,12 @@
 <dd>Popis s mogućnostima <span class="ui">Zadrži samo raspakiranu mapu</span>, <span class="ui">Zadrži samo ZIP datoteku (bez raspakiravanja)</span> i <span class="ui">Zadrži raspakiranu mapu i ZIP datoteku</span>. Primljena mapa stiže kao ZIP datoteka; ova postavka određuje hoće li je Dodavo raspakirati i hoće li zadržati ZIP datoteku. Zadržavanje ZIP datoteke korisno je ako mapu želite pohraniti ili proslijediti točno onakvu kakva je stigla. Izbor vrijedi za prijenose koje prihvatite nakon promjene. Pogledajte <a href="#after-receiving">Kada je prijenos dovršen</a> i <a href="#faq-dates">Zadržavaju li datoteke i mape svoje datume?</a></dd>
 <dt><span class="ui">Nakon primanja pitaj želim li otvoriti datoteku ili mapu</span></dt>
 <dd>Pita što učiniti nakon što je stavka primljena. Pogledajte <a href="#after-receiving">Kada je prijenos dovršen</a>.</dd>
+<dt><span class="ui">Ograniči veličinu stavke koju mi netko može poslati</span></dt>
+<dd>Postavlja najveću veličinu stavke koju vam netko može poslati. Isključeno je dok ga ne uključite. Pogledajte <a href="#size-limit">Ograničavanje veličine onoga što primate</a>.</dd>
+<dt><span class="ui">Najveća veličina</span></dt>
+<dd>Ograničenje kao cijeli broj, a iza njega popis s jedinicama MB i GB. Oboje je nedostupno dok je ograničenje isključeno.</dd>
+<dt><span class="ui">Kad je stavka veća od ograničenja</span></dt>
+<dd>Popis s mogućnostima <span class="ui">Pitaj me prije nego što počne</span>, <span class="ui">Odbij je i nemoj me obavijestiti</span> i <span class="ui">Odbij je i obavijesti me</span>. Vrijedi i za ograničenja koja primatelji imaju sami za sebe, pa je dostupan i bez gornjeg ograničenja.</dd>
 <dt><span class="ui">Blokirani pošiljatelji…</span></dt>
 <dd>Otvara popis pošiljatelja koje ste blokirali, na kojem ih možete deblokirati. Pogledajte <a href="#blocking">Blokiranje pošiljatelja</a>.</dd>
 </dl>
@@ -537,7 +554,7 @@
 <p>Za pokretanje prijenosa da: Dodavo mora biti pokrenut na oba računala, inače vidite <span class="ui">Povezivanje s računalom (…) nije uspjelo.</span> Kad je prijenos jednom prihvaćen, bilo koja strana može otići izvan mreže, prijeći u stanje mirovanja ili izaći iz programa Dodavo; prijenos se nastavlja kad su obje opet tu, kako je opisano u prethodnom odgovoru.</p>
 
 <h3 id="faq-size">Postoji li ograničenje veličine?</h3>
-<p>Ne. Dodavo ne ograničava veličinu datoteke ni mape; jedina su ograničenja slobodan prostor na pogonu koji prima i, na pogonu s datotečnim sustavom FAT32 (mnogi USB izbrisivi memorijski pogoni i memorijske kartice), to da nijedna datoteka ne može biti od 4 GB ili veća. Za mapu računalo koje prima treba mjesta i za arhivu i za raspakiranu mapu, dakle otprilike dvostruku veličinu mape dok traje raspakiravanje (osim ako zadržava samo ZIP datoteku). Prozor Dolazni prijenos kaže ima li dovoljno prostora prije nego što prihvatite.</p>
+<p>Ne, osim ako ga sami postavite. Dodavo sam ne ograničava veličinu datoteke ni mape; jedina su ograničenja slobodan prostor na pogonu koji prima i, na pogonu s datotečnim sustavom FAT32 (mnogi USB izbrisivi memorijski pogoni i memorijske kartice), to da nijedna datoteka ne može biti od 4 GB ili veća. Za mapu računalo koje prima treba mjesta i za arhivu i za raspakiranu mapu, dakle otprilike dvostruku veličinu mape dok traje raspakiravanje (osim ako zadržava samo ZIP datoteku). Prozor Dolazni prijenos kaže ima li dovoljno prostora prije nego što prihvatite. Kako postaviti najveću veličinu stavke koju vam drugi mogu poslati, pogledajte u odjeljku <a href="#size-limit">Ograničavanje veličine onoga što primate</a>.</p>
 
 <h3 id="faq-several">Mogu li poslati više stavki odjednom ili ih poslati većem broju osoba?</h3>
 <p>Da. Možete pokrenuti koliko god prijenosa želite, istoj osobi ili različitim osobama, a svaki ima vlastiti prozor napretka. Da biste poslali više datoteka ili mapa u jednom potezu, povucite ih iz Eksplorera za datoteke na osobu na popisu primatelja; nakon što potvrdite, svaka se stavka šalje kao zaseban prijenos. Pogledajte <a href="#drag-and-drop">Povlačenje stavki na osobu</a>. Možete ih i odabrati u Eksploreru za datoteke i poslati odande: pogledajte <a href="#send-from-explorer">Slanje iz Eksplorera za datoteke</a>. Stupac <span class="ui">Prijenos</span> na popisu primatelja i izbornik <span class="ui">Prijenosi</span> prate ih sve.</p>
