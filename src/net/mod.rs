@@ -1365,6 +1365,9 @@ mod tests {
         d
     }
 
+    /// Waits for the end of the transfer `id`. A timeout names the line that
+    /// waited.
+    #[track_caller]
     fn wait_finished(rx: &mpsc::Receiver<Event>, id: u64) -> Outcome {
         loop {
             match rx
@@ -1377,7 +1380,9 @@ mod tests {
         }
     }
 
-    /// Waits until `pred` accepts an event (events before it are dropped).
+    /// Waits until `pred` accepts an event (events before it are dropped). A
+    /// timeout names the line that waited.
+    #[track_caller]
     fn wait_for(rx: &mpsc::Receiver<Event>, mut pred: impl FnMut(&Event) -> bool) -> Event {
         loop {
             let e = rx

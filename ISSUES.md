@@ -18,6 +18,8 @@ None known.
 
 `a_cancel_waits_for_the_verdict_across_a_restart`, `a_send_needs_its_data_again_when_the_receiver_lacks_it`, `finish_alone_after_restart_during_unpacking` and `a_new_identity_waits_for_a_send_the_receiver_may_have` reconnect after a restart, and wait more than 120 s there, while they pass on a Mac elsewhere and on the Windows runner. It may be that the runner keeps an unsigned test program from the local network (Local Network privacy), which would leave a slow way through a relay; that was not checked. If so, the same wait could be what a user who denies that permission sees. CI runs them without letting them fail the run.
 
+A fifth, `a_new_identity_ends_the_transfers_and_takes_over`, timed out there once (2026-11-11), in a wait that began within 1.5 s of its start, and passed in the runs before and after it; it fails the run when it does. On a Mac elsewhere it also passes with endpoints that use relays only (`clear_ip_transports` in `bind()`), so a slow way through a relay does not explain that one. A test that times out waiting names the line that waited (`wait_for`, `wait_finished`), which the log of the Mac job then shows for all five.
+
 ### Windows warns about a new download
 
 SmartScreen shows "Windows protected your PC" on a new download, and Windows 7 asks about an unknown publisher. Automatic updates are not affected. A code-signing certificate ends this: `installer\build.ps1` signs everything once one is configured (`DODAVO_SIGN_THUMBPRINT` or `DODAVO_SIGN_PFX`).
@@ -81,6 +83,10 @@ On FAT32 and exFAT, a part is recognized by its creation time, and Windows gives
 ### A finished transfer can show the progress it had at its start
 
 A progress window that is busy (a question is open) drops the reports of progress. At the end it shows the whole size, but only if it ever learned the size: one that was busy from its first report on keeps its first text beside "Done!".
+
+### A disk image test could not eject its volume on GitHub's Mac runner
+
+Seen once on 2026-11-11: `archive::macos_volumes::on_hfs_plus` failed because `hdiutil detach` refused 30 times in 30 s, with no message, and so failed the Mac job; the tests on the other three file systems passed in the same run. Something on the runner kept the volume busy for longer than `Volume::detach` waits. What it was is not known.
 
 ### Some error details stay in English
 
