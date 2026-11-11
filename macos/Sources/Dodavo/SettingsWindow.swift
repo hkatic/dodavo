@@ -271,7 +271,12 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSTe
         if blocked.isEmpty {
             // After VoiceOver has begun to tell where the focus went, which
             // would take the place of this, and waiting for it to finish.
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+                // Unless the user has left the list meanwhile (the window
+                // closed, another page), or someone was blocked.
+                guard let self = self, self.blocked.isEmpty,
+                    self.blockedTable.window?.isKeyWindow == true
+                else { return }
                 announce(L[.blocked_none], urgent: false)
             }
         }

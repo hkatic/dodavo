@@ -83,6 +83,9 @@ pub struct Started {
     /// The settings could not be read: say so.
     warning: Option<String>,
     my_id: String,
+    /// What the status says until the network says more: Android's app
+    /// shows it from the start, and a Mac has the text itself.
+    status: String,
     profile: Option<String>,
     language: String,
     version: String,
@@ -99,6 +102,21 @@ pub struct Started {
     open_at_login: bool,
     /// Each language by its code, with its own name for it.
     languages: Vec<(&'static str, &'static str)>,
+}
+
+/// What the status says of the network: its problem while it has no
+/// endpoint, and else whether it is online, or still connecting.
+fn status(state: &State) -> Out {
+    let text = match (&state.net_problem, state.online) {
+        (Some(error), _) => ui().network_problem.replace("{error}", error),
+        (None, None) => ui().status_connecting.to_string(),
+        (None, Some(true)) => ui().status_online.to_string(),
+        (None, Some(false)) => ui().status_offline.to_string(),
+    };
+    Out::Status {
+        online: state.net_problem.is_none() && state.online == Some(true),
+        text,
+    }
 }
 
 /// A message for the user interface.
@@ -484,7 +502,11 @@ struct State {
     data_dir: PathBuf,
     temp_dir: PathBuf,
     net: NetHandle,
+    /// Whether the network reports us online (`None` until it says).
     online: Option<bool>,
+    /// Why the network has no endpoint, while it has none (see
+    /// `Event::BindFailed`).
+    net_problem: Option<String>,
     transfers: BTreeMap<u64, TransferView>,
     offers: HashMap<u64, PendingOffer>,
     /// What was last shown of each transfer, and when.
@@ -667,6 +689,7 @@ impl Core {
 
         let mut started = Started {
             my_id: String::new(),
+            status: ui().status_connecting.to_string(),
             profile: profile.clone(),
             language: i18n::lang().code().to_string(),
             version: env!("CARGO_PKG_VERSION").to_string(),
@@ -759,6 +782,7 @@ impl Core {
                 temp_dir,
                 net,
                 online: None,
+                net_problem: None,
                 transfers: BTreeMap::new(),
                 offers: HashMap::new(),
                 shown: HashMap::new(),
@@ -787,17 +811,7 @@ impl Core {
     #[cfg(not(target_os = "macos"))]
     fn restate(&self) {
         let mut state = lock(&self.state);
-        if let Some(online) = state.online {
-            let text = if online {
-                ui().status_online
-            } else {
-                ui().status_offline
-            };
-            self.outbox.push(Out::Status {
-                online,
-                text: text.to_string(),
-            });
-        }
+        self.outbox.push(status(&state));
         let ids: Vec<u64> = state.transfers.keys().copied().collect();
         for id in ids {
             self.show(&mut state, id, None);
@@ -1142,7 +1156,7 @@ impl Core {
         let (net, declined) = {
             let mut state = lock(&self.state);
             // Until the network is up, it takes no commands.
-            if state.online.is_none() {
+            if !state.net.is_up() {
                 return answer(Some(ui().change_id_not_ready.to_string()), Vec::new());
             }
             // The network declines the offers and cancels the transfers;
@@ -1348,29 +1362,23 @@ impl Core {
     fn on_event(&self, event: Event) {
         let mut state = lock(&self.state);
         match event {
+            // What the network says of itself, each in place of what it said before.
             Event::BindFailed(error) => {
-                let text = ui().network_problem.replace("{error}", &error);
-                self.outbox.push(Out::Status {
-                    online: false,
-                    text,
-                });
+                (state.online, state.net_problem) = (None, Some(error));
+                self.outbox.push(status(&state));
+            }
+            Event::Connecting => {
+                (state.online, state.net_problem) = (None, None);
+                self.outbox.push(status(&state));
             }
             Event::Online(online) => {
-                state.online = Some(online);
+                (state.online, state.net_problem) = (Some(online), None);
                 // A check that was waiting for the connection.
                 #[cfg(target_os = "macos")]
                 if online {
                     self.look_for_update(&mut state);
                 }
-                let text = if online {
-                    ui().status_online
-                } else {
-                    ui().status_offline
-                };
-                self.outbox.push(Out::Status {
-                    online,
-                    text: text.to_string(),
-                });
+                self.outbox.push(status(&state));
             }
             Event::Offer { id, from, offer } => {
                 drop(state);
@@ -2061,6 +2069,7 @@ mod tests {
                 temp_dir: dir.to_path_buf(),
                 net: NetHandle::idle(),
                 online: None,
+                net_problem: None,
                 transfers: BTreeMap::new(),
                 offers: HashMap::from([(id, pending)]),
                 shown: HashMap::new(),
@@ -2081,6 +2090,37 @@ mod tests {
             })),
             _events: mpsc::channel().0,
         }
+    }
+
+    /// The status says what the network last said of itself: a network that
+    /// has no endpoint any more is not online as it was before, and its
+    /// problem is not shown once an endpoint is bound.
+    #[test]
+    fn the_status_says_what_the_network_last_said() {
+        let dir = test_dir("status");
+        let core = core_with_offer(1, &dir);
+        // "Online" would look for an update.
+        lock(&core.state).cfg.check_updates = false;
+        let said = |event: Event| {
+            core.on_event(event);
+            let shown = lock(&core.outbox.queue).pop_back();
+            let Some(Out::Status { online, text }) = shown else {
+                panic!("no status was shown: {shown:?}");
+            };
+            (online, text, lock(&core.state).online)
+        };
+        let online = (true, ui().status_online.to_string(), Some(true));
+        let offline = (false, ui().status_offline.to_string(), Some(false));
+        let connecting = (false, ui().status_connecting.to_string(), None);
+
+        assert_eq!(said(Event::Online(true)), online);
+        let (shown_online, text, kept) = said(Event::BindFailed("no socket".into()));
+        assert!(!shown_online && text.contains("no socket"), "{text}");
+        assert_eq!(kept, None);
+        assert_eq!(said(Event::Connecting), connecting);
+        assert_eq!(said(Event::Online(false)), offline);
+        assert_eq!(said(Event::Online(true)), online);
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]

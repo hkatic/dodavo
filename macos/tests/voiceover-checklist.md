@@ -12,6 +12,7 @@ names, not what is actually spoken. Write what fails into `ISSUES.md`.
 ## Main window
 
 - [ ] Opening Dodavo puts the focus on the list, which is announced as Recipients. The status comes after that: "Online – ready to send and receive files.", and never "Offline" first while the connection is there.
+- [ ] The same when the window opens later: with "Hide when opened at login" on, start Dodavo with `--minimized` and without internet, and open the main window about 4 seconds after that. The window is read first, and "Offline – check your internet connection. Transfers within your local network still work." after it.
 - [ ] Interacting with the list reads a recipient's name, Contact ID and transfer, and the arrow keys move between recipients.
 - [ ] `Return` opens the Send panel for the selected recipient.
 - [ ] `VO-Shift-M` on a recipient opens its menu, with Send…, Edit Recipient…, Remove Recipient and Block Recipient.
@@ -69,7 +70,7 @@ names, not what is actually spoken. Write what fails into `ISSUES.md`.
 ## Settings
 
 - [ ] The tabs General, Receiving and Blocked can be reached and are announced.
-- [ ] Blocked: the list reads as Blocked senders, each row as the name with the shortened Contact ID. Unblock is unavailable without a selection, and after the last one the focus goes to the list, which is read as empty, and then "No sender is blocked." is announced.
+- [ ] Blocked: the list reads as Blocked senders, each row as the name with the shortened Contact ID. Unblock is unavailable without a selection, and after the last one the focus goes to the list, which is read as empty, and then "No sender is blocked." is announced. With the window closed (Command-W) right after the last Unblock, that is not said in another window.
 - [ ] Receiving: "Limit the size of an item that someone can send me" reads as a check box. Largest size and Unit read their names, and are unavailable without the limit; "When an item is over the limit" reads its choice. A size that cannot be used gives an alert that is read, and the field shows the last size again.
 - [ ] General: the Change… button after Copy reads as "Your Contact ID: Change…". Its alert is read, with how many transfers end; Cancel (Escape) changes nothing. After Change, the next alert reads the new Contact ID, with nothing said about being offline in between; the field shows it, and Copy My Contact ID copies the new one. File > Change My Contact ID… does the same from the main window. With a transfer under way and an offer waiting, both end and the offer's window closes.
 - [ ] Each field and check box reads its label. Changing one takes effect at once.

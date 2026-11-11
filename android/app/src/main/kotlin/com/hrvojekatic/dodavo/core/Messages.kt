@@ -12,6 +12,8 @@ data class Started(
     /** The settings could not be read: this says so. */
     val warning: String? = null,
     @SerialName("my_id") val myId: String = "",
+    /** What the status line says until the network says more. */
+    val status: String = "",
     val profile: String? = null,
     val language: String = "en",
     val version: String = "",

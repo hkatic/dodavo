@@ -18,6 +18,7 @@ pub const SR_LATN: Strings = Strings {
     error_name_too_long: "Naziv ili putanja stavke su predugi za ovaj uređaj.",
     error_read_only: "Memorija može samo da se čita.",
     error_system: "Sistem je prijavio grešku (kod {code}).",
+    status_connecting: "Povezivanje sa mrežom…",
     status_offline: "Van mreže – proverite internet vezu. Prenosi unutar lokalne mreže i dalje rade.",
     status_online: "Na mreži – spremno za slanje i primanje datoteka.",
     network_problem: "Problem sa mrežom: {error} (ponovni pokušaj…)",

@@ -146,6 +146,9 @@ class CoreRepository(
             refreshContacts()
             refreshBlocked()
             refreshSettings()
+            // Before the screens show the line, so that it is there with
+            // them and is no change that TalkBack reads.
+            _line.value = started.status
             _state.value = CoreState.Running(started)
             scope.launch(listener) {
                 while (isActive) {

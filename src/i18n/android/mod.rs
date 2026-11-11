@@ -31,6 +31,7 @@ super::strings! {
         error_read_only,
         error_system,
         // What the state of the program says (`crates/dodavo-ffi`).
+        status_connecting,
         status_offline,
         status_online,
         network_problem,

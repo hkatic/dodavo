@@ -9,7 +9,8 @@ targets and contrast, not what is actually spoken. Write what fails into
 ## The first start
 
 - [ ] Android's questions (notifications, nearby devices, files on Android 8 to 10) are read, and the Recipients screen is read after them.
-- [ ] The status line, "Online – ready to send and receive files.", is read once it says so, without the focus moving.
+- [ ] The status line says "Connecting to the network…" from the start, and "Online – ready to send and receive files." is read once it says so, without the focus moving. Listen for whether "Connecting to the network…" is read as well when the screen opens.
+- [ ] Without internet, the status line says "Connecting to the network…" for about 5 seconds, and then "Offline – check your internet connection. Transfers within your local network still work." is read.
 
 ## Recipients
 

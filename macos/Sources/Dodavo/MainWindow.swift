@@ -10,9 +10,12 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSToolba
     private let statusLine = makeLabel(small: true)
     private let emptyLine = makeLabel(L[.empty_list])
     private var status = L[.status_connecting]
-    /// Until then VoiceOver tells of the window that has just opened, and an
-    /// announcement made meanwhile takes the place of that, or is lost.
-    private let describedBy = Date().addingTimeInterval(2)
+    /// Until then VoiceOver tells of the window, which has just opened or
+    /// become the key window, and an announcement made meanwhile takes the
+    /// place of that, or is lost.
+    private var describedBy = Date().addingTimeInterval(2)
+    /// The announcement of a status that waits for that, if one does.
+    private var unsaid: DispatchWorkItem?
     private var openSheet: RecipientSheet?
 
     private let sendID = NSToolbarItem.Identifier("send")
@@ -125,21 +128,34 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSToolba
     }
 
     func setStatus(_ text: String) {
-        if text != status {
-            // At the start, the network may be up before VoiceOver has told
-            // of the window: this comes after that.
-            let wait = describedBy.timeIntervalSinceNow
-            if wait > 0 {
-                DispatchQueue.main.asyncAfter(deadline: .now() + wait) { [weak self] in
-                    // Unless the status has changed again meanwhile.
-                    if self?.status == text { announce(text, urgent: false) }
-                }
-            } else {
-                announce(text, urgent: false)
-            }
-        }
+        if text != status { say(text) }
         status = text
         statusLine.stringValue = text
+    }
+
+    /// Announces a new status. The network may be up before VoiceOver has
+    /// told of the window: this comes after that, and only the latest status
+    /// is said.
+    private func say(_ text: String) {
+        unsaid?.cancel()
+        unsaid = nil
+        let wait = describedBy.timeIntervalSinceNow
+        guard wait > 0 else {
+            announce(text, urgent: false)
+            return
+        }
+        let later = DispatchWorkItem { [weak self] in
+            self?.unsaid = nil
+            announce(text, urgent: false)
+        }
+        unsaid = later
+        DispatchQueue.main.asyncAfter(deadline: .now() + wait, execute: later)
+    }
+
+    func windowDidBecomeKey(_: Notification) {
+        describedBy = Date().addingTimeInterval(2)
+        // A status that was waiting waits for this as well.
+        if unsaid != nil { say(status) }
     }
 
     /// While a check for updates that the user asked for is running.

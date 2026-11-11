@@ -387,6 +387,7 @@ fn main() {
         profile: profile.map(str::to_string),
         main: std::ptr::null_mut(),
         online: None,
+        net_problem: None,
         transfers: Default::default(),
         offers: Default::default(),
         balloon_action: None,

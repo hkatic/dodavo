@@ -405,13 +405,14 @@ pub fn set_status(text: &str) {
     set_text(STATUS.get(), text);
 }
 
-pub fn set_online(online: bool) {
-    set_text(STATUS.get(), status_text(Some(online)));
-}
-
-/// Shows the connection state again after a temporary status text.
-pub fn restore_status() {
-    set_text(STATUS.get(), status_text(app::with(|a| a.online)));
+/// Shows what the network last said of itself: when that changes, and again
+/// after a temporary status text.
+pub fn show_status() {
+    let text = app::with(|a| match &a.net_problem {
+        Some(error) => tr!(network_problem, error = error),
+        None => status_text(a.online).to_string(),
+    });
+    set_text(STATUS.get(), &text);
 }
 
 fn status_text(online: Option<bool>) -> &'static str {

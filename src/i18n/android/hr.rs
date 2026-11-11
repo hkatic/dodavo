@@ -18,6 +18,7 @@ pub const HR: Strings = Strings {
     error_name_too_long: "Naziv ili putanja stavke predugi su za ovaj uređaj.",
     error_read_only: "Pohrana se može samo čitati.",
     error_system: "Sustav je prijavio pogrešku (kod {code}).",
+    status_connecting: "Povezivanje s mrežom…",
     status_offline: "Izvan mreže – provjerite internetsku vezu. Prijenosi unutar lokalne mreže i dalje rade.",
     status_online: "Na mreži – spremno za slanje i primanje datoteka.",
     network_problem: "Problem s mrežom: {error} (ponovni pokušaj…)",

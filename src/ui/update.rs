@@ -253,7 +253,7 @@ pub fn handle_event(event: Event) -> Option<Event> {
 fn checked(trigger: Trigger, result: Result<Option<UpdateInfo>, Error>) {
     let main = app::main_window();
     if trigger == Trigger::Manual {
-        main_window::restore_status();
+        main_window::show_status();
     }
     match result {
         Ok(found) => {

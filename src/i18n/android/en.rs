@@ -18,6 +18,7 @@ pub const EN: Strings = Strings {
     error_name_too_long: "The name or path of an item is too long for this device.",
     error_read_only: "The storage is read-only.",
     error_system: "The system reported an error (code {code}).",
+    status_connecting: "Connecting to the network…",
     status_offline: "Offline – check your internet connection. Transfers within your local network still work.",
     status_online: "Online – ready to send and receive files.",
     network_problem: "Network problem: {error} (retrying…)",

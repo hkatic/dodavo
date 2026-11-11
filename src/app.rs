@@ -42,6 +42,9 @@ pub struct App {
     pub main: HWND,
     /// Whether the network reports us online (`None` until it says).
     pub online: Option<bool>,
+    /// Why the network has no endpoint, while it has none (see
+    /// `Event::BindFailed`).
+    pub net_problem: Option<String>,
     /// Running and recently finished transfers by transfer id.
     pub transfers: HashMap<u64, Transfer>,
     /// Open "incoming transfer" windows by transfer id.
@@ -297,7 +300,7 @@ pub fn block_sender(name: &str, id: &str, except: HWND) {
 /// ID changed. Not to be called inside `with`.
 pub fn change_contact_id(owner: HWND) -> bool {
     // Until the network is up, it takes no commands.
-    if with(|a| a.online.is_none()) {
+    if !with(|a| a.net.is_up()) {
         ui::error(owner, tr!(change_id_not_ready));
         return false;
     }
@@ -611,6 +614,7 @@ fn lane_of(event: &Queued) -> Option<Lane> {
             | Event::Path { id, .. }
             | Event::Finished { id, .. } => Some(Lane::Transfer(*id)),
             Event::BindFailed(_)
+            | Event::Connecting
             | Event::Online(_)
             | Event::OverLimit { .. }
             | Event::Progress { .. } => None,
@@ -755,10 +759,18 @@ fn handle_event(event: Queued) -> Option<Queued> {
 
 fn handle_net_event(event: Event) -> Option<Event> {
     match event {
-        Event::BindFailed(msg) => ui::main_window::set_status(&tr!(network_problem, error = msg)),
+        // What the network says of itself, each in place of what it said before.
+        Event::BindFailed(error) => {
+            with(|a| (a.online, a.net_problem) = (None, Some(error)));
+            ui::main_window::show_status();
+        }
+        Event::Connecting => {
+            with(|a| (a.online, a.net_problem) = (None, None));
+            ui::main_window::show_status();
+        }
         Event::Online(online) => {
-            with(|a| a.online = Some(online));
-            ui::main_window::set_online(online);
+            with(|a| (a.online, a.net_problem) = (Some(online), None));
+            ui::main_window::show_status();
             if online {
                 // A check that was waiting for the connection.
                 ui::update::tick();

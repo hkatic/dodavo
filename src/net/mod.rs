@@ -285,7 +285,11 @@ fn io_error_text(error: &std::io::Error) -> String {
 
 #[derive(Debug)]
 pub enum Event {
+    /// No endpoint could be bound, with the reason; it is tried again.
     BindFailed(String),
+    /// An endpoint is bound after `BindFailed`: that problem is over, and
+    /// whether the endpoint is online is not known yet, as at a start.
+    Connecting,
     Online(bool),
     Offer {
         id: u64,
@@ -409,6 +413,9 @@ pub(crate) struct Shared {
     /// How large an item each sender may offer (see
     /// `NetHandle::set_limits`).
     limits: Arc<Mutex<Limits>>,
+    /// Whether an endpoint is bound and commands are taken (see
+    /// `NetHandle::is_up`).
+    up: Arc<AtomicBool>,
 }
 
 /// The blocked senders, shared by the network and its handle.
@@ -600,6 +607,7 @@ pub struct NetHandle {
     tx: mpsc::UnboundedSender<Command>,
     blocked: Blocked,
     limits: Arc<Mutex<Limits>>,
+    up: Arc<AtomicBool>,
 }
 
 impl NetHandle {
@@ -610,11 +618,22 @@ impl NetHandle {
             tx: mpsc::unbounded_channel().0,
             blocked: Blocked::default(),
             limits: Arc::default(),
+            up: Arc::default(),
         }
     }
 
     pub fn send(&self, cmd: Command) {
         let _ = self.tx.send(cmd);
+    }
+
+    /// Whether the network has an endpoint and takes commands: not before
+    /// the first one is bound and the transfers of the last run are
+    /// restored, nor while another endpoint takes its place at a change of
+    /// the identity. A command sent meanwhile waits for that, which never
+    /// comes while no endpoint can be bound (`Event::BindFailed`). Whether
+    /// the endpoint is online has nothing to do with it.
+    pub fn is_up(&self) -> bool {
+        self.up.load(Ordering::SeqCst)
     }
 
     /// From now on, offers from these senders are declined without asking:
@@ -696,6 +715,7 @@ pub fn start(
     let (tx, rx) = mpsc::unbounded_channel();
     let blocked = Blocked::new(Mutex::new(blocked.into_iter().collect()));
     let limits = Arc::new(Mutex::new(limits));
+    let up = Arc::new(AtomicBool::new(false));
     let shared = Arc::new(Shared {
         sink: Box::new(sink),
         data_dir,
@@ -707,6 +727,7 @@ pub fn start(
         shutting_down: AtomicBool::new(false),
         blocked: blocked.clone(),
         limits: limits.clone(),
+        up: up.clone(),
     });
     std::thread::Builder::new()
         .name("network".into())
@@ -722,6 +743,7 @@ pub fn start(
         tx,
         blocked,
         limits,
+        up,
     }
 }
 
@@ -1055,10 +1077,20 @@ async fn restore_records(shared: &Arc<Shared>) -> Vec<(u64, TransferRecord, Arc<
 
 /// Binds an endpoint for `secret`, trying again for as long as it fails.
 async fn bind_patiently(secret: &SecretKey, shared: &Shared) -> Endpoint {
+    let mut failed = false;
     loop {
         match bind(secret.clone()).await {
-            Ok(ep) => break ep,
+            Ok(ep) => {
+                // What the status says of the failure holds no more, and
+                // the endpoint says nothing of itself for a while (see
+                // `online_report`).
+                if failed {
+                    shared.emit(Event::Connecting);
+                }
+                break ep;
+            }
             Err(e) => {
+                failed = true;
                 shared.emit(Event::BindFailed(e.to_string()));
                 tokio::time::sleep(Duration::from_secs(5)).await;
             }
@@ -1157,6 +1189,7 @@ async fn run(secret: SecretKey, shared: Arc<Shared>, mut rx: mpsc::UnboundedRece
 
     // Incoming connections.
     let mut serving = serve(&shared, &endpoint);
+    shared.up.store(true, Ordering::SeqCst);
 
     while let Some(cmd) = rx.recv().await {
         match cmd {
@@ -1290,6 +1323,9 @@ async fn run(secret: SecretKey, shared: Arc<Shared>, mut rx: mpsc::UnboundedRece
                 // the first one did at the start. Nothing says that the
                 // network is gone meanwhile, which it is not: the new
                 // endpoint reports what it finds (see `online_report`).
+                // No command is taken until it is there, which who asked
+                // can tell from here on.
+                shared.up.store(false, Ordering::SeqCst);
                 let _ = done.send(Ok(()));
                 online.abort();
                 // Let the closes of the cancelled transfers reach the peers
@@ -1299,6 +1335,7 @@ async fn run(secret: SecretKey, shared: Arc<Shared>, mut rx: mpsc::UnboundedRece
                 endpoint = bind_patiently(&secret, &shared).await;
                 online = watch_online(&shared, &endpoint);
                 serving = serve(&shared, &endpoint);
+                shared.up.store(true, Ordering::SeqCst);
             }
         }
     }
@@ -1824,6 +1861,7 @@ mod tests {
 
         let new_key = SecretKey::generate();
         let new_id = new_key.public();
+        assert!(b.is_up());
         assert_eq!(b.change_identity(new_key, Duration::from_secs(60)), Ok(()));
         // In whichever order the two end.
         let mut ended = HashMap::new();
@@ -1853,6 +1891,7 @@ mod tests {
 
         // The new Contact ID answers.
         wait_for(&rx_b, |e| matches!(e, Event::Online(true)));
+        assert!(b.is_up());
         let again = send(new_id, "again.bin", 100);
         accept(offer("again.bin"));
         let outcome = wait_finished(&rx_a, again);
@@ -2639,6 +2678,7 @@ mod tests {
             shutting_down: AtomicBool::new(false),
             blocked: Blocked::default(),
             limits: Arc::default(),
+            up: Arc::default(),
         });
         (shared, events)
     }

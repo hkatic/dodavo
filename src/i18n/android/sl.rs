@@ -18,6 +18,7 @@ pub const SL: Strings = Strings {
     error_name_too_long: "Ime ali pot elementa je predolga za to napravo.",
     error_read_only: "Shramba je samo za branje.",
     error_system: "Sistem je sporočil napako (koda {code}).",
+    status_connecting: "Povezovanje z omrežjem…",
     status_offline: "Brez povezave – preverite internetno povezavo. Prenosi v lokalnem omrežju še vedno delujejo.",
     status_online: "Povezano – pripravljeno za pošiljanje in prejemanje datotek.",
     network_problem: "Težava z omrežjem: {error} (vnovični poskus…)",
