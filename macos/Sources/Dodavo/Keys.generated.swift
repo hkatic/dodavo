@@ -92,6 +92,7 @@ enum K: String {
     case menu_remove_recipient
     case menu_block_recipient
     case menu_copy_id
+    case menu_change_id
     case menu_close
     case menu_edit
     case menu_undo
@@ -122,6 +123,15 @@ enum K: String {
     case toolbar_transfers
     case empty_list
     case id_copied
+    case change_id_button
+    case change
+    case change_id_confirm
+    case change_id_text
+    case change_id_done
+    case change_id_done_text
+    case change_id_busy
+    case change_id_failed
+    case change_id_not_ready
     case add_recipient_title
     case edit_recipient_title
     case recipient_name_label
@@ -235,6 +245,7 @@ enum K: String {
 enum PluralK: String {
     case folder_description
     case quit_instruction
+    case change_id_transfers
     case drop_confirm_many
     case transfers_in_progress
 }

@@ -48,6 +48,7 @@ const ID_CHECK_UPDATES: u16 = 115;
 const ID_LICENSE: u16 = 116;
 const ID_DONATE: u16 = 117;
 const ID_BLOCK: u16 = 118;
+const ID_CHANGE_ID: u16 = 119;
 const ID_LIST: u16 = 200;
 /// The first automatic update check, shortly after the start.
 const TIMER_UPDATE_START: usize = 1;
@@ -170,6 +171,7 @@ fn build_menu() -> (HMENU, HMENU) {
     menu_item(file, ID_BLOCK, tr!(menu_block));
     menu_separator(file);
     menu_item(file, ID_COPY_ID, tr!(menu_copy_id));
+    menu_item(file, ID_CHANGE_ID, tr!(menu_change_id));
     menu_item(file, ID_SETTINGS, tr!(menu_settings));
     menu_separator(file);
     menu_item(file, ID_EXIT, tr!(menu_exit));
@@ -193,7 +195,7 @@ fn build_menu() -> (HMENU, HMENU) {
 
 /// The shortcuts of the main window. Menus show them after a tab in their
 /// texts (`i18n`), and the help lists them.
-fn accelerators() -> [ACCEL; 8] {
+fn accelerators() -> [ACCEL; 9] {
     let virt = FVIRTKEY | FCONTROL;
     [
         ACCEL {
@@ -225,6 +227,11 @@ fn accelerators() -> [ACCEL; 8] {
             fVirt: FVIRTKEY,
             key: VK_DELETE,
             cmd: ID_REMOVE,
+        },
+        ACCEL {
+            fVirt: virt,
+            key: b'B' as u16,
+            cmd: ID_BLOCK,
         },
         ACCEL {
             fVirt: virt,
@@ -670,6 +677,9 @@ impl MainWindow {
             ID_REMOVE => self.remove_recipient(w),
             ID_BLOCK => self.block_recipient(w),
             ID_COPY_ID => self.copy_my_id(w),
+            ID_CHANGE_ID => {
+                app::change_contact_id(w.hwnd);
+            }
             ID_SHOW_TRANSFERS => self.show_transfers(w),
             ID_SHOW_CONTACT_TRANSFERS => self.show_contact_transfers(w),
             ID_TRANSFER_FIRST..=ID_TRANSFER_LAST => self.show_transfer(id),

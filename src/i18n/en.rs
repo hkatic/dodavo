@@ -11,8 +11,9 @@ pub const EN: Strings = Strings {
     menu_add: "&Add Recipient…\tCtrl+N",
     menu_edit: "&Edit Recipient…\tF2",
     menu_remove: "&Remove Recipient\tDel",
-    menu_block: "&Block Recipient",
+    menu_block: "&Block Recipient\tCtrl+B",
     menu_copy_id: "&Copy My Contact ID\tCtrl+Shift+C",
+    menu_change_id: "C&hange My Contact ID…",
     menu_settings: "&Settings…\tCtrl+Comma",
     menu_exit: "E&xit",
     menu_view_help: "&View Help\tF1",
@@ -79,6 +80,18 @@ pub const EN: Strings = Strings {
         Paste it into an email or chat message and send it to anyone who wants to send you files. \
         They add you with “Add Recipient”.",
     clipboard_busy: "The clipboard is in use by another program. Please try again.",
+    change_id_confirm: "Change your Contact ID?\n\n\
+        Dodavo gives you a new Contact ID, and the current one stops working for good. \
+        Everyone who sends you files has to get the new Contact ID from you and replace the old one. \
+        Your recipients and blocked senders stay as they are.\n\n\
+        This cannot be undone.",
+    change_id_done: "Your Contact ID has been changed. Your new Contact ID is:\n\n{id}\n\n\
+        Give it to the people who send you files.",
+    change_id_busy: "Your Contact ID was not changed.\n\n\
+        A transfer has sent all of its data and still waits for the recipient to confirm it, \
+        so it could not be cancelled. Try again once that transfer has ended.",
+    change_id_failed: "Your Contact ID was not changed:\n{error}",
+    change_id_not_ready: "Dodavo is not connected to the network yet. Try again in a moment.",
     help_text: "How it works\n\n\
         1. Every computer running Dodavo has its own Contact ID. Click “Copy My Contact ID” \
         and send it to the people who should be able to send you files.\n\n\
@@ -273,6 +286,7 @@ pub const EN: Strings = Strings {
     language_restart: "The new language is used after Dodavo is restarted.",
     my_id_label: "Your Contact ID:",
     copy: "&Copy",
+    change_id_button: "Change…",
     blocked_senders_button: "Blocked S&enders…",
     blocked_title: "Blocked Senders",
     blocked_list_label: "&Blocked senders:",
@@ -410,6 +424,12 @@ pub const EN: Strings = Strings {
         two: "{n} transfers are still running.",
         few: "{n} transfers are still running.",
         other: "{n} transfers are still running.",
+    },
+    change_id_transfers: Plural {
+        one: "{n} transfer is under way or waiting for your answer. Changing your Contact ID cancels it.",
+        two: "{n} transfers are under way or waiting for your answer. Changing your Contact ID cancels them.",
+        few: "{n} transfers are under way or waiting for your answer. Changing your Contact ID cancels them.",
+        other: "{n} transfers are under way or waiting for your answer. Changing your Contact ID cancels them.",
     },
     transfers_in_progress: Plural {
         one: "{n} transfer in progress",

@@ -177,6 +177,7 @@ strings! {
         menu_remove,
         menu_block,
         menu_copy_id,
+        menu_change_id,
         menu_settings,
         menu_exit,
         menu_view_help,
@@ -237,6 +238,11 @@ strings! {
         block_recipient_confirm,
         id_copied,
         clipboard_busy,
+        change_id_confirm,
+        change_id_done,
+        change_id_busy,
+        change_id_failed,
+        change_id_not_ready,
         help_text,
         about_instruction,
         about_text,
@@ -410,6 +416,7 @@ strings! {
         language_restart,
         my_id_label,
         copy,
+        change_id_button,
         blocked_senders_button,
         // The Blocked Senders dialog.
         blocked_title,
@@ -530,6 +537,7 @@ strings! {
         send_to_count,
         drop_confirm,
         exit_instruction,
+        change_id_transfers,
         transfers_in_progress,
         folder_description,
         bytes,
@@ -836,6 +844,7 @@ mod tests {
                         s.menu_remove,
                         s.menu_block,
                         s.menu_copy_id,
+                        s.menu_change_id,
                         s.menu_settings,
                         s.menu_exit,
                     ],
@@ -994,6 +1003,10 @@ mod tests {
                     "{lang:?}: the main window button {text:?} must not have an access key"
                 );
             }
+            // Change… in the settings has none in any language: three of
+            // them have no letter left for it there, and it is not something
+            // to reach by accident. It follows Copy in the Tab order.
+            assert_eq!(key(s.change_id_button), None, "{lang:?}");
         }
     }
 

@@ -76,6 +76,31 @@ pub enum Command {
     Shutdown {
         done: std::sync::mpsc::Sender<()>,
     },
+    /// Gives this installation a new identity, and so a new Contact ID (see
+    /// [`NetHandle::change_identity`]).
+    NewIdentity {
+        secret: SecretKey,
+        /// Set once nobody waits for `done` any more: the identity must
+        /// not change behind the back of who asked.
+        abandoned: Arc<AtomicBool>,
+        done: std::sync::mpsc::Sender<Result<(), IdentityError>>,
+    },
+}
+
+/// Why the identity was not changed (see [`NetHandle::change_identity`]).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum IdentityError {
+    /// Transfers are still under way that a cancel does not end: a send
+    /// whose data has all gone out, until the receiver says whether it has
+    /// the item. Nothing has changed, except that the other transfers were
+    /// cancelled.
+    Busy,
+    /// The new key could not be saved, with the reason. The identity is the
+    /// old one.
+    Failed(String),
+    /// The network did not answer in time (it has not come up yet, say).
+    /// The identity is the old one, and stays it.
+    TimedOut,
 }
 
 /// How an accepted offer is saved.
@@ -576,7 +601,42 @@ impl NetHandle {
         self.send(Command::Shutdown { done });
         let _ = wait.recv_timeout(timeout);
     }
+
+    /// Makes `secret` the identity of this installation, in the key file
+    /// and on the network, and waits for that at most `timeout`. No transfer
+    /// can go on under another identity (the other side takes a transfer
+    /// only from the one it began with), so every transfer is cancelled
+    /// first and every waiting offer declined, which the other sides learn
+    /// while the old identity still answers. The transfers report their end
+    /// as after any cancel. If one of them cannot be ended that way, the
+    /// identity stays (see [`IdentityError`]). Contacts and blocked senders
+    /// are other people's IDs and stay as they are.
+    pub fn change_identity(
+        &self,
+        secret: SecretKey,
+        timeout: Duration,
+    ) -> Result<(), IdentityError> {
+        let (done, wait) = std::sync::mpsc::channel();
+        let abandoned = Arc::new(AtomicBool::new(false));
+        self.send(Command::NewIdentity {
+            secret,
+            abandoned: abandoned.clone(),
+            done,
+        });
+        match wait.recv_timeout(timeout) {
+            Ok(result) => result,
+            Err(_) => {
+                abandoned.store(true, Ordering::SeqCst);
+                // An answer that came just before that stands.
+                wait.try_recv().unwrap_or(Err(IdentityError::TimedOut))
+            }
+        }
+    }
 }
+
+/// How long a change of the identity waits for the transfers it cancelled to
+/// end (see [`NetHandle::change_identity`]).
+const IDENTITY_WAIT: Duration = Duration::from_secs(5);
 
 /// Starts the network thread. `sink` is called from network threads for
 /// every event. `data_dir` holds the records of unfinished transfers and
@@ -927,8 +987,9 @@ async fn restore_records(shared: &Arc<Shared>) -> Vec<(u64, TransferRecord, Arc<
     resumed
 }
 
-async fn run(secret: SecretKey, shared: Arc<Shared>, mut rx: mpsc::UnboundedReceiver<Command>) {
-    let endpoint = loop {
+/// Binds an endpoint for `secret`, trying again for as long as it fails.
+async fn bind_patiently(secret: &SecretKey, shared: &Shared) -> Endpoint {
+    loop {
         match bind(secret.clone()).await {
             Ok(ep) => break ep,
             Err(e) => {
@@ -936,47 +997,80 @@ async fn run(secret: SecretKey, shared: Arc<Shared>, mut rx: mpsc::UnboundedRece
                 tokio::time::sleep(Duration::from_secs(5)).await;
             }
         }
-    };
-
-    // Online indicator: connected to the home relay server.
-    {
-        let endpoint = endpoint.clone();
-        let shared = shared.clone();
-        tokio::spawn(async move {
-            let mut status = endpoint.home_relay_status();
-            let mut last = None;
-            loop {
-                let online = status.get().iter().any(|s| s.is_connected());
-                if last != Some(online) {
-                    last = Some(online);
-                    shared.emit(Event::Online(online));
-                }
-                tokio::time::sleep(Duration::from_secs(2)).await;
-            }
-        });
     }
+}
+
+/// Reports whether `endpoint` is online: connected to the home relay server.
+fn watch_online(shared: &Arc<Shared>, endpoint: &Endpoint) -> tokio::task::JoinHandle<()> {
+    let endpoint = endpoint.clone();
+    let shared = shared.clone();
+    tokio::spawn(async move {
+        let mut status = endpoint.home_relay_status();
+        let mut last = None;
+        loop {
+            let online = status.get().iter().any(|s| s.is_connected());
+            if last != Some(online) {
+                last = Some(online);
+                shared.emit(Event::Online(online));
+            }
+            tokio::time::sleep(Duration::from_secs(2)).await;
+        }
+    })
+}
+
+/// Takes the connections that come in to `endpoint`.
+fn serve(shared: &Arc<Shared>, endpoint: &Endpoint) -> tokio::task::JoinHandle<()> {
+    let endpoint = endpoint.clone();
+    let shared = shared.clone();
+    tokio::spawn(async move {
+        while let Some(incoming) = endpoint.accept().await {
+            let shared = shared.clone();
+            let endpoint = endpoint.clone();
+            tokio::spawn(async move {
+                let Ok(accepting) = incoming.accept() else {
+                    return;
+                };
+                let Ok(conn) = accepting.await else { return };
+                accept(shared, endpoint, conn).await;
+            });
+        }
+    })
+}
+
+/// Ends every transfer for a change of the identity: declines the offers
+/// that wait for an answer and cancels the rest, then waits a while for
+/// them to end. Whether all of them have.
+async fn end_all_transfers(shared: &Shared) -> bool {
+    let deadline = Instant::now() + IDENTITY_WAIT;
+    loop {
+        // Every pass: an offer may have been on its way in.
+        let waiting: Vec<_> = shared.pending.lock().unwrap().drain().collect();
+        for (_, answer) in waiting {
+            let _ = answer.send(None);
+        }
+        let controls: Vec<_> = shared.controls.lock().unwrap().values().cloned().collect();
+        if controls.is_empty() {
+            return true;
+        }
+        if Instant::now() >= deadline {
+            return false;
+        }
+        for ctl in controls.iter().filter(|c| !c.cancelled()) {
+            ctl.cancel();
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+}
+
+async fn run(secret: SecretKey, shared: Arc<Shared>, mut rx: mpsc::UnboundedReceiver<Command>) {
+    let mut endpoint = bind_patiently(&secret, &shared).await;
+    let mut online = watch_online(&shared, &endpoint);
 
     // The transfers of the last run, before anyone can ask about them.
     restore(&shared, &endpoint).await;
 
     // Incoming connections.
-    {
-        let endpoint = endpoint.clone();
-        let shared = shared.clone();
-        tokio::spawn(async move {
-            while let Some(incoming) = endpoint.accept().await {
-                let shared = shared.clone();
-                let endpoint = endpoint.clone();
-                tokio::spawn(async move {
-                    let Ok(accepting) = incoming.accept() else {
-                        return;
-                    };
-                    let Ok(conn) = accepting.await else { return };
-                    accept(shared, endpoint, conn).await;
-                });
-            }
-        });
-    }
+    let mut serving = serve(&shared, &endpoint);
 
     while let Some(cmd) = rx.recv().await {
         match cmd {
@@ -1078,6 +1172,46 @@ async fn run(secret: SecretKey, shared: Arc<Shared>, mut rx: mpsc::UnboundedRece
                 endpoint.close().await;
                 let _ = done.send(());
                 return;
+            }
+            Command::NewIdentity {
+                secret,
+                abandoned,
+                done,
+            } => {
+                if abandoned.load(Ordering::SeqCst) {
+                    continue;
+                }
+                // No new offers while the transfers end, and none that
+                // would begin under an identity about to go.
+                serving.abort();
+                if !end_all_transfers(&shared).await || abandoned.load(Ordering::SeqCst) {
+                    serving = serve(&shared, &endpoint);
+                    let _ = done.send(Err(IdentityError::Busy));
+                    continue;
+                }
+                let saved = {
+                    let (dir, secret) = (shared.data_dir.clone(), secret.clone());
+                    session::off_runtime(move || crate::identity::replace(&dir, &secret)).await
+                };
+                if let Err(e) = saved {
+                    serving = serve(&shared, &endpoint);
+                    let text = failure_text(&anyhow::Error::new(e));
+                    let _ = done.send(Err(IdentityError::Failed(text)));
+                    continue;
+                }
+                // The key is the new one from here on, whatever the network
+                // does: the old endpoint goes, and the new one comes up as
+                // the first one did at the start.
+                let _ = done.send(Ok(()));
+                online.abort();
+                // Let the closes of the cancelled transfers reach the peers
+                // (see `Command::Shutdown`).
+                tokio::time::sleep(Duration::from_millis(200)).await;
+                endpoint.close().await;
+                shared.emit(Event::Online(false));
+                endpoint = bind_patiently(&secret, &shared).await;
+                online = watch_online(&shared, &endpoint);
+                serving = serve(&shared, &endpoint);
             }
         }
     }
@@ -1426,6 +1560,115 @@ mod tests {
         b.send(Command::Respond { id, accept: None });
         let outcome = wait_finished(&rx_a, second);
         assert!(matches!(outcome, Outcome::Declined), "{outcome:?}");
+        std::fs::remove_dir_all(&base).ok();
+    }
+
+    /// A new identity ends what was under way, which the other side learns,
+    /// is the key of the next start, and is where the peer reaches this side
+    /// from then on.
+    #[test]
+    fn a_new_identity_ends_the_transfers_and_takes_over() {
+        let base = scratch("identity");
+        let (tx_a, rx_a) = mpsc::channel();
+        let (tx_b, rx_b) = mpsc::channel();
+        let key_a = SecretKey::generate();
+        let dir_b = base.join("b");
+        let key_b = crate::identity::load_or_create(&dir_b).unwrap();
+        let id_b = key_b.public();
+        let a = start(key_a, base.join("a"), base.join("temp"), [], sink(tx_a));
+        let b = start(key_b, dir_b.clone(), base.join("temp"), [], sink(tx_b));
+        wait_for(&rx_a, |e| matches!(e, Event::Online(true)));
+        wait_for(&rx_b, |e| matches!(e, Event::Online(true)));
+        let recv_dir = base.join("received");
+        std::fs::create_dir_all(&recv_dir).unwrap();
+        let send = |to, name: &str, len| {
+            let file = base.join(name);
+            std::fs::write(&file, pattern(len)).unwrap();
+            let id = next_transfer_id();
+            a.send(Command::Send {
+                id,
+                to,
+                path: file,
+                kind: Kind::File,
+                my_name: "A".into(),
+                peer_name: "B".into(),
+            });
+            id
+        };
+        let offer = |name: &str| {
+            let Event::Offer { id, .. } = wait_for(
+                &rx_b,
+                |e| matches!(e, Event::Offer { offer, .. } if offer.name == name),
+            ) else {
+                unreachable!()
+            };
+            id
+        };
+        let accept = |id| {
+            b.send(Command::Respond {
+                id,
+                accept: Some(Accept {
+                    dir: recv_dir.clone(),
+                    folder: ReceivedFolder::Extract,
+                }),
+            })
+        };
+
+        // One transfer under way, paused so that it stays that way, and one
+        // offer that waits for its answer.
+        let running = send(id_b, "running.bin", 8 << 20);
+        let running_b = offer("running.bin");
+        b.send(Command::Pause { id: running_b });
+        accept(running_b);
+        wait_for(
+            &rx_a,
+            |e| matches!(e, Event::Phase { id, phase: Phase::PausedByPeer } if *id == running),
+        );
+        let waiting = send(id_b, "waiting.bin", 100);
+        offer("waiting.bin");
+
+        let new_key = SecretKey::generate();
+        let new_id = new_key.public();
+        assert_eq!(b.change_identity(new_key, Duration::from_secs(60)), Ok(()));
+        // In whichever order the two end.
+        let mut ended = HashMap::new();
+        while ended.len() < 2 {
+            if let Event::Finished { id, outcome } =
+                wait_for(&rx_a, |e| matches!(e, Event::Finished { .. }))
+            {
+                ended.insert(id, outcome);
+            }
+        }
+        let outcome = &ended[&running];
+        assert!(matches!(outcome, Outcome::CancelledByPeer), "{outcome:?}");
+        let outcome = &ended[&waiting];
+        assert!(
+            matches!(outcome, Outcome::Declined | Outcome::CancelledByPeer),
+            "{outcome:?}"
+        );
+        assert!(
+            leftovers(&recv_dir).is_empty(),
+            "{:?}",
+            leftovers(&recv_dir)
+        );
+        assert_eq!(
+            crate::identity::load_or_create(&dir_b).unwrap().public(),
+            new_id
+        );
+
+        // The new Contact ID answers.
+        wait_for(&rx_b, |e| matches!(e, Event::Online(true)));
+        let again = send(new_id, "again.bin", 100);
+        accept(offer("again.bin"));
+        let outcome = wait_finished(&rx_a, again);
+        assert!(matches!(outcome, Outcome::Completed(_)), "{outcome:?}");
+        assert_eq!(
+            std::fs::read(recv_dir.join("again.bin")).unwrap(),
+            pattern(100)
+        );
+
+        a.shutdown(Duration::from_secs(5));
+        b.shutdown(Duration::from_secs(5));
         std::fs::remove_dir_all(&base).ok();
     }
 
@@ -2759,6 +3002,34 @@ mod tests {
         assert_eq!(std::fs::read(&stopped.file).unwrap(), stopped.data);
         a.shutdown(Duration::from_secs(5));
         b.shutdown(Duration::from_secs(5));
+        std::fs::remove_dir_all(&base).ok();
+    }
+
+    /// A send whose data has all gone out cannot be ended by a cancel while
+    /// the receiver is away, and under another identity nobody could ask the
+    /// receiver any more: the identity stays, and the cancel waits on.
+    #[test]
+    fn a_new_identity_waits_for_a_send_the_receiver_may_have() {
+        let base = scratch("identity-busy");
+        let stopped = send_until_verdict(&base, "maybe-there.bin", false);
+        let (tx, rx) = mpsc::channel();
+        let a = start(
+            stopped.key_a.clone(),
+            stopped.dir_a.clone(),
+            base.join("temp"),
+            [],
+            sink(tx),
+        );
+        wait_for(&rx, |e| matches!(e, Event::Restored { .. }));
+        assert_eq!(
+            a.change_identity(SecretKey::generate(), Duration::from_secs(60)),
+            Err(IdentityError::Busy)
+        );
+        assert!(!stopped.dir_a.join("secret.key").exists());
+        a.shutdown(Duration::from_secs(5));
+        let records = session::records(&stopped.dir_a);
+        assert_eq!(records.len(), 1);
+        assert!(records[0].cancel_pending(), "{:?}", records[0]);
         std::fs::remove_dir_all(&base).ok();
     }
 

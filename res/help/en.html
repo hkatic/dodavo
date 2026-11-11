@@ -48,7 +48,7 @@
 
 <section aria-labelledby="how-it-works">
 <h2 id="how-it-works">How Dodavo works</h2>
-<p>Every computer running Dodavo has a permanent <strong>Contact ID</strong>: a code of 64 characters made of the digits 0–9 and the letters a–f. The Contact ID works like a phone number for Dodavo. To send files to someone, you need their Contact ID; to receive files, you give your Contact ID to the people who will send them.</p>
+<p>Every computer running Dodavo has a <strong>Contact ID</strong>: a code of 64 characters made of the digits 0–9 and the letters a–f. The Contact ID works like a phone number for Dodavo. To send files to someone, you need their Contact ID; to receive files, you give your Contact ID to the people who will send them. Your Contact ID stays the same until you change it yourself; see <a href="#change-id">Changing your Contact ID</a>.</p>
 <ol>
 <li>You copy your Contact ID and send it to the other person, for example by email or in a chat message.</li>
 <li>The other person adds you to their recipient list, and you add them to yours.</li>
@@ -131,7 +131,7 @@
 <li><span class="ui">Offline – check your internet connection. Transfers within your local network still work.</span></li>
 </ul>
 <p>The status line cannot receive keyboard focus. To hear it, use your screen reader's command for reading the whole window: <kbd>NVDA</kbd>+<kbd>B</kbd> in NVDA, <kbd>Insert</kbd>+<kbd>B</kbd> in JAWS, or <kbd>Narrator</kbd>+<kbd>W</kbd> in Narrator.</p>
-<p>The menu bar has three menus. The <span class="ui">File</span> menu (<kbd>Alt</kbd>+<kbd>F</kbd>) contains <span class="ui">Send File…</span>, <span class="ui">Send Folder…</span>, <span class="ui">Add Recipient…</span>, <span class="ui">Edit Recipient…</span>, <span class="ui">Remove Recipient</span>, <span class="ui">Copy My Contact ID</span>, <span class="ui">Settings…</span> and <span class="ui">Exit</span>. The <span class="ui">Transfers</span> menu (<kbd>Alt</kbd>+<kbd>T</kbd>) lists every transfer in progress, with the person, the item and the state, and ends with <span class="ui">Show All Transfers</span> (<kbd>Ctrl</kbd>+<kbd>T</kbd>); when nothing is running, it says <span class="ui">No transfers in progress</span>. See <a href="#finding-transfers">Finding a transfer that runs in the background</a>. The <span class="ui">Help</span> menu (<kbd>Alt</kbd>+<kbd>H</kbd>) contains <span class="ui">View Help</span>, <span class="ui">How It Works</span> (a short summary), <span class="ui">License</span> (see <a href="#license">License</a>), <span class="ui">Donate</span> (see <a href="#donate">Donating</a>), <span class="ui">Check for Updates…</span> (see <a href="#update">Updating Dodavo</a>) and <span class="ui">About</span> (the version, the author, the website and the license; see <a href="#about">About Dodavo</a>).</p>
+<p>The menu bar has three menus. The <span class="ui">File</span> menu (<kbd>Alt</kbd>+<kbd>F</kbd>) contains <span class="ui">Send File…</span>, <span class="ui">Send Folder…</span>, <span class="ui">Add Recipient…</span>, <span class="ui">Edit Recipient…</span>, <span class="ui">Remove Recipient</span>, <span class="ui">Block Recipient</span>, <span class="ui">Copy My Contact ID</span>, <span class="ui">Change My Contact ID…</span>, <span class="ui">Settings…</span> and <span class="ui">Exit</span>. The <span class="ui">Transfers</span> menu (<kbd>Alt</kbd>+<kbd>T</kbd>) lists every transfer in progress, with the person, the item and the state, and ends with <span class="ui">Show All Transfers</span> (<kbd>Ctrl</kbd>+<kbd>T</kbd>); when nothing is running, it says <span class="ui">No transfers in progress</span>. See <a href="#finding-transfers">Finding a transfer that runs in the background</a>. The <span class="ui">Help</span> menu (<kbd>Alt</kbd>+<kbd>H</kbd>) contains <span class="ui">View Help</span>, <span class="ui">How It Works</span> (a short summary), <span class="ui">License</span> (see <a href="#license">License</a>), <span class="ui">Donate</span> (see <a href="#donate">Donating</a>), <span class="ui">Check for Updates…</span> (see <a href="#update">Updating Dodavo</a>) and <span class="ui">About</span> (the version, the author, the website and the license; see <a href="#about">About Dodavo</a>).</p>
 <p>When a person is selected in the list, the menu of actions (<kbd>Enter</kbd>, a double-click, <kbd>Shift</kbd>+<kbd>F10</kbd> or the Menu key, or a right-click) offers <span class="ui">Send File…</span>, <span class="ui">Send Folder…</span>, <span class="ui">Show Transfer</span> (only while a transfer with that person is running; <span class="ui">Show Transfers</span> when there are several), <span class="ui">Edit…</span>, <span class="ui">Remove</span> and <span class="ui">Block</span>.</p>
 </section>
 
@@ -160,7 +160,7 @@
 <ul>
 <li>To change the name or the Contact ID, press <kbd>F2</kbd> or choose <span class="ui">Edit Recipient…</span> from the <span class="ui">File</span> menu. The <span class="ui">Edit Recipient</span> dialog works like <span class="ui">Add Recipient</span>.</li>
 <li>To remove the person, press <kbd>Delete</kbd> or choose <span class="ui">Remove Recipient</span> from the <span class="ui">File</span> menu, then confirm with <span class="ui">Yes</span>.</li>
-<li>To block the person, choose <span class="ui">Block Recipient</span> from the <span class="ui">File</span> menu, or <span class="ui">Block</span> from the menu of actions, then confirm with <span class="ui">Yes</span>. See <a href="#blocking">Blocking a sender</a>.</li>
+<li>To block the person, press <kbd>Ctrl</kbd>+<kbd>B</kbd>, or choose <span class="ui">Block Recipient</span> from the <span class="ui">File</span> menu, or <span class="ui">Block</span> from the menu of actions, then confirm with <span class="ui">Yes</span>. See <a href="#blocking">Blocking a sender</a>.</li>
 </ul>
 </section>
 
@@ -245,7 +245,7 @@
 <p>If someone sends you things you do not want, you can block them. Dodavo then declines everything they send you, without asking and without a notification. They see only that their offer was declined, and are not told that they are blocked. Transfers with them that are already under way go on; cancel them in their progress windows if you want them to stop.</p>
 <ul>
 <li>In the Incoming Transfer window, activate <span class="ui">Block Sender</span> (<kbd>Alt</kbd>+<kbd>K</kbd>) and confirm with <span class="ui">Yes</span>. Everything the person offers that waits for an answer is declined.</li>
-<li>In the main window, select the person and choose <span class="ui">Block Recipient</span> from the <span class="ui">File</span> menu. A blocked person is removed from your recipients.</li>
+<li>In the main window, select the person and press <kbd>Ctrl</kbd>+<kbd>B</kbd>, or choose <span class="ui">Block Recipient</span> from the <span class="ui">File</span> menu or <span class="ui">Block</span> from the menu of actions. A blocked person is removed from your recipients.</li>
 </ul>
 <p>To unblock someone, open Settings, activate <span class="ui">Blocked Senders…</span> (<kbd>Alt</kbd>+<kbd>E</kbd>), select the person in the <span class="ui">Blocked Senders</span> dialog and activate <span class="ui">Unblock</span> (<kbd>Alt</kbd>+<kbd>U</kbd>). Adding a blocked person as a recipient also unblocks them.</p>
 </section>
@@ -356,8 +356,16 @@
 <dt><span class="ui">Language</span></dt>
 <dd>The language of Dodavo and of this help: <span class="ui">Windows default</span>, <span lang="en">English</span>, <span lang="hr">Hrvatski</span>, <span lang="sr-Latn">Srpski (latinica)</span> or <span lang="sl">Slovenščina</span>. With <span class="ui">Windows default</span>, Dodavo uses the first of your Windows display languages that it supports, or English. A new language is used after Dodavo is restarted.</dd>
 <dt><span class="ui">Your Contact ID</span></dt>
-<dd>A read-only field with your full Contact ID, followed by a <span class="ui">Copy</span> button.</dd>
+<dd>A read-only field with your full Contact ID, followed by the buttons <span class="ui">Copy</span> and <span class="ui">Change…</span>. See <a href="#change-id">Changing your Contact ID</a>.</dd>
 </dl>
+<h3 id="change-id">Changing your Contact ID</h3>
+<p>You can replace your Contact ID with a new one, for example when it has reached people you do not want to receive anything from. The current Contact ID then stops working for good: nobody can reach you with it any more, and it cannot be brought back. Everyone who should still be able to send you files has to get the new Contact ID from you and replace the old one with <span class="ui">Edit Recipient…</span>. Your recipients, your blocked senders and your settings stay as they are.</p>
+<p>No transfer can continue under another Contact ID. Dodavo tells you how many transfers are under way or waiting for your answer, and cancels them when you confirm. One kind of transfer cannot be cancelled this way: a send whose data has all been sent and that the recipient has not confirmed yet. While there is such a transfer, Dodavo tells you so and keeps your Contact ID; try again when that transfer has ended.</p>
+<ol>
+<li>Choose <span class="ui">Change My Contact ID…</span> from the <span class="ui">File</span> menu (<kbd>Alt</kbd>+<kbd>F</kbd>, then <kbd>H</kbd>), or open Settings and activate <span class="ui">Change…</span>, the button after <span class="ui">Copy</span>.</li>
+<li>Read the question. The default answer is <span class="ui">No</span>; choose <span class="ui">Yes</span> to go on.</li>
+<li>A message shows your new Contact ID. To copy it, press <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>C</kbd> in the main window.</li>
+</ol>
 </section>
 
 <section aria-labelledby="shortcuts">
@@ -374,6 +382,7 @@
 <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>C</kbd></td><td>Copy your Contact ID to the clipboard</td></tr>
 <tr><td><kbd>F2</kbd></td><td>Edit the selected recipient</td></tr>
 <tr><td><kbd>Delete</kbd></td><td>Remove the selected recipient</td></tr>
+<tr><td><kbd>Ctrl</kbd>+<kbd>B</kbd></td><td>Block the selected recipient</td></tr>
 <tr><td><kbd>Ctrl</kbd>+<kbd>T</kbd></td><td>Show the windows of all transfers in progress</td></tr>
 <tr><td><kbd>Ctrl</kbd>+<kbd>Comma</kbd></td><td>Open Settings</td></tr>
 <tr><td><kbd>Enter</kbd> or a double-click</td><td>Open the menu of actions for the selected recipient</td></tr>
@@ -481,7 +490,7 @@
 <dd>Like a web browser with downloads, Dodavo marks every file it receives (also the files in a received folder, and a kept ZIP file) as coming from the internet. Windows SmartScreen therefore checks a received program before it runs, and Microsoft Office opens received documents in Protected View. The mark is stored with the file on NTFS drives; drives formatted with FAT32 or exFAT, such as many USB sticks, cannot keep it. See <a href="#troubleshooting">Troubleshooting</a> if Windows warns about a file you trust.</dd>
 </dl>
 <h3 id="your-data">Your settings and identity</h3>
-<p>Dodavo stores its settings, your recipient list and your secret key in the folder <code>%APPDATA%\Dodavo</code>. The secret key is what makes your Contact ID yours. Don't share the contents of this folder. If you move to another computer and want to keep your Contact ID, copy this folder to the same place on the new computer while Dodavo is not running there. If the folder is deleted, Dodavo creates a new Contact ID, and everyone has to add you again.</p>
+<p>Dodavo stores its settings, your recipient list and your secret key in the folder <code>%APPDATA%\Dodavo</code>. The secret key is what makes your Contact ID yours. Don't share the contents of this folder. If you move to another computer and want to keep your Contact ID, copy this folder to the same place on the new computer while Dodavo is not running there. If the folder is deleted, Dodavo creates a new Contact ID, and everyone has to add you again. To get a new Contact ID on purpose, see <a href="#change-id">Changing your Contact ID</a>.</p>
 </section>
 
 <section aria-labelledby="faq">
@@ -543,7 +552,7 @@
 <p>No. Every transfer is end-to-end encrypted between the two computers. When the data has to go through a relay server, the relay only passes on encrypted data that it cannot read. The Contact ID is the recipient's public key, so the connection can only be established with the computer that holds the matching secret key. See <a href="#connections">Connections and security</a>.</p>
 
 <h3 id="faq-id-secret">Is my Contact ID secret? Can anyone send me files?</h3>
-<p>The Contact ID is not secret; it works like a phone number. Anyone who has it can offer you a file. Only transfers from people in your recipient list start by themselves (<span class="ui">Start transfers automatically, without asking</span>, which you can turn off in Settings). From anyone else, nothing is saved on your computer until you choose <span class="ui">Accept</span>, and their offers are marked with an unknown sender warning. See <a href="#auto-accept">Receiving without being asked</a>. If someone keeps sending you things you do not want, see <a href="#blocking">Blocking a sender</a>.</p>
+<p>The Contact ID is not secret; it works like a phone number. Anyone who has it can offer you a file. Only transfers from people in your recipient list start by themselves (<span class="ui">Start transfers automatically, without asking</span>, which you can turn off in Settings). From anyone else, nothing is saved on your computer until you choose <span class="ui">Accept</span>, and their offers are marked with an unknown sender warning. See <a href="#auto-accept">Receiving without being asked</a>. If someone keeps sending you things you do not want, see <a href="#blocking">Blocking a sender</a>. To stop everyone who has your Contact ID at once, see <a href="#change-id">Changing your Contact ID</a>.</p>
 
 <h3 id="faq-servers">What does Dodavo send to servers on the internet?</h3>
 <p>Only what is needed for other computers to find yours. Dodavo publishes the addresses at which your computer can currently be reached under your Contact ID, to the lookup service of the iroh network, and keeps a connection to a relay server so that a transfer can be set up even when a direct connection is not possible. The names and contents of your files travel only inside the encrypted connection to the other computer. Once a day, when <span class="ui">Check for updates automatically (once a day)</span> is on, Dodavo also fetches from the Dodavo page on GitHub (github.com) a small file that describes the latest version, and it downloads the setup program from there when you choose to install an update; see <a href="#update">Updating Dodavo</a>. Dodavo has no accounts and sends no usage statistics.</p>

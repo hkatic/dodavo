@@ -233,6 +233,22 @@ pub fn decline_from(from: &str, except: HWND) {
     }
 }
 
+/// Declines every offer that waits for an answer, and closes the windows
+/// without a word (before the Contact ID changes). A window that is busy
+/// with a dialog of its own stays, and closes when the network declines its
+/// offers.
+pub fn decline_all() {
+    let open_windows: Vec<HWND> = app::with(|a| a.offers.values().copied().collect());
+    for hwnd in open_windows {
+        window::with_handler::<Incoming, _>(hwnd, |s, w| {
+            if !s.answered {
+                // Closing declines what waits (see `on_destroy`).
+                w.close();
+            }
+        });
+    }
+}
+
 /// How an item is described, with its size, under the name it will be saved
 /// as: a peer's name may hold line ends, which would fake lines of the list.
 fn describe(offer: &Offer) -> String {

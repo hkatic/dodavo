@@ -14,8 +14,9 @@ pub const HR: Strings = Strings {
     menu_add: "Dod&aj primatelja…\tCtrl+N",
     menu_edit: "&Uredi primatelja…\tF2",
     menu_remove: "U&kloni primatelja\tDel",
-    menu_block: "&Blokiraj primatelja",
+    menu_block: "&Blokiraj primatelja\tCtrl+B",
     menu_copy_id: "Kopiraj moj &ID kontakta\tCtrl+Shift+C",
+    menu_change_id: "P&romijeni moj ID kontakta…",
     menu_settings: "&Postavke…\tCtrl+Zarez",
     menu_exit: "I&zlaz",
     menu_view_help: "&Prikaži pomoć\tF1",
@@ -81,6 +82,18 @@ pub const HR: Strings = Strings {
         Zalijepite ga u poruku e-pošte ili čavrljanja i pošaljite svima koji vam žele slati datoteke. \
         Oni vas dodaju pomoću naredbe „Dodaj primatelja”.",
     clipboard_busy: "Međuspremnik trenutačno koristi drugi program. Pokušajte ponovno.",
+    change_id_confirm: "Želite li promijeniti svoj ID kontakta?\n\n\
+        Dodavo vam dodjeljuje novi ID kontakta, a dosadašnji trajno prestaje vrijediti. \
+        Svi koji vam šalju datoteke moraju od vas dobiti novi ID kontakta i njime zamijeniti stari. \
+        Vaši primatelji i blokirani pošiljatelji ostaju kakvi jesu.\n\n\
+        Ovo se ne može poništiti.",
+    change_id_done: "Vaš ID kontakta je promijenjen. Vaš novi ID kontakta:\n\n{id}\n\n\
+        Dajte ga osobama koje vam šalju datoteke.",
+    change_id_busy: "Vaš ID kontakta nije promijenjen.\n\n\
+        Jedan prijenos poslao je sve podatke i još čeka potvrdu primatelja pa ga nije bilo moguće otkazati. \
+        Pokušajte ponovno kad taj prijenos završi.",
+    change_id_failed: "Vaš ID kontakta nije promijenjen:\n{error}",
+    change_id_not_ready: "Dodavo se još nije povezao s mrežom. Pokušajte ponovno za koji trenutak.",
     help_text: "Kako funkcionira\n\n\
         1. Svako računalo na kojem radi Dodavo ima vlastiti ID kontakta. Kliknite „Kopiraj moj ID kontakta” \
         i pošaljite ga osobama koje vam trebaju moći slati datoteke.\n\n\
@@ -275,6 +288,7 @@ pub const HR: Strings = Strings {
     language_restart: "Novi jezik koristit će se nakon ponovnog pokretanja programa Dodavo.",
     my_id_label: "Vaš ID kontakta:",
     copy: "&Kopiraj",
+    change_id_button: "Promijeni…",
     blocked_senders_button: "B&lokirani pošiljatelji…",
     blocked_title: "Blokirani pošiljatelji",
     blocked_list_label: "&Blokirani pošiljatelji:",
@@ -412,6 +426,12 @@ pub const HR: Strings = Strings {
         two: "{n} prijenosa još je u tijeku.",
         few: "{n} prijenosa još su u tijeku.",
         other: "{n} prijenosa još je u tijeku.",
+    },
+    change_id_transfers: Plural {
+        one: "{n} prijenos je u tijeku ili čeka vaš odgovor. Promjenom ID-a kontakta on se otkazuje.",
+        two: "{n} prijenosa je u tijeku ili čeka vaš odgovor. Promjenom ID-a kontakta oni se otkazuju.",
+        few: "{n} prijenosa su u tijeku ili čekaju vaš odgovor. Promjenom ID-a kontakta oni se otkazuju.",
+        other: "{n} prijenosa je u tijeku ili čeka vaš odgovor. Promjenom ID-a kontakta oni se otkazuju.",
     },
     transfers_in_progress: Plural {
         one: "{n} prijenos u tijeku",

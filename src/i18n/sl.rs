@@ -14,8 +14,9 @@ pub const SL: Strings = Strings {
     menu_add: "Dod&aj prejemnika…\tCtrl+N",
     menu_edit: "&Uredi prejemnika…\tF2",
     menu_remove: "Od&strani prejemnika\tDel",
-    menu_block: "&Blokiraj prejemnika",
+    menu_block: "&Blokiraj prejemnika\tCtrl+B",
     menu_copy_id: "Kopiraj moj &ID stika\tCtrl+Shift+C",
+    menu_change_id: "S&premeni moj ID stika…",
     menu_settings: "&Nastavitve…\tCtrl+Vejica",
     menu_exit: "I&zhod",
     menu_view_help: "Ogled &pomoči\tF1",
@@ -82,6 +83,18 @@ pub const SL: Strings = Strings {
         Prilepite ga v e-poštno sporočilo ali sporočilo v klepetu in ga pošljite vsem, ki vam želijo pošiljati datoteke. \
         Dodajo vas z ukazom »Dodaj prejemnika«.",
     clipboard_busy: "Odložišče trenutno uporablja drug program. Poskusite znova.",
+    change_id_confirm: "Ali želite spremeniti svoj ID stika?\n\n\
+        Dodavo vam dodeli nov ID stika, dosedanji pa za vedno preneha veljati. \
+        Vsi, ki vam pošiljajo datoteke, morajo od vas dobiti novi ID stika in z njim zamenjati starega. \
+        Vaši prejemniki in blokirani pošiljatelji ostanejo, kakršni so.\n\n\
+        Tega ni mogoče razveljaviti.",
+    change_id_done: "Vaš ID stika je bil spremenjen. Vaš novi ID stika:\n\n{id}\n\n\
+        Dajte ga osebam, ki vam pošiljajo datoteke.",
+    change_id_busy: "Vaš ID stika ni bil spremenjen.\n\n\
+        Eden od prenosov je poslal vse podatke in še čaka na potrditev prejemnika, zato ga ni bilo mogoče preklicati. \
+        Poskusite znova, ko se ta prenos konča.",
+    change_id_failed: "Vaš ID stika ni bil spremenjen:\n{error}",
+    change_id_not_ready: "Dodavo se še ni povezal z omrežjem. Poskusite znova čez trenutek.",
     help_text: "Kako deluje\n\n\
         1. Vsak računalnik, v katerem se izvaja Dodavo, ima svoj ID stika. Kliknite »Kopiraj moj ID stika« \
         in ga pošljite osebam, ki naj vam lahko pošiljajo datoteke.\n\n\
@@ -276,6 +289,7 @@ pub const SL: Strings = Strings {
     language_restart: "Novi jezik bo uporabljen po vnovičnem zagonu programa Dodavo.",
     my_id_label: "Vaš ID stika:",
     copy: "&Kopiraj",
+    change_id_button: "Spremeni…",
     blocked_senders_button: "Blokirani po&šiljatelji…",
     blocked_title: "Blokirani pošiljatelji",
     blocked_list_label: "&Blokirani pošiljatelji:",
@@ -413,6 +427,12 @@ pub const SL: Strings = Strings {
         two: "{n} prenosa še potekata.",
         few: "{n} prenosi še potekajo.",
         other: "{n} prenosov še poteka.",
+    },
+    change_id_transfers: Plural {
+        one: "{n} prenos poteka ali čaka na vaš odgovor. S spremembo ID-ja stika se prekliče.",
+        two: "{n} prenosa potekata ali čakata na vaš odgovor. S spremembo ID-ja stika se prekličeta.",
+        few: "{n} prenosi potekajo ali čakajo na vaš odgovor. S spremembo ID-ja stika se prekličejo.",
+        other: "{n} prenosov poteka ali čaka na vaš odgovor. S spremembo ID-ja stika se prekličejo.",
     },
     transfers_in_progress: Plural {
         one: "{n} prenos poteka",

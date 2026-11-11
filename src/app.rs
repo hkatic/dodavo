@@ -286,6 +286,49 @@ pub fn block_sender(name: &str, id: &str, except: HWND) {
     ui::main_window::refresh_list();
 }
 
+/// Gives this installation a new Contact ID, if the user confirms it at
+/// `owner`: every transfer is cancelled and every waiting offer declined
+/// first, since none can go on under another ID (see
+/// `NetHandle::change_identity`). Says how it went, and returns whether the
+/// ID changed. Not to be called inside `with`.
+pub fn change_contact_id(owner: HWND) -> bool {
+    // Until the network is up, it takes no commands.
+    if with(|a| a.online.is_none()) {
+        ui::error(owner, tr!(change_id_not_ready));
+        return false;
+    }
+    let ending = with(|a| a.offers.len()) + active_transfer_count();
+    let mut question = tr!(change_id_confirm).to_string();
+    if ending > 0 {
+        question = format!("{question}\n\n{}", trn!(change_id_transfers, ending));
+    }
+    if !ui::confirm_no(owner, &question) {
+        return false;
+    }
+    incoming::decline_all();
+    let net = with(|a| a.net.clone());
+    let secret = identity::new_key();
+    let new_id = secret.public().to_string();
+    // The UI waits: nothing may begin under the old ID meanwhile.
+    let result = ui::busy(|| net.change_identity(secret, Duration::from_secs(20)));
+    match result {
+        Ok(()) => {
+            with(|a| a.my_id = new_id.clone());
+            ui::info(owner, &tr!(change_id_done, id = new_id));
+            true
+        }
+        Err(e) => {
+            let text = match e {
+                net::IdentityError::Busy => tr!(change_id_busy).to_string(),
+                net::IdentityError::Failed(error) => tr!(change_id_failed, error = error),
+                net::IdentityError::TimedOut => tr!(change_id_not_ready).to_string(),
+            };
+            ui::error(owner, &text);
+            false
+        }
+    }
+}
+
 pub fn net_send(cmd: Command) {
     with(|a| a.net.send(cmd));
 }

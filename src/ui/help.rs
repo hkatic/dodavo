@@ -214,6 +214,8 @@ mod tests {
                 s.menu_edit,
                 s.menu_remove,
                 s.menu_copy_id,
+                s.menu_change_id,
+                s.change_id_button,
                 s.menu_settings,
                 s.menu_exit,
                 s.ctx_edit,

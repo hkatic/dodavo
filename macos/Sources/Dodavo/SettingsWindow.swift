@@ -19,6 +19,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSTe
     private let chooseFolder = NSButton()
     private let autoAccept = NSButton(checkboxWithTitle: L[.auto_accept], target: nil, action: nil)
     private let keep = NSPopUpButton()
+    private let idText = NSTextField(labelWithString: "")
     private let blockedTable = NSTableView()
     private let blockedNone = makeLabel(L[.blocked_none])
     private let unblock = NSButton()
@@ -87,7 +88,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSTe
         let nameHelp = makeLabel(L[.my_name_help], small: true)
 
         let idLabel = NSTextField(labelWithString: L[.my_id_label])
-        let idText = NSTextField(labelWithString: started.myId)
+        idText.stringValue = (NSApp.delegate as? AppDelegate)?.myId ?? started.myId
         idText.isSelectable = true
         idText.font = .monospacedSystemFont(ofSize: NSFont.smallSystemFontSize, weight: .regular)
         idText.lineBreakMode = .byCharWrapping
@@ -95,6 +96,11 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSTe
         idText.preferredMaxLayoutWidth = 300
         name(idText, by: idLabel)
         let copy = makeButton(L[.copy], NSApp.delegate, #selector(AppDelegate.copyMyContactID(_:)))
+        // Applies at once, like blocking: it is not one of the settings.
+        let change = makeButton(
+            L[.change_id_button], NSApp.delegate, #selector(AppDelegate.changeMyContactID(_:)))
+        // "Change…" alone does not say what.
+        change.setAccessibilityTitle("\(idLabel.stringValue) \(L[.change_id_button])")
 
         let languageLabel = NSTextField(labelWithString: L[.language_label])
         language.addItem(withTitle: L[.language_system])
@@ -115,7 +121,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSTe
             [nameLabel, nameField],
             [NSGridCell.emptyContentView, nameHelp],
             [idLabel, idText],
-            [NSGridCell.emptyContentView, copy],
+            [NSGridCell.emptyContentView, makeRow([copy, change])],
             [NSGridCell.emptyContentView, openAtLogin],
             [NSGridCell.emptyContentView, hideAtLogin],
             [NSGridCell.emptyContentView, showInMenuBar],
@@ -200,6 +206,11 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSTe
     /// Someone was blocked elsewhere (see `AppDelegate.senderBlocked`).
     func blockedChanged() {
         reloadBlocked()
+    }
+
+    /// The Contact ID was changed (see `AppDelegate.changeMyContactID`).
+    func contactIDChanged(_ id: String) {
+        idText.stringValue = id
     }
 
     private func reloadBlocked() {

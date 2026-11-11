@@ -36,6 +36,7 @@ const ID_SHOW_AFTER_SEND: u16 = 24;
 const ID_RECEIVED_FOLDER: u16 = 25;
 const ID_EXPLORER_MENU: u16 = 26;
 const ID_BLOCKED: u16 = 27;
+const ID_CHANGE_ID: u16 = 28;
 
 /// The two columns (96-DPI units): headings start at their `x`, the
 /// settings under them are indented.
@@ -64,6 +65,8 @@ struct SettingsDialog {
     close_running: HWND,
     connection_lost: HWND,
     language: HWND,
+    /// The read-only field with this installation's Contact ID.
+    my_id: HWND,
 }
 
 pub fn show(owner: HWND) {
@@ -86,6 +89,7 @@ pub fn show(owner: HWND) {
         close_running: std::ptr::null_mut(),
         connection_lost: std::ptr::null_mut(),
         language: std::ptr::null_mut(),
+        my_id: std::ptr::null_mut(),
     };
     let hwnd = window::create(
         CreateOptions {
@@ -356,7 +360,12 @@ impl Handler for SettingsDialog {
             0,
         );
         w.button(tr!(copy), ID_COPY, (x + COLUMN_W - 86, 355, 86, 26));
-        let right_bottom = 381;
+        self.my_id = id_edit;
+        // Applies at once, like blocking: it is not one of the settings
+        // that OK saves.
+        let change_w = w.button_width(tr!(change_id_button), 86);
+        w.button(tr!(change_id_button), ID_CHANGE_ID, (x, 388, change_w, 26));
+        let right_bottom = 414;
 
         let buttons_y = left_bottom.max(right_bottom) + 22;
         w.button(tr!(ok), ID_OK, (WIDTH - 14 - 186, buttons_y, 90, 30));
@@ -385,6 +394,12 @@ impl Handler for SettingsDialog {
             ID_COPY => {
                 let my_id = app::with(|a| a.my_id.clone());
                 shell::copy_to_clipboard(w.hwnd, &my_id);
+            }
+            ID_CHANGE_ID => {
+                if app::change_contact_id(w.hwnd) {
+                    set_text(self.my_id, &app::with(|a| a.my_id.clone()));
+                    window::focus(self.my_id);
+                }
             }
             ID_OK => {
                 if self.save(w) {

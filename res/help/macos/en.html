@@ -48,7 +48,7 @@
 
 <section aria-labelledby="how-it-works">
 <h2 id="how-it-works">How Dodavo works</h2>
-<p>Every computer running Dodavo has a permanent <strong>Contact ID</strong>: a code of 64 characters that takes the place of an address. You share it once; it does not change, wherever the computer goes.</p>
+<p>Every computer running Dodavo has a <strong>Contact ID</strong>: a code of 64 characters that takes the place of an address. You share it once; it stays the same, wherever the computer goes, until you change it yourself.</p>
 <ol>
 <li>You copy your Contact ID and send it to the other person, for example by email or in a message.</li>
 <li>The other person adds you to their recipients, and you add them to yours.</li>
@@ -82,7 +82,7 @@
 <h2 id="main-window">The main window</h2>
 <p>The main window lists your recipients in a table with the columns Name, Contact ID and Transfer. The last one says what is going on with that person. Below the table, a status line says whether Dodavo is online; VoiceOver announces when that changes.</p>
 <p>The toolbar has the commands Send, Add Recipient, Copy My Contact ID and Transfers. Send is unavailable until a recipient is selected.</p>
-<p>With VoiceOver, move to the table and press <kbd>VO</kbd>-<kbd>⇧</kbd>-<kbd>↓</kbd> to interact with it, then use the arrow keys to move between recipients. Press <kbd>Return</kbd> to send to the selected recipient, or <kbd>VO</kbd>-<kbd>⇧</kbd>-<kbd>M</kbd> to open its menu, with Send…, Show Transfer, Edit Recipient… and Remove Recipient.</p>
+<p>With VoiceOver, move to the table and press <kbd>VO</kbd>-<kbd>⇧</kbd>-<kbd>↓</kbd> to interact with it, then use the arrow keys to move between recipients. Press <kbd>Return</kbd> to send to the selected recipient, or <kbd>VO</kbd>-<kbd>⇧</kbd>-<kbd>M</kbd> to open its menu, with Send…, Show Transfer, Edit Recipient…, Remove Recipient and Block Recipient.</p>
 <p>Without VoiceOver, turn on Keyboard navigation in System Settings > Keyboard to move between all controls with <kbd>Tab</kbd>; macOS has it off by default, and <kbd>Tab</kbd> then reaches only text fields and lists.</p>
 </section>
 
@@ -90,8 +90,9 @@
 <h2 id="recipients">Managing recipients</h2>
 <p>Add Recipient… (<kbd>⌘N</kbd>) asks for a name, which only you see, and the person's Contact ID. Ask the person to choose Copy My Contact ID in their copy of Dodavo and send it to you.</p>
 <p>Edit Recipient… (<kbd>⌘I</kbd>) changes them, and Remove Recipient (<kbd>⌘⌫</kbd>, or <kbd>Delete</kbd> in the table) removes the person, after asking. Transfers that are running go on.</p>
-<p>Block Recipient blocks the person, after asking: they leave your recipients, and from now on Dodavo declines everything they send you, without asking. They are not told that they are blocked; they see only that their offer was declined. Transfers that are already under way go on.</p>
+<p>Block Recipient (<kbd>⌘B</kbd>) blocks the person, after asking: they leave your recipients, and from now on Dodavo declines everything they send you, without asking. They are not told that they are blocked; they see only that their offer was declined. Transfers that are already under way go on.</p>
 <p>Copy My Contact ID (<kbd>⇧⌘C</kbd>) puts your own Contact ID on the clipboard. You also find it in General in Settings.</p>
+<p>Change My Contact ID… in the File menu gives you a new Contact ID, after asking; Change… in General in Settings does the same. The current one then stops working for good, so everyone who sends you files has to get the new one from you and replace the old one. No transfer can continue under another Contact ID: Dodavo says how many are under way or waiting for your answer, and cancels them when you confirm. A send whose data has all been sent and that the recipient has not confirmed yet cannot be cancelled this way; while there is one, Dodavo says so and keeps your Contact ID. Your recipients and blocked senders stay as they are.</p>
 </section>
 
 <section aria-labelledby="sending">
@@ -111,7 +112,7 @@
 <h2 id="receiving">Receiving files and folders</h2>
 <p>When someone sends you something, the Incoming Transfer window appears, a notification says so, and Dodavo's icon bounces in the Dock. It does not take the focus from what you are doing: click the notification, or the icon, to go to it.</p>
 <p>The window says who sends what, and whether there is enough free space. Save to: shows where it goes, and Choose… changes that. Accept takes it (<kbd>Return</kbd>), Decline refuses it (<kbd>Esc</kbd>). VoiceOver reads the window when you go to it.</p>
-<p>Block Sender declines the offer and blocks the sender, after asking: from now on, Dodavo declines everything they send you, without asking, and they see only that their offer was declined. The Blocked page of <a href="#settings">Settings</a> lists the people you blocked, and Unblock lets them send to you again. Adding a blocked person as a recipient also unblocks them.</p>
+<p>Block Sender (<kbd>⌘B</kbd>) declines the offer and blocks the sender, after asking: from now on, Dodavo declines everything they send you, without asking, and they see only that their offer was declined. The Blocked page of <a href="#settings">Settings</a> lists the people you blocked, and Unblock lets them send to you again. Adding a blocked person as a recipient also unblocks them.</p>
 <p>From people in your recipients, a transfer can start by itself: see Start transfers automatically, without asking in <a href="#settings">Settings</a>. From anyone else, Dodavo always asks first, and says that the sender is not one of your recipients.</p>
 <p>Received items get the same mark as downloads from the internet, so macOS asks before opening an app that came this way.</p>
 <p>Volumes in MS-DOS (FAT) format cannot hold files of 4 GB or more; Dodavo says so before it accepts.</p>
@@ -140,7 +141,7 @@
 <p>General:</p>
 <ul>
 <li>Your name: Shown to the people you send files to.</li>
-<li>Your Contact ID: with Copy.</li>
+<li>Your Contact ID: with Copy and Change….</li>
 <li>Open at Login and Hide when opened at login.</li>
 <li>Show in menu bar.</li>
 <li>Check for updates automatically: once a day, Dodavo looks for a newer version, and shows its release notes when there is one. Check for Updates… does it at any time.</li>
@@ -164,6 +165,7 @@
 <tr><td><kbd>⌘N</kbd></td><td>Add Recipient…</td></tr>
 <tr><td><kbd>⌘I</kbd></td><td>Edit Recipient…</td></tr>
 <tr><td><kbd>⌘⌫</kbd></td><td>Remove Recipient</td></tr>
+<tr><td><kbd>⌘B</kbd></td><td>Block Recipient</td></tr>
 <tr><td><kbd>⇧⌘C</kbd></td><td>Copy My Contact ID</td></tr>
 <tr><td><kbd>⌘T</kbd></td><td>Show Transfers</td></tr>
 <tr><td><kbd>⌘,</kbd></td><td>Settings…</td></tr>

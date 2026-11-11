@@ -85,6 +85,12 @@ pub const HR: Strings = Strings {
         few: "{n} prijenosa još su u tijeku.",
         other: "{n} prijenosa još je u tijeku.",
     },
+    change_id_transfers: Plural {
+        one: "{n} prijenos je u tijeku ili čeka vaš odgovor. Promjenom ID-a kontakta on se otkazuje.",
+        two: "{n} prijenosa je u tijeku ili čeka vaš odgovor. Promjenom ID-a kontakta oni se otkazuju.",
+        few: "{n} prijenosa su u tijeku ili čekaju vaš odgovor. Promjenom ID-a kontakta oni se otkazuju.",
+        other: "{n} prijenosa je u tijeku ili čeka vaš odgovor. Promjenom ID-a kontakta oni se otkazuju.",
+    },
     drop_confirm_many: Plural {
         one: "Želite li poslati {n} stavku primatelju ({name})? Svaka se stavka šalje kao zaseban prijenos.",
         two: "Želite li poslati {n} stavki primatelju ({name})? Svaka se stavka šalje kao zaseban prijenos.",
@@ -126,6 +132,7 @@ pub const HR: Strings = Strings {
     menu_remove_recipient: "Ukloni primatelja",
     menu_block_recipient: "Blokiraj primatelja",
     menu_copy_id: "Kopiraj moj ID kontakta",
+    menu_change_id: "Promijeni moj ID kontakta…",
     menu_close: "Zatvori",
     menu_edit: "Uredi",
     menu_undo: "Poništi",
@@ -156,6 +163,18 @@ pub const HR: Strings = Strings {
     toolbar_transfers: "Prijenosi",
     empty_list: "Još nema primatelja. Odaberite Dodaj primatelja da biste nekoga dodali pomoću njegova ID-ja kontakta.",
     id_copied: "Vaš ID kontakta je kopiran. Pošaljite ga svima koji vam žele slati datoteke.",
+    change_id_button: "Promijeni…",
+    change: "Promijeni",
+    change_id_confirm: "Želite li promijeniti svoj ID kontakta?",
+    change_id_text: "Dodavo vam dodjeljuje novi ID kontakta, a dosadašnji trajno prestaje vrijediti. \
+        Svi koji vam šalju datoteke moraju od vas dobiti novi ID kontakta i njime zamijeniti stari. \
+        Vaši primatelji i blokirani pošiljatelji ostaju kakvi jesu. Ovo se ne može poništiti.",
+    change_id_done: "Vaš ID kontakta je promijenjen.",
+    change_id_done_text: "Vaš novi ID kontakta:\n{id}\n\nDajte ga osobama koje vam šalju datoteke.",
+    change_id_busy: "Vaš ID kontakta nije promijenjen. Jedan prijenos poslao je sve podatke i još čeka potvrdu primatelja \
+        pa ga nije bilo moguće otkazati. Pokušajte ponovno kad taj prijenos završi.",
+    change_id_failed: "Vaš ID kontakta nije promijenjen: {error}",
+    change_id_not_ready: "Dodavo se još nije povezao s mrežom. Pokušajte ponovno za koji trenutak.",
     add_recipient_title: "Dodaj primatelja",
     edit_recipient_title: "Uredi primatelja",
     recipient_name_label: "Ime:",

@@ -143,6 +143,8 @@ fn pages_use_the_program_texts() {
             ("settings_blocked", table.settings_blocked),
             ("unblock", table.unblock),
             ("menu_copy_id", table.menu_copy_id),
+            ("menu_change_id", table.menu_change_id),
+            ("change_id_button", table.change_id_button),
             ("menu_show_transfers", table.menu_show_transfers),
             ("menu_quit", table.menu_quit),
             ("menu_settings", table.menu_settings),

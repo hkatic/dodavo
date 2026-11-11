@@ -48,7 +48,7 @@
 
 <section aria-labelledby="how-it-works">
 <h2 id="how-it-works">Kako deluje Dodavo</h2>
-<p>Vsak računalnik z Dodavom ima trajni <strong>ID stika</strong>: kodo s 64 znaki, ki nadomesti naslov. Delite ga enkrat; ne spreminja se, kamor koli gre računalnik.</p>
+<p>Vsak računalnik z Dodavom ima <strong>ID stika</strong>: kodo s 64 znaki, ki nadomesti naslov. Delite ga enkrat; ostane enak, kamor koli gre računalnik, dokler ga sami ne spremenite.</p>
 <ol>
 <li>Kopirate svoj ID stika in ga pošljete drugi osebi, na primer po e-pošti ali v sporočilu.</li>
 <li>Druga oseba doda vas med svoje prejemnike, vi pa njo med svoje.</li>
@@ -82,7 +82,7 @@
 <h2 id="main-window">Glavno okno</h2>
 <p>Glavno okno prikazuje vaše prejemnike v tabeli s stolpci Ime, ID stika in Prenos. Zadnji pove, kaj se dogaja s to osebo. Pod tabelo vrstica stanja pove, ali je Dodavo povezan; VoiceOver sporoči, ko se to spremeni.</p>
 <p>Orodna vrstica ima ukaze Pošlji, Dodaj prejemnika, Kopiraj moj ID stika in Prenosi. Ukaz Pošlji ni na voljo, dokler ni izbran prejemnik.</p>
-<p>Z VoiceOverjem pojdite na tabelo in pritisnite <kbd>VO</kbd>-<kbd>⇧</kbd>-<kbd>↓</kbd> za delo z njo, nato se s puščičnimi tipkami premikajte med prejemniki. Pritisnite <kbd>Return</kbd> za pošiljanje izbranemu prejemniku ali <kbd>VO</kbd>-<kbd>⇧</kbd>-<kbd>M</kbd> za meni z ukazi Pošlji …, Prikaži prenos, Uredi prejemnika … in Odstrani prejemnika.</p>
+<p>Z VoiceOverjem pojdite na tabelo in pritisnite <kbd>VO</kbd>-<kbd>⇧</kbd>-<kbd>↓</kbd> za delo z njo, nato se s puščičnimi tipkami premikajte med prejemniki. Pritisnite <kbd>Return</kbd> za pošiljanje izbranemu prejemniku ali <kbd>VO</kbd>-<kbd>⇧</kbd>-<kbd>M</kbd> za meni z ukazi Pošlji …, Prikaži prenos, Uredi prejemnika …, Odstrani prejemnika in Blokiraj prejemnika.</p>
 <p>Brez VoiceOverja vklopite krmarjenje s tipkovnico v: Sistemske nastavitve > Tipkovnica, da se s tipko <kbd>Tab</kbd> premikate med vsemi kontrolniki; macOS ga ima privzeto izklopljenega in <kbd>Tab</kbd> doseže le besedilna polja in sezname.</p>
 </section>
 
@@ -90,8 +90,9 @@
 <h2 id="recipients">Upravljanje prejemnikov</h2>
 <p>Dodaj prejemnika … (<kbd>⌘N</kbd>) zahteva ime, ki ga vidite samo vi, in ID stika osebe. Osebo prosite, naj v svojem Dodavu izbere Kopiraj moj ID stika in vam ga pošlje.</p>
 <p>Uredi prejemnika … (<kbd>⌘I</kbd>) ju spremeni, Odstrani prejemnika (<kbd>⌘⌫</kbd> ali <kbd>Delete</kbd> v tabeli) pa odstrani osebo, po vprašanju. Prenosi v teku se nadaljujejo.</p>
-<p>Blokiraj prejemnika osebo po vprašanju blokira: oseba se odstrani iz vaših prejemnikov, Dodavo pa odslej brez vprašanja zavrne vse, kar vam pošlje. Oseba ne izve, da je blokirana; vidi le, da je bila njena ponudba zavrnjena. Prenosi, ki že potekajo, se nadaljujejo.</p>
+<p>Blokiraj prejemnika (<kbd>⌘B</kbd>) osebo po vprašanju blokira: oseba se odstrani iz vaših prejemnikov, Dodavo pa odslej brez vprašanja zavrne vse, kar vam pošlje. Oseba ne izve, da je blokirana; vidi le, da je bila njena ponudba zavrnjena. Prenosi, ki že potekajo, se nadaljujejo.</p>
 <p>Kopiraj moj ID stika (<kbd>⇧⌘C</kbd>) postavi vaš ID stika v odložišče. Najdete ga tudi na zavihku Splošno v nastavitvah.</p>
+<p>Spremeni moj ID stika … v meniju Datoteka vam po vprašanju dodeli nov ID stika; enako stori Spremeni … na zavihku Splošno v nastavitvah. Dosedanji takrat za vedno preneha veljati, zato morajo vsi, ki vam pošiljajo datoteke, od vas dobiti novega in z njim zamenjati starega. Noben prenos se ne more nadaljevati pod drugim ID-jem stika: Dodavo pove, koliko jih poteka ali čaka na vaš odgovor, in jih po vaši potrditvi prekliče. Pošiljanja, pri katerem so bili vsi podatki že poslani, prejemnik pa jih še ni potrdil, tako ni mogoče preklicati; dokler tako obstaja, Dodavo to pove in ohrani vaš ID stika. Vaši prejemniki in blokirani pošiljatelji ostanejo, kakršni so.</p>
 </section>
 
 <section aria-labelledby="sending">
@@ -111,7 +112,7 @@
 <h2 id="receiving">Prejemanje datotek in map</h2>
 <p>Ko vam nekdo nekaj pošilja, se prikaže okno Dohodni prenos, obvestilo to sporoči, ikona Dodava pa poskakuje v Docku. Ne vzame fokusa temu, kar počnete: kliknite obvestilo ali ikono, da pridete do njega.</p>
 <p>Okno pove, kdo pošilja kaj in ali je dovolj prostega prostora. Shrani v: pokaže, kam gre, Izberi … pa to spremeni. Sprejmi sprejme (<kbd>Return</kbd>), Zavrni zavrne (<kbd>Esc</kbd>). VoiceOver prebere okno, ko pridete do njega.</p>
-<p>Blokiraj pošiljatelja po vprašanju zavrne ponudbo in blokira pošiljatelja: Dodavo odslej brez vprašanja zavrne vse, kar vam pošlje ta oseba, ona pa vidi le, da je bila njena ponudba zavrnjena. Stran Blokirani v razdelku <a href="#settings">Nastavitve</a> navaja osebe, ki ste jih blokirali, z gumbom Odblokiraj pa vam lahko spet pošiljajo. Če blokirano osebo dodate med prejemnike, se tudi odblokira.</p>
+<p>Blokiraj pošiljatelja (<kbd>⌘B</kbd>) po vprašanju zavrne ponudbo in blokira pošiljatelja: Dodavo odslej brez vprašanja zavrne vse, kar vam pošlje ta oseba, ona pa vidi le, da je bila njena ponudba zavrnjena. Stran Blokirani v razdelku <a href="#settings">Nastavitve</a> navaja osebe, ki ste jih blokirali, z gumbom Odblokiraj pa vam lahko spet pošiljajo. Če blokirano osebo dodate med prejemnike, se tudi odblokira.</p>
 <p>Od oseb med vašimi prejemniki se lahko prenos začne sam: glejte Prenose začni samodejno, brez vprašanja v razdelku <a href="#settings">Nastavitve</a>. Pri vseh drugih Dodavo vedno najprej vpraša in pove, da pošiljatelj ni med vašimi prejemniki.</p>
 <p>Prejeti elementi dobijo enako oznako kot prenosi iz interneta, zato macOS vpraša, preden odpre aplikacijo, ki je prispela na ta način.</p>
 <p>Diski v obliki MS-DOS (FAT) ne morejo shraniti datotek, velikih 4 GB ali več; Dodavo to pove pred sprejemom.</p>
@@ -140,7 +141,7 @@
 <p>Splošno:</p>
 <ul>
 <li>Vaše ime: Prikazano je osebam, ki jim pošiljate datoteke.</li>
-<li>Vaš ID stika: z gumbom Kopiraj.</li>
+<li>Vaš ID stika: z gumboma Kopiraj in Spremeni ….</li>
 <li>Odpri ob prijavi in Skrij, ko se odpre ob prijavi.</li>
 <li>Prikaži v menijski vrstici.</li>
 <li>Samodejno preverjaj posodobitve: enkrat na dan Dodavo poišče novejšo različico in prikaže njene opombe, kadar je na voljo. Preveri posodobitve … to naredi kadar koli.</li>
@@ -164,6 +165,7 @@
 <tr><td><kbd>⌘N</kbd></td><td>Dodaj prejemnika …</td></tr>
 <tr><td><kbd>⌘I</kbd></td><td>Uredi prejemnika …</td></tr>
 <tr><td><kbd>⌘⌫</kbd></td><td>Odstrani prejemnika</td></tr>
+<tr><td><kbd>⌘B</kbd></td><td>Blokiraj prejemnika</td></tr>
 <tr><td><kbd>⇧⌘C</kbd></td><td>Kopiraj moj ID stika</td></tr>
 <tr><td><kbd>⌘T</kbd></td><td>Prikaži prenose</td></tr>
 <tr><td><kbd>⌘,</kbd></td><td>Nastavitve …</td></tr>

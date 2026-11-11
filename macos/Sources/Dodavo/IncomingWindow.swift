@@ -60,6 +60,9 @@ final class IncomingWindowController: NSWindowController, NSWindowDelegate {
         accept.keyEquivalent = "\r"
         // On the leading side, apart from the answers.
         let block = makeButton(L[.block_sender], self, #selector(blockSender))
+        // Command-B, as Block Recipient has in the main window.
+        block.keyEquivalent = "b"
+        block.keyEquivalentModifierMask = [.command]
         let buttons = makeButtonRow([decline, accept], leading: [block])
         views.append(buttons)
         let column = makeColumn(views, spacing: 10)

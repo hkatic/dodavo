@@ -4,7 +4,6 @@ import AppKit
 final class MainWindowController: NSWindowController, NSWindowDelegate, NSToolbarDelegate,
     NSTableViewDataSource, NSTableViewDelegate, NSMenuDelegate, NSMenuItemValidation
 {
-    private let myId: String
     private var contacts: [Contact] = []
     private var rows: [Row] = []
     private let table = RecipientsTable()
@@ -19,7 +18,6 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSToolba
     private let transfersID = NSToolbarItem.Identifier("transfers")
 
     init(started: Started, title: String) {
-        myId = started.myId
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 640, height: 400),
             styleMask: [.titled, .closable, .miniaturizable, .resizable],

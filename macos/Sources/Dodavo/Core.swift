@@ -275,6 +275,19 @@ enum Core {
         return (reply?.error, reply?.declined ?? [])
     }
 
+    /// Gives this copy a new Contact ID. Every transfer was cancelled for it and
+    /// every waiting offer declined, whose windows are to close. `myId` is the
+    /// Contact ID that holds now: the old one when there is an error.
+    static func changeContactID() -> (error: String?, myId: String?, declined: [UInt64]) {
+        struct Reply: Decodable {
+            let error: String?
+            let myId: String
+            let declined: [UInt64]
+        }
+        let reply: Reply? = call("change_contact_id")
+        return (reply?.error, reply?.myId, reply?.declined ?? [])
+    }
+
     /// The blocked senders, in the order of their names.
     static func blocked() -> [Contact] {
         call("blocked") ?? []

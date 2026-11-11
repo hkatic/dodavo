@@ -85,6 +85,12 @@ pub const EN: Strings = Strings {
         few: "{n} transfers are still running.",
         other: "{n} transfers are still running.",
     },
+    change_id_transfers: Plural {
+        one: "{n} transfer is under way or waiting for your answer. Changing your Contact ID cancels it.",
+        two: "{n} transfers are under way or waiting for your answer. Changing your Contact ID cancels them.",
+        few: "{n} transfers are under way or waiting for your answer. Changing your Contact ID cancels them.",
+        other: "{n} transfers are under way or waiting for your answer. Changing your Contact ID cancels them.",
+    },
     drop_confirm_many: Plural {
         one: "Send {n} item to {name}?",
         two: "Send {n} items to {name}? Each item is sent as a separate transfer.",
@@ -126,6 +132,7 @@ pub const EN: Strings = Strings {
     menu_remove_recipient: "Remove Recipient",
     menu_block_recipient: "Block Recipient",
     menu_copy_id: "Copy My Contact ID",
+    menu_change_id: "Change My Contact ID…",
     menu_close: "Close",
     menu_edit: "Edit",
     menu_undo: "Undo",
@@ -156,6 +163,18 @@ pub const EN: Strings = Strings {
     toolbar_transfers: "Transfers",
     empty_list: "No recipients yet. Choose Add Recipient to add someone using their Contact ID.",
     id_copied: "Your Contact ID has been copied. Send it to anyone who wants to send you files.",
+    change_id_button: "Change…",
+    change: "Change",
+    change_id_confirm: "Change your Contact ID?",
+    change_id_text: "Dodavo gives you a new Contact ID, and the current one stops working for good. \
+        Everyone who sends you files has to get the new Contact ID from you and replace the old one. \
+        Your recipients and blocked senders stay as they are. This cannot be undone.",
+    change_id_done: "Your Contact ID has been changed.",
+    change_id_done_text: "Your new Contact ID is:\n{id}\n\nGive it to the people who send you files.",
+    change_id_busy: "Your Contact ID was not changed. A transfer has sent all of its data and still waits for the recipient \
+        to confirm it, so it could not be cancelled. Try again once that transfer has ended.",
+    change_id_failed: "Your Contact ID was not changed: {error}",
+    change_id_not_ready: "Dodavo is not connected to the network yet. Try again in a moment.",
     add_recipient_title: "Add Recipient",
     edit_recipient_title: "Edit Recipient",
     recipient_name_label: "Name:",

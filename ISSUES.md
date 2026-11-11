@@ -48,6 +48,7 @@ Each offer gets its own `IncomingWindowController`, centred on the same spot, so
 
 ## Low
 
+- **A transfer cancelled by a change of the Contact ID stays waiting on a side that was not connected.** Change My Contact ID cancels every transfer, which the other side learns only if it is connected at that moment. One that is not goes on asking the old Contact ID, which nobody answers any more, and shows its transfer as waiting for the connection until the user cancels it or it expires after 30 days. A tombstone cannot answer either, since the old identity is gone.
 ### On Android, a file that another app saves under the name of a waiting part can be taken for it
 
 Android tells Dodavo no birth time of a file before Android 11, nor on its shared storage (`FileId::weak`), and ext4 gives the number of a deleted file to the next one at once. So a part file that the user deletes while its transfer waits, followed by another file of the same name, looks like the part to the record. Dodavo's own new parts and folders leave the names of records alone (`session::held_names`), and a file shorter than what reached the disk is not taken for the part (`TransferRecord::part_shorter`); a longer one that another app saves into `Download/Dodavo` under that name is. `FS_IOC_GETVERSION` (the inode generation) would tell them apart on ext4 where the app may ask for it.

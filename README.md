@@ -10,6 +10,7 @@ Send files and folders directly from one device to another: Windows PCs, Macs wi
 - Files and folders keep their Date modified and Date created: single files carry them in the offer, and folder ZIPs store them both as MS-DOS dates and exactly in the NTFS extra field, which is what Dodavo restores when it unpacks.
 - The recipient sees an *Incoming Transfer* window with the name and size of the item and whether there is enough free disk space for it (a folder that is unpacked needs room for the download and for unpacking). They can accept or decline and choose where to save. Several items from one person share one window and one answer.
 - Anyone who keeps sending you things you don't want can be blocked, from the Incoming Transfer window or the recipient list: Dodavo then declines their offers without asking, and they only see them declined. Settings lists the blocked senders, with Unblock.
+- On Windows and on a Mac you can change your Contact ID (**Change My Contact ID…** in the File menu, or **Change…** in Settings): the old one stops working for good, transfers that are under way are cancelled, and everyone who sends you files needs the new one
 - From people in your recipient list, items go by themselves to Downloads or a folder of your choice ("Always save to this folder" and "Start transfers automatically", both on by default). Without "Always save to this folder", Dodavo asks where to save each item. Offers from anyone else always ask first.
 - Received files get the Mark of the Web (the `Zone.Identifier` stream, Internet zone), as browser downloads do, so SmartScreen and Office's Protected View treat them the same way.
 - The progress window shows how much has been transferred, the total size, the current speed and the time remaining, with buttons to pause and resume the transfer (on either side) and to minimize it to the background. Closing it lets the transfer continue in the background or cancels it. When a file or folder has been received, Dodavo offers to open it, and when a sent item has arrived, it says so. Each of these has a "Don't ask me again" or "Don't show this again" option, and all of them can be changed again in Settings.
@@ -68,7 +69,7 @@ Building: `android/build.sh [--debug]`, which needs JDK 21, the Android SDK with
 
 ## How connections work
 
-Every installation has a permanent **Contact ID** (a public key). You share that instead of an IP address: click **Copy My Contact ID** and send it to the other person, and they add you with **Add Recipient**.
+Every installation has a **Contact ID** (a public key), which stays the same until you change it. You share that instead of an IP address: click **Copy My Contact ID** and send it to the other person, and they add you with **Add Recipient**.
 
 Connections use [iroh](https://iroh.computer):
 

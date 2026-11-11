@@ -48,7 +48,7 @@
 
 <section aria-labelledby="how-it-works">
 <h2 id="how-it-works">Kako Dodavo radi</h2>
-<p>Svako računalo na kojem radi Dodavo ima trajni <strong>ID kontakta</strong>: kôd od 64 znaka koji zamjenjuje adresu. Podijelite ga jednom; ne mijenja se, gdje god računalo bilo.</p>
+<p>Svako računalo na kojem radi Dodavo ima <strong>ID kontakta</strong>: kôd od 64 znaka koji zamjenjuje adresu. Podijelite ga jednom; ostaje isti, gdje god računalo bilo, dok ga sami ne promijenite.</p>
 <ol>
 <li>Kopirate svoj ID kontakta i pošaljete ga drugoj osobi, na primjer e-poštom ili u poruci.</li>
 <li>Druga osoba doda vas među svoje primatelje, a vi nju među svoje.</li>
@@ -82,7 +82,7 @@
 <h2 id="main-window">Glavni prozor</h2>
 <p>Glavni prozor prikazuje vaše primatelje u tablici sa stupcima Ime, ID kontakta i Prijenos. Posljednji govori što se događa s tom osobom. Ispod tablice redak stanja govori je li Dodavo na mreži; VoiceOver najavljuje kada se to promijeni.</p>
 <p>Alatna traka ima naredbe Pošalji, Dodaj primatelja, Kopiraj moj ID kontakta i Prijenosi. Naredba Pošalji nije dostupna dok nije odabran primatelj.</p>
-<p>S VoiceOverom prijeđite na tablicu i pritisnite <kbd>VO</kbd>-<kbd>⇧</kbd>-<kbd>↓</kbd> za rad s njom, a zatim se tipkama sa strelicama krećite među primateljima. Pritisnite <kbd>Return</kbd> za slanje odabranom primatelju ili <kbd>VO</kbd>-<kbd>⇧</kbd>-<kbd>M</kbd> za otvaranje izbornika s naredbama Pošalji…, Prikaži prijenos, Uredi primatelja… i Ukloni primatelja.</p>
+<p>S VoiceOverom prijeđite na tablicu i pritisnite <kbd>VO</kbd>-<kbd>⇧</kbd>-<kbd>↓</kbd> za rad s njom, a zatim se tipkama sa strelicama krećite među primateljima. Pritisnite <kbd>Return</kbd> za slanje odabranom primatelju ili <kbd>VO</kbd>-<kbd>⇧</kbd>-<kbd>M</kbd> za otvaranje izbornika s naredbama Pošalji…, Prikaži prijenos, Uredi primatelja…, Ukloni primatelja i Blokiraj primatelja.</p>
 <p>Bez VoiceOvera uključite navigaciju tipkovnicom u: Postavke sustava > Tipkovnica, da biste se tipkom <kbd>Tab</kbd> kretali među svim kontrolama; macOS je zadano ima isključenu, pa <kbd>Tab</kbd> dolazi samo do tekstnih polja i popisa.</p>
 </section>
 
@@ -90,8 +90,9 @@
 <h2 id="recipients">Upravljanje primateljima</h2>
 <p>Dodaj primatelja… (<kbd>⌘N</kbd>) traži ime, koje vidite samo vi, i ID kontakta osobe. Zamolite osobu da u svojem Dodavu odabere Kopiraj moj ID kontakta i pošalje vam ga.</p>
 <p>Uredi primatelja… (<kbd>⌘I</kbd>) ih mijenja, a Ukloni primatelja (<kbd>⌘⌫</kbd> ili <kbd>Delete</kbd> u tablici) uklanja osobu, nakon pitanja. Prijenosi u tijeku se nastavljaju.</p>
-<p>Blokiraj primatelja blokira osobu, nakon pitanja: ona se uklanja iz vaših primatelja, a Dodavo od sada bez pitanja odbija sve što vam pošalje. Ta osoba ne saznaje da je blokirana; vidi samo da je njezina ponuda odbijena. Prijenosi koji su već u tijeku nastavljaju se.</p>
+<p>Blokiraj primatelja (<kbd>⌘B</kbd>) blokira osobu, nakon pitanja: ona se uklanja iz vaših primatelja, a Dodavo od sada bez pitanja odbija sve što vam pošalje. Ta osoba ne saznaje da je blokirana; vidi samo da je njezina ponuda odbijena. Prijenosi koji su već u tijeku nastavljaju se.</p>
 <p>Kopiraj moj ID kontakta (<kbd>⇧⌘C</kbd>) stavlja vaš ID kontakta u međuspremnik. Nalazi se i u kartici Općenito u postavkama.</p>
+<p>Promijeni moj ID kontakta… na izborniku Datoteka daje vam novi ID kontakta, nakon pitanja; isto čini Promijeni… u kartici Općenito u postavkama. Dosadašnji tada trajno prestaje vrijediti pa svi koji vam šalju datoteke moraju od vas dobiti novi i njime zamijeniti stari. Nijedan prijenos ne može se nastaviti pod drugim ID-om kontakta: Dodavo kaže koliko ih je u tijeku ili čeka vaš odgovor i otkazuje ih kada potvrdite. Slanje čiji su svi podaci već poslani, a primatelj ih još nije potvrdio, ne može se tako otkazati; dok takvo postoji, Dodavo to kaže i zadržava vaš ID kontakta. Vaši primatelji i blokirani pošiljatelji ostaju kakvi jesu.</p>
 </section>
 
 <section aria-labelledby="sending">
@@ -111,7 +112,7 @@
 <h2 id="receiving">Primanje datoteka i mapa</h2>
 <p>Kada vam netko nešto šalje, pojavljuje se prozor Dolazni prijenos, obavijest to javlja, a ikona Dodava poskakuje u Docku. Ne oduzima fokus onome što radite: kliknite obavijest ili ikonu da biste došli do njega.</p>
 <p>Prozor govori tko šalje što i ima li dovoljno slobodnog prostora. Spremi u: prikazuje kamo ide, a Odaberi… to mijenja. Prihvati prihvaća (<kbd>Return</kbd>), Odbij odbija (<kbd>Esc</kbd>). VoiceOver čita prozor kada dođete do njega.</p>
-<p>Blokiraj pošiljatelja odbija ponudu i blokira pošiljatelja, nakon pitanja: Dodavo od sada bez pitanja odbija sve što vam ta osoba pošalje, a ona vidi samo da je njezina ponuda odbijena. Stranica Blokirani u odjeljku <a href="#settings">Postavke</a> navodi osobe koje ste blokirali, a Deblokiraj im opet dopušta da vam šalju. Kada blokiranu osobu dodate u primatelje, ona se također deblokira.</p>
+<p>Blokiraj pošiljatelja (<kbd>⌘B</kbd>) odbija ponudu i blokira pošiljatelja, nakon pitanja: Dodavo od sada bez pitanja odbija sve što vam ta osoba pošalje, a ona vidi samo da je njezina ponuda odbijena. Stranica Blokirani u odjeljku <a href="#settings">Postavke</a> navodi osobe koje ste blokirali, a Deblokiraj im opet dopušta da vam šalju. Kada blokiranu osobu dodate u primatelje, ona se također deblokira.</p>
 <p>Od osoba među vašim primateljima prijenos može početi sam: pogledajte Prijenose pokreći automatski, bez pitanja u odjeljku <a href="#settings">Postavke</a>. Od svih ostalih Dodavo uvijek najprije pita i kaže da pošiljatelj nije među vašim primateljima.</p>
 <p>Primljene stavke dobivaju istu oznaku kao preuzimanja s interneta, pa macOS pita prije otvaranja aplikacije koja je stigla na ovaj način.</p>
 <p>Diskovi u formatu MS-DOS (FAT) ne mogu spremiti datoteke od 4 GB ili veće; Dodavo to kaže prije prihvaćanja.</p>
@@ -140,7 +141,7 @@
 <p>Općenito:</p>
 <ul>
 <li>Vaše ime: Prikazuje se osobama kojima šaljete datoteke.</li>
-<li>Vaš ID kontakta: uz Kopiraj.</li>
+<li>Vaš ID kontakta: uz Kopiraj i Promijeni….</li>
 <li>Otvori pri prijavi i Sakrij kada se otvori pri prijavi.</li>
 <li>Prikaži u traci izbornika.</li>
 <li>Automatski provjeravaj ažuriranja: jednom dnevno Dodavo traži noviju verziju i prikazuje njezine napomene kada je ima. Provjeri ažuriranja… to čini u bilo kojem trenutku.</li>
@@ -164,6 +165,7 @@
 <tr><td><kbd>⌘N</kbd></td><td>Dodaj primatelja…</td></tr>
 <tr><td><kbd>⌘I</kbd></td><td>Uredi primatelja…</td></tr>
 <tr><td><kbd>⌘⌫</kbd></td><td>Ukloni primatelja</td></tr>
+<tr><td><kbd>⌘B</kbd></td><td>Blokiraj primatelja</td></tr>
 <tr><td><kbd>⇧⌘C</kbd></td><td>Kopiraj moj ID kontakta</td></tr>
 <tr><td><kbd>⌘T</kbd></td><td>Prikaži prijenose</td></tr>
 <tr><td><kbd>⌘,</kbd></td><td>Postavke…</td></tr>

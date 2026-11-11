@@ -1,5 +1,5 @@
 //! Dodavo – send files and folders directly between
-//! computers, identified by a permanent Contact ID instead of an IP address.
+//! computers, identified by a Contact ID instead of an IP address.
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 

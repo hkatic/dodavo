@@ -14,8 +14,9 @@ pub const SR_LATN: Strings = Strings {
     menu_add: "Dod&aj primaoca…\tCtrl+N",
     menu_edit: "&Uredi primaoca…\tF2",
     menu_remove: "U&kloni primaoca\tDel",
-    menu_block: "&Blokiraj primaoca",
+    menu_block: "&Blokiraj primaoca\tCtrl+B",
     menu_copy_id: "Kopiraj moj &ID kontakta\tCtrl+Shift+C",
+    menu_change_id: "P&romeni moj ID kontakta…",
     menu_settings: "&Postavke…\tCtrl+Zarez",
     menu_exit: "I&zlaz",
     menu_view_help: "&Prikaži pomoć\tF1",
@@ -81,6 +82,18 @@ pub const SR_LATN: Strings = Strings {
         Nalepite ga u e-poruku ili poruku ćaskanja i pošaljite ga svima koji žele da vam šalju datoteke. \
         Oni vas dodaju pomoću opcije „Dodaj primaoca“.",
     clipboard_busy: "Međuspremnik trenutno koristi drugi program. Pokušajte ponovo.",
+    change_id_confirm: "Želite li da promenite svoj ID kontakta?\n\n\
+        Dodavo vam dodeljuje novi ID kontakta, a dosadašnji trajno prestaje da važi. \
+        Svi koji vam šalju datoteke moraju od vas da dobiju novi ID kontakta i da njime zamene stari. \
+        Vaši primaoci i blokirani pošiljaoci ostaju kakvi jesu.\n\n\
+        Ovo ne može da se opozove.",
+    change_id_done: "Vaš ID kontakta je promenjen. Vaš novi ID kontakta:\n\n{id}\n\n\
+        Dajte ga osobama koje vam šalju datoteke.",
+    change_id_busy: "Vaš ID kontakta nije promenjen.\n\n\
+        Jedan prenos je poslao sve podatke i još čeka potvrdu primaoca, pa nije mogao da se otkaže. \
+        Pokušajte ponovo kada se taj prenos završi.",
+    change_id_failed: "Vaš ID kontakta nije promenjen:\n{error}",
+    change_id_not_ready: "Dodavo se još nije povezao sa mrežom. Pokušajte ponovo za koji trenutak.",
     help_text: "Kako funkcioniše\n\n\
         1. Svaki računar na kojem radi Dodavo ima sopstveni ID kontakta. Kliknite na „Kopiraj moj ID kontakta“ \
         i pošaljite ga osobama koje treba da mogu da vam šalju datoteke.\n\n\
@@ -275,6 +288,7 @@ pub const SR_LATN: Strings = Strings {
     language_restart: "Novi jezik će se koristiti nakon ponovnog pokretanja programa Dodavo.",
     my_id_label: "Vaš ID kontakta:",
     copy: "&Kopiraj",
+    change_id_button: "Promeni…",
     blocked_senders_button: "B&lokirani pošiljaoci…",
     blocked_title: "Blokirani pošiljaoci",
     blocked_list_label: "&Blokirani pošiljaoci:",
@@ -412,6 +426,12 @@ pub const SR_LATN: Strings = Strings {
         two: "{n} prenosa je još u toku.",
         few: "{n} prenosa su još u toku.",
         other: "{n} prenosa je još u toku.",
+    },
+    change_id_transfers: Plural {
+        one: "{n} prenos je u toku ili čeka vaš odgovor. Promenom ID-a kontakta on se otkazuje.",
+        two: "{n} prenosa je u toku ili čeka vaš odgovor. Promenom ID-a kontakta oni se otkazuju.",
+        few: "{n} prenosa su u toku ili čekaju vaš odgovor. Promenom ID-a kontakta oni se otkazuju.",
+        other: "{n} prenosa je u toku ili čeka vaš odgovor. Promenom ID-a kontakta oni se otkazuju.",
     },
     transfers_in_progress: Plural {
         one: "{n} prenos u toku",

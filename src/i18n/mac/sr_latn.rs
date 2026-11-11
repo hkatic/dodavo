@@ -85,6 +85,12 @@ pub const SR_LATN: Strings = Strings {
         few: "{n} prenosa su još u toku.",
         other: "{n} prenosa je još u toku.",
     },
+    change_id_transfers: Plural {
+        one: "{n} prenos je u toku ili čeka vaš odgovor. Promenom ID-a kontakta on se otkazuje.",
+        two: "{n} prenosa je u toku ili čeka vaš odgovor. Promenom ID-a kontakta oni se otkazuju.",
+        few: "{n} prenosa su u toku ili čekaju vaš odgovor. Promenom ID-a kontakta oni se otkazuju.",
+        other: "{n} prenosa je u toku ili čeka vaš odgovor. Promenom ID-a kontakta oni se otkazuju.",
+    },
     drop_confirm_many: Plural {
         one: "Želite li da pošaljete {n} stavku primaocu ({name})? Svaka stavka se šalje kao zaseban prenos.",
         two: "Želite li da pošaljete {n} stavki primaocu ({name})? Svaka stavka se šalje kao zaseban prenos.",
@@ -126,6 +132,7 @@ pub const SR_LATN: Strings = Strings {
     menu_remove_recipient: "Ukloni primaoca",
     menu_block_recipient: "Blokiraj primaoca",
     menu_copy_id: "Kopiraj moj ID kontakta",
+    menu_change_id: "Promeni moj ID kontakta…",
     menu_close: "Zatvori",
     menu_edit: "Uredi",
     menu_undo: "Opozovi",
@@ -156,6 +163,18 @@ pub const SR_LATN: Strings = Strings {
     toolbar_transfers: "Prenosi",
     empty_list: "Još nema primalaca. Izaberite Dodaj primaoca da biste nekoga dodali pomoću njegovog ID-ja kontakta.",
     id_copied: "Vaš ID kontakta je kopiran. Pošaljite ga svima koji žele da vam šalju datoteke.",
+    change_id_button: "Promeni…",
+    change: "Promeni",
+    change_id_confirm: "Želite li da promenite svoj ID kontakta?",
+    change_id_text: "Dodavo vam dodeljuje novi ID kontakta, a dosadašnji trajno prestaje da važi. \
+        Svi koji vam šalju datoteke moraju od vas da dobiju novi ID kontakta i da njime zamene stari. \
+        Vaši primaoci i blokirani pošiljaoci ostaju kakvi jesu. Ovo ne može da se opozove.",
+    change_id_done: "Vaš ID kontakta je promenjen.",
+    change_id_done_text: "Vaš novi ID kontakta:\n{id}\n\nDajte ga osobama koje vam šalju datoteke.",
+    change_id_busy: "Vaš ID kontakta nije promenjen. Jedan prenos je poslao sve podatke i još čeka potvrdu primaoca, \
+        pa nije mogao da se otkaže. Pokušajte ponovo kada se taj prenos završi.",
+    change_id_failed: "Vaš ID kontakta nije promenjen: {error}",
+    change_id_not_ready: "Dodavo se još nije povezao sa mrežom. Pokušajte ponovo za koji trenutak.",
     add_recipient_title: "Dodaj primaoca",
     edit_recipient_title: "Uredi primaoca",
     recipient_name_label: "Ime:",

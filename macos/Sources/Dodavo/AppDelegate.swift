@@ -10,6 +10,8 @@ private func wakeUp(_: UnsafeMutableRawPointer?) {
 
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var started: Started?
+    /// This copy's Contact ID, which the user can change.
+    private(set) var myId = ""
     private var mainWindow: MainWindowController?
     private var transfersWindow: TransfersWindowController?
     private var settingsWindow: SettingsWindowController?
@@ -67,6 +69,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             return
         }
         self.started = started
+        myId = started.myId
         applyAppearanceOverride()
         NSApp.mainMenu = buildMainMenu()
         NSApp.servicesMenu = servicesMenu
@@ -393,11 +396,63 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     @objc func copyMyContactID(_: Any?) {
-        guard let id = started?.myId else { return }
+        guard isReady else { return }
         NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(id, forType: .string)
+        NSPasteboard.general.setString(myId, forType: .string)
         announce(L[.id_copied])
         mainWindow?.flashStatus(L[.id_copied])
+    }
+
+    /// Gives this copy a new Contact ID, if the user confirms it. No transfer
+    /// can go on under another ID, so the question says how many end with it.
+    @objc func changeMyContactID(_: Any?) {
+        guard isReady else { return }
+        // On the Settings window when the command came from there.
+        var host = mainWindow?.window
+        if let settings = settingsWindow?.window, settings.isKeyWindow {
+            host = settings
+        } else {
+            showMainWindow(nil)
+        }
+        guard let window = host else { return }
+        let ending = runningRows.count + incoming.count
+        let alert = NSAlert()
+        alert.messageText = L[.change_id_confirm]
+        alert.informativeText =
+            ending > 0
+            ? "\(L[.change_id_text])\n\n\(L.plural(.change_id_transfers, ending))"
+            : L[.change_id_text]
+        alert.addButton(withTitle: L[.change])
+        alert.addButton(withTitle: L[.cancel])
+        alert.buttons[1].keyEquivalent = "\u{1b}"
+        alert.beginSheetModal(for: window) { [weak self] response in
+            guard response == .alertFirstButtonReturn else { return }
+            // Once the sheet is gone: the next one says how it went.
+            DispatchQueue.main.async { self?.changeContactID(on: window) }
+        }
+    }
+
+    private func changeContactID(on window: NSWindow) {
+        let (error, id, declined) = Core.changeContactID()
+        for offer in declined {
+            incoming[offer]?.closeWithoutAnswer()
+            incoming[offer] = nil
+            notifier?.forgetOffer(offer)
+        }
+        if let id = id { myId = id }
+        settingsWindow?.contactIDChanged(myId)
+        if let error = error {
+            showAlert(error, on: window)
+            return
+        }
+        let alert = NSAlert()
+        alert.messageText = L[.change_id_done]
+        alert.informativeText = L.f(.change_id_done_text, ["id": myId])
+        alert.addButton(withTitle: L[.close])
+        alert.addButton(withTitle: L[.menu_copy_id])
+        alert.beginSheetModal(for: window) { [weak self] response in
+            if response == .alertSecondButtonReturn { self?.copyMyContactID(nil) }
+        }
     }
 
     // MARK: Sending from elsewhere
@@ -532,11 +587,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             "\u{8}", target: nil)
         remove.keyEquivalentModifierMask = [.command]
         add(
-            file, L[.menu_block_recipient], #selector(MainWindowController.blockRecipient(_:)), "",
+            file, L[.menu_block_recipient], #selector(MainWindowController.blockRecipient(_:)), "b",
             target: nil)
         file.addItem(.separator())
         let copyID = add(file, L[.menu_copy_id], #selector(copyMyContactID), "c")
         copyID.keyEquivalentModifierMask = [.command, .shift]
+        add(file, L[.menu_change_id], #selector(changeMyContactID), "")
         file.addItem(.separator())
         add(file, L[.menu_close], #selector(NSWindow.performClose(_:)), "w", target: nil)
         addSubmenu(main, L[.menu_file], file)

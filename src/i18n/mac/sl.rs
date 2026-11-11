@@ -85,6 +85,12 @@ pub const SL: Strings = Strings {
         few: "{n} prenosi še potekajo.",
         other: "{n} prenosov še poteka.",
     },
+    change_id_transfers: Plural {
+        one: "{n} prenos poteka ali čaka na vaš odgovor. S spremembo ID-ja stika se prekliče.",
+        two: "{n} prenosa potekata ali čakata na vaš odgovor. S spremembo ID-ja stika se prekličeta.",
+        few: "{n} prenosi potekajo ali čakajo na vaš odgovor. S spremembo ID-ja stika se prekličejo.",
+        other: "{n} prenosov poteka ali čaka na vaš odgovor. S spremembo ID-ja stika se prekličejo.",
+    },
     drop_confirm_many: Plural {
         one: "Ali želite poslati {n} element prejemniku ({name})? Vsak element se pošlje kot ločen prenos.",
         two: "Ali želite poslati {n} elementa prejemniku ({name})? Vsak element se pošlje kot ločen prenos.",
@@ -126,6 +132,7 @@ pub const SL: Strings = Strings {
     menu_remove_recipient: "Odstrani prejemnika",
     menu_block_recipient: "Blokiraj prejemnika",
     menu_copy_id: "Kopiraj moj ID stika",
+    menu_change_id: "Spremeni moj ID stika …",
     menu_close: "Zapri",
     menu_edit: "Uredi",
     menu_undo: "Razveljavi",
@@ -156,6 +163,18 @@ pub const SL: Strings = Strings {
     toolbar_transfers: "Prenosi",
     empty_list: "Prejemnikov še ni. Izberite Dodaj prejemnika, da koga dodate z njegovim ID-jem stika.",
     id_copied: "Vaš ID stika je kopiran. Pošljite ga vsem, ki vam želijo pošiljati datoteke.",
+    change_id_button: "Spremeni …",
+    change: "Spremeni",
+    change_id_confirm: "Ali želite spremeniti svoj ID stika?",
+    change_id_text: "Dodavo vam dodeli nov ID stika, dosedanji pa za vedno preneha veljati. \
+        Vsi, ki vam pošiljajo datoteke, morajo od vas dobiti novi ID stika in z njim zamenjati starega. \
+        Vaši prejemniki in blokirani pošiljatelji ostanejo, kakršni so. Tega ni mogoče razveljaviti.",
+    change_id_done: "Vaš ID stika je bil spremenjen.",
+    change_id_done_text: "Vaš novi ID stika:\n{id}\n\nDajte ga osebam, ki vam pošiljajo datoteke.",
+    change_id_busy: "Vaš ID stika ni bil spremenjen. Eden od prenosov je poslal vse podatke in še čaka na potrditev prejemnika, \
+        zato ga ni bilo mogoče preklicati. Poskusite znova, ko se ta prenos konča.",
+    change_id_failed: "Vaš ID stika ni bil spremenjen: {error}",
+    change_id_not_ready: "Dodavo se še ni povezal z omrežjem. Poskusite znova čez trenutek.",
     add_recipient_title: "Dodaj prejemnika",
     edit_recipient_title: "Uredi prejemnika",
     recipient_name_label: "Ime:",

@@ -48,7 +48,7 @@
 
 <section aria-labelledby="how-it-works">
 <h2 id="how-it-works">Kako deluje Dodavo</h2>
-<p>Vsak računalnik, v katerem se izvaja Dodavo, ima trajni <strong>ID stika</strong>: 64-mestno kodo iz števk 0–9 in črk a–f. ID stika je za Dodavo to, kar je telefonska številka za telefon. Če želite nekomu pošiljati datoteke, potrebujete njegov ID stika; če želite datoteke prejemati, svoj ID stika daste osebam, ki vam jih bodo pošiljale.</p>
+<p>Vsak računalnik, v katerem se izvaja Dodavo, ima <strong>ID stika</strong>: 64-mestno kodo iz števk 0–9 in črk a–f. ID stika je za Dodavo to, kar je telefonska številka za telefon. Če želite nekomu pošiljati datoteke, potrebujete njegov ID stika; če želite datoteke prejemati, svoj ID stika daste osebam, ki vam jih bodo pošiljale. Vaš ID stika ostane enak, dokler ga sami ne spremenite; glejte <a href="#change-id">Spreminjanje vašega ID-ja stika</a>.</p>
 <ol>
 <li>Kopirate svoj ID stika in ga pošljete drugi osebi, na primer po e-pošti ali v sporočilu v klepetu.</li>
 <li>Druga oseba vas doda na svoj seznam prejemnikov, vi pa njo na svojega.</li>
@@ -131,7 +131,7 @@
 <li><span class="ui">Brez povezave – preverite internetno povezavo. Prenosi v lokalnem omrežju še vedno delujejo.</span></li>
 </ul>
 <p>Vrstica stanja ne more dobiti fokusa tipkovnice. Če jo želite slišati, uporabite ukaz bralnika zaslona za branje celotnega okna: <kbd>NVDA</kbd>+<kbd>B</kbd> v bralniku NVDA, <kbd>Insert</kbd>+<kbd>B</kbd> v bralniku JAWS ali <kbd>Pripovedovalec</kbd>+<kbd>W</kbd> v Pripovedovalcu.</p>
-<p>Menijska vrstica ima tri menije. Meni <span class="ui">Datoteka</span> (<kbd>Alt</kbd>+<kbd>D</kbd>) vsebuje ukaze <span class="ui">Pošlji datoteko…</span>, <span class="ui">Pošlji mapo…</span>, <span class="ui">Dodaj prejemnika…</span>, <span class="ui">Uredi prejemnika…</span>, <span class="ui">Odstrani prejemnika</span>, <span class="ui">Kopiraj moj ID stika</span>, <span class="ui">Nastavitve…</span> in <span class="ui">Izhod</span>. Meni <span class="ui">Prenosi</span> (<kbd>Alt</kbd>+<kbd>R</kbd>) našteje vse prenose, ki potekajo, z osebo, elementom in stanjem, na koncu pa vsebuje ukaz <span class="ui">Pokaži vse prenose</span> (<kbd>Ctrl</kbd>+<kbd>T</kbd>); ko ne poteka noben prenos, v njem piše <span class="ui">Noben prenos ne poteka</span>. Glejte <a href="#finding-transfers">Iskanje prenosa, ki poteka v ozadju</a>. Meni <span class="ui">Pomoč</span> (<kbd>Alt</kbd>+<kbd>P</kbd>) vsebuje ukaze <span class="ui">Ogled pomoči</span>, <span class="ui">Kako deluje</span> (kratek povzetek), <span class="ui">Licenca</span> (glejte <a href="#license">Licenca</a>), <span class="ui">Doniraj</span> (glejte <a href="#donate">Donacije</a>), <span class="ui">Preveri, ali so na voljo posodobitve…</span> (glejte <a href="#update">Posodabljanje programa Dodavo</a>) in <span class="ui">O programu</span> (različica, avtor, spletno mesto in licenca; glejte <a href="#about">O programu Dodavo</a>).</p>
+<p>Menijska vrstica ima tri menije. Meni <span class="ui">Datoteka</span> (<kbd>Alt</kbd>+<kbd>D</kbd>) vsebuje ukaze <span class="ui">Pošlji datoteko…</span>, <span class="ui">Pošlji mapo…</span>, <span class="ui">Dodaj prejemnika…</span>, <span class="ui">Uredi prejemnika…</span>, <span class="ui">Odstrani prejemnika</span>, <span class="ui">Blokiraj prejemnika</span>, <span class="ui">Kopiraj moj ID stika</span>, <span class="ui">Spremeni moj ID stika…</span>, <span class="ui">Nastavitve…</span> in <span class="ui">Izhod</span>. Meni <span class="ui">Prenosi</span> (<kbd>Alt</kbd>+<kbd>R</kbd>) našteje vse prenose, ki potekajo, z osebo, elementom in stanjem, na koncu pa vsebuje ukaz <span class="ui">Pokaži vse prenose</span> (<kbd>Ctrl</kbd>+<kbd>T</kbd>); ko ne poteka noben prenos, v njem piše <span class="ui">Noben prenos ne poteka</span>. Glejte <a href="#finding-transfers">Iskanje prenosa, ki poteka v ozadju</a>. Meni <span class="ui">Pomoč</span> (<kbd>Alt</kbd>+<kbd>P</kbd>) vsebuje ukaze <span class="ui">Ogled pomoči</span>, <span class="ui">Kako deluje</span> (kratek povzetek), <span class="ui">Licenca</span> (glejte <a href="#license">Licenca</a>), <span class="ui">Doniraj</span> (glejte <a href="#donate">Donacije</a>), <span class="ui">Preveri, ali so na voljo posodobitve…</span> (glejte <a href="#update">Posodabljanje programa Dodavo</a>) in <span class="ui">O programu</span> (različica, avtor, spletno mesto in licenca; glejte <a href="#about">O programu Dodavo</a>).</p>
 <p>Ko je na seznamu izbrana oseba, meni dejanj (<kbd>Enter</kbd>, dvoklik, <kbd>Shift</kbd>+<kbd>F10</kbd>, tipka za priročni meni ali desni klik) ponuja ukaze <span class="ui">Pošlji datoteko…</span>, <span class="ui">Pošlji mapo…</span>, <span class="ui">Pokaži prenos</span> (samo dokler s to osebo poteka prenos; <span class="ui">Pokaži prenose</span>, kadar jih je več), <span class="ui">Uredi…</span>, <span class="ui">Odstrani</span> in <span class="ui">Blokiraj</span>.</p>
 </section>
 
@@ -160,7 +160,7 @@
 <ul>
 <li>Če želite spremeniti ime ali ID stika, pritisnite <kbd>F2</kbd> ali v meniju <span class="ui">Datoteka</span> izberite <span class="ui">Uredi prejemnika…</span>. Pogovorno okno <span class="ui">Uredi prejemnika</span> deluje enako kot <span class="ui">Dodaj prejemnika</span>.</li>
 <li>Če želite osebo odstraniti, pritisnite <kbd>Delete</kbd> ali v meniju <span class="ui">Datoteka</span> izberite <span class="ui">Odstrani prejemnika</span> in potrdite z gumbom <span class="ui">Da</span>.</li>
-<li>Če želite osebo blokirati, v meniju <span class="ui">Datoteka</span> izberite <span class="ui">Blokiraj prejemnika</span> ali v meniju dejanj izberite <span class="ui">Blokiraj</span> in potrdite z gumbom <span class="ui">Da</span>. Glejte <a href="#blocking">Blokiranje pošiljatelja</a>.</li>
+<li>Če želite osebo blokirati, pritisnite <kbd>Ctrl</kbd>+<kbd>B</kbd> ali v meniju <span class="ui">Datoteka</span> izberite <span class="ui">Blokiraj prejemnika</span> ali v meniju dejanj izberite <span class="ui">Blokiraj</span> in potrdite z gumbom <span class="ui">Da</span>. Glejte <a href="#blocking">Blokiranje pošiljatelja</a>.</li>
 </ul>
 </section>
 
@@ -245,7 +245,7 @@
 <p>Če vam kdo pošilja, česar ne želite, ga lahko blokirate. Dodavo nato brez vprašanja in brez obvestila zavrne vse, kar vam ta oseba pošlje. Oseba vidi le, da je bila njena ponudba zavrnjena, in ne izve, da je blokirana. Prenosi z njo, ki že potekajo, se nadaljujejo; če želite, da se ustavijo, jih prekličite v njihovih oknih napredka.</p>
 <ul>
 <li>V oknu Dohodni prenos aktivirajte <span class="ui">Blokiraj pošiljatelja</span> (<kbd>Alt</kbd>+<kbd>B</kbd>) in potrdite z gumbom <span class="ui">Da</span>. Zavrne se vse, kar ta oseba ponuja in čaka na odgovor.</li>
-<li>V glavnem oknu izberite osebo in v meniju <span class="ui">Datoteka</span> izberite <span class="ui">Blokiraj prejemnika</span>. Blokirana oseba se odstrani s seznama prejemnikov.</li>
+<li>V glavnem oknu izberite osebo in pritisnite <kbd>Ctrl</kbd>+<kbd>B</kbd> ali v meniju <span class="ui">Datoteka</span> izberite <span class="ui">Blokiraj prejemnika</span> ali v meniju dejanj <span class="ui">Blokiraj</span>. Blokirana oseba se odstrani s seznama prejemnikov.</li>
 </ul>
 <p>Če želite koga odblokirati, odprite nastavitve, aktivirajte <span class="ui">Blokirani pošiljatelji…</span> (<kbd>Alt</kbd>+<kbd>Š</kbd>), v pogovornem oknu <span class="ui">Blokirani pošiljatelji</span> izberite osebo in aktivirajte <span class="ui">Odblokiraj</span> (<kbd>Alt</kbd>+<kbd>O</kbd>). Če blokirano osebo dodate med prejemnike, se tudi odblokira.</p>
 </section>
@@ -356,8 +356,16 @@
 <dt><span class="ui">Jezik</span></dt>
 <dd>Jezik programa Dodavo in te pomoči: <span class="ui">Privzeto v sistemu Windows</span>, <span lang="en">English</span>, <span lang="hr">Hrvatski</span>, <span lang="sr-Latn">Srpski (latinica)</span> ali <span lang="sl">Slovenščina</span>. Z možnostjo <span class="ui">Privzeto v sistemu Windows</span> Dodavo uporabi prvega od vaših jezikov prikaza v sistemu Windows, ki ga podpira, sicer pa angleščino. Novi jezik bo uporabljen po vnovičnem zagonu programa Dodavo.</dd>
 <dt><span class="ui">Vaš ID stika</span></dt>
-<dd>Polje samo za branje z vašim celotnim ID-jem stika, za njim pa gumb <span class="ui">Kopiraj</span>.</dd>
+<dd>Polje samo za branje z vašim celotnim ID-jem stika, za njim pa gumba <span class="ui">Kopiraj</span> in <span class="ui">Spremeni…</span>. Glejte <a href="#change-id">Spreminjanje vašega ID-ja stika</a>.</dd>
 </dl>
+<h3 id="change-id">Spreminjanje vašega ID-ja stika</h3>
+<p>Svoj ID stika lahko zamenjate z novim, na primer, ko je prišel do oseb, od katerih ne želite ničesar prejemati. Dosedanji ID stika takrat za vedno preneha veljati: nihče vas z njim ne more več doseči in ni ga mogoče povrniti. Vsi, ki naj bi vam še lahko pošiljali datoteke, morajo od vas dobiti novi ID stika in z njim zamenjati starega z ukazom <span class="ui">Uredi prejemnika…</span>. Vaši prejemniki, blokirani pošiljatelji in nastavitve ostanejo, kakršni so.</p>
+<p>Noben prenos se ne more nadaljevati pod drugim ID-jem stika. Dodavo vam pove, koliko prenosov poteka ali čaka na vaš odgovor, in jih po vaši potrditvi prekliče. Ene vrste prenosa tako ni mogoče preklicati: pošiljanja, pri katerem so bili vsi podatki že poslani, prejemnik pa jih še ni potrdil. Dokler tak prenos obstaja, vas Dodavo o tem obvesti in ohrani vaš ID stika; poskusite znova, ko se ta prenos konča.</p>
+<ol>
+<li>V meniju <span class="ui">Datoteka</span> izberite <span class="ui">Spremeni moj ID stika…</span> (<kbd>Alt</kbd>+<kbd>D</kbd>, nato <kbd>P</kbd>) ali odprite Nastavitve in aktivirajte gumb <span class="ui">Spremeni…</span>, ki sledi gumbu <span class="ui">Kopiraj</span>.</li>
+<li>Preberite vprašanje. Privzeti odgovor je <span class="ui">Ne</span>; izberite <span class="ui">Da</span>, če želite nadaljevati.</li>
+<li>Sporočilo prikaže vaš novi ID stika. Če ga želite kopirati, v glavnem oknu pritisnite <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>C</kbd>.</li>
+</ol>
 </section>
 
 <section aria-labelledby="shortcuts">
@@ -374,6 +382,7 @@
 <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>C</kbd></td><td>Kopiranje vašega ID-ja stika v odložišče</td></tr>
 <tr><td><kbd>F2</kbd></td><td>Urejanje izbranega prejemnika</td></tr>
 <tr><td><kbd>Delete</kbd></td><td>Odstranjevanje izbranega prejemnika</td></tr>
+<tr><td><kbd>Ctrl</kbd>+<kbd>B</kbd></td><td>Blokiranje izbranega prejemnika</td></tr>
 <tr><td><kbd>Ctrl</kbd>+<kbd>T</kbd></td><td>Prikaz oken vseh prenosov, ki potekajo</td></tr>
 <tr><td><kbd>Ctrl</kbd>+<kbd>Vejica</kbd></td><td>Odpiranje nastavitev</td></tr>
 <tr><td><kbd>Enter</kbd> ali dvoklik</td><td>Odpiranje menija dejanj izbranega prejemnika</td></tr>
@@ -481,7 +490,7 @@
 <dd>Tako kot spletni brskalnik prenesene datoteke tudi Dodavo vsako prejeto datoteko (tudi datoteke v prejeti mapi in obdržano datoteko ZIP) označi kot datoteko iz interneta. Zato Windows SmartScreen preveri prejeti program, preden se zažene, Microsoft Office pa prejete dokumente odpre v zaščitenem pogledu. Oznaka se shrani z datoteko na pogonih NTFS; pogoni, formatirani v datotečnem sistemu FAT32 ali exFAT, kot številni pogoni USB, je ne morejo obdržati. Če Windows opozarja na datoteko, ki ji zaupate, glejte <a href="#troubleshooting">Odpravljanje težav</a>.</dd>
 </dl>
 <h3 id="your-data">Vaše nastavitve in identiteta</h3>
-<p>Dodavo shranjuje nastavitve, vaš seznam prejemnikov in vaš skrivni ključ v mapo <code>%APPDATA%\Dodavo</code>. Skrivni ključ je tisto, zaradi česar je vaš ID stika vaš. Vsebine te mape ne delite z nikomer. Če se selite na drug računalnik in želite obdržati svoj ID stika, kopirajte to mapo na isto mesto v novem računalniku, ko se Dodavo v njem ne izvaja. Če mapo izbrišete, Dodavo ustvari nov ID stika in vsi vas morajo znova dodati.</p>
+<p>Dodavo shranjuje nastavitve, vaš seznam prejemnikov in vaš skrivni ključ v mapo <code>%APPDATA%\Dodavo</code>. Skrivni ključ je tisto, zaradi česar je vaš ID stika vaš. Vsebine te mape ne delite z nikomer. Če se selite na drug računalnik in želite obdržati svoj ID stika, kopirajte to mapo na isto mesto v novem računalniku, ko se Dodavo v njem ne izvaja. Če mapo izbrišete, Dodavo ustvari nov ID stika in vsi vas morajo znova dodati. Če želite namenoma dobiti nov ID stika, glejte <a href="#change-id">Spreminjanje vašega ID-ja stika</a>.</p>
 </section>
 
 <section aria-labelledby="faq">
@@ -543,7 +552,7 @@
 <p>Ne. Vsak prenos je med obema računalnikoma celovito šifriran. Kadar morajo podatki prek posredovalnega strežnika, ta le posreduje šifrirane podatke, ki jih ne more prebrati. ID stika je prejemnikov javni ključ, zato je povezavo mogoče vzpostaviti samo z računalnikom, ki ima ustrezni skrivni ključ. Glejte <a href="#connections">Povezave in varnost</a>.</p>
 
 <h3 id="faq-id-secret">Ali je moj ID stika skrivnost? Ali mi lahko kdor koli pošilja datoteke?</h3>
-<p>ID stika ni skrivnost; deluje kot telefonska številka. Kdor ga ima, vam lahko ponudi datoteko. Sami se začnejo le prenosi oseb z vašega seznama prejemnikov (<span class="ui">Prenose začni samodejno, brez vprašanja</span>, kar lahko izklopite v nastavitvah). Od kogar koli drugega se v vaš računalnik nič ne shrani, dokler ne izberete <span class="ui">Sprejmi</span>, takšne ponudbe pa so označene z opozorilom o neznanem pošiljatelju. Glejte <a href="#auto-accept">Prejemanje brez vprašanja</a>. Če vam kdo vztrajno pošilja, česar ne želite, glejte <a href="#blocking">Blokiranje pošiljatelja</a>.</p>
+<p>ID stika ni skrivnost; deluje kot telefonska številka. Kdor ga ima, vam lahko ponudi datoteko. Sami se začnejo le prenosi oseb z vašega seznama prejemnikov (<span class="ui">Prenose začni samodejno, brez vprašanja</span>, kar lahko izklopite v nastavitvah). Od kogar koli drugega se v vaš računalnik nič ne shrani, dokler ne izberete <span class="ui">Sprejmi</span>, takšne ponudbe pa so označene z opozorilom o neznanem pošiljatelju. Glejte <a href="#auto-accept">Prejemanje brez vprašanja</a>. Če vam kdo vztrajno pošilja, česar ne želite, glejte <a href="#blocking">Blokiranje pošiljatelja</a>. Če želite naenkrat ustaviti vse, ki imajo vaš ID stika, glejte <a href="#change-id">Spreminjanje vašega ID-ja stika</a>.</p>
 
 <h3 id="faq-servers">Kaj Dodavo pošilja strežnikom v internetu?</h3>
 <p>Samo tisto, kar je potrebno, da drugi računalniki najdejo vašega. Dodavo pod vašim ID-jem stika objavi naslove, na katerih je vaš računalnik trenutno dosegljiv, in sicer v storitvi za iskanje naslovov omrežja iroh, ter vzdržuje povezavo s posredovalnim strežnikom, da je prenos mogoče vzpostaviti tudi takrat, ko neposredna povezava ni mogoča. Imena in vsebina vaših datotek potujejo le znotraj šifrirane povezave z drugim računalnikom. Enkrat na dan, ko je vklopljena nastavitev <span class="ui">Samodejno preverjaj, ali so na voljo posodobitve (enkrat na dan)</span>, Dodavo s strani programa Dodavo na GitHubu (github.com) prenese tudi majhno datoteko, ki opisuje najnovejšo različico, in od tam prenese namestitveni program, ko se odločite namestiti posodobitev; glejte <a href="#update">Posodabljanje programa Dodavo</a>. Dodavo nima uporabniških računov in ne pošilja statistike uporabe.</p>

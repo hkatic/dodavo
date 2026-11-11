@@ -304,6 +304,12 @@ enum Call {
     CancelAll,
     Licenses,
     Shutdown,
+    /// Gives this installation a new Contact ID. Every transfer is cancelled
+    /// and every waiting offer declined first (`declined`: their windows are
+    /// to close). The answer has the Contact ID that holds from now on, and
+    /// an error when that is still the old one.
+    #[cfg(target_os = "macos")]
+    ChangeContactId,
     #[cfg(target_os = "macos")]
     CheckForUpdates,
     #[cfg(target_os = "macos")]
@@ -386,7 +392,8 @@ struct State {
 
 pub struct Core {
     state: Mutex<State>,
-    my_id: String,
+    /// This installation's Contact ID, which the user can change.
+    my_id: Mutex<String>,
     outbox: &'static Outbox,
     /// Events of the network on their way to the thread that handles them.
     _events: mpsc::Sender<Event>,
@@ -649,7 +656,7 @@ impl Core {
                 #[cfg(target_os = "macos")]
                 next_update_look: Instant::now() + update::START_DELAY,
             }),
-            my_id,
+            my_id: Mutex::new(my_id),
             outbox,
             _events: events,
         };
@@ -821,7 +828,7 @@ impl Core {
                 let state = lock(&self.state);
                 let problem = recipient_problem(
                     &state.cfg,
-                    &self.my_id,
+                    &lock(&self.my_id),
                     &name,
                     &contact_id,
                     editing.as_deref(),
@@ -931,6 +938,8 @@ impl Core {
                 "components": COMPONENTS,
             })),
             #[cfg(target_os = "macos")]
+            Call::ChangeContactId => self.change_contact_id(),
+            #[cfg(target_os = "macos")]
             Call::CheckForUpdates => {
                 self.check_now();
                 "null".into()
@@ -979,6 +988,48 @@ impl Core {
                 "null".into()
             }
         }
+    }
+
+    /// See [`Call::ChangeContactId`].
+    #[cfg(target_os = "macos")]
+    fn change_contact_id(&self) -> String {
+        let answer = |error: Option<String>, declined: Vec<u64>| {
+            serde_json::json!({
+                "error": error,
+                "my_id": *lock(&self.my_id),
+                "declined": declined,
+            })
+            .to_string()
+        };
+        let (net, declined) = {
+            let mut state = lock(&self.state);
+            // Until the network is up, it takes no commands.
+            if state.online.is_none() {
+                return answer(Some(ui().change_id_not_ready.to_string()), Vec::new());
+            }
+            // The network declines the offers and cancels the transfers;
+            // the rows say so until their ends arrive.
+            let declined: Vec<u64> = state.offers.drain().map(|(id, _)| id).collect();
+            for view in state.transfers.values_mut().filter(|t| t.is_active()) {
+                view.on_cancel();
+            }
+            (state.net.clone(), declined)
+        };
+        // Off the lock: the ends of the transfers come meanwhile.
+        let secret = identity::new_key();
+        let new_id = secret.public().to_string();
+        let error = match net.change_identity(secret, Duration::from_secs(20)) {
+            Ok(()) => {
+                *lock(&self.my_id) = new_id;
+                None
+            }
+            Err(net::IdentityError::Busy) => Some(ui().change_id_busy.to_string()),
+            Err(net::IdentityError::Failed(error)) => {
+                Some(ui().change_id_failed.replace("{error}", &error))
+            }
+            Err(net::IdentityError::TimedOut) => Some(ui().change_id_not_ready.to_string()),
+        };
+        answer(error, declined)
     }
 
     /// Starts sending `paths`, each as a transfer of its own. An error text
@@ -1849,7 +1900,7 @@ mod tests {
                 #[cfg(target_os = "macos")]
                 next_update_look: Instant::now(),
             }),
-            my_id: String::new(),
+            my_id: Mutex::new(String::new()),
             outbox: Box::leak(Box::new(Outbox {
                 queue: Mutex::new(VecDeque::new()),
                 ready: Condvar::new(),

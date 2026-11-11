@@ -29,8 +29,9 @@ use windows_sys::{
                 TDN_HYPERLINK_CLICKED, TaskDialogIndirect,
             },
             WindowsAndMessaging::{
-                GetWindowTextLengthW, GetWindowTextW, IDCANCEL, IDYES, LoadIconW, MB_ICONERROR,
-                MB_ICONINFORMATION, MB_ICONQUESTION, MB_OK, MB_YESNO, MessageBoxW, SendMessageW,
+                GetWindowTextLengthW, GetWindowTextW, IDC_WAIT, IDCANCEL, IDYES, LoadCursorW,
+                LoadIconW, MB_DEFBUTTON2, MB_ICONERROR, MB_ICONINFORMATION, MB_ICONQUESTION,
+                MB_ICONWARNING, MB_OK, MB_YESNO, MessageBoxW, SendMessageW, SetCursor,
                 SetWindowTextW,
             },
         },
@@ -94,6 +95,21 @@ pub fn error(owner: HWND, text: &str) {
 
 pub fn confirm(owner: HWND, text: &str) -> bool {
     message_box(owner, text, MB_YESNO | MB_ICONQUESTION) == IDYES
+}
+
+/// Asks about something that cannot be undone: Enter answers No.
+pub fn confirm_no(owner: HWND, text: &str) -> bool {
+    let style = MB_YESNO | MB_ICONWARNING | MB_DEFBUTTON2;
+    message_box(owner, text, style) == IDYES
+}
+
+/// Runs `work`, which keeps the UI thread for a moment, under the wait
+/// cursor.
+pub fn busy<R>(work: impl FnOnce() -> R) -> R {
+    let old = unsafe { SetCursor(LoadCursorW(std::ptr::null_mut(), IDC_WAIT)) };
+    let result = work();
+    unsafe { SetCursor(old) };
+    result
 }
 
 /// The main icon of a task dialog.
