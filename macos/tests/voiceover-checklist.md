@@ -24,13 +24,15 @@ names, not what is actually spoken. Write what fails into `ISSUES.md`.
 ## Add and Edit Recipient
 
 - [ ] The sheet is announced with its title, and the focus is on Name.
-- [ ] Each field reads its label. `Tab` goes Name, Contact ID, Cancel, Add.
-- [ ] `Return` adds, `Esc` cancels. A wrong Contact ID gives an alert that is read, and leaves the sheet open.
+- [ ] Each field reads its label. `Tab` goes Name, Contact ID, Largest item, Cancel, Add; with This size chosen, Largest size and Unit come after Largest item.
+- [ ] Largest item reads as a pop-up button with its choice, and Largest size and Unit read their names. They are unavailable unless This size is chosen.
+- [ ] `Return` adds, `Esc` cancels. A wrong Contact ID, or a size that is not a whole number from 1 on, gives an alert that is read, and leaves the sheet open.
 
 ## Sending
 
 - [ ] The Send panel reads its message with the recipient's name. Files and folders can both be chosen, also several.
 - [ ] Finder: Services > Send with Dodavo appears for a selected file, and the recipient question is read.
+- [ ] The recipient question sends to the recipient it shows, also when the list changed while it was open. If that recipient was removed or blocked meanwhile, an alert that is read says so, and nothing is sent.
 - [ ] Copying a file onto the Dock icon is not possible with VoiceOver, so the service must be enough.
 
 ## Incoming Transfer
@@ -43,6 +45,8 @@ names, not what is actually spoken. Write what fails into `ISSUES.md`.
 - [ ] Block Sender can be reached with `Tab` and reads its title. Its alert is read, Block closes the window, and the sender's other offers that were waiting close too.
 - [ ] An offer from a blocked sender shows nothing at all, and the sender sees it declined.
 - [ ] Command-B in the window of an offer does the same as Block Sender.
+- [ ] An item over the sender's size limit waits for an answer, also from a recipient, and its window has a line that says so, read after the item's name and size.
+- [ ] With "Decline it and tell me", an item over the limit shows no window, and a notification that is read says who offered what, also while Dodavo is in the background.
 
 ## Transfers window
 
@@ -66,6 +70,7 @@ names, not what is actually spoken. Write what fails into `ISSUES.md`.
 
 - [ ] The tabs General, Receiving and Blocked can be reached and are announced.
 - [ ] Blocked: the list reads as Blocked senders, each row as the name with the shortened Contact ID. Unblock is unavailable without a selection, and after the last one "No sender is blocked." is announced and the focus stays in the window.
+- [ ] Receiving: "Limit the size of an item that someone can send me" reads as a check box. Largest size and Unit read their names, and are unavailable without the limit; "When an item is over the limit" reads its choice. A size that cannot be used gives an alert that is read, and the field shows the last size again.
 - [ ] General: the Change… button after Copy reads as "Your Contact ID: Change…". Its alert is read, with how many transfers end; Cancel (Escape) changes nothing. After Change, the next alert reads the new Contact ID, the field shows it, and Copy My Contact ID copies the new one. File > Change My Contact ID… does the same from the main window. With a transfer under way and an offer waiting, both end and the offer's window closes.
 - [ ] Each field and check box reads its label. Changing one takes effect at once.
 - [ ] Your Contact ID can be read, and Copy says that it was copied.
