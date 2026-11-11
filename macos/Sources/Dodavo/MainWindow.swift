@@ -252,7 +252,14 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSToolba
         alert.messageText = L[.pick_recipient_title]
         alert.informativeText = L[.pick_recipient_text]
         let popup = NSPopUpButton(frame: NSRect(x: 0, y: 0, width: 280, height: 26), pullsDown: false)
-        popup.addItems(withTitles: contacts.map { $0.name })
+        // The recipients as the question lists them: the list may change while
+        // it is open (an offer that adds its sender, or blocks them), and the
+        // items go to the one chosen here, not to whoever has that place then.
+        // An item each: `addItems(withTitles:)` drops a title it has already.
+        let listed = contacts
+        for contact in listed {
+            popup.menu?.addItem(NSMenuItem(title: contact.name, action: nil, keyEquivalent: ""))
+        }
         popup.selectItem(at: max(table.selectedRow, 0))
         popup.setAccessibilityLabel(L[.pick_recipient_text])
         alert.accessoryView = popup
@@ -261,8 +268,12 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSToolba
         alert.buttons[1].keyEquivalent = "\u{1b}"
         alert.window.initialFirstResponder = popup
         alert.beginSheetModal(for: window) { response in
-            guard response == .alertFirstButtonReturn else { return }
-            self.start(self.contacts[popup.indexOfSelectedItem], paths)
+            let chosen = popup.indexOfSelectedItem
+            guard response == .alertFirstButtonReturn, listed.indices.contains(chosen) else {
+                return
+            }
+            // One who is no longer a recipient: the send says so.
+            self.start(listed[chosen], paths)
         }
     }
 
