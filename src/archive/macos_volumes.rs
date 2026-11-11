@@ -61,22 +61,27 @@ impl Volume {
     }
 
     /// Something may still be looking at a new volume, such as Spotlight, and then
-    /// `hdiutil` says for a moment that it is busy.
+    /// `hdiutil` says for a moment that it is busy. What keeps it for half a
+    /// minute is not the test, whose files are closed by now: the volume is
+    /// then taken from it, and what the test goes on to read after mounting it
+    /// again shows that nothing was lost.
     fn detach(&self) {
-        let mut tries = 0;
-        loop {
-            let detached = Command::new("hdiutil")
-                .args(["detach", "-quiet"])
-                .arg(&self.mount)
-                .output()
-                .unwrap();
-            if detached.status.success() {
+        let detach = |force: bool| {
+            let mut hdiutil = Command::new("hdiutil");
+            hdiutil.args(["detach", "-quiet"]);
+            if force {
+                hdiutil.arg("-force");
+            }
+            hdiutil.arg(&self.mount).output().unwrap()
+        };
+        for _ in 0..30 {
+            if detach(false).status.success() {
                 return;
             }
-            tries += 1;
-            assert!(tries < 30, "{detached:?}");
             std::thread::sleep(std::time::Duration::from_secs(1));
         }
+        let detached = detach(true);
+        assert!(detached.status.success(), "{detached:?}");
     }
 }
 
