@@ -1394,6 +1394,86 @@ mod tests {
         }
     }
 
+    /// Makes sure that `a` reaches `b`, whose Contact ID is `to`, before a
+    /// test sends what it is about: a small file goes out until `b` answers,
+    /// and is declined there. An endpoint that has just started is not found
+    /// at once where the local network is closed to the test (GitHub's Mac
+    /// runner): its address is published a moment after it is online, and a
+    /// send that does not find its receiver ends as unreachable, with nothing
+    /// to try it again. A `b` that blocks `a` declines by itself, which is an
+    /// answer too. For two endpoints that are online; what they report
+    /// meanwhile is dropped, and nothing of the small file is left for the
+    /// test to come across.
+    #[track_caller]
+    fn reach(
+        a: &NetHandle,
+        rx_a: &mpsc::Receiver<Event>,
+        b: &NetHandle,
+        rx_b: &mpsc::Receiver<Event>,
+        to: EndpointId,
+        base: &std::path::Path,
+    ) {
+        const NAME: &str = "reach.probe";
+        let probe = base.join(NAME);
+        std::fs::write(&probe, b"?").unwrap();
+        let deadline = Instant::now() + Duration::from_secs(120);
+        // The offers of it that `b` was shown and that have not ended there.
+        let mut shown = Vec::new();
+        let note = |shown: &mut Vec<u64>, event| match event {
+            Event::Offer { id, offer, .. } if offer.name == NAME => {
+                shown.push(id);
+                b.send(Command::Respond { id, accept: None });
+            }
+            Event::Finished { id, .. } => shown.retain(|s| *s != id),
+            _ => {}
+        };
+        let mut tries = 0;
+        let mut last = None;
+        'tries: loop {
+            tries += 1;
+            let id = next_transfer_id();
+            a.send(Command::Send {
+                id,
+                to,
+                path: probe.clone(),
+                kind: Kind::File,
+                my_name: "A".into(),
+                peer_name: "B".into(),
+            });
+            loop {
+                assert!(
+                    Instant::now() < deadline,
+                    "the receiver was not reached in {tries} tries, of which the last ended as {last:?}"
+                );
+                if let Ok(event) = rx_b.recv_timeout(Duration::from_millis(20)) {
+                    note(&mut shown, event);
+                }
+                let ended = rx_a.try_iter().find_map(|e| match e {
+                    Event::Finished { id: i, outcome } if i == id => Some(outcome),
+                    _ => None,
+                });
+                match ended {
+                    None => {}
+                    Some(Outcome::Declined) => break 'tries,
+                    Some(other) => {
+                        last = Some(other);
+                        std::thread::sleep(Duration::from_millis(250));
+                        continue 'tries;
+                    }
+                }
+            }
+        }
+        while !shown.is_empty() {
+            let left = deadline.saturating_duration_since(Instant::now());
+            let event = rx_b.recv_timeout(left).expect("timed out");
+            note(&mut shown, event);
+        }
+        if tries > 1 {
+            eprintln!("reached in {tries} tries; before that: {last:?}");
+        }
+        std::fs::remove_file(&probe).unwrap();
+    }
+
     fn sink(tx: mpsc::Sender<Event>) -> impl Fn(Event) + Send + Sync + 'static {
         let tx = Mutex::new(tx);
         move |e| {
@@ -1439,6 +1519,9 @@ mod tests {
             Limits::default(),
             sink(tx_b),
         ));
+        wait_for(&rx_a, |e| matches!(e, Event::Online(true)));
+        wait_for(&rx_b, |e| matches!(e, Event::Online(true)));
+        reach(&a, &rx_a, &b, &rx_b, id_b, &base);
 
         // Receiver: accept everything except offers named "decline.txt" (the
         // folder "Kept" also keeps its zip), and pause the first transfer
@@ -1653,10 +1736,11 @@ mod tests {
             Limits::default(),
             sink(tx_b),
         );
-        // Both can be found once they are online, also where the local
-        // network is closed to the test (GitHub's Mac runner).
+        // Both can be found a moment after they are online, also where the
+        // local network is closed to the test (GitHub's Mac runner).
         wait_for(&rx_a, |e| matches!(e, Event::Online(true)));
         wait_for(&rx_b, |e| matches!(e, Event::Online(true)));
+        reach(&a, &rx_a, &b, &rx_b, id_b, &base);
         let file = base.join("note.txt");
         std::fs::write(&file, b"hello").unwrap();
         let send = |id| {
@@ -1730,6 +1814,7 @@ mod tests {
         );
         wait_for(&rx_a, |e| matches!(e, Event::Online(true)));
         wait_for(&rx_b, |e| matches!(e, Event::Online(true)));
+        reach(&a, &rx_a, &b, &rx_b, id_b, &base);
         let file = base.join("note.txt");
         std::fs::write(&file, b"hello").unwrap();
         let send = || {
@@ -1816,6 +1901,7 @@ mod tests {
         let b = start(key_b, dir_b.clone(), base.join("temp"), [], Limits::default(), sink(tx_b));
         wait_for(&rx_a, |e| matches!(e, Event::Online(true)));
         wait_for(&rx_b, |e| matches!(e, Event::Online(true)));
+        reach(&a, &rx_a, &b, &rx_b, id_b, &base);
         let recv_dir = base.join("received");
         std::fs::create_dir_all(&recv_dir).unwrap();
         let send = |to, name: &str, len| {
@@ -1897,6 +1983,7 @@ mod tests {
         // The new Contact ID answers.
         wait_for(&rx_b, |e| matches!(e, Event::Online(true)));
         assert!(b.is_up());
+        reach(&a, &rx_a, &b, &rx_b, new_id, &base);
         let again = send(new_id, "again.bin", 100);
         accept(offer("again.bin"));
         let outcome = wait_finished(&rx_a, again);
@@ -1926,6 +2013,7 @@ mod tests {
         let b = start(key_b, base.join("b"), base.join("temp-b"), [], Limits::default(), sink(tx_b));
         wait_for(&rx_a, |e| matches!(e, Event::Online(true)));
         wait_for(&rx_b, |e| matches!(e, Event::Online(true)));
+        reach(&a, &rx_a, &b, &rx_b, id_b, &base);
         let staging = session::staging_root(&temp_a);
         let copy = |folder: &str, name: &str| {
             let path = staging.join(folder).join(name);
@@ -1992,6 +2080,7 @@ mod tests {
         let b = start(key_b, base.join("b"), base.join("temp-b"), [], Limits::default(), sink(tx_b));
         wait_for(&rx_a, |e| matches!(e, Event::Online(true)));
         wait_for(&rx_b, |e| matches!(e, Event::Online(true)));
+        reach(&a, &rx_a, &b, &rx_b, id_b, &base);
         let stored = base.join("stored");
         std::fs::create_dir_all(&stored).unwrap();
         let data = |name: &str, bytes: &[u8]| {
@@ -2090,6 +2179,9 @@ mod tests {
             Limits::default(),
             sink(tx_b),
         ));
+        wait_for(&rx_a, |e| matches!(e, Event::Online(true)));
+        wait_for(&rx_b, |e| matches!(e, Event::Online(true)));
+        reach(&a, &rx_a, &b, &rx_b, id_b, &base);
         let recv_dir = base.join("received");
         let b_thread = {
             let recv_dir = recv_dir.clone();
@@ -2194,6 +2286,9 @@ mod tests {
             Limits::default(),
             sink(tx_b),
         );
+        wait_for(&rx_a, |e| matches!(e, Event::Online(true)));
+        wait_for(&rx_b, |e| matches!(e, Event::Online(true)));
+        reach(&a, &rx_a, &b, &rx_b, id_b, &base);
         let recv_dir = base.join("received");
 
         let file = base.join("big.bin");
@@ -2309,6 +2404,9 @@ mod tests {
             Limits::default(),
             sink(tx_b),
         );
+        wait_for(&rx_a, |e| matches!(e, Event::Online(true)));
+        wait_for(&rx_b, |e| matches!(e, Event::Online(true)));
+        reach(&a, &rx_a, &b, &rx_b, id_b, &base);
         let recv_dir = base.join("received");
 
         let folder = base.join("Photos");
@@ -3163,7 +3261,7 @@ mod tests {
         let data = pattern(3_000_000);
         std::fs::write(&file, &data).unwrap();
         receive::HOLD_VERIFY.lock().unwrap().push(name.into());
-        let (tx_a, _rx_a) = mpsc::channel();
+        let (tx_a, rx_a) = mpsc::channel();
         let (tx_b, rx_b) = mpsc::channel();
         let a = start(
             key_a.clone(),
@@ -3181,6 +3279,9 @@ mod tests {
             Limits::default(),
             sink(tx_b),
         );
+        wait_for(&rx_a, |e| matches!(e, Event::Online(true)));
+        wait_for(&rx_b, |e| matches!(e, Event::Online(true)));
+        reach(&a, &rx_a, &b, &rx_b, key_b.public(), &base);
         let id = next_transfer_id();
         a.send(Command::Send {
             id,
