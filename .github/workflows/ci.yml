@@ -100,23 +100,9 @@ jobs:
             ~/.cargo/git
             target
           key: macos-${{ hashFiles('Cargo.lock') }}
-      # See ISSUES.md: on this runner, four tests that reconnect after a restart
-      # time out, which they do not on a Mac elsewhere.
+      # One at a time: the network tests start real iroh endpoints.
       - name: Test
-        run: >-
-          cargo test --locked --workspace -- --test-threads=1
-          --skip a_cancel_waits_for_the_verdict_across_a_restart
-          --skip a_send_needs_its_data_again_when_the_receiver_lacks_it
-          --skip finish_alone_after_restart_during_unpacking
-          --skip a_new_identity_waits_for_a_send_the_receiver_may_have
-      - name: Test what reconnects after a restart
-        continue-on-error: true
-        run: >-
-          cargo test --locked --lib -- --test-threads=1
-          a_cancel_waits_for_the_verdict_across_a_restart
-          a_send_needs_its_data_again_when_the_receiver_lacks_it
-          finish_alone_after_restart_during_unpacking
-          a_new_identity_waits_for_a_send_the_receiver_may_have
+        run: cargo test --locked --workspace -- --test-threads=1
       - name: Build the app
         run: macos/build.sh --debug
 
