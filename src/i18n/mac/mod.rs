@@ -21,6 +21,7 @@ super::strings! {
         status_offline,
         network_problem,
         contact_invalid,
+        recipient_gone,
         enter_recipient_name,
         invalid_contact_id,
         own_contact_id,

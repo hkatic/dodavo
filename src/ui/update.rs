@@ -178,7 +178,7 @@ pub fn tick() {
 }
 
 /// Help → Check for Updates.
-pub fn check_now(owner: HWND) {
+pub fn check_now() {
     let (hwnd, running) = app::with(|a| (a.update_window, a.update_job.is_some()));
     if !hwnd.is_null() {
         window::bring_to_front(hwnd);
@@ -187,12 +187,13 @@ pub fn check_now(owner: HWND) {
     main_window::set_status(tr!(update_checking));
     if running {
         // The daily check is already on its way: report its result instead.
+        // The status bar says that it is checking; a message box here would
+        // still be open when the answer opens its own.
         app::with(|a| {
             if let Some(job) = &mut a.update_job {
                 job.trigger = Trigger::Manual;
             }
         });
-        info(owner, tr!(update_checking));
         return;
     }
     start_check(Trigger::Manual);

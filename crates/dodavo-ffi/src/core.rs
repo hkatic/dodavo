@@ -1174,7 +1174,10 @@ impl Core {
     /// when that cannot be done.
     fn send(&self, peer_id: &str, paths: Vec<PathBuf>) -> Option<String> {
         let mut state = lock(&self.state);
-        let contact = state.cfg.contact_by_id(peer_id)?.clone();
+        // Removed, or given another Contact ID, while the send was on its way.
+        let Some(contact) = state.cfg.contact_by_id(peer_id).cloned() else {
+            return Some(ui().recipient_gone.to_string());
+        };
         let Some(to) = identity::parse_contact_id(&contact.id) else {
             return Some(ui().contact_invalid.replace("{name}", &contact.name));
         };
@@ -1219,7 +1222,10 @@ impl Core {
         documents: Vec<dodavo_core::source::Document>,
     ) -> Option<String> {
         let mut state = lock(&self.state);
-        let contact = state.cfg.contact_by_id(peer_id)?.clone();
+        // Removed, or given another Contact ID, while the send was on its way.
+        let Some(contact) = state.cfg.contact_by_id(peer_id).cloned() else {
+            return Some(ui().recipient_gone.to_string());
+        };
         let Some(to) = identity::parse_contact_id(&contact.id) else {
             return Some(ui().contact_invalid.replace("{name}", &contact.name));
         };
@@ -2012,6 +2018,20 @@ mod tests {
                 .error_system
                 .replace("{code}", &libc::ENOTDIR.to_string())
         );
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /// A send to someone who is no longer a recipient starts nothing, and
+    /// says why.
+    #[test]
+    fn sending_to_a_removed_recipient_says_so() {
+        let dir = test_dir("recipient-gone");
+        let core = core_with_offer(1, &dir);
+        let id = "ab".repeat(32);
+        let gone = Some(ui().recipient_gone.to_string());
+        assert_eq!(core.send(&id, vec![dir.join("file.txt")]), gone);
+        assert_eq!(core.send_documents(&id, Vec::new()), gone);
+        assert!(lock(&core.state).transfers.is_empty());
         std::fs::remove_dir_all(&dir).unwrap();
     }
 

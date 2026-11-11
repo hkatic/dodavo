@@ -12,6 +12,7 @@ pub const HR: Strings = Strings {
     status_offline: "Izvan mreže – provjerite internetsku vezu. Prijenosi unutar lokalne mreže i dalje rade.",
     network_problem: "Problem s mrežom: {error} (ponovni pokušaj…)",
     contact_invalid: "ID kontakta primatelja „{name}” nije valjan.",
+    recipient_gone: "Taj primatelj više nije na popisu.",
     enter_recipient_name: "Unesite ime ovog primatelja.",
     invalid_contact_id: "Ovo nije valjan ID kontakta.\n\nID kontakta kôd je od 64 znaka sastavljen od znamenki 0–9 \
         i slova a–f. Zamolite osobu da klikne „Kopiraj moj ID kontakta” i ponovno vam ga pošalje.",

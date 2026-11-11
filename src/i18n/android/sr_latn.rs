@@ -24,6 +24,7 @@ pub const SR_LATN: Strings = Strings {
     space_confirm: "Za ovaj prenos nema dovoljno slobodnog prostora u memoriji.\n\n{details}\n\nŽelite li ipak da ga prihvatite?",
     choose_save_folder: "Izaberite fasciklu u kojoj će se sačuvati primljene datoteke.",
     contact_invalid: "ID kontakta primaoca „{name}“ nije važeći.",
+    recipient_gone: "Taj primalac više nije na listi.",
     name_taken: "Primalac sa imenom „{name}“ već postoji. Izaberite drugo ime.",
     contact_id_taken: "Ovaj ID kontakta već pripada primaocu „{name}“.",
     invalid_save_folder: "Izaberite važeću fasciklu za čuvanje primljenih datoteka.",

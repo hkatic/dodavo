@@ -24,6 +24,7 @@ pub const EN: Strings = Strings {
     space_confirm: "There is not enough free storage space for this transfer.\n\n{details}\n\nDo you want to accept it anyway?",
     choose_save_folder: "Please choose the folder where the received files should be saved.",
     contact_invalid: "The Contact ID of {name} is not valid.",
+    recipient_gone: "This recipient is no longer in the list.",
     name_taken: "There is already a recipient called “{name}”. Please choose a different name.",
     contact_id_taken: "This Contact ID already belongs to “{name}”.",
     invalid_save_folder: "Please choose a valid folder for saving received files.",

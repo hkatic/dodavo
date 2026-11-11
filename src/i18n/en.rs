@@ -398,6 +398,7 @@ pub const EN: Strings = Strings {
     error_cannot_read_folder: "Cannot read folder {path}",
     error_cannot_open: "Cannot open {path}",
     error_unsafe_path: "The received folder contains an unsafe path: {path}",
+    error_folder_too_large: "The received folder is larger than what was offered.",
     error_source_changed: "The file was changed after the transfer started",
     error_part_missing: "The partly transferred data is no longer there",
     error_expired: "Nothing happened in the transfer for more than 30 days",

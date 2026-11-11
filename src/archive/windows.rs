@@ -108,15 +108,30 @@ pub(super) fn is_hidden(meta: &Metadata) -> bool {
 
 /// Opens the file of a zip entry for [`unzip`](super::unzip).
 pub(super) fn open_unpacked(target: PathBuf) -> io::Result<(File, PathBuf)> {
-    let file = OpenOptions::new()
-        .write(true)
-        .create(true)
-        .truncate(true)
-        // Also reading the attributes: a hidden file is hidden through
-        // this handle (see `hide_open`).
-        .access_mode(GENERIC_WRITE | FILE_READ_ATTRIBUTES)
-        .open(&target)?;
-    Ok((file, target))
+    let name = target
+        .file_name()
+        .unwrap_or_default()
+        .to_string_lossy()
+        .into_owned();
+    let parent = target.parent().unwrap_or(Path::new("")).to_path_buf();
+    // Always a new file: a zip can hold two entries of one name, or of names
+    // that differ only in case, and the later one gets a number.
+    for candidate in super::numbered(&name, false) {
+        let path = parent.join(candidate);
+        match OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            // Also reading the attributes: a hidden file is hidden through
+            // this handle (see `hide_open`).
+            .access_mode(GENERIC_WRITE | FILE_READ_ATTRIBUTES)
+            .open(&path)
+        {
+            Ok(file) => return Ok((file, path)),
+            Err(e) if e.kind() == io::ErrorKind::AlreadyExists => continue,
+            Err(e) => return Err(e),
+        }
+    }
+    unreachable!("infinite iterator")
 }
 
 /// Whether a file can be run: Windows goes by its extension, which travels.

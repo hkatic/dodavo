@@ -37,6 +37,7 @@ super::strings! {
         space_confirm,
         choose_save_folder,
         contact_invalid,
+        recipient_gone,
         name_taken,
         contact_id_taken,
         invalid_save_folder,

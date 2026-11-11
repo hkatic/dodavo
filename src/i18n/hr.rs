@@ -400,6 +400,7 @@ pub const HR: Strings = Strings {
     error_cannot_read_folder: "Nije moguće pročitati mapu: {path}",
     error_cannot_open: "Nije moguće otvoriti: {path}",
     error_unsafe_path: "Primljena mapa sadrži nesiguran put: {path}",
+    error_folder_too_large: "Primljena mapa veća je od ponuđene.",
     error_source_changed: "Datoteka je promijenjena nakon početka prijenosa",
     error_part_missing: "Djelomično preneseni podaci više ne postoje",
     error_expired: "U prijenosu se više od 30 dana ništa nije dogodilo",

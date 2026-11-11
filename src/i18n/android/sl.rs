@@ -24,6 +24,7 @@ pub const SL: Strings = Strings {
     space_confirm: "Za ta prenos v shrambi ni dovolj prostega prostora.\n\n{details}\n\nAli ga želite vseeno sprejeti?",
     choose_save_folder: "Izberite mapo, v katero naj se shranijo prejete datoteke.",
     contact_invalid: "ID stika prejemnika »{name}« ni veljaven.",
+    recipient_gone: "Tega prejemnika ni več na seznamu.",
     name_taken: "Prejemnik z imenom »{name}« že obstaja. Izberite drugo ime.",
     contact_id_taken: "Ta ID stika že pripada prejemniku »{name}«.",
     invalid_save_folder: "Izberite veljavno mapo za shranjevanje prejetih datotek.",

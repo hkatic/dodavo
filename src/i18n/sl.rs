@@ -401,6 +401,7 @@ pub const SL: Strings = Strings {
     error_cannot_read_folder: "Mape ni mogoče prebrati: {path}",
     error_cannot_open: "Ni mogoče odpreti: {path}",
     error_unsafe_path: "Prejeta mapa vsebuje nevarno pot: {path}",
+    error_folder_too_large: "Prejeta mapa je večja od ponujene.",
     error_source_changed: "Datoteka je bila spremenjena po začetku prenosa",
     error_part_missing: "Delno prenesenih podatkov ni več",
     error_expired: "Pri prenosu se več kot 30 dni ni zgodilo nič",

@@ -12,6 +12,7 @@ pub const EN: Strings = Strings {
     status_offline: "Offline – check your internet connection. Transfers within your local network still work.",
     network_problem: "Network problem: {error} (retrying…)",
     contact_invalid: "The Contact ID of {name} is not valid.",
+    recipient_gone: "This recipient is no longer in the list.",
     enter_recipient_name: "Please enter a name for this recipient.",
     invalid_contact_id: "This is not a valid Contact ID.\n\nA Contact ID is a 64 character code made of the digits 0–9 \
         and the letters a–f. Ask the person to click “Copy My Contact ID” and send it to you again.",

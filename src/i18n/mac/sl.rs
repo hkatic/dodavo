@@ -12,6 +12,7 @@ pub const SL: Strings = Strings {
     status_offline: "Brez povezave – preverite internetno povezavo. Prenosi v lokalnem omrežju še vedno delujejo.",
     network_problem: "Težava z omrežjem: {error} (vnovični poskus…)",
     contact_invalid: "ID stika prejemnika »{name}« ni veljaven.",
+    recipient_gone: "Tega prejemnika ni več na seznamu.",
     enter_recipient_name: "Vnesite ime tega prejemnika.",
     invalid_contact_id: "To ni veljaven ID stika.\n\nID stika je 64-mestna koda iz števk 0–9 \
         in črk a–f. Prosite osebo, naj klikne »Kopiraj moj ID stika« in vam ga znova pošlje.",

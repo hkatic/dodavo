@@ -400,6 +400,7 @@ pub const SR_LATN: Strings = Strings {
     error_cannot_read_folder: "Nije moguće pročitati fasciklu: {path}",
     error_cannot_open: "Nije moguće otvoriti: {path}",
     error_unsafe_path: "Primljena fascikla sadrži nebezbednu putanju: {path}",
+    error_folder_too_large: "Primljena fascikla je veća od ponuđene.",
     error_source_changed: "Datoteka je promenjena posle početka prenosa",
     error_part_missing: "Delimično preneti podaci više ne postoje",
     error_expired: "U prenosu se više od 30 dana ništa nije desilo",

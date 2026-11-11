@@ -1424,6 +1424,21 @@ impl<'a> Receiver<'a> {
         }
     }
 
+    /// The most that the folder may unpack to: what the offer said or the
+    /// sender's limit as it is now, whichever is more, so that a sender whose
+    /// program states less than it packs gets nothing past the limit. A
+    /// folder can be a little larger than its offer said (a file that grew
+    /// while it was packed), which a limit leaves room for unless the item
+    /// was accepted over it. `None` without a limit.
+    fn unpack_max(&self) -> Option<u64> {
+        let limit = self.shared.limits.lock().unwrap().limit_for(&self.peer)?;
+        let offered = self
+            .session
+            .with_record(|r| crate::limit::size_of(&r.offer))
+            .unwrap_or(0);
+        Some(limit.max(offered))
+    }
+
     /// Moves the file into place, or unpacks the folder and keeps its zip
     /// as chosen, telling the sender through `msgs` while connected (see
     /// `control_writer`). Once it succeeds, the transfer has ended as
@@ -1454,6 +1469,7 @@ impl<'a> Receiver<'a> {
         let transfer = Transfer {
             session: self.session.clone(),
             data_dir: shared.data_dir.clone(),
+            unpack_max: self.unpack_max(),
             waits: Box::new(move |in_use| {
                 if in_use {
                     status.set(Phase::PartInUse { finishing: true });
@@ -1568,6 +1584,8 @@ async fn open_for_connection(
 struct Transfer {
     session: Arc<Session>,
     data_dir: PathBuf,
+    /// The most that a folder may unpack to (see `unpack_max`).
+    unpack_max: Option<u64>,
     waits: Box<dyn Fn(bool) + Send>,
 }
 
@@ -1815,7 +1833,7 @@ fn finish_folder(
     };
     let mut partial = Cleanup(Some(target.clone()));
     // From the part that was checked, which is closed after it.
-    archive::unzip(part, &target, true, cancel, progress)?;
+    archive::unzip_within(part, &target, true, transfer.unpack_max, cancel, progress)?;
     // As for a file (see `finish_file`), by the folder's identity.
     let folder_id = files.unpacking.as_ref().map(|folder| folder.id);
     let (now, later) = times.split(folder_id.as_ref());
@@ -2505,6 +2523,7 @@ mod tests {
         Transfer {
             session,
             data_dir,
+            unpack_max: None,
             waits: Box::new(|_| {}),
         }
     }
@@ -2697,6 +2716,35 @@ mod tests {
             b"theirs"
         );
         assert!(!part.exists());
+        std::fs::remove_dir_all(&base).ok();
+    }
+
+    /// A folder that would unpack to more than it may fails, and its
+    /// folder is not left behind.
+    #[test]
+    fn a_folder_larger_than_it_may_be_fails() {
+        let base = scratch("too-large");
+        let dest = base.join("dest");
+        let (t, _) = times(1_400_000_000);
+        let part = received_zip(&base, "recv.zip");
+        let mut transfer = receiving(&base, &part, Kind::Folder, ReceivedFolder::Extract);
+        // "alpha" is five bytes.
+        transfer.unpack_max = Some(4);
+        let cancel = AtomicBool::new(false);
+        let error = finish_with(
+            &transfer,
+            &dest,
+            ReceivedFolder::Extract,
+            t,
+            &cancel,
+            &mut |_, _| {},
+        )
+        .unwrap_err();
+        assert_eq!(error.to_string(), tr!(error_folder_too_large));
+        assert!(!dest.join("Photos").exists());
+        transfer.unpack_max = Some(5);
+        let path = finish(&transfer, &dest, ReceivedFolder::Extract, t);
+        assert_eq!(std::fs::read(path.join("a.txt")).unwrap(), b"alpha");
         std::fs::remove_dir_all(&base).ok();
     }
 

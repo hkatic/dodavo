@@ -763,6 +763,20 @@ impl Progress {
         if completed {
             send(self.bar, PBM_SETSTATE, PBST_NORMAL as usize, 0);
             send(self.bar, PBM_SETPOS, RANGE, 0);
+            // The last reports may have found the window busy (a question
+            // was open), and the text would stay at what it was.
+            let total = self.progress.1;
+            if total > 0 {
+                set_text(
+                    self.done,
+                    &tr!(
+                        progress_of,
+                        done = format_size(total),
+                        total = format_size(total),
+                        percent = percent(total, total)
+                    ),
+                );
+            }
         } else {
             send(self.bar, PBM_SETSTATE, PBST_ERROR as usize, 0);
         }

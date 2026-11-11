@@ -619,10 +619,29 @@ pub fn unzip(
     cancel: &AtomicBool,
     progress: &mut dyn FnMut(u64, u64),
 ) -> anyhow::Result<()> {
+    unzip_within(zip, dest, mark, None, cancel, progress)
+}
+
+/// [`unzip`], which fails rather than write more than `max` bytes of files
+/// (`None`: any amount): before anything is written when the sizes that the
+/// zip states come to more, and otherwise at the byte that is one too many,
+/// since a zip can hold more than it states.
+pub fn unzip_within(
+    zip: File,
+    dest: &Path,
+    mark: bool,
+    max: Option<u64>,
+    cancel: &AtomicBool,
+    progress: &mut dyn FnMut(u64, u64),
+) -> anyhow::Result<()> {
     let mut archive = ZipArchive::new(zip)?;
     let mut total = 0u64;
     for i in 0..archive.len() {
-        total += archive.by_index(i)?.size();
+        total = total.saturating_add(archive.by_index(i)?.size());
+    }
+    let too_large = |size: u64| max.is_some_and(|max| size > max);
+    if too_large(total) {
+        bail!(tr!(error_folder_too_large));
     }
     std::fs::create_dir_all(dest)?;
     if mark {
@@ -679,6 +698,9 @@ pub fn unzip(
             let n = entry.read(&mut buf)?;
             if n == 0 {
                 break;
+            }
+            if too_large(done.saturating_add(n as u64)) {
+                bail!(tr!(error_folder_too_large));
             }
             out.write_all(&buf[..n])?;
             done += n as u64;
@@ -825,11 +847,18 @@ pub fn sanitize_file_name(name: &str) -> String {
     if is_device_name(&s) {
         return format!("_{s}");
     }
-    // APFS and Linux count bytes, not characters, and the part and a number
-    // still have to fit (`.zip.part`, " (99)").
+    // The part and a number still have to fit (`.zip.part`, " (99)"). APFS
+    // and Linux count bytes, Windows UTF-16 units.
     #[cfg(not(windows))]
     let s = names::cut_to(&s, 240, names::bytes);
-    s
+    #[cfg(windows)]
+    let s = names::cut_to(&s, 240, names::utf16_units);
+    // What the cut left at the end, where Windows takes neither.
+    let kept = s.trim_end_matches(['.', ' ']);
+    if kept.is_empty() {
+        return "Received".into();
+    }
+    kept.to_string()
 }
 
 /// The names to try for a new item, in order: `name`, then `name (2).ext`,
@@ -2436,6 +2465,88 @@ mod tests {
         std::fs::remove_dir_all(&base).ok();
     }
 
+    /// A folder is not unpacked past the size it may have, and nothing of it
+    /// is written when its zip already says that it is larger.
+    #[test]
+    fn unzip_stops_at_the_size_it_may_have() {
+        let base = scratch("unzip-max");
+        let src = base.join("src");
+        std::fs::create_dir_all(&src).unwrap();
+        std::fs::write(src.join("a.bin"), vec![1u8; 600]).unwrap();
+        std::fs::write(src.join("b.bin"), vec![2u8; 400]).unwrap();
+        let zip = base.join("x.zip");
+        let cancel = AtomicBool::new(false);
+        zip_folder(&src, &zip, &cancel, &mut |_, _| {}).unwrap();
+        let unpack = |out: &Path, max| {
+            unzip_within(
+                File::open(&zip).unwrap(),
+                out,
+                false,
+                max,
+                &cancel,
+                &mut |_, _| {},
+            )
+        };
+        let out = base.join("over");
+        let error = unpack(&out, Some(999)).unwrap_err();
+        assert_eq!(error.to_string(), tr!(error_folder_too_large));
+        assert!(!is_cancelled(&error));
+        assert!(!out.exists(), "nothing was written");
+        let out = base.join("fits");
+        unpack(&out, Some(1000)).unwrap();
+        assert_eq!(std::fs::read(out.join("b.bin")).unwrap(), vec![2u8; 400]);
+        unpack(&base.join("any"), None).unwrap();
+        std::fs::remove_dir_all(&base).ok();
+    }
+
+    /// Two entries whose names differ only in case are both kept: the later
+    /// one gets a number rather than replace the earlier one.
+    #[test]
+    fn unzip_keeps_entries_whose_names_collide() {
+        let base = scratch("unzip-collide");
+        let zip_path = base.join("x.zip");
+        let mut zip = ZipWriter::new(File::create(&zip_path).unwrap());
+        for (name, data) in [("Notes.txt", "first"), ("NOTES.TXT", "second")] {
+            zip.start_file(name, SimpleFileOptions::default()).unwrap();
+            zip.write_all(data.as_bytes()).unwrap();
+        }
+        zip.finish().unwrap();
+        let out = base.join("out");
+        let cancel = AtomicBool::new(false);
+        unzip(
+            File::open(&zip_path).unwrap(),
+            &out,
+            false,
+            &cancel,
+            &mut |_, _| {},
+        )
+        .unwrap();
+        let mut found: Vec<(String, String)> = std::fs::read_dir(&out)
+            .unwrap()
+            .map(|e| {
+                let e = e.unwrap();
+                (
+                    e.file_name().to_string_lossy().into_owned(),
+                    std::fs::read_to_string(e.path()).unwrap(),
+                )
+            })
+            .collect();
+        found.sort();
+        // Where case counts, both names are free.
+        let second = if cfg!(any(windows, target_os = "macos")) {
+            "NOTES (2).TXT"
+        } else {
+            "NOTES.TXT"
+        };
+        let mut expected = vec![
+            (second.to_string(), "second".to_string()),
+            ("Notes.txt".to_string(), "first".to_string()),
+        ];
+        expected.sort();
+        assert_eq!(found, expected);
+        std::fs::remove_dir_all(&base).ok();
+    }
+
     /// Putting something under a free name never replaces what is there,
     /// also when the name was taken after it was found free.
     #[test]
@@ -2509,5 +2620,22 @@ mod tests {
         assert_eq!(sanitize_file_name("lpt².txt"), "_lpt².txt");
         assert_eq!(sanitize_file_name("Kuća.jpg"), "Kuća.jpg");
         assert_eq!(sanitize_file_name("name. "), "name");
+    }
+
+    /// A name leaves room for what a receive adds to it (`.zip.part` and a
+    /// number), and keeps its extension.
+    #[test]
+    fn sanitize_shortens_a_long_name() {
+        let long = format!("{}.jpeg", "š".repeat(300));
+        let name = sanitize_file_name(&long);
+        assert!(name.ends_with(".jpeg") && name.starts_with('š'), "{name}");
+        let units = |s: &str| s.encode_utf16().count();
+        let measure = if cfg!(windows) { units(&name) } else { name.len() };
+        assert!((230..=240).contains(&measure), "{measure}");
+        assert!(is_plain_name(&format!("{name} (99).zip.part")));
+        // Nothing that Windows would drop is left at the cut.
+        let spaced = format!("{}{}", "a".repeat(239), " b");
+        assert_eq!(sanitize_file_name(&spaced), "a".repeat(239));
+        assert_eq!(sanitize_file_name("short.txt"), "short.txt");
     }
 }

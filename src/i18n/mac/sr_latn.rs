@@ -12,6 +12,7 @@ pub const SR_LATN: Strings = Strings {
     status_offline: "Van mreže – proverite internet vezu. Prenosi unutar lokalne mreže i dalje rade.",
     network_problem: "Problem sa mrežom: {error} (ponovni pokušaj…)",
     contact_invalid: "ID kontakta primaoca „{name}“ nije važeći.",
+    recipient_gone: "Taj primalac više nije na listi.",
     enter_recipient_name: "Unesite ime ovog primaoca.",
     invalid_contact_id: "Ovo nije važeći ID kontakta.\n\nID kontakta je kôd od 64 znaka sastavljen od cifara 0–9 \
         i slova a–f. Zamolite osobu da klikne na „Kopiraj moj ID kontakta“ i ponovo vam ga pošalje.",

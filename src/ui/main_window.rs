@@ -691,7 +691,7 @@ impl MainWindow {
             ID_TRAY_OPEN => window::bring_to_front(w.hwnd),
             ID_VIEW_HELP => super::help::show(w.hwnd),
             ID_HELP => info(w.hwnd, tr!(help_text)),
-            ID_CHECK_UPDATES => super::update::check_now(w.hwnd),
+            ID_CHECK_UPDATES => super::update::check_now(),
             ID_LICENSE => super::license::show(w.hwnd),
             ID_DONATE => super::about::open_link(w.hwnd, DONATE_URL),
             ID_ABOUT => super::about::show(w.hwnd),

@@ -122,11 +122,14 @@ impl Transfer {
         self.speed.reset();
     }
 
-    /// Bytes per second at `now`, when known; zero once the data of a
-    /// transfer has stopped coming, as in the progress window (see
-    /// `progress::Speed::stalled`).
+    /// Bytes per second at `now`, when known, and only while some data is
+    /// still to come (a peer may take a while to check what arrived); zero
+    /// once the data of a transfer has stopped coming. As in the progress
+    /// window (see `progress::Progress::rate`, `progress::Speed::stalled`).
     fn rate(&self, now: Instant) -> Option<u64> {
-        if self.phase == Some(Phase::Transferring) && self.speed.stalled(now) {
+        if self.done >= self.total {
+            None
+        } else if self.phase == Some(Phase::Transferring) && self.speed.stalled(now) {
             Some(0)
         } else {
             self.speed.rate()
@@ -585,23 +588,160 @@ pub fn cancel_all_transfers() {
     }
 }
 
-/// Drains the queue of network and update events (on the UI thread).
-pub fn process_events() {
-    loop {
-        let Some(event) = EVENTS.lock().unwrap().pop_front() else {
-            break;
-        };
-        if let Some(event) = handle_event(event) {
-            // The target window is busy (e.g. showing a message box); retry shortly.
-            EVENTS.lock().unwrap().push_front(event);
-            unsafe { SetTimer(std::ptr::null_mut(), 0, 250, Some(retry_timer)) };
-            break;
+/// Whose turn an event has to wait for: the events of one transfer, and
+/// those of the update, are delivered in their order.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Lane {
+    Transfer(u64),
+    Update,
+}
+
+/// The lane of an event; `None` for one that never waits for a window.
+/// Progress reports are among those: one that finds its window busy is
+/// dropped, and holding them back would only pile them up.
+fn lane_of(event: &Queued) -> Option<Lane> {
+    match event {
+        Queued::Update(_) => Some(Lane::Update),
+        Queued::Net(event) => match event {
+            Event::Offer { id, .. }
+            | Event::Restored { id, .. }
+            | Event::Phase { id, .. }
+            | Event::HandedOver { id }
+            | Event::CancelWaits { id }
+            | Event::Path { id, .. }
+            | Event::Finished { id, .. } => Some(Lane::Transfer(*id)),
+            Event::BindFailed(_)
+            | Event::Online(_)
+            | Event::OverLimit { .. }
+            | Event::Progress { .. } => None,
+        },
+    }
+}
+
+/// The events that could not be delivered yet, because their window was busy
+/// (showing a message box, say), in their order. Only the events of the same
+/// lane wait behind one: the other transfers go on.
+///
+/// Delivering an event can run a message loop (a window that asks
+/// something), in which more events are delivered, so everything here is
+/// behind cells, and no borrow is held while an event is delivered.
+struct Backlog<E> {
+    held: RefCell<Vec<(Lane, E)>>,
+    /// The lanes of the events that are being delivered right now.
+    in_hand: RefCell<Vec<Lane>>,
+    /// Whether a call is trying the held events again: one inside it leaves
+    /// them alone.
+    retrying: Cell<bool>,
+}
+
+impl<E> Backlog<E> {
+    const fn new() -> Self {
+        Backlog {
+            held: RefCell::new(Vec::new()),
+            in_hand: RefCell::new(Vec::new()),
+            retrying: Cell::new(false),
         }
+    }
+
+    /// Delivers the held events whose windows are free by now, and then
+    /// those that `next` gives, through `deliver`, which returns an event
+    /// that it could not deliver. Returns whether some are held now.
+    fn run(
+        &self,
+        mut next: impl FnMut() -> Option<E>,
+        lane_of: impl Fn(&E) -> Option<Lane>,
+        mut deliver: impl FnMut(E) -> Option<E>,
+    ) -> bool {
+        if !self.retrying.replace(true) {
+            // Calls inside this one only add at the end, so what is before
+            // `at` stays where it is.
+            let mut blocked = Vec::new();
+            let mut at = 0;
+            loop {
+                let taken = {
+                    let mut held = self.held.borrow_mut();
+                    match held.get(at) {
+                        None => break,
+                        Some((lane, _)) if blocked.contains(lane) => {
+                            at += 1;
+                            continue;
+                        }
+                        Some(_) => held.remove(at),
+                    }
+                };
+                let (lane, event) = taken;
+                if let Some(event) = self.deliver_in(lane, event, &mut deliver) {
+                    self.held.borrow_mut().insert(at, (lane, event));
+                    blocked.push(lane);
+                    at += 1;
+                }
+            }
+            self.retrying.set(false);
+        }
+        while let Some(event) = next() {
+            let Some(lane) = lane_of(&event) else {
+                deliver(event);
+                continue;
+            };
+            let waits = self.in_hand.borrow().contains(&lane)
+                || self.held.borrow().iter().any(|(held, _)| *held == lane);
+            if waits {
+                self.held.borrow_mut().push((lane, event));
+            } else if let Some(event) = self.deliver_in(lane, event, &mut deliver) {
+                // Before what arrived for its lane while it was in hand.
+                let mut held = self.held.borrow_mut();
+                let at = held
+                    .iter()
+                    .position(|(other, _)| *other == lane)
+                    .unwrap_or(held.len());
+                held.insert(at, (lane, event));
+            }
+        }
+        !self.held.borrow().is_empty()
+    }
+
+    /// Delivers one event, with its lane noted as in hand meanwhile.
+    fn deliver_in(
+        &self,
+        lane: Lane,
+        event: E,
+        deliver: &mut impl FnMut(E) -> Option<E>,
+    ) -> Option<E> {
+        self.in_hand.borrow_mut().push(lane);
+        let back = deliver(event);
+        let mut in_hand = self.in_hand.borrow_mut();
+        if let Some(at) = in_hand.iter().rposition(|other| *other == lane) {
+            in_hand.remove(at);
+        }
+        back
+    }
+}
+
+thread_local! {
+    static BACKLOG: Backlog<Queued> = const { Backlog::new() };
+    /// Whether the timer that tries the held events again is set.
+    static RETRY_SET: Cell<bool> = const { Cell::new(false) };
+}
+
+/// Drains the queue of network and update events (on the UI thread). An
+/// event whose window is busy waits, together with the later ones of its
+/// transfer, and is tried again shortly (see `Backlog`).
+pub fn process_events() {
+    let held = BACKLOG.with(|backlog| {
+        backlog.run(
+            || EVENTS.lock().unwrap().pop_front(),
+            lane_of,
+            handle_event,
+        )
+    });
+    if held && !RETRY_SET.replace(true) {
+        unsafe { SetTimer(std::ptr::null_mut(), 0, 250, Some(retry_timer)) };
     }
 }
 
 unsafe extern "system" fn retry_timer(_: HWND, _: u32, id: usize, _: u32) {
     unsafe { KillTimer(std::ptr::null_mut(), id) };
+    RETRY_SET.set(false);
     process_events();
 }
 
@@ -845,6 +985,97 @@ mod tests {
         assert!(!under_way(Some(Phase::WaitingForConnection { lost: true })));
     }
 
+    /// Delivers `events` through `backlog`, with the transfers in `busy`
+    /// busy, and returns what was delivered. An event is its transfer and a
+    /// number; transfer 0 stands for an event that never waits.
+    fn deliver(
+        backlog: &Backlog<(u64, u32)>,
+        events: &[(u64, u32)],
+        busy: &[u64],
+    ) -> Vec<(u64, u32)> {
+        let mut queue: VecDeque<(u64, u32)> = events.iter().copied().collect();
+        let mut delivered = Vec::new();
+        backlog.run(
+            || queue.pop_front(),
+            |(id, _)| (*id != 0).then_some(Lane::Transfer(*id)),
+            |event| {
+                if busy.contains(&event.0) {
+                    Some(event)
+                } else {
+                    delivered.push(event);
+                    None
+                }
+            },
+        );
+        delivered
+    }
+
+    /// A busy window holds up its own transfer's events, in their order,
+    /// and nobody else's.
+    #[test]
+    fn a_busy_window_holds_up_only_its_own_events() {
+        let backlog = Backlog::new();
+        let events = [(1, 1), (2, 1), (1, 2), (0, 1), (2, 2), (3, 1)];
+        assert_eq!(
+            deliver(&backlog, &events, &[1]),
+            [(2, 1), (0, 1), (2, 2), (3, 1)]
+        );
+        // Still busy: a later event of that transfer waits behind them, and
+        // another transfer's window is busy now as well.
+        assert_eq!(
+            deliver(&backlog, &[(1, 3), (3, 2), (2, 3)], &[1, 3]),
+            [(2, 3)]
+        );
+        // Free again: each transfer's events in their order.
+        assert_eq!(
+            deliver(&backlog, &[(1, 4)], &[3]),
+            [(1, 1), (1, 2), (1, 3), (1, 4)]
+        );
+        assert_eq!(deliver(&backlog, &[], &[]), [(3, 2)]);
+        assert!(backlog.held.borrow().is_empty());
+        assert!(backlog.in_hand.borrow().is_empty());
+    }
+
+    /// Events that arrive while one of their transfer is being delivered (in
+    /// a window's own message loop) wait for it, and stay behind it when it
+    /// could not be delivered.
+    #[test]
+    fn events_wait_for_the_one_in_hand() {
+        let backlog: Backlog<(u64, u32)> = Backlog::new();
+        let lane = |event: &(u64, u32)| Some(Lane::Transfer(event.0));
+        let mut outer = VecDeque::from([(1u64, 1u32)]);
+        let delivered = RefCell::new(Vec::new());
+        let held = backlog.run(
+            || outer.pop_front(),
+            lane,
+            |event| {
+                // Inside: its own transfer's next event, and another's.
+                let mut inner = VecDeque::from([(1u64, 2u32), (2, 1)]);
+                backlog.run(
+                    || inner.pop_front(),
+                    lane,
+                    |event| {
+                        delivered.borrow_mut().push(event);
+                        None
+                    },
+                );
+                Some(event)
+            },
+        );
+        assert!(held);
+        assert_eq!(*delivered.borrow(), [(2, 1)]);
+        let mut none = VecDeque::new();
+        backlog.run(
+            || none.pop_front(),
+            lane,
+            |event| {
+                delivered.borrow_mut().push(event);
+                None
+            },
+        );
+        assert_eq!(*delivered.borrow(), [(2, 1), (1, 1), (1, 2)]);
+    }
+
     fn transfer(phase: Option<Phase>, done: u64, total: u64) -> Transfer {
         let mut t = Transfer::new(
             std::ptr::null_mut(),
@@ -910,6 +1141,19 @@ mod tests {
         assert_eq!(t.rate(stalled), None);
     }
 
+    /// Once all of it is done there is no speed, and none of zero either:
+    /// the other side may be checking what arrived.
+    #[test]
+    fn a_transfer_with_nothing_to_come_has_no_speed() {
+        let mut t = transfer(Some(Phase::Transferring), 0, 1000);
+        let start = Instant::now();
+        let later = start + Duration::from_secs(2);
+        t.note_progress(start, 0, 1000);
+        t.note_progress(later, 1000, 1000);
+        assert_eq!(t.rate(later), None);
+        assert_eq!(t.rate(later + crate::view::STALLED_AFTER), None);
+    }
+
     /// Gives `t` a speed of `rate` bytes per second, as of a second after
     /// `start`.
     fn moving(t: &mut Transfer, start: Instant, rate: u64) {
@@ -936,7 +1180,7 @@ mod tests {
         assert!(tip.contains('2') && !tip.contains("report.pdf"), "{tip}");
         assert!(tip.contains("45%") || tip.contains("45 %"), "{tip}");
         two.total = 100;
-        two.done = 100;
+        two.done = 99;
         moving(&mut two, start, 1024);
         let tip = tray_tip(&[&one, &two], now);
         assert!(tip.contains("72%") || tip.contains("72 %"), "{tip}");

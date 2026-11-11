@@ -24,6 +24,7 @@ pub const HR: Strings = Strings {
     space_confirm: "Za ovaj prijenos nema dovoljno slobodnog prostora u pohrani.\n\n{details}\n\nŽelite li ga ipak prihvatiti?",
     choose_save_folder: "Odaberite mapu u koju će se spremiti primljene datoteke.",
     contact_invalid: "ID kontakta primatelja „{name}” nije valjan.",
+    recipient_gone: "Taj primatelj više nije na popisu.",
     name_taken: "Primatelj s imenom „{name}” već postoji. Odaberite drugo ime.",
     contact_id_taken: "Ovaj ID kontakta već pripada primatelju „{name}”.",
     invalid_save_folder: "Odaberite valjanu mapu za spremanje primljenih datoteka.",

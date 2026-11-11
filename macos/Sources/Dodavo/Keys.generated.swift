@@ -10,6 +10,7 @@ enum K: String {
     case status_offline
     case network_problem
     case contact_invalid
+    case recipient_gone
     case enter_recipient_name
     case invalid_contact_id
     case own_contact_id

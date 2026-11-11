@@ -537,6 +537,7 @@ strings! {
         error_cannot_read_folder,
         error_cannot_open,
         error_unsafe_path,
+        error_folder_too_large,
         error_source_changed,
         error_part_missing,
         error_expired,
