@@ -74,6 +74,14 @@ A share mode holds the part only during a connection, while `have` and the hash 
 
 On FAT32 and exFAT, a part is recognized by its creation time, and Windows gives a new file the creation time of a file of that name deleted within about 15 seconds ("tunnelling"). `TransferRecord::part_shorter` catches a new file shorter than what was received, but not one of that length or longer. Such a file would be written to and then deleted, as was seen with a shorter one before that check. It takes a part being deleted and a new file of exactly its name appearing within seconds while Dodavo is not running.
 
+### The Android app carries two libraries that it does not use
+
+`iroh` and `iroh-relay` are also built as libraries of their own (`cdylib`), and cargo-ndk copies every `.so` it finds, so `libiroh-….so` and `libiroh_relay-….so` go into the app beside `libdodavo.so`, which does not need them: about 1.3 MB for each ABI. `buildRust` in `android/app/build.gradle.kts` would have to keep only `libdodavo.so`.
+
+### A finished transfer can show the progress it had at its start
+
+A progress window that is busy (a question is open) drops the reports of progress. At the end it shows the whole size, but only if it ever learned the size: one that was busy from its first report on keeps its first text beside "Done!".
+
 ### Some error details stay in English
 
 Most failure texts are translated (`net::failure_text`), but these are not: other errors of a dial (the last case of `net::connect_error_text`), network errors of the update check (`update::http`), and a failure to start networking (`Event::BindFailed`). They appear in every language.
