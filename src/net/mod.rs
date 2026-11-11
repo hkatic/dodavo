@@ -1066,20 +1066,40 @@ async fn bind_patiently(secret: &SecretKey, shared: &Shared) -> Endpoint {
     }
 }
 
-/// Reports whether `endpoint` is online: connected to the home relay server.
+/// How long a new endpoint may take to reach its home relay server before
+/// it is reported as offline.
+const ONLINE_GRACE: Duration = Duration::from_secs(5);
+
+/// What to report of an endpoint that is connected to its home relay server
+/// or not (`online`), `age` after it was bound, when `last` is what was
+/// reported of it before; `None` for nothing. A new endpoint is not connected
+/// yet, which says nothing about the network: "offline" waits until it has
+/// had `ONLINE_GRACE`. Until then the status is what it was: that Dodavo is
+/// connecting at a start, and what the endpoint before it was at a change of
+/// the identity.
+fn online_report(last: Option<bool>, online: bool, age: Duration) -> Option<bool> {
+    let known = online || age >= ONLINE_GRACE;
+    (known && last != Some(online)).then_some(online)
+}
+
+/// Reports whether `endpoint`, bound just now, is online: connected to the
+/// home relay server (see `online_report`).
 fn watch_online(shared: &Arc<Shared>, endpoint: &Endpoint) -> tokio::task::JoinHandle<()> {
     let endpoint = endpoint.clone();
     let shared = shared.clone();
     tokio::spawn(async move {
         let mut status = endpoint.home_relay_status();
+        let bound = Instant::now();
         let mut last = None;
         loop {
             let online = status.get().iter().any(|s| s.is_connected());
-            if last != Some(online) {
-                last = Some(online);
-                shared.emit(Event::Online(online));
+            if let Some(report) = online_report(last, online, bound.elapsed()) {
+                last = Some(report);
+                shared.emit(Event::Online(report));
             }
-            tokio::time::sleep(Duration::from_secs(2)).await;
+            // Often until the first report, so that it is not late.
+            let pause = if last.is_none() { 250 } else { 2000 };
+            tokio::time::sleep(Duration::from_millis(pause)).await;
         }
     })
 }
@@ -1267,14 +1287,15 @@ async fn run(secret: SecretKey, shared: Arc<Shared>, mut rx: mpsc::UnboundedRece
                 }
                 // The key is the new one from here on, whatever the network
                 // does: the old endpoint goes, and the new one comes up as
-                // the first one did at the start.
+                // the first one did at the start. Nothing says that the
+                // network is gone meanwhile, which it is not: the new
+                // endpoint reports what it finds (see `online_report`).
                 let _ = done.send(Ok(()));
                 online.abort();
                 // Let the closes of the cancelled transfers reach the peers
                 // (see `Command::Shutdown`).
                 tokio::time::sleep(Duration::from_millis(200)).await;
                 endpoint.close().await;
-                shared.emit(Event::Online(false));
                 endpoint = bind_patiently(&secret, &shared).await;
                 online = watch_online(&shared, &endpoint);
                 serving = serve(&shared, &endpoint);
@@ -2701,6 +2722,27 @@ mod tests {
             "{outcome:?}"
         );
         std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// A new endpoint is reported as online as soon as it is, and as offline
+    /// only once it has had the time to connect: not at the start, and not
+    /// when it takes the place of another at a change of the identity.
+    #[test]
+    fn a_new_endpoint_is_not_offline_before_it_had_time_to_connect() {
+        let soon = Duration::from_millis(250);
+        assert_eq!(online_report(None, false, Duration::ZERO), None);
+        assert_eq!(online_report(None, false, soon), None);
+        assert_eq!(online_report(None, true, soon), Some(true));
+        assert_eq!(online_report(None, false, ONLINE_GRACE), Some(false));
+        // Later on, every change is reported, once.
+        let later = ONLINE_GRACE * 10;
+        assert_eq!(online_report(Some(true), true, later), None);
+        assert_eq!(online_report(Some(true), false, later), Some(false));
+        assert_eq!(online_report(Some(false), false, later), None);
+        assert_eq!(online_report(Some(false), true, later), Some(true));
+        // Online at once and then not any more: said when that time is up.
+        assert_eq!(online_report(Some(true), false, soon), None);
+        assert_eq!(online_report(Some(true), false, ONLINE_GRACE), Some(false));
     }
 
     /// Without a tombstone, a transfer that this side does not know (any

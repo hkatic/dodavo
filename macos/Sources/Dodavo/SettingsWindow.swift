@@ -268,7 +268,13 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSTe
         reloadBlocked()
         // The button may be unavailable now, and the focus must not stay on it.
         window?.makeFirstResponder(blockedTable)
-        if blocked.isEmpty { announce(L[.blocked_none]) }
+        if blocked.isEmpty {
+            // After VoiceOver has begun to tell where the focus went, which
+            // would take the place of this, and waiting for it to finish.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                announce(L[.blocked_none], urgent: false)
+            }
+        }
     }
 
     func numberOfRows(in _: NSTableView) -> Int {

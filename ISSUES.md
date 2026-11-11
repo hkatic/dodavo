@@ -46,14 +46,6 @@ Each offer gets its own `IncomingWindowController`, centred on the same spot, so
 
 - **A transfer cancelled by a change of the Contact ID stays waiting on a side that was not connected.** Change My Contact ID cancels every transfer, which the other side learns only if it is connected at that moment. One that is not goes on asking the old Contact ID, which nobody answers any more, and shows its transfer as waiting for the connection until the user cancels it or it expires after 30 days. A tombstone cannot answer either, since the old identity is gone.
 
-### On a Mac, a change of the Contact ID says "Offline" for a moment
-
-Between the question and the message with the new Contact ID, the status line shows "Offline – check your internet connection…" for about two seconds, and VoiceOver reads it, while the new endpoint comes up (`Event::Online(false)` at `Command::NewIdentity` in `src/net/mod.rs`). Nothing is wrong with the connection then, so the status should not say so during the change.
-
-### On a Mac, VoiceOver does not say "No sender is blocked." after the last sender is unblocked
-
-It says "Blocked senders empty table" instead: the focus goes to the list at the same moment (`SettingsWindowController.unblockSelected`), and what VoiceOver says of the focus takes the place of the announcement.
-
 ### On Android, a file that another app saves under the name of a waiting part can be taken for it
 
 Android tells Dodavo no birth time of a file before Android 11, nor on its shared storage (`FileId::weak`), and ext4 gives the number of a deleted file to the next one at once. So a part file that the user deletes while its transfer waits, followed by another file of the same name, looks like the part to the record. Dodavo's own new parts and folders leave the names of records alone (`session::held_names`), and a file shorter than what reached the disk is not taken for the part (`TransferRecord::part_shorter`); a longer one that another app saves into `Download/Dodavo` under that name is. `FS_IOC_GETVERSION` (the inode generation) would tell them apart on ext4 where the app may ask for it.

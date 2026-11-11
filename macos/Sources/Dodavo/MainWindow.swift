@@ -10,6 +10,9 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSToolba
     private let statusLine = makeLabel(small: true)
     private let emptyLine = makeLabel(L[.empty_list])
     private var status = L[.status_connecting]
+    /// Until then VoiceOver tells of the window that has just opened, and an
+    /// announcement made meanwhile takes the place of that, or is lost.
+    private let describedBy = Date().addingTimeInterval(2)
     private var openSheet: RecipientSheet?
 
     private let sendID = NSToolbarItem.Identifier("send")
@@ -122,7 +125,19 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSToolba
     }
 
     func setStatus(_ text: String) {
-        if text != status { announce(text, urgent: false) }
+        if text != status {
+            // At the start, the network may be up before VoiceOver has told
+            // of the window: this comes after that.
+            let wait = describedBy.timeIntervalSinceNow
+            if wait > 0 {
+                DispatchQueue.main.asyncAfter(deadline: .now() + wait) { [weak self] in
+                    // Unless the status has changed again meanwhile.
+                    if self?.status == text { announce(text, urgent: false) }
+                }
+            } else {
+                announce(text, urgent: false)
+            }
+        }
         status = text
         statusLine.stringValue = text
     }
