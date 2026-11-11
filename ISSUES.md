@@ -14,9 +14,9 @@ None known.
 
 ## Medium
 
-### Three network tests time out on GitHub's Mac runner (not explained)
+### Four network tests time out on GitHub's Mac runner (not explained)
 
-`a_cancel_waits_for_the_verdict_across_a_restart`, `a_send_needs_its_data_again_when_the_receiver_lacks_it` and `finish_alone_after_restart_during_unpacking` reconnect after a restart, and wait more than 120 s there, while they pass on a Mac elsewhere and on the Windows runner. It may be that the runner keeps an unsigned test program from the local network (Local Network privacy), which would leave a slow way through a relay; that was not checked. If so, the same wait could be what a user who denies that permission sees. CI runs them without letting them fail the run.
+`a_cancel_waits_for_the_verdict_across_a_restart`, `a_send_needs_its_data_again_when_the_receiver_lacks_it`, `finish_alone_after_restart_during_unpacking` and `a_new_identity_waits_for_a_send_the_receiver_may_have` reconnect after a restart, and wait more than 120 s there, while they pass on a Mac elsewhere and on the Windows runner. It may be that the runner keeps an unsigned test program from the local network (Local Network privacy), which would leave a slow way through a relay; that was not checked. If so, the same wait could be what a user who denies that permission sees. CI runs them without letting them fail the run.
 
 ### Windows warns about a new download
 
