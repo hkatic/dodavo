@@ -5,7 +5,7 @@ import android.content.Intent
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.clickable
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.DropdownMenu
@@ -25,7 +26,6 @@ import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -78,16 +78,43 @@ fun RecipientsScreen(navigator: Navigator) {
     val context = LocalContext.current
     val clipboard = LocalClipboard.current
     val scope = rememberCoroutineScope()
-    var target by remember { mutableStateOf<Contact?>(null) }
+    // Who the picker's result goes to.
+    var targets by remember { mutableStateOf<List<Contact>>(emptyList()) }
     var pending by remember { mutableStateOf<Pending?>(null) }
     var menuOpen by rememberSaveable { mutableStateOf(false) }
+    var sendOpen by rememberSaveable { mutableStateOf(false) }
+    // The Contact IDs of the selected recipients; the selection is on while there are any.
+    var selected by rememberSaveable { mutableStateOf(listOf<String>()) }
+    // In the order of the list, and without those who are no longer in it.
+    val chosen = state.recipients.map { it.contact }.filter { it.id in selected }
+    val selecting = chosen.isNotEmpty()
+    fun toggle(contact: Contact) {
+        val ids = chosen.map { it.id }
+        selected = if (contact.id in ids) ids - contact.id else ids + contact.id
+    }
+    BackHandler(enabled = selecting) { selected = emptyList() }
 
     val pickFiles = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
-        target?.let { viewModel.sendFiles(it, uris) }
+        // The selection has done its work once something goes out; a picker
+        // that was closed leaves it as it was.
+        if (uris.isNotEmpty()) {
+            selected = emptyList()
+            viewModel.sendFiles(targets, uris)
+        }
     }
     val pickFolder = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { tree ->
-        val contact = target
-        if (tree != null && contact != null) viewModel.sendFolder(contact, tree)
+        if (tree != null) {
+            selected = emptyList()
+            viewModel.sendFolder(targets, tree)
+        }
+    }
+    fun sendFiles(to: List<Contact>) {
+        targets = to
+        pickFiles.launch(arrayOf("*/*"))
+    }
+    fun sendFolder(to: List<Contact>) {
+        targets = to
+        pickFolder.launch(null)
     }
     val copied = stringResource(R.string.id_copied)
     val shareTitle = stringResource(R.string.share_id_title)
@@ -101,7 +128,28 @@ fun RecipientsScreen(navigator: Navigator) {
 
     Scaffold(
         topBar = {
-            TopAppBar(
+            if (selecting) {
+                SelectionTopBar(count = chosen.size, onClose = { selected = emptyList() }) {
+                    Box {
+                        IconButton(onClick = { sendOpen = true }) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.Send,
+                                contentDescription = stringResource(R.string.action_send),
+                            )
+                        }
+                        DropdownMenu(expanded = sendOpen, onDismissRequest = { sendOpen = false }) {
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.action_send_files)) },
+                                onClick = { sendOpen = false; sendFiles(chosen) },
+                            )
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.action_send_folder)) },
+                                onClick = { sendOpen = false; sendFolder(chosen) },
+                            )
+                        }
+                    }
+                }
+            } else TopAppBar(
                 title = { Text(stringResource(R.string.nav_recipients)) },
                 actions = {
                     Box {
@@ -142,7 +190,7 @@ fun RecipientsScreen(navigator: Navigator) {
             )
         },
         floatingActionButton = {
-            if (state.state is CoreState.Running) {
+            if (state.state is CoreState.Running && !selecting) {
                 // Icon and text as content: the form with `icon` and `text`
                 // keeps its text from accessibility services (Material 3 1.4).
                 ExtendedFloatingActionButton(onClick = { navigator.go(RecipientEditorKey()) }) {
@@ -177,8 +225,11 @@ fun RecipientsScreen(navigator: Navigator) {
                         items(state.recipients, key = { it.contact.id }) { item ->
                             RecipientRow(
                                 item = item,
-                                onSendFiles = { target = item.contact; pickFiles.launch(arrayOf("*/*")) },
-                                onSendFolder = { target = item.contact; pickFolder.launch(null) },
+                                selecting = selecting,
+                                selected = item.contact.id in selected,
+                                onToggle = { toggle(item.contact) },
+                                onSendFiles = { sendFiles(listOf(item.contact)) },
+                                onSendFolder = { sendFolder(listOf(item.contact)) },
                                 onEdit = { navigator.go(RecipientEditorKey(item.contact.id)) },
                                 onCopy = { copy(item.contact.id) },
                                 onBlock = { pending = Pending.Block(item.contact) },
@@ -212,10 +263,17 @@ fun RecipientsScreen(navigator: Navigator) {
     state.message?.let { MessageDialog(it, onDismiss = viewModel::messageShown) }
 }
 
-/** A recipient: a tap sends files; the other actions are in its menu. */
+/**
+ * A recipient: a tap sends files; the other actions are in its menu, with
+ * Select, which a long press does as well. While recipients are being
+ * selected, a tap selects this one or takes it out.
+ */
 @Composable
 private fun RecipientRow(
     item: RecipientItem,
+    selecting: Boolean,
+    selected: Boolean,
+    onToggle: () -> Unit,
     onSendFiles: () -> Unit,
     onSendFolder: () -> Unit,
     onEdit: () -> Unit,
@@ -225,12 +283,15 @@ private fun RecipientRow(
 ) {
     var open by remember { mutableStateOf(false) }
     val sendLabel = stringResource(R.string.action_send_files)
-    ListItem(
-        headlineContent = { Text(item.contact.name) },
-        supportingContent = {
-            Text(item.transfer ?: shortId(item.contact.id))
-        },
-        trailingContent = {
+    RecipientListItem(
+        name = item.contact.name,
+        supporting = item.transfer ?: shortId(item.contact.id),
+        selecting = selecting,
+        selected = selected,
+        onClick = onSendFiles,
+        onToggle = onToggle,
+        onClickLabel = sendLabel,
+        trailing = {
             Box {
                 IconButton(onClick = { open = true }) {
                     Icon(
@@ -245,6 +306,10 @@ private fun RecipientRow(
                         text = { Text(stringResource(R.string.action_send_folder)) },
                         onClick = choose(onSendFolder),
                     )
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.action_select)) },
+                        onClick = choose(onToggle),
+                    )
                     DropdownMenuItem(text = { Text(stringResource(R.string.action_edit)) }, onClick = choose(onEdit))
                     DropdownMenuItem(
                         text = { Text(stringResource(R.string.action_copy_id)) },
@@ -258,6 +323,5 @@ private fun RecipientRow(
                 }
             }
         },
-        modifier = Modifier.clickable(onClickLabel = sendLabel, onClick = onSendFiles),
     )
 }

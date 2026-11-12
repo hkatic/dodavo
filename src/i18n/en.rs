@@ -66,6 +66,9 @@ pub const EN: Strings = Strings {
     select_recipient_first: "Please select a recipient in the list first.",
     pick_file_title: "Choose one or more files to send to {name}",
     pick_folder_title: "Choose one or more folders to send to {name}",
+    pick_file_title_many: "Choose one or more files to send to {names}",
+    pick_folder_title_many: "Choose one or more folders to send to {names}",
+    names_and_more: "{names} and {n} more",
     remove_confirm: "Remove {name} from your recipients?",
     block_confirm: "Block {name}?\n\n\
         From now on, Dodavo declines everything this sender sends you, without asking. \
@@ -418,7 +421,7 @@ pub const EN: Strings = Strings {
     explorer_menu: "Add Dodavo to File E&xplorer's menus",
     send_to_title: "Send with Dodavo",
     send_to_items_label: "&Items:",
-    send_to_recipient_label: "&Recipient:",
+    send_to_recipient_label: "&Recipients:",
     send_to_send: "&Send",
     send_to_waiting: "Choose who should receive what you selected in File Explorer.",
     send_to_failed: "Dodavo is not responding, so the selected items could not be handed over to it. Please try again.",
@@ -446,6 +449,12 @@ pub const EN: Strings = Strings {
         two: "Send {n} items to {name}? Each item is sent as a separate transfer.",
         few: "Send {n} items to {name}? Each item is sent as a separate transfer.",
         other: "Send {n} items to {name}? Each item is sent as a separate transfer.",
+    },
+    drop_confirm_many: Plural {
+        one: "Send {n} item to each of these recipients: {names}? It is sent to each recipient as a separate transfer.",
+        two: "Send {n} items to each of these recipients: {names}? Each item is sent to each recipient as a separate transfer.",
+        few: "Send {n} items to each of these recipients: {names}? Each item is sent to each recipient as a separate transfer.",
+        other: "Send {n} items to each of these recipients: {names}? Each item is sent to each recipient as a separate transfer.",
     },
     exit_instruction: Plural {
         one: "{n} transfer is still running.",

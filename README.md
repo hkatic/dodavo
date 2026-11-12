@@ -5,6 +5,7 @@
 Send files and folders directly from one device to another: Windows PCs, Macs with Apple silicon, and Android phones and tablets. You don't need an account, a cloud upload, a ZIP file you made yourself, or a link. What follows is mostly about Windows; [the Mac version](#the-mac-version) and [the Android version](#the-android-version) have their own sections.
 
 - **Send File / Send Folder** to a person in your recipient list (from the File menu, the right-click menu, the buttons, or by dragging items onto a person).
+- **Several recipients at once:** check their boxes in the list (Space) and send as usual; each person gets a transfer of their own.
 - **Send with Dodavo** in File Explorer's context menu, and Dodavo in its Send to menu, on Windows 7 to 11. On Windows 11 they are under *Show more options*, which Shift+F10 opens right away. Settings can remove them.
 - Folders are zipped automatically, sent, and unpacked on the recipient's computer. In Settings the recipient can choose to keep only the ZIP file, or both the folder and the ZIP file.
 - Files and folders keep their Date modified and Date created: single files carry them in the offer, and folder ZIPs store them both as MS-DOS dates and exactly in the NTFS extra field, which is what Dodavo restores when it unpacks.
@@ -45,7 +46,7 @@ Windows may flag the setup program when it is started: Windows 8.1 and later sho
 A native Mac app in Swift and AppKit, which follows Apple's terms and interface guidelines and is built for VoiceOver. It exchanges transfers with Windows copies in both directions.
 
 - macOS 11 Big Sur or later, on Apple silicon. Intel Macs may follow.
-- **Send…** chooses files and folders, also several at once. Items can also be dragged onto a recipient, dropped on the Dock icon, or sent with the Finder's service **Send with Dodavo**.
+- **Send…** chooses files and folders, also several at once, for one recipient or for all that are selected in the table. Items can also be dragged onto a recipient, dropped on the Dock icon, or sent with the Finder's service **Send with Dodavo**.
 - All transfers are in one **Transfers** window, like the Finder's copy window: closing it does nothing to them, and each row has Pause or Resume, Cancel Transfer, and at the end Open and Show in Finder.
 - Closing the main window leaves Dodavo running, so that it can receive; ⌘Q quits. It can show in the menu bar, and open at login.
 - Notifications report transfers, with their own actions, and VoiceOver announces what changes while Dodavo is in front.
@@ -59,7 +60,7 @@ Building: `macos/build.sh`, which needs Xcode's command line tools and Rust (`ru
 A native Android app in Kotlin, with Jetpack Compose and Material 3, on the same Rust core, which follows Android's terms and design and is built for TalkBack. It exchanges transfers with Windows and Mac copies in both directions.
 
 - Android 8.0 or later, on phones and tablets (arm64 and x86_64).
-- Two screens, **Recipients** and **Transfers**. A tap on a recipient opens Android's file picker; its menu has **Send a folder**, **Edit**, **Copy Contact ID**, **Block** and **Remove**. Other apps can share items to Dodavo.
+- Two screens, **Recipients** and **Transfers**. A tap on a recipient opens Android's file picker; its menu has **Send a folder**, **Select** (for sending to several recipients at once, as a long press does), **Edit**, **Copy Contact ID**, **Block** and **Remove**. Other apps can share items to Dodavo.
 - A picked file is read where it is, for as long as its transfer lasts, also after a restart; a picked folder is packed straight from where it is. What another app shares is copied first, and the copy goes with its transfer.
 - Received items go to `Download/Dodavo`. From recipients, transfers can start by themselves.
 - An offer that arrives while Dodavo is not in front comes as a notification, with **Review** and **Decline**. While data moves, a notification shows the transfer. With **Receive in the background** on (off by default), Dodavo stays reachable while it is closed, also after a restart of the device.

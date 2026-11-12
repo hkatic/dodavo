@@ -190,13 +190,17 @@
 <p>You can drag files and folders from File Explorer and drop them onto a person in the recipient list. If you drop several items at once, Dodavo asks you to confirm; each item is then sent as a separate transfer with its own progress window.</p>
 <p>You can start as many transfers as you like at the same time, to the same person or to different people.</p>
 
+<h3 id="send-to-several">Sending to several people</h3>
+<p>To send the same items to several people at once, check their boxes in the recipient list: move to each person with the arrow keys and press <kbd>Space</kbd>, or click the box before the name. Then send a file or a folder as usual, or drop the items onto one of the checked people. Dodavo sends to everyone who is checked, and to the selected person when nobody is checked. The window in which you choose the files names the recipients in its title, and after a drop Dodavo asks you to confirm them.</p>
+<p>Every person gets a transfer of their own for each item, with its own progress window, so one person can decline or be away while the others receive the item. Once the transfers have started, the boxes are cleared. Dropping items onto a person who is not checked sends to that person only. Editing, removing and blocking apply to the selected person, whoever is checked. The <span class="ui">Send with Dodavo</span> window has the same boxes: see <a href="#send-from-explorer">Sending from File Explorer</a>.</p>
+
 <h3 id="send-from-explorer">Sending from File Explorer</h3>
 <p>You can send files and folders directly from File Explorer, also when Dodavo is not running:</p>
 <ol>
 <li>Select one or more files or folders in File Explorer.</li>
 <li>Press <kbd>Shift</kbd>+<kbd>F10</kbd> to open the context menu, or right-click the selection. On Windows 11, right-clicking first shows a shorter menu: choose <span class="ui">Show more options</span> there. <kbd>Shift</kbd>+<kbd>F10</kbd> opens the full menu right away.</li>
 <li>Choose <span class="ui">Send with Dodavo</span> (<kbd>W</kbd>), or choose <span class="ui">Send to</span> and then <span class="ui">Dodavo</span>.</li>
-<li>The <span class="ui">Send with Dodavo</span> window opens. It says how many items you selected, and the focus is on the <span class="ui">Recipient</span> list. Choose the person with the arrow keys and press <kbd>Enter</kbd>, or activate <span class="ui">Send</span>.</li>
+<li>The <span class="ui">Send with Dodavo</span> window opens. It says how many items you selected, and the focus is on the <span class="ui">Recipients</span> list. Choose the person with the arrow keys and press <kbd>Enter</kbd>, or activate <span class="ui">Send</span>. To send to several people, check each of them with <kbd>Space</kbd> first; the items then go to everyone who is checked.</li>
 </ol>
 <p>Each item is sent as a separate transfer with its own progress window. Nothing is sent before you choose <span class="ui">Send</span>; <kbd>Esc</kbd> or <span class="ui">Cancel</span> closes the window without sending anything. To read what you selected, press <kbd>Alt</kbd>+<kbd>I</kbd> and use the arrow keys in the <span class="ui">Items</span> field. If you have no recipients yet, the window says so and the focus is on <span class="ui">Add Recipient…</span> (<kbd>Alt</kbd>+<kbd>A</kbd>). Items you send to Dodavo while the window is open are added to it.</p>
 <p>The context menu offers <span class="ui">Send with Dodavo</span> for up to 100 selected items. For more, use <span class="ui">Send to</span>, or send the folder they are in. You can remove both entries with <span class="ui">Add Dodavo to File Explorer's menus</span> in <a href="#settings">Settings</a>.</p>
@@ -397,6 +401,7 @@
 <tbody>
 <tr><td><kbd>Ctrl</kbd>+<kbd>O</kbd></td><td>Send a file to the selected person</td></tr>
 <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>O</kbd></td><td>Send a folder to the selected person</td></tr>
+<tr><td><kbd>Space</kbd> in the recipient list</td><td>Check or clear the box of the selected person; a send goes to everyone who is checked</td></tr>
 <tr><td><kbd>Ctrl</kbd>+<kbd>N</kbd></td><td>Add a recipient</td></tr>
 <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>C</kbd></td><td>Copy your Contact ID to the clipboard</td></tr>
 <tr><td><kbd>F2</kbd></td><td>Edit the selected recipient</td></tr>
@@ -449,6 +454,7 @@
 <tr><td><kbd>Alt</kbd>+<kbd>I</kbd></td><td>Move to the list of selected items</td></tr>
 <tr><td><kbd>Alt</kbd>+<kbd>R</kbd></td><td>Move to the list of recipients</td></tr>
 <tr><td><kbd>Alt</kbd>+<kbd>A</kbd></td><td>Add a recipient</td></tr>
+<tr><td><kbd>Space</kbd> in the list of recipients</td><td>Check or clear the box of the selected person; the items go to everyone who is checked</td></tr>
 <tr><td><kbd>Alt</kbd>+<kbd>S</kbd> or <kbd>Enter</kbd></td><td>Send the items to the selected person</td></tr>
 <tr><td><kbd>Esc</kbd></td><td>Close the window without sending anything</td></tr>
 </tbody>
@@ -559,7 +565,7 @@
 <p>Not unless you set one. Dodavo itself has no limit on the size of a file or folder; the only limits are the free space on the receiving drive and, on a drive with the FAT32 file system (many USB sticks and memory cards), that no single file can be 4 GB or larger. For a folder, the receiving computer needs room for the archive and for the unpacked folder, so roughly twice the folder's size while unpacking (unless it keeps only the ZIP file). The Incoming Transfer window says whether there is enough space before you accept. To set the largest size of an item that others can send you, see <a href="#size-limit">Limiting the size of what you receive</a>.</p>
 
 <h3 id="faq-several">Can I send several items at once, or to several people?</h3>
-<p>Yes. You can start as many transfers as you like, to the same person or to different people, and each has its own progress window. To send several files or folders in one go, drag them from File Explorer onto the person in your recipient list; after you confirm, each item is sent as a separate transfer. See <a href="#drag-and-drop">Dragging items onto a person</a>. You can also select them in File Explorer and send them from there: see <a href="#send-from-explorer">Sending from File Explorer</a>. The <span class="ui">Transfer</span> column of the recipient list and the <span class="ui">Transfers</span> menu keep track of all of them.</p>
+<p>Yes. You can start as many transfers as you like, to the same person or to different people, and each has its own progress window. To send several files or folders in one go, drag them from File Explorer onto the person in your recipient list; after you confirm, each item is sent as a separate transfer. See <a href="#drag-and-drop">Dragging items onto a person</a>. You can also select them in File Explorer and send them from there: see <a href="#send-from-explorer">Sending from File Explorer</a>. The <span class="ui">Transfer</span> column of the recipient list and the <span class="ui">Transfers</span> menu keep track of all of them. To send the same items to several people at once, see <a href="#send-to-several">Sending to several people</a>.</p>
 
 <h3 id="faq-where">Where are received files saved?</h3>
 <p>In your Downloads folder, unless you chose another one in Settings under <span class="ui">Always save received files to this folder</span>. If you clear that option, Dodavo asks every time. Whenever the Incoming Transfer window opens, you can change the folder under <span class="ui">Save to:</span> for that transfer. If an item with the same name already exists there, the new one gets a number added to its name; nothing is ever overwritten. See <a href="#incoming-window">The Incoming Transfer window</a> and <a href="#settings-receiving">Receiving files</a>.</p>

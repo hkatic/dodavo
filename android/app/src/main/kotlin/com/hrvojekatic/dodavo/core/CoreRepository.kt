@@ -218,13 +218,13 @@ class CoreRepository(
         _settings.value = coreJson.decodeFromString(Settings.serializer(), call(Call.GetSettings))
     }
 
-    /** Sends each of [paths] to [peerId] as a transfer of its own; an error text if that cannot be. */
-    suspend fun send(peerId: String, paths: List<String>): String? =
-        reply(Call.Send(peerId, paths)).error
+    /** Sends each of [paths] to each of [peerIds], every one as a transfer of its own; an error text if that cannot be. */
+    suspend fun send(peerIds: List<String>, paths: List<String>): String? =
+        reply(Call.Send(peerIds, paths)).error
 
-    /** Sends each of [documents] to [peerId], read where they are; an error text if that cannot be. */
-    suspend fun sendDocuments(peerId: String, documents: List<Document>): String? =
-        reply(Call.SendDocuments(peerId, documents)).error
+    /** Sends each of [documents] to each of [peerIds], read where they are; an error text if that cannot be. */
+    suspend fun sendDocuments(peerIds: List<String>, documents: List<Document>): String? =
+        reply(Call.SendDocuments(peerIds, documents)).error
 
     /** The URIs of the documents that sends still read. */
     suspend fun documentsInUse(): List<String> =

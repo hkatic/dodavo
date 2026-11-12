@@ -242,14 +242,15 @@ enum Call {
         key: String,
         n: u64,
     },
+    /// Each of `paths` to each of the recipients.
     Send {
-        peer_id: String,
+        peer_ids: Vec<String>,
         paths: Vec<PathBuf>,
     },
     /// Documents that the user chose in Android's pickers, read where they
     /// are (see `dodavo_core::source`).
     SendDocuments {
-        peer_id: String,
+        peer_ids: Vec<String>,
         documents: Vec<dodavo_core::source::Document>,
     },
     /// The documents that sends still read: what the app must keep its
@@ -879,12 +880,13 @@ impl Core {
                     .unwrap_or_default();
                 json(serde_json::json!(text.replace("{n}", &n.to_string())))
             }
-            Call::Send { peer_id, paths } => {
-                json(serde_json::json!({ "error": self.send(&peer_id, paths) }))
+            Call::Send { peer_ids, paths } => {
+                json(serde_json::json!({ "error": self.send(&peer_ids, paths) }))
             }
-            Call::SendDocuments { peer_id, documents } => {
-                json(serde_json::json!({ "error": self.send_documents(&peer_id, documents) }))
-            }
+            Call::SendDocuments {
+                peer_ids,
+                documents,
+            } => json(serde_json::json!({ "error": self.send_documents(&peer_ids, documents) })),
             Call::Documents => {
                 let state = lock(&self.state);
                 let uris: BTreeSet<&String> = state.documents.values().collect();
@@ -1202,95 +1204,124 @@ impl Core {
         answer(error, declined)
     }
 
-    /// Starts sending `paths`, each as a transfer of its own. An error text
-    /// when that cannot be done.
-    fn send(&self, peer_id: &str, paths: Vec<PathBuf>) -> Option<String> {
+    /// The recipients a send names, or why it cannot start: nothing goes to
+    /// some of them only.
+    fn recipients(state: &State, peer_ids: &[String]) -> Result<Vec<Contact>, String> {
+        let mut contacts = Vec::new();
+        for peer_id in peer_ids {
+            // Removed, or given another Contact ID, while the send was on its
+            // way.
+            let Some(contact) = state.cfg.contact_by_id(peer_id) else {
+                return Err(ui().recipient_gone.to_string());
+            };
+            if identity::parse_contact_id(&contact.id).is_none() {
+                return Err(ui().contact_invalid.replace("{name}", &contact.name));
+            }
+            // Named twice, a recipient still gets each item once.
+            if !contacts.contains(contact) {
+                contacts.push(contact.clone());
+            }
+        }
+        if contacts.is_empty() {
+            return Err(ui().recipient_gone.to_string());
+        }
+        Ok(contacts)
+    }
+
+    /// Starts sending each of `paths` to each of the recipients, every one
+    /// as a transfer of its own. An error text when that cannot be done.
+    fn send(&self, peer_ids: &[String], paths: Vec<PathBuf>) -> Option<String> {
         let mut state = lock(&self.state);
-        // Removed, or given another Contact ID, while the send was on its way.
-        let Some(contact) = state.cfg.contact_by_id(peer_id).cloned() else {
-            return Some(ui().recipient_gone.to_string());
+        let contacts = match Self::recipients(&state, peer_ids) {
+            Ok(contacts) => contacts,
+            Err(error) => return Some(error),
         };
-        let Some(to) = identity::parse_contact_id(&contact.id) else {
-            return Some(ui().contact_invalid.replace("{name}", &contact.name));
-        };
-        for path in paths {
-            let id = net::next_transfer_id();
-            let item = path
-                .file_name()
-                .map(|n| n.to_string_lossy().into_owned())
-                .unwrap_or_else(|| path.display().to_string());
-            let kind = kind_of(&path);
-            state.transfers.insert(
-                id,
-                TransferView::new(
+        for contact in &contacts {
+            let Some(to) = identity::parse_contact_id(&contact.id) else {
+                continue;
+            };
+            for path in &paths {
+                let id = net::next_transfer_id();
+                let item = path
+                    .file_name()
+                    .map(|n| n.to_string_lossy().into_owned())
+                    .unwrap_or_else(|| path.display().to_string());
+                let kind = kind_of(path);
+                state.transfers.insert(
                     id,
-                    Direction::Send,
-                    &contact.id,
-                    &contact.name,
-                    &item,
+                    TransferView::new(
+                        id,
+                        Direction::Send,
+                        &contact.id,
+                        &contact.name,
+                        &item,
+                        kind,
+                        0,
+                    ),
+                );
+                self.show(&mut state, id, None);
+                let my_name = state.cfg.my_name.clone();
+                state.net.send(Command::Send {
+                    id,
+                    to,
+                    path: path.clone(),
                     kind,
-                    0,
-                ),
-            );
-            self.show(&mut state, id, None);
-            let my_name = state.cfg.my_name.clone();
-            state.net.send(Command::Send {
-                id,
-                to,
-                path,
-                kind,
-                my_name,
-                peer_name: contact.name.clone(),
-            });
+                    my_name,
+                    peer_name: contact.name.clone(),
+                });
+            }
         }
         None
     }
 
-    /// Sends each of `documents` to `peer_id`, as [`send`](Self::send) does
-    /// files: an error text if it cannot be done.
+    /// Sends each of `documents` to each of the recipients, as
+    /// [`send`](Self::send) does files: an error text if it cannot be done.
     fn send_documents(
         &self,
-        peer_id: &str,
+        peer_ids: &[String],
         documents: Vec<dodavo_core::source::Document>,
     ) -> Option<String> {
         let mut state = lock(&self.state);
-        // Removed, or given another Contact ID, while the send was on its way.
-        let Some(contact) = state.cfg.contact_by_id(peer_id).cloned() else {
-            return Some(ui().recipient_gone.to_string());
+        let contacts = match Self::recipients(&state, peer_ids) {
+            Ok(contacts) => contacts,
+            Err(error) => return Some(error),
         };
-        let Some(to) = identity::parse_contact_id(&contact.id) else {
-            return Some(ui().contact_invalid.replace("{name}", &contact.name));
-        };
-        for document in documents {
-            let id = net::next_transfer_id();
-            let kind = if document.items.is_some() {
-                Kind::Folder
-            } else {
-                Kind::File
+        for contact in &contacts {
+            let Some(to) = identity::parse_contact_id(&contact.id) else {
+                continue;
             };
-            let view = TransferView::new(
-                id,
-                Direction::Send,
-                &contact.id,
-                &contact.name,
-                &document.name,
-                kind,
-                0,
-            );
-            state.transfers.insert(id, view);
-            // A folder is read only while it is packed.
-            if kind == Kind::File {
-                state.documents.insert(id, document.uri.clone());
+            for document in &documents {
+                let id = net::next_transfer_id();
+                let kind = if document.items.is_some() {
+                    Kind::Folder
+                } else {
+                    Kind::File
+                };
+                let view = TransferView::new(
+                    id,
+                    Direction::Send,
+                    &contact.id,
+                    &contact.name,
+                    &document.name,
+                    kind,
+                    0,
+                );
+                state.transfers.insert(id, view);
+                // A folder is read only while it is packed. A file that goes
+                // to several recipients is read until the last of them ends.
+                if kind == Kind::File {
+                    state.documents.insert(id, document.uri.clone());
+                }
+                self.show(&mut state, id, None);
+                let my_name = state.cfg.my_name.clone();
+                state.net.send(Command::SendDocument {
+                    id,
+                    to,
+                    document: document.clone(),
+                    my_name,
+                    peer_name: contact.name.clone(),
+                });
             }
-            self.show(&mut state, id, None);
-            let my_name = state.cfg.my_name.clone();
-            state.net.send(Command::SendDocument {
-                id,
-                to,
-                document,
-                my_name,
-                peer_name: contact.name.clone(),
-            });
         }
         None
     }
@@ -2073,11 +2104,45 @@ mod tests {
     fn sending_to_a_removed_recipient_says_so() {
         let dir = test_dir("recipient-gone");
         let core = core_with_offer(1, &dir);
-        let id = "ab".repeat(32);
+        let id = ["ab".repeat(32)];
         let gone = Some(ui().recipient_gone.to_string());
         assert_eq!(core.send(&id, vec![dir.join("file.txt")]), gone);
         assert_eq!(core.send_documents(&id, Vec::new()), gone);
+        assert_eq!(core.send(&[], vec![dir.join("file.txt")]), gone);
         assert!(lock(&core.state).transfers.is_empty());
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /// Each recipient of a send gets each item as a transfer of its own, and
+    /// nothing starts when one of them is no longer a recipient.
+    #[test]
+    fn a_send_to_several_recipients_is_a_transfer_for_each() {
+        let dir = test_dir("several-recipients");
+        let core = core_with_offer(1, &dir);
+        let ids: Vec<String> = (0..2)
+            .map(|_| identity::new_key().public().to_string())
+            .collect();
+        {
+            let mut state = lock(&core.state);
+            state.cfg.add_contact(Contact::new("Ana", &ids[0]));
+            state.cfg.add_contact(Contact::new("Bob", &ids[1]));
+        }
+        let paths = vec![dir.join("a.txt"), dir.join("b.txt")];
+
+        let mut with_a_stranger = ids.clone();
+        with_a_stranger.push("ab".repeat(32));
+        assert_eq!(
+            core.send(&with_a_stranger, paths.clone()),
+            Some(ui().recipient_gone.to_string())
+        );
+        assert!(lock(&core.state).transfers.is_empty());
+
+        assert_eq!(core.send(&ids, paths.clone()), None);
+        assert_eq!(lock(&core.state).transfers.len(), 4);
+        // Named twice, a recipient gets each item once.
+        let twice = [ids[0].clone(), ids[0].to_uppercase()];
+        assert_eq!(core.send(&twice, paths), None);
+        assert_eq!(lock(&core.state).transfers.len(), 6);
         std::fs::remove_dir_all(&dir).unwrap();
     }
 

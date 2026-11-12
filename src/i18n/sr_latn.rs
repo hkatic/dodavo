@@ -69,6 +69,9 @@ pub const SR_LATN: Strings = Strings {
     select_recipient_first: "Prvo izaberite primaoca na listi.",
     pick_file_title: "Izaberite jednu ili više datoteka za slanje – primalac: {name}",
     pick_folder_title: "Izaberite jednu ili više fascikli za slanje – primalac: {name}",
+    pick_file_title_many: "Izaberite jednu ili više datoteka za slanje – primaoci: {names}",
+    pick_folder_title_many: "Izaberite jednu ili više fascikli za slanje – primaoci: {names}",
+    names_and_more: "{names} i još {n}",
     remove_confirm: "Želite li da uklonite „{name}“ sa liste primalaca?",
     block_confirm: "Želite li da blokirate „{name}“?\n\n\
         Dodavo će od sada bez pitanja odbijati sve što vam ta osoba pošalje. \
@@ -420,7 +423,7 @@ pub const SR_LATN: Strings = Strings {
     explorer_menu: "Dodaj Dodavo u m&enije Istraživača datoteka",
     send_to_title: "Slanje programom Dodavo",
     send_to_items_label: "&Stavke:",
-    send_to_recipient_label: "&Primalac:",
+    send_to_recipient_label: "&Primaoci:",
     send_to_send: "P&ošalji",
     send_to_waiting: "Izaberite primaoca za ono što ste izabrali u Istraživaču datoteka.",
     send_to_failed: "Dodavo ne reaguje, pa mu izabrane stavke nije moguće predati. Pokušajte ponovo.",
@@ -448,6 +451,12 @@ pub const SR_LATN: Strings = Strings {
         two: "Želite li da pošaljete {n} stavki primaocu ({name})? Svaka stavka se šalje kao zaseban prenos.",
         few: "Želite li da pošaljete {n} stavke primaocu ({name})? Svaka stavka se šalje kao zaseban prenos.",
         other: "Želite li da pošaljete {n} stavki primaocu ({name})? Svaka stavka se šalje kao zaseban prenos.",
+    },
+    drop_confirm_many: Plural {
+        one: "Želite li da pošaljete {n} stavku svakom od ovih primalaca: {names}? Stavka se svakom primaocu šalje kao zaseban prenos.",
+        two: "Želite li da pošaljete {n} stavki svakom od ovih primalaca: {names}? Svaka stavka se svakom primaocu šalje kao zaseban prenos.",
+        few: "Želite li da pošaljete {n} stavke svakom od ovih primalaca: {names}? Svaka stavka se svakom primaocu šalje kao zaseban prenos.",
+        other: "Želite li da pošaljete {n} stavki svakom od ovih primalaca: {names}? Svaka stavka se svakom primaocu šalje kao zaseban prenos.",
     },
     exit_instruction: Plural {
         one: "{n} prenos je još u toku.",

@@ -28,7 +28,7 @@ use windows_sys::Win32::{
 };
 
 use super::{
-    accessibility, crlf, error, info, main_window, send, set_text,
+    accessibility, crlf, info, main_window, send, set_text,
     tray::{self, BalloonAction},
     wide,
     window::{self, CreateOptions, Handler, Window},
@@ -37,8 +37,6 @@ use crate::{
     app,
     config::Contact,
     i18n::{tr, trn},
-    identity,
-    net::Kind,
 };
 
 /// Marks the `WM_COPYDATA` messages that carry paths: "DODV".
@@ -233,9 +231,10 @@ unsafe extern "system" fn announce_timer(_: HWND, _: u32, _: usize, _: u32) {
     }
 }
 
-/// Shows the current recipients. The one selected stays selected; if it is
-/// gone, none is, so that nothing goes to someone else by mistake. Only a list
-/// that had nobody in it selects someone by itself.
+/// Shows the current recipients. The one selected stays selected, and the
+/// checked ones checked; if the selected one is gone, none is, so that nothing
+/// goes to someone else by mistake. Only a list that had nobody in it selects
+/// someone by itself.
 pub fn refresh_recipients() {
     let Some(c) = CONTROLS.get() else {
         return;
@@ -243,6 +242,7 @@ pub fn refresh_recipients() {
     let selected = main_window::list_selection(c.list);
     let keep = selected.and_then(|i| SHOWN.with(|s| s.borrow().get(i).map(|c| c.id.clone())));
     let had_recipients = SHOWN.with(|s| !s.borrow().is_empty());
+    let checked = checked(&c);
     let contacts = app::cfg().contacts;
     send(c.list, LVM_DELETEALLITEMS, 0, 0);
     for (i, contact) in contacts.iter().enumerate() {
@@ -252,6 +252,12 @@ pub fn refresh_recipients() {
         item.iItem = i as i32;
         item.pszText = name.as_mut_ptr();
         send(c.list, LVM_INSERTITEMW, 0, &item as *const _ as isize);
+        if checked
+            .iter()
+            .any(|was| was.id.eq_ignore_ascii_case(&contact.id))
+        {
+            main_window::list_check(c.list, i, true);
+        }
     }
     let index = match &keep {
         Some(id) => contacts
@@ -279,37 +285,41 @@ pub fn refresh_recipients() {
     });
 }
 
+/// The recipients whose boxes are checked, in the order of the list.
+fn checked(c: &Controls) -> Vec<Contact> {
+    SHOWN.with(|shown| {
+        let shown = shown.borrow();
+        main_window::list_checked(c.list)
+            .into_iter()
+            .filter_map(|i| shown.get(i).cloned())
+            .collect()
+    })
+}
+
 struct SendTo;
 
 impl SendTo {
+    /// Sends the items to the recipients whose boxes are checked, and to the
+    /// selected one when none is, as the main window does.
     fn send(&self, w: &Window) {
         let Some(c) = CONTROLS.get() else {
             return;
         };
-        let contact = main_window::list_selection(c.list)
-            .and_then(|i| SHOWN.with(|s| s.borrow().get(i).cloned()));
-        let Some(contact) = contact else {
-            info(w.hwnd, tr!(select_recipient_first));
-            return;
-        };
-        // Once, rather than from `start_send` for every item, and the window
-        // stays with what it offers.
-        if identity::parse_contact_id(&contact.id).is_none() {
-            error(w.hwnd, &tr!(contact_invalid, name = contact.name));
-            return;
-        }
-        let paths = PATHS.take();
-        for (i, path) in paths.into_iter().enumerate() {
-            let kind = if path.is_dir() {
-                Kind::Folder
-            } else {
-                Kind::File
+        let mut contacts = checked(&c);
+        if contacts.is_empty() {
+            let selected = main_window::list_selection(c.list)
+                .and_then(|i| SHOWN.with(|s| s.borrow().get(i).cloned()));
+            let Some(contact) = selected else {
+                info(w.hwnd, tr!(select_recipient_first));
+                return;
             };
-            // Only the first window takes the focus, which then stays there
-            // while the others open.
-            app::start_send(&contact, path, kind, i == 0);
+            contacts.push(contact);
         }
-        w.close();
+        // The window stays with what it offers if a Contact ID is not valid.
+        let paths = PATHS.with(|paths| paths.borrow().clone());
+        if app::start_sends(w.hwnd, &contacts, &paths) {
+            w.close();
+        }
     }
 
     fn add_recipient(&self, w: &Window) {
@@ -330,6 +340,10 @@ impl SendTo {
         });
         if let Some(index) = index {
             main_window::list_select(c.list, index);
+            // Among checked ones, the selected row would not be sent to.
+            if !main_window::list_checked(c.list).is_empty() {
+                main_window::list_check(c.list, index, true);
+            }
         }
         window::focus(c.list);
     }
@@ -361,7 +375,7 @@ impl Handler for SendTo {
             list,
             LVM_SETEXTENDEDLISTVIEWSTYLE,
             0,
-            (LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER) as isize,
+            (LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER | LVS_EX_CHECKBOXES) as isize,
         );
         let mut title = wide("");
         let mut column: LVCOLUMNW = unsafe { std::mem::zeroed() };
@@ -416,8 +430,11 @@ impl Handler for SendTo {
         true
     }
 
-    fn on_notify(&mut self, w: &Window, hdr: &NMHDR, _lparam: isize) -> Option<isize> {
-        if hdr.idFrom == ID_LIST as usize && hdr.code == NM_DBLCLK {
+    fn on_notify(&mut self, w: &Window, hdr: &NMHDR, lparam: isize) -> Option<isize> {
+        if hdr.idFrom == ID_LIST as usize
+            && hdr.code == NM_DBLCLK
+            && !main_window::on_check_box(hdr.hwndFrom, lparam)
+        {
             self.send(w);
             return Some(0);
         }

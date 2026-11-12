@@ -15,6 +15,10 @@
     <string name="menu_about">"O aplikaciji Dodavo"</string>
     <string name="action_send_files">"Pošalji datoteke"</string>
     <string name="action_send_folder">"Pošalji mapu"</string>
+    <string name="action_select">"Odaberi"</string>
+    <string name="action_send">"Pošalji"</string>
+    <string name="selected_count">"Odabrano: %1$s"</string>
+    <string name="clear_selection">"Poništi odabir"</string>
     <string name="action_edit">"Uredi"</string>
     <string name="action_copy_id">"Kopiraj ID kontakta"</string>
     <string name="action_block">"Blokiraj"</string>

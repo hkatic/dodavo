@@ -55,7 +55,9 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSToolba
     private func buildContent(_ window: NSWindow) {
         table.headerView = NSTableHeaderView()
         table.usesAlternatingRowBackgroundColors = true
-        table.allowsMultipleSelection = false
+        // Several recipients get the same items: Shift and Command with the
+        // arrows or a click, and VO-Command-Return with VoiceOver.
+        table.allowsMultipleSelection = true
         table.setAccessibilityLabel(L[.recipients_label])
         for (id, title, width) in [
             ("name", L[.col_name], 180.0), ("id", L[.col_contact_id], 160.0),
@@ -112,11 +114,12 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSToolba
     // MARK: What changes
 
     private func reload() {
-        let selected = selectedContact?.id
+        let selected = Set(selectedContacts.map { $0.id })
         contacts = Core.contacts
         table.reloadData()
-        if let selected = selected, let row = contacts.firstIndex(where: { $0.id == selected }) {
-            table.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
+        let keep = IndexSet(contacts.indices.filter { selected.contains(contacts[$0].id) })
+        if !keep.isEmpty {
+            table.selectRowIndexes(keep, byExtendingSelection: false)
         } else if !contacts.isEmpty {
             table.selectRowIndexes(IndexSet(integer: 0), byExtendingSelection: false)
         }
@@ -193,35 +196,64 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSToolba
         }
     }
 
-    private var selectedContact: Contact? {
-        let row = table.selectedRow
-        return contacts.indices.contains(row) ? contacts[row] : nil
+    private var selectedContacts: [Contact] {
+        table.selectedRowIndexes.filter { contacts.indices.contains($0) }.map { contacts[$0] }
     }
 
-    /// The contact a menu or a click means.
-    private var targetContact: Contact? {
+    /// The contacts a menu or a click means: the selected ones, or the one
+    /// that was clicked if it is not among them, as in the Finder.
+    private var targetContacts: [Contact] {
         let clicked = table.clickedRow
-        return contacts.indices.contains(clicked) ? contacts[clicked] : selectedContact
+        if contacts.indices.contains(clicked), !table.selectedRowIndexes.contains(clicked) {
+            return [contacts[clicked]]
+        }
+        return selectedContacts
+    }
+
+    /// The one contact that a command for a single recipient means.
+    private var targetContact: Contact? {
+        let targets = targetContacts
+        return targets.count == 1 ? targets[0] : nil
+    }
+
+    /// The names of several recipients as one text: all of up to three, and
+    /// of more the first two and how many there are besides.
+    private func names(of contacts: [Contact]) -> String {
+        if contacts.count <= 3 {
+            return contacts.map { $0.name }.joined(separator: ", ")
+        }
+        return L.f(
+            .names_and_more,
+            [
+                "names": contacts.prefix(2).map { $0.name }.joined(separator: ", "),
+                "n": String(contacts.count - 2),
+            ])
     }
 
     // MARK: Commands
 
     @objc func send(_: Any?) {
-        guard let contact = targetContact, let window = window else { return }
+        let contacts = targetContacts
+        guard !contacts.isEmpty, let window = window else { return }
         let panel = NSOpenPanel()
         panel.canChooseFiles = true
         panel.canChooseDirectories = true
         panel.allowsMultipleSelection = true
         panel.prompt = L[.send_panel_prompt]
-        panel.message = L.f(.send_panel_message, ["name": contact.name])
+        panel.message =
+            contacts.count == 1
+            ? L.f(.send_panel_message, ["name": contacts[0].name])
+            : L.f(.send_panel_message_many, ["names": names(of: contacts)])
         panel.beginSheetModal(for: window) { response in
             guard response == .OK else { return }
-            self.start(contact, panel.urls.map { $0.path })
+            self.start(contacts, panel.urls.map { $0.path })
         }
     }
 
-    private func start(_ contact: Contact, _ paths: [String]) {
-        if let error = Core.errorOf("send", ["peer_id": contact.id, "paths": paths]) {
+    /// Sends each item to each of the recipients, as transfers of their own.
+    private func start(_ contacts: [Contact], _ paths: [String]) {
+        let ids = contacts.map { $0.id }
+        if let error = Core.errorOf("send", ["peer_ids": ids, "paths": paths]) {
             showAlert(error, on: window)
         }
     }
@@ -266,8 +298,8 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSToolba
         }
     }
 
-    /// Items that came from elsewhere: to whom? The selected recipient is what
-    /// Return takes.
+    /// Items that came from elsewhere: to whom? The recipients selected in the
+    /// window are what Return takes.
     func chooseRecipient(forSending paths: [String]) {
         guard let window = window else { return }
         reload()
@@ -282,36 +314,31 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSToolba
         let alert = NSAlert()
         alert.messageText = L[.pick_recipient_title]
         alert.informativeText = L[.pick_recipient_text]
-        let popup = NSPopUpButton(frame: NSRect(x: 0, y: 0, width: 280, height: 26), pullsDown: false)
         // The recipients as the question lists them: the list may change while
         // it is open (an offer that adds its sender, or blocks them), and the
-        // items go to the one chosen here, not to whoever has that place then.
-        // An item each: `addItems(withTitles:)` drops a title it has already.
-        let listed = contacts
-        for contact in listed {
-            popup.menu?.addItem(NSMenuItem(title: contact.name, action: nil, keyEquivalent: ""))
-        }
-        popup.selectItem(at: max(table.selectedRow, 0))
-        popup.setAccessibilityLabel(L[.pick_recipient_text])
-        alert.accessoryView = popup
+        // items go to those chosen here, not to whoever has their places then.
+        let selected = table.selectedRowIndexes.filter { contacts.indices.contains($0) }
+        let picker = RecipientPicker(contacts, selected: selected)
+        alert.accessoryView = picker.view
         alert.addButton(withTitle: L[.send_action])
         alert.addButton(withTitle: L[.cancel])
         alert.buttons[1].keyEquivalent = "\u{1b}"
-        alert.window.initialFirstResponder = popup
+        alert.window.initialFirstResponder = picker.table
         alert.beginSheetModal(for: window) { response in
-            let chosen = popup.indexOfSelectedItem
-            guard response == .alertFirstButtonReturn, listed.indices.contains(chosen) else {
-                return
-            }
+            let chosen = picker.chosen
+            guard response == .alertFirstButtonReturn, !chosen.isEmpty else { return }
             // One who is no longer a recipient: the send says so.
-            self.start(listed[chosen], paths)
+            self.start(chosen, paths)
         }
     }
 
-    /// Commands that need a recipient are unavailable without one.
+    /// Commands that need a recipient are unavailable without one, and those
+    /// for a single recipient while several are selected.
     @objc func validateMenuItem(_ item: NSMenuItem) -> Bool {
         switch item.action {
-        case #selector(send(_:)), #selector(editRecipient(_:)), #selector(removeRecipient(_:)),
+        case #selector(send(_:)):
+            return !targetContacts.isEmpty && window?.attachedSheet == nil
+        case #selector(editRecipient(_:)), #selector(removeRecipient(_:)),
             #selector(blockRecipient(_:)):
             return targetContact != nil && window?.attachedSheet == nil
         case #selector(addRecipient(_:)):
@@ -369,7 +396,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSToolba
     }
 
     @objc func validateToolbarItem(_ item: NSToolbarItem) -> Bool {
-        item.itemIdentifier == sendID ? targetContact != nil : true
+        item.itemIdentifier == sendID ? !targetContacts.isEmpty : true
     }
 
     // MARK: The table
@@ -382,7 +409,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSToolba
         guard let id = column?.identifier, contacts.indices.contains(row) else { return nil }
         let cell =
             tableView.makeView(withIdentifier: id, owner: self) as? NSTableCellView
-            ?? makeCell(id)
+            ?? makeTextCell(id)
         let contact = contacts[row]
         switch id.rawValue {
         case "name":
@@ -399,33 +426,21 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSToolba
         return cell
     }
 
-    private func makeCell(_ id: NSUserInterfaceItemIdentifier) -> NSTableCellView {
-        let cell = NSTableCellView()
-        cell.identifier = id
-        let text = NSTextField(labelWithString: "")
-        text.lineBreakMode = .byTruncatingTail
-        text.translatesAutoresizingMaskIntoConstraints = false
-        cell.addSubview(text)
-        cell.textField = text
-        NSLayoutConstraint.activate([
-            text.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 2),
-            text.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -2),
-            text.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
-        ])
-        return cell
-    }
-
     func menuNeedsUpdate(_ menu: NSMenu) {
         menu.removeAllItems()
         func add(_ title: String, _ action: Selector) {
             let item = menu.addItem(withTitle: title, action: action, keyEquivalent: "")
             item.target = self
         }
-        guard let contact = targetContact else {
+        let targets = targetContacts
+        if targets.isEmpty {
             add(L[.menu_add_recipient], #selector(addRecipient(_:)))
             return
         }
         add(L[.menu_send], #selector(send(_:)))
+        // The rest is for one recipient.
+        guard targets.count == 1 else { return }
+        let contact = targets[0]
         if rows.contains(where: {
             $0.active && $0.peerId.caseInsensitiveCompare(contact.id) == .orderedSame
         }) {
@@ -448,7 +463,8 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSToolba
     ) -> NSDragOperation {
         guard !contacts.isEmpty else { return [] }
         if operation == .above || !contacts.indices.contains(row) {
-            // Dropped between rows or below them: on the selected one.
+            // Dropped between rows or below them: on the selected one, and
+            // so on all of them if several are.
             let selected = max(table.selectedRow, 0)
             table.setDropRow(selected, dropOperation: .on)
         }
@@ -465,22 +481,94 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSToolba
         guard !urls.isEmpty, contacts.indices.contains(row), let window = window else {
             return false
         }
-        let contact = contacts[row]
-        table.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
+        // A drop on one of several selected recipients is for all of them, as
+        // in the Finder; on another row, for that recipient alone.
+        if !table.selectedRowIndexes.contains(row) {
+            table.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
+        }
+        let targets = selectedContacts
         let paths = urls.map { $0.path }
-        if paths.count == 1 {
-            start(contact, paths)
+        if paths.count == 1, targets.count == 1 {
+            start(targets, paths)
             return true
         }
         let alert = NSAlert()
-        alert.messageText = L.plural(.drop_confirm_many, paths.count, ["name": contact.name])
+        alert.messageText =
+            targets.count == 1
+            ? L.plural(.drop_confirm_many, paths.count, ["name": targets[0].name])
+            : L.plural(.drop_confirm_recipients, paths.count, ["names": names(of: targets)])
         alert.addButton(withTitle: L[.send_action])
         alert.addButton(withTitle: L[.cancel])
         alert.buttons[1].keyEquivalent = "\u{1b}"
         alert.beginSheetModal(for: window) { response in
-            if response == .alertFirstButtonReturn { self.start(contact, paths) }
+            if response == .alertFirstButtonReturn { self.start(targets, paths) }
         }
         return true
+    }
+}
+
+/// A cell that shows one line of text.
+private func makeTextCell(_ id: NSUserInterfaceItemIdentifier) -> NSTableCellView {
+    let cell = NSTableCellView()
+    cell.identifier = id
+    let text = NSTextField(labelWithString: "")
+    text.lineBreakMode = .byTruncatingTail
+    text.translatesAutoresizingMaskIntoConstraints = false
+    cell.addSubview(text)
+    cell.textField = text
+    NSLayoutConstraint.activate([
+        text.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 2),
+        text.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -2),
+        text.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
+    ])
+    return cell
+}
+
+/// The recipients in the question of who gets items that came from elsewhere:
+/// a list in which several can be selected, as in the main window.
+final class RecipientPicker: NSObject, NSTableViewDataSource, NSTableViewDelegate {
+    private let listed: [Contact]
+    let table = NSTableView()
+    let view = NSScrollView(frame: NSRect(x: 0, y: 0, width: 280, height: 140))
+
+    init(_ contacts: [Contact], selected: IndexSet) {
+        listed = contacts
+        super.init()
+        let column = NSTableColumn(identifier: .init("name"))
+        column.isEditable = false
+        column.width = 260
+        table.addTableColumn(column)
+        table.headerView = nil
+        table.allowsMultipleSelection = true
+        table.allowsEmptySelection = false
+        table.setAccessibilityLabel(L[.pick_recipient_text])
+        table.dataSource = self
+        table.delegate = self
+        view.documentView = table
+        view.hasVerticalScroller = true
+        view.borderType = .bezelBorder
+        table.reloadData()
+        let rows = selected.isEmpty ? IndexSet(integer: 0) : selected
+        table.selectRowIndexes(rows, byExtendingSelection: false)
+        table.scrollRowToVisible(rows.first ?? 0)
+    }
+
+    /// The selected recipients, in the order of the list.
+    var chosen: [Contact] {
+        table.selectedRowIndexes.filter { listed.indices.contains($0) }.map { listed[$0] }
+    }
+
+    func numberOfRows(in _: NSTableView) -> Int {
+        listed.count
+    }
+
+    func tableView(_ tableView: NSTableView, viewFor column: NSTableColumn?, row: Int) -> NSView? {
+        guard let id = column?.identifier, listed.indices.contains(row) else { return nil }
+        let cell =
+            tableView.makeView(withIdentifier: id, owner: self) as? NSTableCellView
+            ?? makeTextCell(id)
+        cell.textField?.stringValue = listed[row].name
+        return cell
     }
 }
 

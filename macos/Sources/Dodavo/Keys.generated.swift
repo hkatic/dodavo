@@ -154,6 +154,8 @@ enum K: String {
     case block
     case block_sender
     case send_panel_message
+    case send_panel_message_many
+    case names_and_more
     case send_panel_prompt
     case pick_recipient_title
     case pick_recipient_text
@@ -267,5 +269,6 @@ enum PluralK: String {
     case quit_instruction
     case change_id_transfers
     case drop_confirm_many
+    case drop_confirm_recipients
     case transfers_in_progress
 }

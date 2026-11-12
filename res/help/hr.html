@@ -190,13 +190,17 @@
 <p>Datoteke i mape možete povući iz Eksplorera za datoteke i ispustiti ih na osobu na popisu primatelja. Ako odjednom ispustite više stavki, Dodavo traži potvrdu; svaka se stavka zatim šalje kao zaseban prijenos s vlastitim prozorom napretka.</p>
 <p>Istodobno možete pokrenuti koliko god želite prijenosa, istoj osobi ili različitim osobama.</p>
 
+<h3 id="send-to-several">Slanje većem broju osoba</h3>
+<p>Da biste iste stavke poslali većem broju osoba odjednom, potvrdite njihove potvrdne okvire na popisu primatelja: tipkama sa strelicama dođite do svake osobe i pritisnite <kbd>razmaknicu</kbd> ili kliknite okvir ispred imena. Zatim pošaljite datoteku ili mapu kao i inače ili ispustite stavke na jednu od potvrđenih osoba. Dodavo šalje svima čiji je okvir potvrđen, a odabranoj osobi kad nije potvrđen nijedan. Prozor u kojem birate datoteke u naslovu navodi primatelje, a nakon ispuštanja stavki Dodavo traži da ih potvrdite.</p>
+<p>Svaka osoba za svaku stavku dobiva zaseban prijenos s vlastitim prozorom napretka, pa jedna osoba može odbiti prijenos ili biti odsutna dok ostale primaju stavku. Kad prijenosi počnu, okviri se poništavaju. Ispuštanje stavki na osobu čiji okvir nije potvrđen šalje samo toj osobi. Uređivanje, uklanjanje i blokiranje odnose se na odabranu osobu, bez obzira na potvrđene okvire. Prozor <span class="ui">Slanje programom Dodavo</span> ima iste okvire: pogledajte <a href="#send-from-explorer">Slanje iz Eksplorera za datoteke</a>.</p>
+
 <h3 id="send-from-explorer">Slanje iz Eksplorera za datoteke</h3>
 <p>Datoteke i mape možete slati izravno iz Eksplorera za datoteke, čak i kada Dodavo nije pokrenut:</p>
 <ol>
 <li>U Eksploreru za datoteke odaberite jednu ili više datoteka ili mapa.</li>
 <li>Pritisnite <kbd>Shift</kbd>+<kbd>F10</kbd> da biste otvorili kontekstni izbornik ili desnom tipkom miša kliknite odabrano. U sustavu Windows 11 desni klik najprije prikazuje kraći izbornik: ondje odaberite <span class="ui">Prikaži još mogućnosti</span>. <kbd>Shift</kbd>+<kbd>F10</kbd> odmah otvara cijeli izbornik.</li>
 <li>Odaberite <span class="ui">Pošalji programom Dodavo</span> (<kbd>D</kbd>) ili odaberite <span class="ui">Pošalji u</span> pa <span class="ui">Dodavo</span>.</li>
-<li>Otvara se prozor <span class="ui">Slanje programom Dodavo</span>. Kaže koliko ste stavki odabrali, a fokus je na popisu <span class="ui">Primatelj</span>. Tipkama sa strelicama odaberite osobu i pritisnite <kbd>Enter</kbd> ili aktivirajte gumb <span class="ui">Pošalji</span>.</li>
+<li>Otvara se prozor <span class="ui">Slanje programom Dodavo</span>. Kaže koliko ste stavki odabrali, a fokus je na popisu <span class="ui">Primatelji</span>. Tipkama sa strelicama odaberite osobu i pritisnite <kbd>Enter</kbd> ili aktivirajte gumb <span class="ui">Pošalji</span>. Da biste poslali većem broju osoba, najprije potvrdite svaku od njih <kbd>razmaknicom</kbd>; stavke se tada šalju svima čiji je okvir potvrđen.</li>
 </ol>
 <p>Svaka se stavka šalje kao zaseban prijenos s vlastitim prozorom napretka. Ništa se ne šalje prije nego što odaberete <span class="ui">Pošalji</span>; <kbd>Esc</kbd> ili <span class="ui">Odustani</span> zatvara prozor bez slanja. Da biste pročitali što ste odabrali, pritisnite <kbd>Alt</kbd>+<kbd>S</kbd> i koristite se tipkama sa strelicama u polju <span class="ui">Stavke</span>. Ako još nemate primatelja, prozor to kaže, a fokus je na gumbu <span class="ui">Dodaj primatelja…</span> (<kbd>Alt</kbd>+<kbd>A</kbd>). Stavke koje pošaljete Dodavu dok je prozor otvoren dodaju se u njega.</p>
 <p>Kontekstni izbornik nudi <span class="ui">Pošalji programom Dodavo</span> za najviše 100 odabranih stavki. Za više stavki upotrijebite <span class="ui">Pošalji u</span> ili pošaljite mapu u kojoj se nalaze. Obje stavke možete ukloniti mogućnošću <span class="ui">Dodaj Dodavo u izbornike Eksplorera za datoteke</span> u <a href="#settings">postavkama</a>.</p>
@@ -397,6 +401,7 @@
 <tbody>
 <tr><td><kbd>Ctrl</kbd>+<kbd>O</kbd></td><td>Slanje datoteke odabranoj osobi</td></tr>
 <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>O</kbd></td><td>Slanje mape odabranoj osobi</td></tr>
+<tr><td><kbd>razmaknica</kbd> na popisu primatelja</td><td>Potvrđivanje ili poništavanje okvira odabrane osobe; šalje se svima čiji je okvir potvrđen</td></tr>
 <tr><td><kbd>Ctrl</kbd>+<kbd>N</kbd></td><td>Dodavanje primatelja</td></tr>
 <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>C</kbd></td><td>Kopiranje vašeg ID-a kontakta u međuspremnik</td></tr>
 <tr><td><kbd>F2</kbd></td><td>Uređivanje odabranog primatelja</td></tr>
@@ -449,6 +454,7 @@
 <tr><td><kbd>Alt</kbd>+<kbd>S</kbd></td><td>Prelazak na popis odabranih stavki</td></tr>
 <tr><td><kbd>Alt</kbd>+<kbd>P</kbd></td><td>Prelazak na popis primatelja</td></tr>
 <tr><td><kbd>Alt</kbd>+<kbd>A</kbd></td><td>Dodavanje primatelja</td></tr>
+<tr><td><kbd>razmaknica</kbd> na popisu primatelja</td><td>Potvrđivanje ili poništavanje okvira odabrane osobe; stavke se šalju svima čiji je okvir potvrđen</td></tr>
 <tr><td><kbd>Alt</kbd>+<kbd>O</kbd> ili <kbd>Enter</kbd></td><td>Slanje stavki odabranoj osobi</td></tr>
 <tr><td><kbd>Esc</kbd></td><td>Zatvaranje prozora bez slanja</td></tr>
 </tbody>
@@ -559,7 +565,7 @@
 <p>Ne, osim ako ga sami postavite. Dodavo sam ne ograničava veličinu datoteke ni mape; jedina su ograničenja slobodan prostor na pogonu koji prima i, na pogonu s datotečnim sustavom FAT32 (mnogi USB izbrisivi memorijski pogoni i memorijske kartice), to da nijedna datoteka ne može biti od 4 GB ili veća. Za mapu računalo koje prima treba mjesta i za arhivu i za raspakiranu mapu, dakle otprilike dvostruku veličinu mape dok traje raspakiravanje (osim ako zadržava samo ZIP datoteku). Prozor Dolazni prijenos kaže ima li dovoljno prostora prije nego što prihvatite. Kako postaviti najveću veličinu stavke koju vam drugi mogu poslati, pogledajte u odjeljku <a href="#size-limit">Ograničavanje veličine onoga što primate</a>.</p>
 
 <h3 id="faq-several">Mogu li poslati više stavki odjednom ili ih poslati većem broju osoba?</h3>
-<p>Da. Možete pokrenuti koliko god prijenosa želite, istoj osobi ili različitim osobama, a svaki ima vlastiti prozor napretka. Da biste poslali više datoteka ili mapa u jednom potezu, povucite ih iz Eksplorera za datoteke na osobu na popisu primatelja; nakon što potvrdite, svaka se stavka šalje kao zaseban prijenos. Pogledajte <a href="#drag-and-drop">Povlačenje stavki na osobu</a>. Možete ih i odabrati u Eksploreru za datoteke i poslati odande: pogledajte <a href="#send-from-explorer">Slanje iz Eksplorera za datoteke</a>. Stupac <span class="ui">Prijenos</span> na popisu primatelja i izbornik <span class="ui">Prijenosi</span> prate ih sve.</p>
+<p>Da. Možete pokrenuti koliko god prijenosa želite, istoj osobi ili različitim osobama, a svaki ima vlastiti prozor napretka. Da biste poslali više datoteka ili mapa u jednom potezu, povucite ih iz Eksplorera za datoteke na osobu na popisu primatelja; nakon što potvrdite, svaka se stavka šalje kao zaseban prijenos. Pogledajte <a href="#drag-and-drop">Povlačenje stavki na osobu</a>. Možete ih i odabrati u Eksploreru za datoteke i poslati odande: pogledajte <a href="#send-from-explorer">Slanje iz Eksplorera za datoteke</a>. Stupac <span class="ui">Prijenos</span> na popisu primatelja i izbornik <span class="ui">Prijenosi</span> prate ih sve. Da biste iste stavke poslali većem broju osoba odjednom, pogledajte <a href="#send-to-several">Slanje većem broju osoba</a>.</p>
 
 <h3 id="faq-where">Gdje se spremaju primljene datoteke?</h3>
 <p>U vašu mapu Preuzimanja, osim ako ste u postavkama pod <span class="ui">Uvijek spremaj primljene datoteke u ovu mapu</span> odabrali drugu. Ako poništite odabir te mogućnosti, Dodavo pita svaki put. Kad god se otvori prozor Dolazni prijenos, mapu za taj prijenos možete promijeniti pod <span class="ui">Spremi u:</span>. Ako stavka istog naziva ondje već postoji, nova dobiva broj dodan nazivu; ništa se nikada ne prebrisuje. Pogledajte <a href="#incoming-window">Prozor Dolazni prijenos</a> i <a href="#settings-receiving">Primanje datoteka</a>.</p>

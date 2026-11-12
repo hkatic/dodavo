@@ -69,6 +69,9 @@ pub const HR: Strings = Strings {
     select_recipient_first: "Najprije odaberite primatelja na popisu.",
     pick_file_title: "Odaberite jednu ili više datoteka za slanje – primatelj: {name}",
     pick_folder_title: "Odaberite jednu ili više mapa za slanje – primatelj: {name}",
+    pick_file_title_many: "Odaberite jednu ili više datoteka za slanje – primatelji: {names}",
+    pick_folder_title_many: "Odaberite jednu ili više mapa za slanje – primatelji: {names}",
+    names_and_more: "{names} i još {n}",
     remove_confirm: "Želite li ukloniti „{name}” s popisa primatelja?",
     block_confirm: "Želite li blokirati „{name}”?\n\n\
         Dodavo će od sada bez pitanja odbijati sve što vam ta osoba pošalje. \
@@ -420,7 +423,7 @@ pub const HR: Strings = Strings {
     explorer_menu: "Dodaj Dodavo u iz&bornike Eksplorera za datoteke",
     send_to_title: "Slanje programom Dodavo",
     send_to_items_label: "&Stavke:",
-    send_to_recipient_label: "&Primatelj:",
+    send_to_recipient_label: "&Primatelji:",
     send_to_send: "P&ošalji",
     send_to_waiting: "Odaberite primatelja za ono što ste odabrali u Eksploreru za datoteke.",
     send_to_failed: "Dodavo ne reagira, pa mu odabrane stavke nije moguće predati. Pokušajte ponovno.",
@@ -448,6 +451,12 @@ pub const HR: Strings = Strings {
         two: "Želite li poslati {n} stavki primatelju ({name})? Svaka se stavka šalje kao zaseban prijenos.",
         few: "Želite li poslati {n} stavke primatelju ({name})? Svaka se stavka šalje kao zaseban prijenos.",
         other: "Želite li poslati {n} stavki primatelju ({name})? Svaka se stavka šalje kao zaseban prijenos.",
+    },
+    drop_confirm_many: Plural {
+        one: "Želite li poslati {n} stavku svakom od ovih primatelja: {names}? Stavka se svakom primatelju šalje kao zaseban prijenos.",
+        two: "Želite li poslati {n} stavki svakom od ovih primatelja: {names}? Svaka se stavka svakom primatelju šalje kao zaseban prijenos.",
+        few: "Želite li poslati {n} stavke svakom od ovih primatelja: {names}? Svaka se stavka svakom primatelju šalje kao zaseban prijenos.",
+        other: "Želite li poslati {n} stavki svakom od ovih primatelja: {names}? Svaka se stavka svakom primatelju šalje kao zaseban prijenos.",
     },
     exit_instruction: Plural {
         one: "{n} prijenos još je u tijeku.",

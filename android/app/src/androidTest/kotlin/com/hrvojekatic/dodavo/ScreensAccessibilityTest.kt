@@ -92,6 +92,28 @@ class ScreensAccessibilityTest {
         rule.waitForIdle()
     }
 
+    /** Select in a recipient's menu starts the selection, and the top bar leaves it again. */
+    @Test
+    fun selectingRecipients() {
+        val name = "Selected"
+        tap(R.string.add_recipient)
+        rule.onNode(hasSetTextAction() and hasText(text(R.string.recipient_name_label))).performTextInput(name)
+        rule.onNode(hasSetTextAction() and hasText(text(R.string.contact_id_label))).performTextInput(SOME_ID)
+        tap(R.string.save)
+        rule.waitUntil(5_000) { rule.onAllNodes(hasText(name)).fetchSemanticsNodes().isNotEmpty() }
+        rule.onNode(hasContentDescription(name, substring = true) and hasClickAction()).performClick()
+        tap(R.string.action_select)
+        rule.waitUntil(5_000) {
+            rule.onAllNodes(hasContentDescription(text(R.string.clear_selection))).fetchSemanticsNodes().isNotEmpty()
+        }
+        rule.onRoot().tryPerformAccessibilityChecks()
+        tapDescribed(R.string.clear_selection)
+        rule.onNode(hasContentDescription(name, substring = true) and hasClickAction()).performClick()
+        tap(R.string.action_remove)
+        rule.onNode(hasText(text(R.string.remove)) and hasClickAction()).performClick()
+        rule.waitForIdle()
+    }
+
     @Test
     fun settingsAndBlockedSenders() {
         tapDescribed(R.string.more_options)
