@@ -48,6 +48,7 @@ const ID_OVER_LIMIT: u16 = 32;
 const ID_TEMP_DIR: u16 = 33;
 const ID_TEMP_BROWSE: u16 = 34;
 const ID_TABS: u16 = 35;
+const ID_CLOSE_WHEN_ENDED: u16 = 36;
 
 /// The window (96-DPI units): a margin around a page of settings.
 const MARGIN: i32 = 14;
@@ -79,6 +80,8 @@ struct SettingsDialog {
     limit_unit: HWND,
     over_limit: HWND,
     show_after_send: HWND,
+    /// Whether a progress window closes as soon as its transfer ends.
+    close_when_ended: HWND,
     autostart: HWND,
     minimized: HWND,
     tray: HWND,
@@ -114,6 +117,7 @@ pub fn show(owner: HWND) {
         limit_unit: std::ptr::null_mut(),
         over_limit: std::ptr::null_mut(),
         show_after_send: std::ptr::null_mut(),
+        close_when_ended: std::ptr::null_mut(),
         autostart: std::ptr::null_mut(),
         minimized: std::ptr::null_mut(),
         tray: std::ptr::null_mut(),
@@ -196,6 +200,11 @@ impl SettingsDialog {
         window::enable(self.limit_label, limited);
         window::enable(self.limit_size, limited);
         window::enable(self.limit_unit, limited);
+        // A window that closes at the end shows no message and asks nothing.
+        // Both settings keep their values for when it stays open again.
+        let stays = !window::is_checked(self.close_when_ended);
+        window::enable(self.show_after_send, stays);
+        window::enable(self.ask_after, stays);
     }
 
     fn save(&self, w: &Window) -> bool {
@@ -238,6 +247,7 @@ impl SettingsDialog {
             .and_then(|i| OverLimit::ALL.get(i).copied())
             .unwrap_or_default();
         let show_after_send = window::is_checked(self.show_after_send);
+        let close_when_ended = window::is_checked(self.close_when_ended);
         let autostart = window::is_checked(self.autostart);
         let minimized = window::is_checked(self.minimized);
         let tray = window::is_checked(self.tray);
@@ -284,6 +294,7 @@ impl SettingsDialog {
             }
             c.over_limit = over_limit;
             c.show_after_send = show_after_send;
+            c.close_when_ended = close_when_ended;
             c.start_with_windows = autostart;
             c.start_minimized = minimized;
             c.minimize_to_tray = tray;
@@ -429,6 +440,13 @@ impl Handler for SettingsDialog {
             (x, y + 20, 300, 24),
         );
         y += 58;
+        self.close_when_ended = w.checkbox(
+            tr!(close_when_ended),
+            ID_CLOSE_WHEN_ENDED,
+            cfg.close_when_ended,
+            (x, y, width, 20),
+        );
+        y += 24;
         self.show_after_send = w.checkbox(
             tr!(show_after_send),
             ID_SHOW_AFTER_SEND,
@@ -577,7 +595,7 @@ impl Handler for SettingsDialog {
 
     fn on_command(&mut self, w: &Window, id: u16, code: u16) -> bool {
         match id {
-            ID_ALWAYS | ID_LIMIT if code == BN_CLICKED as u16 => self.update_enabled(),
+            ID_ALWAYS | ID_LIMIT | ID_CLOSE_WHEN_ENDED if code == BN_CLICKED as u16 => self.update_enabled(),
             ID_BROWSE => {
                 let current = PathBuf::from(get_text(self.dir).trim());
                 if let Some(dir) = shell::pick_folder(w.hwnd, tr!(pick_save_folder), Some(&current))

@@ -263,6 +263,7 @@ pub const EN: Strings = Strings {
     settings_tab_receiving: "Receiving",
     my_name_label: "Your &name (shown to the people you send files to):",
     show_after_send: "After &sending, show a message once the item has arrived",
+    close_when_ended: "&Close the progress window when a transfer ends",
     always_save: "&Always save received files to this folder:",
     always_save_folder_label: "&Folder:",
     auto_accept: "Start transfers au&tomatically, without asking",

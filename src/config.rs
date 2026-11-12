@@ -177,6 +177,11 @@ pub struct Config {
     pub ask_after_receive: bool,
     /// Show a message when the recipient has received a sent item.
     pub show_after_send: bool,
+    /// Windows: close a transfer's progress window as soon as the transfer
+    /// ends, however it ended, with a notification in place of the question
+    /// after a receive, the message after a send and the window that a
+    /// failed transfer otherwise leaves open.
+    pub close_when_ended: bool,
     /// What is kept of a received folder.
     pub received_folder: ReceivedFolder,
     /// Whether the "still running in the notification area" hint was shown.
@@ -223,6 +228,7 @@ impl Default for Config {
             connection_lost: ConnectionLostAction::Wait,
             ask_after_receive: true,
             show_after_send: true,
+            close_when_ended: false,
             received_folder: ReceivedFolder::Extract,
             tray_hint_shown: false,
             language: None,
@@ -612,6 +618,7 @@ mod tests {
         cfg.close_running_transfer = CloseAction::Background;
         cfg.connection_lost = ConnectionLostAction::Ask;
         cfg.show_after_send = false;
+        cfg.close_when_ended = true;
         cfg.received_folder = ReceivedFolder::Both;
         cfg.auto_accept = false;
         cfg.check_updates = false;
@@ -687,6 +694,7 @@ mod tests {
         assert!(!cfg.start_minimized);
         assert!(cfg.ask_after_receive);
         assert!(cfg.show_after_send);
+        assert!(!cfg.close_when_ended);
         assert!(cfg.auto_accept);
         assert!(cfg.always_save);
         assert_eq!(cfg.always_save_dir, None);

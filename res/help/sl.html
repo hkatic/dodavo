@@ -207,7 +207,7 @@
 
 <h3 id="after-sending">Ko poslani element prispe</h3>
 <p>Ko druga oseba prejme vse in je kontrolna vsota potrjena ter je element shranjen v drugem računalniku, Dodavo prikaže sporočilo, na primer <span class="ui">Končano! Datoteka je bila dostavljena prejemniku (Ana).</span>, pod njim pa ime elementa. Bralniki zaslona ga preberejo. Pritisnite <kbd>Enter</kbd> ali <kbd>Esc</kbd> ali izberite <span class="ui">Zapri</span>; zapre se tudi okno napredka.</p>
-<p>Če izberete <span class="ui">Ne prikaži več</span>, se okno napredka naslednjič zapre samo, obvestilo pa vam sporoči, da je prenos končan. Sporočilo lahko znova vklopite v nastavitvah z možnostjo <span class="ui">Po pošiljanju pokaži sporočilo, ko datoteka ali mapa prispe</span>. Če je okno napredka ob koncu prenosa skrito ali pomanjšano ali če še potekajo drugi prenosi z isto osebo, se prikaže le obvestilo. Ko prenos ne uspe, je zavrnjen ali preklican, okno napredka ostane odprto, da lahko preberete, kaj se je zgodilo.</p>
+<p>Če izberete <span class="ui">Ne prikaži več</span>, se okno napredka naslednjič zapre samo, obvestilo pa vam sporoči, da je prenos končan. Sporočilo lahko znova vklopite v nastavitvah z možnostjo <span class="ui">Po pošiljanju pokaži sporočilo, ko datoteka ali mapa prispe</span>. Če je okno napredka ob koncu prenosa skrito ali pomanjšano ali če še potekajo drugi prenosi z isto osebo, se prikaže le obvestilo. Ko prenos ne uspe, je zavrnjen ali preklican, okno napredka ostane odprto, da lahko preberete, kaj se je zgodilo. Če je v nastavitvah potrjena možnost <span class="ui">Zapri okno napredka, ko se prenos konča</span>, se zapre tudi to okno, sporočila ni, obvestilo pa pove, kako se je prenos končal.</p>
 </section>
 
 <section aria-labelledby="receiving">
@@ -242,7 +242,7 @@
 <li>Za mapo, ki je obdržana le kot datoteka ZIP, se sporočilo glasi <span class="ui">Končano! Mapa je shranjena kot datoteka ZIP.</span>, izbira pa je enaka kot za datoteko.</li>
 <li><span class="ui">Zapri</span> ne naredi ničesar od tega.</li>
 </ul>
-<p>Če izberete <span class="ui">Ne sprašuj me več</span>, bo Dodavo naslednjič namesto vprašanja prikazal obvestilo. Če izberete obvestilo, se element prikaže v Raziskovalcu. Vprašanje lahko znova vklopite v nastavitvah z možnostjo <span class="ui">Po prejemu vprašaj, ali naj se datoteka ali mapa odpre</span>. Dokler potekajo drugi prenosi z isto osebo, Dodavo ne vpraša, ampak prikaže obvestilo; vprašanje pride po zadnjem.</p>
+<p>Če izberete <span class="ui">Ne sprašuj me več</span>, bo Dodavo naslednjič namesto vprašanja prikazal obvestilo. Če izberete obvestilo, se element prikaže v Raziskovalcu. Vprašanje lahko znova vklopite v nastavitvah z možnostjo <span class="ui">Po prejemu vprašaj, ali naj se datoteka ali mapa odpre</span>. Dokler potekajo drugi prenosi z isto osebo, Dodavo ne vpraša, ampak prikaže obvestilo; vprašanje pride po zadnjem. Če je v nastavitvah potrjena možnost <span class="ui">Zapri okno napredka, ko se prenos konča</span>, Dodavo prav tako ne vpraša.</p>
 
 <h3 id="auto-accept">Prejemanje brez vprašanja</h3>
 <p>Prenosi od oseb z vašega seznama prejemnikov se začnejo takoj, brez okna Dohodni prenos, če sta v nastavitvah vklopljeni obe možnosti: <span class="ui">Vedno shrani prejete datoteke v to mapo</span> in <span class="ui">Prenose začni samodejno, brez vprašanja</span>. Vklopljeni sta, dokler ju ne izklopite. Dodavo prikaže obvestilo <span class="ui">Prejemanje</span> in shrani element v mapo iz prve možnosti, to pa je vaša mapa Prenosi, če niste izbrali druge. Prenosi od neznanih pošiljateljev, prenosi, za katere na disku ne bi bilo dovolj prostora, in elementi, večji od omejitve, ki ste jo nastavili, se nikoli ne začnejo na ta način. Tako lahko prenos začnejo le osebe, ki ste jih dodali sami: njihovega ID-ja stika ni mogoče ponarediti.</p>
@@ -355,6 +355,8 @@
 <dd>Seznam z možnostmi <span class="ui">Vprašaj vsakič</span>, <span class="ui">Nadaljuj v ozadju</span> in <span class="ui">Prekliči prenos</span>. Glejte <a href="#closing-progress">Zapiranje okna napredka med prenosom</a>.</dd>
 <dt><span class="ui">Če se povezava med prenosom prekine</span></dt>
 <dd>Seznam z možnostmi <span class="ui">Vprašaj vsakič</span>, <span class="ui">Počakaj na povezavo in nadaljuj</span> in <span class="ui">Prekliči prenos</span>. Glejte <a href="#connection-lost">Ko se povezava prekine</a>.</dd>
+<dt><span class="ui">Zapri okno napredka, ko se prenos konča</span></dt>
+<dd>Ko je potrjeno, se okno napredka samo zapre, takoj ko se prenos konča, ne glede na to, ali je bil dokončan, ni uspel, je bil zavrnjen ali preklican. Dodavo takrat ne prikaže sporočila po pošiljanju in po prejemu ničesar ne vpraša, obvestilo pa pove, kako se je prenos končal. Nastavitvi za to sporočilo in to vprašanje sta medtem nedostopni. Izklopljeno je, dokler ga ne vklopite.</dd>
 <dt><span class="ui">Po pošiljanju pokaži sporočilo, ko datoteka ali mapa prispe</span></dt>
 <dd>Prikaže sporočilo, ko druga oseba prejme element, ki ste ga poslali. Ko ni izbrano, se okno napredka zapre samo, rezultat pa sporoči obvestilo. Glejte <a href="#after-sending">Ko poslani element prispe</a>.</dd>
 <dt><span class="ui">Mapa za začasne datoteke</span></dt>

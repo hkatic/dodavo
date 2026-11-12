@@ -400,6 +400,7 @@ strings! {
         settings_tab_receiving,
         my_name_label,
         show_after_send,
+        close_when_ended,
         always_save,
         always_save_folder_label,
         auto_accept,
@@ -936,6 +937,7 @@ mod tests {
                     vec![
                         s.close_running_label,
                         s.connection_lost_label,
+                        s.close_when_ended,
                         s.show_after_send,
                         s.temp_folder_label,
                         s.browse,

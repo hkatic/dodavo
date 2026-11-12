@@ -265,6 +265,7 @@ pub const HR: Strings = Strings {
     settings_tab_receiving: "Primanje",
     my_name_label: "Vaše &ime (prikazuje se osobama kojima šaljete datoteke):",
     show_after_send: "Nakon slanja prikaži poruku kad &datoteka ili mapa stigne",
+    close_when_ended: "Za&tvori prozor napretka kada prijenos završi",
     always_save: "&Uvijek spremaj primljene datoteke u ovu mapu:",
     always_save_folder_label: "Mapa za &spremanje:",
     auto_accept: "Prijenose pokreći au&tomatski, bez pitanja",

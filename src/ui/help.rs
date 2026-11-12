@@ -279,6 +279,7 @@ mod tests {
                 s.my_name_label,
                 s.settings_tab_general,
                 s.show_after_send,
+                s.close_when_ended,
                 s.dont_show_again,
                 s.settings_tab_transfers,
                 s.always_save,

@@ -265,6 +265,7 @@ pub const SR_LATN: Strings = Strings {
     settings_tab_receiving: "Prijem",
     my_name_label: "Vaše &ime (prikazuje se osobama kojima šaljete datoteke):",
     show_after_send: "Posle slanja prikaži poruku kada &datoteka ili fascikla stigne",
+    close_when_ended: "Za&tvori prozor napretka kada se prenos završi",
     always_save: "&Uvek čuvaj primljene datoteke u ovoj fascikli:",
     always_save_folder_label: "&Fascikla za čuvanje:",
     auto_accept: "Prenose pokreći au&tomatski, bez pitanja",

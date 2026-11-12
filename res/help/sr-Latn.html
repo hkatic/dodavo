@@ -207,7 +207,7 @@
 
 <h3 id="after-sending">Kada poslata stavka stigne</h3>
 <p>Kada druga osoba primi sve, kontrolni zbir bude potvrđen i stavka bude sačuvana na drugom računaru, Dodavo prikazuje poruku, na primer <span class="ui">Gotovo! Datoteka je isporučena primaocu (Ana).</span>, a ispod nje naziv stavke. Čitači ekrana je čitaju. Pritisnite <kbd>Enter</kbd> ili <kbd>Esc</kbd> ili izaberite <span class="ui">Zatvori</span>; zatvara se i prozor napretka.</p>
-<p>Ako izaberete <span class="ui">Ne prikazuj ponovo</span>, prozor napretka će se sledeći put zatvoriti sam, a obaveštenje će vam javiti da je prenos završen. Poruku možete ponovo da uključite u postavkama opcijom <span class="ui">Posle slanja prikaži poruku kada datoteka ili fascikla stigne</span>. Ako je prozor napretka skriven ili umanjen kada se prenos završi ili ako su još u toku drugi prenosi sa istom osobom, prikazuje se samo obaveštenje. Kada prenos ne uspe, bude odbijen ili otkazan, prozor napretka ostaje otvoren da biste mogli da pročitate šta se dogodilo.</p>
+<p>Ako izaberete <span class="ui">Ne prikazuj ponovo</span>, prozor napretka će se sledeći put zatvoriti sam, a obaveštenje će vam javiti da je prenos završen. Poruku možete ponovo da uključite u postavkama opcijom <span class="ui">Posle slanja prikaži poruku kada datoteka ili fascikla stigne</span>. Ako je prozor napretka skriven ili umanjen kada se prenos završi ili ako su još u toku drugi prenosi sa istom osobom, prikazuje se samo obaveštenje. Kada prenos ne uspe, bude odbijen ili otkazan, prozor napretka ostaje otvoren da biste mogli da pročitate šta se dogodilo. Ako je u postavkama potvrđena opcija <span class="ui">Zatvori prozor napretka kada se prenos završi</span>, zatvara se i taj prozor, poruke nema, a obaveštenje javlja kako se prenos završio.</p>
 </section>
 
 <section aria-labelledby="receiving">
@@ -242,7 +242,7 @@
 <li>Za fasciklu zadržanu samo kao ZIP datoteku poruka glasi <span class="ui">Gotovo! Fascikla je sačuvana kao ZIP datoteka.</span>, a izbor je isti kao za datoteku.</li>
 <li><span class="ui">Zatvori</span> ne radi ništa od toga.</li>
 </ul>
-<p>Ako izaberete <span class="ui">Ne pitaj me ponovo</span>, Dodavo će sledeći put umesto pitanja prikazati obaveštenje. Izborom obaveštenja stavka se prikazuje u Istraživaču datoteka. Pitanje možete ponovo da uključite u postavkama opcijom <span class="ui">Posle prijema pitaj da li da se otvori datoteka ili fascikla</span>. Dok su u toku drugi prenosi sa istom osobom, Dodavo ne pita, već prikazuje obaveštenje; pitanje dolazi posle poslednjeg.</p>
+<p>Ako izaberete <span class="ui">Ne pitaj me ponovo</span>, Dodavo će sledeći put umesto pitanja prikazati obaveštenje. Izborom obaveštenja stavka se prikazuje u Istraživaču datoteka. Pitanje možete ponovo da uključite u postavkama opcijom <span class="ui">Posle prijema pitaj da li da se otvori datoteka ili fascikla</span>. Dok su u toku drugi prenosi sa istom osobom, Dodavo ne pita, već prikazuje obaveštenje; pitanje dolazi posle poslednjeg. Ako je u postavkama potvrđena opcija <span class="ui">Zatvori prozor napretka kada se prenos završi</span>, Dodavo takođe ne pita.</p>
 
 <h3 id="auto-accept">Primanje bez pitanja</h3>
 <p>Prenosi od osoba sa vaše liste primalaca počinju odmah, bez prozora Dolazni prenos, ako su u postavkama uključene obe opcije: <span class="ui">Uvek čuvaj primljene datoteke u ovoj fascikli</span> i <span class="ui">Prenose pokreći automatski, bez pitanja</span>. Uključene su dok ih ne isključite. Dodavo prikazuje obaveštenje <span class="ui">Primanje</span> i čuva stavku u fascikli iz prve opcije, a to je vaša fascikla Preuzimanja ako niste izabrali drugu. Prenosi od nepoznatih pošiljalaca, prenosi koji ne bi stali na disk i stavke veće od ograničenja koje ste postavili nikada ne počinju na ovaj način. Na ovaj način prenos mogu da pokrenu samo osobe koje ste sami dodali: njihov ID kontakta ne može da se falsifikuje.</p>
@@ -355,6 +355,8 @@
 <dd>Lista sa opcijama <span class="ui">Pitaj svaki put</span>, <span class="ui">Nastavi u pozadini</span> i <span class="ui">Otkaži prenos</span>. Pogledajte <a href="#closing-progress">Zatvaranje prozora napretka tokom prenosa</a>.</dd>
 <dt><span class="ui">Ako se veza prekine tokom prenosa</span></dt>
 <dd>Lista sa opcijama <span class="ui">Pitaj svaki put</span>, <span class="ui">Sačekaj vezu i nastavi</span> i <span class="ui">Otkaži prenos</span>. Pogledajte <a href="#connection-lost">Kada se veza prekine</a>.</dd>
+<dt><span class="ui">Zatvori prozor napretka kada se prenos završi</span></dt>
+<dd>Kada je potvrđeno, prozor napretka se zatvara sam čim se prenos završi, bilo da je završen, nije uspeo, odbijen je ili otkazan. Dodavo tada ne prikazuje poruku posle slanja i ništa ne pita posle prijema, a obaveštenje javlja kako se prenos završio. Postavke za tu poruku i to pitanje su za to vreme nedostupne. Isključeno je dok ga ne uključite.</dd>
 <dt><span class="ui">Posle slanja prikaži poruku kada datoteka ili fascikla stigne</span></dt>
 <dd>Prikazuje poruku kada druga osoba primi stavku koju ste poslali. Kada nije izabrano, prozor napretka se zatvara sam, a rezultat javlja obaveštenje. Pogledajte <a href="#after-sending">Kada poslata stavka stigne</a>.</dd>
 <dt><span class="ui">Fascikla za privremene datoteke</span></dt>

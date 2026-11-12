@@ -207,7 +207,7 @@
 
 <h3 id="after-sending">Kada poslana stavka stigne</h3>
 <p>Kada druga osoba primi sve, kontrolni zbroj bude potvrđen i stavka bude spremljena na drugom računalu, Dodavo prikazuje poruku, na primjer <span class="ui">Gotovo! Datoteka je isporučena primatelju (Ana).</span>, a ispod nje naziv stavke. Čitači zaslona je čitaju. Pritisnite <kbd>Enter</kbd> ili <kbd>Esc</kbd> ili odaberite <span class="ui">Zatvori</span>; zatvara se i prozor napretka.</p>
-<p>Ako odaberete <span class="ui">Ne prikazuj ponovno</span>, prozor napretka sljedeći će se put zatvoriti sam, a obavijest će vam javiti da je prijenos dovršen. Poruku možete ponovno uključiti u postavkama mogućnošću <span class="ui">Nakon slanja prikaži poruku kad datoteka ili mapa stigne</span>. Ako je prozor napretka skriven ili minimiziran kada prijenos završi ili ako su još u tijeku drugi prijenosi s istom osobom, prikazuje se samo obavijest. Kada prijenos ne uspije, bude odbijen ili otkazan, prozor napretka ostaje otvoren da biste mogli pročitati što se dogodilo.</p>
+<p>Ako odaberete <span class="ui">Ne prikazuj ponovno</span>, prozor napretka sljedeći će se put zatvoriti sam, a obavijest će vam javiti da je prijenos dovršen. Poruku možete ponovno uključiti u postavkama mogućnošću <span class="ui">Nakon slanja prikaži poruku kad datoteka ili mapa stigne</span>. Ako je prozor napretka skriven ili minimiziran kada prijenos završi ili ako su još u tijeku drugi prijenosi s istom osobom, prikazuje se samo obavijest. Kada prijenos ne uspije, bude odbijen ili otkazan, prozor napretka ostaje otvoren da biste mogli pročitati što se dogodilo. Ako je u postavkama potvrđena mogućnost <span class="ui">Zatvori prozor napretka kada prijenos završi</span>, zatvara se i taj prozor, poruke nema, a obavijest javlja kako je prijenos završio.</p>
 </section>
 
 <section aria-labelledby="receiving">
@@ -242,7 +242,7 @@
 <li>Za mapu zadržanu samo kao ZIP datoteku poruka glasi <span class="ui">Gotovo! Mapa je spremljena kao ZIP datoteka.</span>, a izbor je isti kao za datoteku.</li>
 <li><span class="ui">Zatvori</span> ne radi ništa od toga.</li>
 </ul>
-<p>Ako odaberete <span class="ui">Ne pitaj me ponovno</span>, Dodavo će sljedeći put umjesto pitanja prikazati obavijest. Odabirom obavijesti stavka se prikazuje u Eksploreru za datoteke. Pitanje možete ponovno uključiti u postavkama mogućnošću <span class="ui">Nakon primanja pitaj želim li otvoriti datoteku ili mapu</span>. Dok su u tijeku drugi prijenosi s istom osobom, Dodavo ne pita, nego prikazuje obavijest; pitanje dolazi nakon posljednjeg.</p>
+<p>Ako odaberete <span class="ui">Ne pitaj me ponovno</span>, Dodavo će sljedeći put umjesto pitanja prikazati obavijest. Odabirom obavijesti stavka se prikazuje u Eksploreru za datoteke. Pitanje možete ponovno uključiti u postavkama mogućnošću <span class="ui">Nakon primanja pitaj želim li otvoriti datoteku ili mapu</span>. Dok su u tijeku drugi prijenosi s istom osobom, Dodavo ne pita, nego prikazuje obavijest; pitanje dolazi nakon posljednjeg. Ako je u postavkama potvrđena mogućnost <span class="ui">Zatvori prozor napretka kada prijenos završi</span>, Dodavo također ne pita.</p>
 
 <h3 id="auto-accept">Primanje bez pitanja</h3>
 <p>Prijenosi od osoba s vašeg popisa primatelja počinju odmah, bez prozora Dolazni prijenos, ako su u postavkama uključene obje mogućnosti: <span class="ui">Uvijek spremaj primljene datoteke u ovu mapu</span> i <span class="ui">Prijenose pokreći automatski, bez pitanja</span>. Uključene su dok ih ne isključite. Dodavo prikazuje obavijest <span class="ui">Primanje</span> i sprema stavku u mapu iz prve mogućnosti, a to je vaša mapa Preuzimanja ako niste odabrali drugu. Prijenosi od nepoznatih pošiljatelja, prijenosi koji ne bi stali na disk i stavke veće od ograničenja koje ste postavili nikada ne počinju na taj način. Na taj način prijenos mogu pokrenuti samo osobe koje ste sami dodali: njihov se ID kontakta ne može krivotvoriti.</p>
@@ -355,6 +355,8 @@
 <dd>Popis s mogućnostima <span class="ui">Pitaj svaki put</span>, <span class="ui">Nastavi u pozadini</span> i <span class="ui">Otkaži prijenos</span>. Pogledajte <a href="#closing-progress">Zatvaranje prozora napretka tijekom prijenosa</a>.</dd>
 <dt><span class="ui">Ako se veza prekine tijekom prijenosa</span></dt>
 <dd>Popis s mogućnostima <span class="ui">Pitaj svaki put</span>, <span class="ui">Pričekaj vezu i nastavi</span> i <span class="ui">Otkaži prijenos</span>. Pogledajte <a href="#connection-lost">Kada se veza prekine</a>.</dd>
+<dt><span class="ui">Zatvori prozor napretka kada prijenos završi</span></dt>
+<dd>Kada je potvrđeno, prozor napretka zatvara se sam čim prijenos završi, bilo da je dovršen, nije uspio, odbijen je ili otkazan. Dodavo tada ne prikazuje poruku nakon slanja i ništa ne pita nakon primanja, a obavijest javlja kako je prijenos završio. Postavke za tu poruku i to pitanje za to su vrijeme nedostupne. Isključeno je dok ga ne uključite.</dd>
 <dt><span class="ui">Nakon slanja prikaži poruku kad datoteka ili mapa stigne</span></dt>
 <dd>Prikazuje poruku kada druga osoba primi stavku koju ste poslali. Kada nije odabrano, prozor napretka zatvara se sam, a rezultat javlja obavijest. Pogledajte <a href="#after-sending">Kada poslana stavka stigne</a>.</dd>
 <dt><span class="ui">Mapa za privremene datoteke</span></dt>

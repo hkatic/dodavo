@@ -266,6 +266,7 @@ pub const SL: Strings = Strings {
     settings_tab_receiving: "Prejemanje",
     my_name_label: "Vaše &ime (prikazano osebam, ki jim pošiljate datoteke):",
     show_after_send: "Po pošiljanju pokaži sporočilo, ko da&toteka ali mapa prispe",
+    close_when_ended: "Zapri okno napredka, ko se prenos &konča",
     always_save: "&Vedno shrani prejete datoteke v to mapo:",
     always_save_folder_label: "Mapa za &shranjevanje:",
     auto_accept: "Prenose začni s&amodejno, brez vprašanja",

@@ -794,16 +794,25 @@ impl Progress {
 
         let received = completed && self.dir == Direction::Receive;
         let sent = completed && self.dir == Direction::Send;
-        let (ask_after_receive, show_after_send) =
-            app::with(|a| (a.cfg.ask_after_receive, a.cfg.show_after_send));
+        let (ask_after_receive, show_after_send, close_when_ended) = app::with(|a| {
+            (
+                a.cfg.ask_after_receive,
+                a.cfg.show_after_send,
+                a.cfg.close_when_ended,
+            )
+        });
         // A completed transfer's window closes by itself, after the question
-        // or the message, if any; a failed one stays to show what happened.
+        // or the message, if any; a failed one stays to show what happened,
+        // unless the user wants every window closed at the end: then none
+        // asks or stays, and the notification says how the transfer ended.
         // A hidden or minimized window asks nothing: a question needs a
         // window that is seen, and the notification reports instead. Nor does
         // one while others with the same person are under way: several items
         // of a selection would pile up a dialog each. The last to finish asks.
         let hidden = self.background || window::is_minimized(w.hwnd);
-        self.after = if !completed && !self.background {
+        self.after = if close_when_ended {
+            AfterFinish::Close
+        } else if !completed && !self.background {
             AfterFinish::Stay
         } else if hidden || app::others_under_way(self.id) {
             AfterFinish::Close
