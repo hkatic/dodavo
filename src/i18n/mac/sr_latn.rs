@@ -51,6 +51,11 @@ pub const SR_LATN: Strings = Strings {
     received_both: "Zadrži raspakovanu fasciklu i ZIP datoteku",
     enter_my_name: "Unesite svoje ime. Prikazuje se osobama kojima šaljete datoteke.",
     invalid_save_folder: "Izaberite važeću fasciklu za čuvanje primljenih datoteka.",
+    temp_folder_label: "Fascikla za privremene datoteke:",
+    temp_folder_default: "Podrazumevana fascikla",
+    use_default: "Koristi podrazumevanu",
+    pick_temp_folder: "Izaberite fasciklu za privremene datoteke",
+    invalid_temp_folder: "Fascikla za privremene datoteke ne može da se koristi. Izaberite drugu fasciklu.",
     settings_not_saved: "Postavke nije moguće sačuvati:\n{error}",
     settings_title: "Postavke",
     about_text: "Šaljite datoteke i fascikle direktno sa računara na računar – \

@@ -501,11 +501,7 @@ async fn accept(
     // gone, say).
     let first = First::default();
     let mut making = {
-        let (dir, temp_dir, data_dir) = (
-            dest_dir.clone(),
-            shared.temp_dir.clone(),
-            shared.data_dir.clone(),
-        );
+        let (dir, shared, data_dir) = (dest_dir.clone(), shared.clone(), shared.data_dir.clone());
         let (name, offer, paused, first) = (
             name.clone(),
             offer.clone(),
@@ -513,6 +509,7 @@ async fn accept(
             first.clone(),
         );
         tokio::task::spawn_blocking(move || {
+            let temp_dir = shared.temp_dir_now();
             new_receive(
                 &dir, &temp_dir, &data_dir, &name, offer, from, folder, &paused, &first,
             )

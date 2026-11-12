@@ -394,9 +394,15 @@ pub(crate) struct Shared {
     sink: Sink,
     /// Where transfer records are kept.
     pub(crate) data_dir: PathBuf,
-    /// This profile's folder for temporary archives (see
-    /// `archive::temp_dir_for`); created on use.
+    /// This profile's folder for temporary archives in the system's place
+    /// (see `archive::temp_dir_for`); created on use. What is always there
+    /// to fall back on, and where the copies of shared items are.
     pub(crate) temp_dir: PathBuf,
+    /// The folder that the user chose for them instead (see
+    /// `NetHandle::set_temp_dir`, `Shared::temp_dir_now`).
+    temp_chosen: Arc<Mutex<Option<PathBuf>>>,
+    /// Folders that were chosen before, which a start clears of leftovers.
+    temp_before: Vec<PathBuf>,
     pub(crate) pending: Mutex<HashMap<u64, oneshot::Sender<Option<Accept>>>>,
     controls: Mutex<HashMap<u64, Arc<Control>>>,
     sessions: Mutex<Vec<Arc<Session>>>,
@@ -607,7 +613,44 @@ pub struct NetHandle {
     tx: mpsc::UnboundedSender<Command>,
     blocked: Blocked,
     limits: Arc<Mutex<Limits>>,
+    temp_chosen: Arc<Mutex<Option<PathBuf>>>,
     up: Arc<AtomicBool>,
+}
+
+/// Where the temporary archives of folder transfers go (see [`start`]).
+pub struct TempDirs {
+    /// This profile's folder in the system's place for them
+    /// (`archive::temp_dir_for`).
+    pub default: PathBuf,
+    /// This profile's folder in the one that the user chose instead
+    /// (`Config::temp_dir_for`).
+    pub chosen: Option<PathBuf>,
+    /// The same in the folders chosen before
+    /// (`Config::temp_dirs_before_for`).
+    pub before: Vec<PathBuf>,
+}
+
+impl From<PathBuf> for TempDirs {
+    fn from(default: PathBuf) -> Self {
+        TempDirs {
+            default,
+            chosen: None,
+            before: Vec::new(),
+        }
+    }
+}
+
+impl Shared {
+    /// The folder for a new temporary archive: the one that the user chose,
+    /// if it is there or can be made, and otherwise the system's (the
+    /// chosen drive may be unplugged). Blocking.
+    pub(crate) fn temp_dir_now(&self) -> PathBuf {
+        let chosen = self.temp_chosen.lock().unwrap().clone();
+        match chosen {
+            Some(dir) if std::fs::create_dir_all(&dir).is_ok() => dir,
+            _ => self.temp_dir.clone(),
+        }
+    }
 }
 
 impl NetHandle {
@@ -618,8 +661,16 @@ impl NetHandle {
             tx: mpsc::unbounded_channel().0,
             blocked: Blocked::default(),
             limits: Arc::default(),
+            temp_chosen: Arc::default(),
             up: Arc::default(),
         }
+    }
+
+    /// Chooses the folder for the temporary archives of the transfers that
+    /// start from now on (`None`: the system's place). Those under way keep
+    /// theirs where they are.
+    pub fn set_temp_dir(&self, chosen: Option<PathBuf>) {
+        *self.temp_chosen.lock().unwrap() = chosen;
     }
 
     pub fn send(&self, cmd: Command) {
@@ -700,14 +751,15 @@ const IDENTITY_WAIT: Duration = Duration::from_secs(5);
 
 /// Starts the network thread. `sink` is called from network threads for
 /// every event. `data_dir` holds the records of unfinished transfers and
-/// `temp_dir` the temporary archives of folder transfers. Offers from the
+/// `temp_dir` the temporary archives of folder transfers (a path is the
+/// system's place alone, see [`TempDirs`]). Offers from the
 /// `blocked` senders are declined from the start (see
 /// `NetHandle::set_blocked`), and `limits` hold from the start (see
 /// `NetHandle::set_limits`).
 pub fn start(
     secret: SecretKey,
     data_dir: PathBuf,
-    temp_dir: PathBuf,
+    temp_dir: impl Into<TempDirs>,
     blocked: impl IntoIterator<Item = EndpointId>,
     limits: Limits,
     sink: impl Fn(Event) + Send + Sync + 'static,
@@ -716,10 +768,14 @@ pub fn start(
     let blocked = Blocked::new(Mutex::new(blocked.into_iter().collect()));
     let limits = Arc::new(Mutex::new(limits));
     let up = Arc::new(AtomicBool::new(false));
+    let temp = temp_dir.into();
+    let temp_chosen = Arc::new(Mutex::new(temp.chosen));
     let shared = Arc::new(Shared {
         sink: Box::new(sink),
         data_dir,
-        temp_dir,
+        temp_dir: temp.default,
+        temp_chosen: temp_chosen.clone(),
+        temp_before: temp.before,
         pending: Mutex::new(HashMap::new()),
         controls: Mutex::new(HashMap::new()),
         sessions: Mutex::new(Vec::new()),
@@ -743,6 +799,7 @@ pub fn start(
         tx,
         blocked,
         limits,
+        temp_chosen,
         up,
     }
 }
@@ -985,7 +1042,11 @@ async fn restore_records(shared: &Arc<Shared>) -> Vec<(u64, TransferRecord, Arc<
     // transfer that goes on with how many bytes it has and, if it cannot go
     // on, why.
     let (going_on, over) = {
-        let (data_dir, temp_dir) = (shared.data_dir.clone(), shared.temp_dir.clone());
+        let data_dir = shared.data_dir.clone();
+        // Every folder that may hold a temporary archive of this profile.
+        let mut temp_dirs = vec![shared.temp_dir.clone()];
+        temp_dirs.extend(shared.temp_chosen.lock().unwrap().clone());
+        temp_dirs.extend(shared.temp_before.iter().cloned());
         session::off_runtime(move || {
             // Before the records are read: an old note would go with them.
             session::cleanup_packing(&data_dir);
@@ -994,7 +1055,10 @@ async fn restore_records(shared: &Arc<Shared>) -> Vec<(u64, TransferRecord, Arc<
                 .going_on
                 .iter()
                 .chain(found.over.iter().map(|(r, _)| r));
-            session::cleanup_temp(&temp_dir, all);
+            let all: Vec<&TransferRecord> = all.collect();
+            for temp_dir in &temp_dirs {
+                session::cleanup_temp(temp_dir, all.iter().copied());
+            }
             let going_on = found
                 .going_on
                 .into_iter()
@@ -2768,6 +2832,58 @@ mod tests {
         }
     }
 
+    /// A new temporary archive goes to the folder that the user chose, and
+    /// to the system's place while that one cannot be made (its drive is
+    /// not there). A start clears the leftovers of every folder that was
+    /// ever used: the system's place, the chosen one and those before.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn temporary_archives_go_where_the_user_chose() {
+        let dir = scratch("temp-chosen");
+        let (shared, _events) = recording_shared(&dir);
+        assert_eq!(shared.temp_dir_now(), dir.join("temp"));
+        let chosen = dir.join("chosen").join("Dodavo");
+        *shared.temp_chosen.lock().unwrap() = Some(chosen.clone());
+        assert_eq!(shared.temp_dir_now(), chosen);
+        assert!(chosen.is_dir());
+        // Under a file no folder can be made.
+        let file = dir.join("a file");
+        std::fs::write(&file, b"x").unwrap();
+        *shared.temp_chosen.lock().unwrap() = Some(file.join("Dodavo"));
+        assert_eq!(shared.temp_dir_now(), dir.join("temp"));
+
+        let before = dir.join("before").join("Dodavo");
+        let month_ago = SystemTime::now() - Duration::from_secs(31 * 24 * 60 * 60);
+        let leftover = |folder: &std::path::Path| {
+            std::fs::create_dir_all(folder).unwrap();
+            let zip = session::temp_archive(folder, session::Role::Send, &[3; 16]);
+            std::fs::write(&zip, b"zip").unwrap();
+            std::fs::File::options()
+                .write(true)
+                .open(&zip)
+                .unwrap()
+                .set_modified(month_ago)
+                .unwrap();
+            zip
+        };
+        let shared = {
+            let (shared, _) = recording_shared(&dir);
+            let mut shared = Arc::try_unwrap(shared).ok().expect("the only one");
+            shared.temp_chosen = Arc::new(Mutex::new(Some(chosen.clone())));
+            shared.temp_before = vec![before.clone()];
+            Arc::new(shared)
+        };
+        let leftovers = [
+            leftover(&dir.join("temp")),
+            leftover(&chosen),
+            leftover(&before),
+        ];
+        let elsewhere = leftover(&dir.join("elsewhere"));
+        assert!(restore_records(&shared).await.is_empty());
+        assert!(leftovers.iter().all(|zip| !zip.exists()));
+        assert!(elsewhere.exists());
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
     /// A `Shared` that keeps the events it emits for the test to look at.
     pub(super) fn recording_shared(dir: &std::path::Path) -> (Arc<Shared>, Arc<Mutex<Vec<Event>>>) {
         let events = Arc::new(Mutex::new(Vec::new()));
@@ -2776,6 +2892,8 @@ mod tests {
             sink: Box::new(move |event| sink.lock().unwrap().push(event)),
             data_dir: dir.to_path_buf(),
             temp_dir: dir.join("temp"),
+            temp_chosen: Arc::default(),
+            temp_before: Vec::new(),
             pending: Mutex::new(HashMap::new()),
             controls: Mutex::new(HashMap::new()),
             sessions: Mutex::new(Vec::new()),

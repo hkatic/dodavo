@@ -364,6 +364,15 @@ pub fn cleanup_packing(data_dir: &Path) {
     }
 }
 
+/// Whether the folder `dir` holds a [`temp_archive`] of any transfer.
+pub fn has_temp_archives(dir: &Path) -> bool {
+    fs::read_dir(dir).is_ok_and(|entries| {
+        entries
+            .flatten()
+            .any(|entry| is_temp_archive(&entry.file_name().to_string_lossy()))
+    })
+}
+
 /// Whether a file name is that of a [`temp_archive`].
 fn is_temp_archive(name: &str) -> bool {
     [Role::Send, Role::Receive]

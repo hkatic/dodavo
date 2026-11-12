@@ -96,19 +96,17 @@ fn new_zip(
     source: &std::path::Path,
     token: &Token,
 ) -> std::io::Result<(PathBuf, Option<PathBuf>)> {
-    let in_temp = |temp_dir: &std::path::Path| {
-        std::fs::create_dir_all(temp_dir)?;
-        Ok((session::temp_archive(temp_dir, Role::Send, token), None))
+    let temp_dir = shared.temp_dir_now();
+    let in_temp = || {
+        std::fs::create_dir_all(&temp_dir)?;
+        Ok((session::temp_archive(&temp_dir, Role::Send, token), None))
     };
     let Some(parent) = source.parent().filter(|_| !source::is_document(source)) else {
-        return in_temp(&shared.temp_dir);
+        return in_temp();
     };
     // The temporary folder may not be there yet: its drive is that of the
     // nearest folder above it that is.
-    let temp = shared
-        .temp_dir
-        .ancestors()
-        .find_map(crate::platform::disk_free);
+    let temp = temp_dir.ancestors().find_map(crate::platform::disk_free);
     let beside = crate::platform::disk_free(parent);
     let needed = match (&temp, &beside) {
         // Only where it can matter: it reads the whole folder's listing.
@@ -120,11 +118,11 @@ fn new_zip(
         _ => 0,
     };
     if pack_in(needed, temp.as_ref(), beside.as_ref()) == PackIn::Temp {
-        return in_temp(&shared.temp_dir);
+        return in_temp();
     }
     let zip = session::temp_archive(parent, Role::Send, token);
     let Ok(note) = session::note_packing(&shared.data_dir, token, &zip) else {
-        return in_temp(&shared.temp_dir);
+        return in_temp();
     };
     let made = std::fs::OpenOptions::new()
         .write(true)
@@ -132,7 +130,7 @@ fn new_zip(
         .open(&zip);
     if made.is_err() {
         let _ = std::fs::remove_file(&note);
-        return in_temp(&shared.temp_dir);
+        return in_temp();
     }
     Ok((zip, Some(note)))
 }

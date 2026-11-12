@@ -192,6 +192,13 @@ pub struct Config {
     pub update_last_check: Option<u64>,
     /// "Remind Me Later": no update window before this time (Unix seconds).
     pub update_remind_after: Option<u64>,
+    /// The folder that the user chose for temporary files, which Dodavo
+    /// keeps in a folder of its own in it (see `temp_dir_for`); `None` is
+    /// the system's place for them. Windows and the Mac.
+    pub temp_dir: Option<PathBuf>,
+    /// What `temp_dir` was before: a start still clears leftovers there,
+    /// until none are left (see `set_temp_dir`, `forget_temp_dirs`).
+    pub temp_dirs_before: Vec<PathBuf>,
 }
 
 impl Default for Config {
@@ -223,7 +230,21 @@ impl Default for Config {
             explorer_menu: true,
             update_last_check: None,
             update_remind_after: None,
+            temp_dir: None,
+            temp_dirs_before: Vec::new(),
         }
+    }
+}
+
+/// Dodavo's own folder for temporary files in the folder `base` that the
+/// user chose, with a sub folder per `--profile` as in the system's place
+/// (see `archive::temp_dir_for`): never `base` itself, where other things
+/// are, since a start deletes old archives from its temporary folder.
+fn temp_dir_in(base: &Path, profile: Option<&str>) -> PathBuf {
+    let own = base.join("Dodavo");
+    match profile {
+        Some(profile) => own.join("profiles").join(profile),
+        None => own,
     }
 }
 
@@ -391,6 +412,68 @@ impl Config {
         }
     }
 
+    /// Where the temporary archives of `profile`'s transfers go by the
+    /// user's choice; `None` without one, which is the system's place
+    /// (`archive::temp_dir_for`). Android has no such choice: its folders
+    /// are the app's.
+    pub fn temp_dir_for(&self, profile: Option<&str>) -> Option<PathBuf> {
+        if cfg!(target_os = "android") {
+            return None;
+        }
+        self.temp_dir
+            .as_deref()
+            .map(|base| temp_dir_in(base, profile))
+    }
+
+    /// Where the temporary archives of `profile`'s new transfers go: the
+    /// user's choice, or the system's place. (A transfer falls back on the
+    /// system's place while the chosen folder cannot be made, see
+    /// `net::Shared::temp_dir_now`.)
+    pub fn temp_dir_in_use(&self, profile: Option<&str>) -> PathBuf {
+        self.temp_dir_for(profile)
+            .unwrap_or_else(|| crate::archive::temp_dir_for(profile))
+    }
+
+    /// The same for the folders chosen before (see `temp_dirs_before`).
+    pub fn temp_dirs_before_for(&self, profile: Option<&str>) -> Vec<PathBuf> {
+        self.temp_dirs_before
+            .iter()
+            .map(|base| temp_dir_in(base, profile))
+            .collect()
+    }
+
+    /// Chooses the folder for temporary files (`None`: the system's place),
+    /// and remembers the one before, where a transfer under way may still
+    /// have its archive and a start has to look for leftovers.
+    pub fn set_temp_dir(&mut self, dir: Option<PathBuf>) {
+        if dir == self.temp_dir {
+            return;
+        }
+        if let Some(before) = self.temp_dir.take()
+            && !self.temp_dirs_before.contains(&before)
+        {
+            self.temp_dirs_before.push(before);
+        }
+        if let Some(dir) = &dir {
+            self.temp_dirs_before.retain(|before| before != dir);
+        }
+        self.temp_dir = dir;
+    }
+
+    /// Forgets the folders chosen before in which `profile` has nothing
+    /// left (`has_files` says whether its folder there has); whether any
+    /// was forgotten.
+    pub fn forget_temp_dirs(
+        &mut self,
+        profile: Option<&str>,
+        has_files: impl Fn(&Path) -> bool,
+    ) -> bool {
+        let before = self.temp_dirs_before.len();
+        self.temp_dirs_before
+            .retain(|base| has_files(&temp_dir_in(base, profile)));
+        self.temp_dirs_before.len() != before
+    }
+
     /// The folder of "Always save received files to this folder".
     pub fn always_save_folder(&self) -> PathBuf {
         self.always_save_dir
@@ -463,6 +546,47 @@ mod tests {
         assert_eq!(read_language(&dir), None);
         assert!(path.exists());
         std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// The folder for temporary files is the system's until the user
+    /// chooses one, in which Dodavo keeps a folder of its own, per profile.
+    /// What was chosen before is remembered until nothing is left there.
+    #[test]
+    #[cfg(not(target_os = "android"))]
+    fn the_folder_for_temporary_files() {
+        let earlier: Config = serde_json::from_str("{}").unwrap();
+        assert_eq!(earlier.temp_dir, None);
+        assert!(earlier.temp_dirs_before.is_empty());
+
+        let (a, b) = (PathBuf::from("a"), PathBuf::from("b"));
+        let mut cfg = Config::default();
+        assert_eq!(cfg.temp_dir_for(None), None);
+        assert_eq!(cfg.temp_dir_in_use(None), crate::archive::temp_dir_for(None));
+        cfg.set_temp_dir(Some(a.clone()));
+        assert!(cfg.temp_dirs_before.is_empty());
+        assert_eq!(cfg.temp_dir_for(None), Some(a.join("Dodavo")));
+        assert_eq!(cfg.temp_dir_in_use(None), a.join("Dodavo"));
+        assert_eq!(
+            cfg.temp_dir_for(Some("ana")),
+            Some(a.join("Dodavo").join("profiles").join("ana"))
+        );
+        // The same choice again changes nothing.
+        cfg.set_temp_dir(Some(a.clone()));
+        assert!(cfg.temp_dirs_before.is_empty());
+        cfg.set_temp_dir(Some(b.clone()));
+        assert_eq!(cfg.temp_dirs_before, std::slice::from_ref(&a));
+        cfg.set_temp_dir(Some(a.clone()));
+        assert_eq!(cfg.temp_dirs_before, std::slice::from_ref(&b));
+        cfg.set_temp_dir(None);
+        assert_eq!(cfg.temp_dirs_before, [b.clone(), a.clone()]);
+        assert_eq!(
+            cfg.temp_dirs_before_for(None),
+            [b.join("Dodavo"), a.join("Dodavo")]
+        );
+        let in_b = b.join("Dodavo");
+        assert!(cfg.forget_temp_dirs(None, |dir| dir == in_b));
+        assert_eq!(cfg.temp_dirs_before, [b]);
+        assert!(!cfg.forget_temp_dirs(None, |_| true));
     }
 
     #[test]

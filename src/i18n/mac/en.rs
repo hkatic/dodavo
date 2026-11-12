@@ -51,6 +51,11 @@ pub const EN: Strings = Strings {
     received_both: "Keep both the unpacked folder and the ZIP file",
     enter_my_name: "Please enter your name. It is shown to the people you send files to.",
     invalid_save_folder: "Please choose a valid folder for saving received files.",
+    temp_folder_label: "Folder for temporary files:",
+    temp_folder_default: "The default folder",
+    use_default: "Use Default",
+    pick_temp_folder: "Choose the folder for temporary files",
+    invalid_temp_folder: "The folder for temporary files cannot be used. Choose another folder.",
     settings_not_saved: "The settings could not be saved:\n{error}",
     settings_title: "Settings",
     about_text: "Send files and folders directly from computer to computer – \

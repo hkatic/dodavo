@@ -14,6 +14,8 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSTe
     private let showInMenuBar = NSButton(checkboxWithTitle: L[.show_in_menu_bar], target: nil, action: nil)
     private let checkUpdates = NSButton(checkboxWithTitle: L[.check_updates], target: nil, action: nil)
     private let language = NSPopUpButton()
+    private let tempFolder = NSTextField(wrappingLabelWithString: "")
+    private let useDefaultTemp = NSButton()
     private let alwaysSave = NSButton(checkboxWithTitle: L[.always_save], target: nil, action: nil)
     private let folderLabel = NSTextField(wrappingLabelWithString: "")
     private let chooseFolder = NSButton()
@@ -38,7 +40,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSTe
             ?? Settings(
                 myName: "", openAtLogin: false, hideAtLogin: false, showInMenuBar: true,
                 checkUpdates: true, language: nil, alwaysSave: true, alwaysSaveDir: nil,
-                autoAccept: true, receivedFolder: "extract", limitSize: false,
+                autoAccept: true, receivedFolder: "extract", tempDir: nil, limitSize: false,
                 limitNumber: "1", limitUnit: "gb", overLimit: "ask")
         settings.openAtLogin = LoginItem.isEnabled ?? settings.openAtLogin
         let tabs = NSTabViewController()
@@ -122,6 +124,19 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSTe
             box.target = self
             box.action = #selector(changed)
         }
+
+        let tempLabel = NSTextField(labelWithString: L[.temp_folder_label])
+        tempFolder.isSelectable = false
+        tempFolder.preferredMaxLayoutWidth = 300
+        name(tempFolder, by: tempLabel)
+        let chooseTemp = makeButton(L[.choose], self, #selector(pickTempFolder))
+        // "Choose…" and "Use Default" alone do not say what for.
+        chooseTemp.setAccessibilityTitle("\(tempLabel.stringValue) \(L[.choose])")
+        useDefaultTemp.title = L[.use_default]
+        useDefaultTemp.bezelStyle = .rounded
+        useDefaultTemp.target = self
+        useDefaultTemp.action = #selector(useDefaultTempFolder)
+        useDefaultTemp.setAccessibilityTitle("\(tempLabel.stringValue) \(L[.use_default])")
         let grid = NSGridView(views: [
             [nameLabel, nameField],
             [NSGridCell.emptyContentView, nameHelp],
@@ -132,6 +147,8 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSTe
             [NSGridCell.emptyContentView, showInMenuBar],
             [NSGridCell.emptyContentView, checkUpdates],
             [languageLabel, language],
+            [tempLabel, tempFolder],
+            [NSGridCell.emptyContentView, makeRow([chooseTemp, useDefaultTemp])],
         ])
         grid.column(at: 0).xPlacement = .trailing
         grid.rowAlignment = .firstBaseline
@@ -329,6 +346,8 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSTe
             ($0.representedObject as? String) == settings.language
         }
         language.selectItem(at: languageIndex ?? 0)
+        tempFolder.stringValue = settings.tempDir ?? L[.temp_folder_default]
+        useDefaultTemp.isEnabled = settings.tempDir != nil
         alwaysSave.state = settings.alwaysSave ? .on : .off
         folderLabel.stringValue = settings.alwaysSaveDir ?? ""
         folderLabel.isHidden = settings.alwaysSaveDir == nil
@@ -426,6 +445,31 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSTe
         alert.messageText = L[.language_restart]
         alert.addButton(withTitle: L[.close])
         alert.beginSheetModal(for: window, completionHandler: nil)
+    }
+
+    @objc private func pickTempFolder() {
+        guard let window = window else { return }
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.canCreateDirectories = true
+        panel.message = L[.pick_temp_folder]
+        panel.prompt = L[.choose_folder_prompt]
+        if let dir = settings.tempDir {
+            panel.directoryURL = URL(fileURLWithPath: dir)
+        }
+        panel.beginSheetModal(for: window) { response in
+            guard response == .OK, let url = panel.url else { return }
+            self.settings.tempDir = url.path
+            self.commit()
+        }
+    }
+
+    @objc private func useDefaultTempFolder() {
+        settings.tempDir = nil
+        commit()
+        // The button is unavailable now, and the text beside it changed.
+        announce(L[.temp_folder_default], urgent: false)
     }
 
     @objc private func pickFolder() {

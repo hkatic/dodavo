@@ -1,6 +1,6 @@
 //! Settings dialog.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use windows_sys::Win32::{
     Foundation::HWND,
@@ -42,6 +42,8 @@ const ID_LIMIT: u16 = 29;
 const ID_LIMIT_SIZE: u16 = 30;
 const ID_LIMIT_UNIT: u16 = 31;
 const ID_OVER_LIMIT: u16 = 32;
+const ID_TEMP_DIR: u16 = 33;
+const ID_TEMP_BROWSE: u16 = 34;
 
 /// The two columns (96-DPI units): headings start at their `x`, the
 /// settings under them are indented.
@@ -77,6 +79,9 @@ struct SettingsDialog {
     close_running: HWND,
     connection_lost: HWND,
     language: HWND,
+    /// The folder for temporary files, as the user chose it or Windows
+    /// gives it.
+    temp_dir: HWND,
     /// The read-only field with this installation's Contact ID.
     my_id: HWND,
 }
@@ -106,6 +111,7 @@ pub fn show(owner: HWND) {
         close_running: std::ptr::null_mut(),
         connection_lost: std::ptr::null_mut(),
         language: std::ptr::null_mut(),
+        temp_dir: std::ptr::null_mut(),
         my_id: std::ptr::null_mut(),
     };
     let hwnd = window::create(
@@ -119,6 +125,24 @@ pub fn show(owner: HWND) {
         Box::new(handler),
     );
     window::run_modal(owner, hwnd);
+}
+
+/// A path without what only its writing adds (a separator at its end).
+fn tidy(path: &Path) -> PathBuf {
+    path.components().collect()
+}
+
+/// The folder that Windows gives for temporary files, in which Dodavo keeps
+/// its own (see `platform::temp_base`).
+fn system_temp() -> PathBuf {
+    tidy(&std::env::temp_dir())
+}
+
+/// Whether two paths name the same folder, as far as their writing tells.
+fn same_folder(a: &Path, b: &Path) -> bool {
+    tidy(a)
+        .as_os_str()
+        .eq_ignore_ascii_case(tidy(b).as_os_str())
 }
 
 impl SettingsDialog {
@@ -199,6 +223,18 @@ impl SettingsDialog {
             .and_then(|i| Lang::ALL.get(i))
             .map(|l| l.code().to_string());
         let language_changed = language != app::cfg().language;
+        // Empty, or the folder that Windows gives: no choice of the user's.
+        let temp_text = get_text(self.temp_dir).trim().to_string();
+        let temp_dir = (!temp_text.is_empty())
+            .then(|| tidy(Path::new(&temp_text)))
+            .filter(|dir| !same_folder(dir, &system_temp()));
+        if let Some(dir) = &temp_dir
+            && !(dir.is_absolute() && std::fs::create_dir_all(dir).is_ok())
+        {
+            error(w.hwnd, tr!(invalid_temp_folder));
+            window::focus(self.temp_dir);
+            return false;
+        }
         // Unset, it follows Downloads to wherever that is moved.
         let dir = dir.filter(|d| *d != crate::platform::downloads_dir());
         app::update_cfg(|c| {
@@ -224,6 +260,7 @@ impl SettingsDialog {
             c.close_running_transfer = close_running;
             c.connection_lost = connection_lost;
             c.language = language;
+            c.set_temp_dir(temp_dir);
         });
         shell::set_start_with_windows(autostart);
         if let Some(on) = explorer_menu {
@@ -434,23 +471,37 @@ impl Handler for SettingsDialog {
             .and_then(|l| Lang::ALL.iter().position(|&x| x == l))
             .map_or(0, |i| i + 1);
         self.language = w.combobox(&languages, selected, ID_LANGUAGE, (inner_x, 296, 300, 24));
+        // The folder in which Dodavo keeps its own folder of temporary
+        // files: the user's choice, or what Windows gives.
+        // Without an access key: two of the languages have no letter of
+        // the caption left in this window.
+        w.caption(tr!(temp_folder_label), (inner_x, 332, inner_w, 18));
+        let temp = cfg.temp_dir.clone().unwrap_or_else(system_temp);
+        self.temp_dir = w.edit(
+            &temp.display().to_string(),
+            ID_TEMP_DIR,
+            (inner_x, 352, inner_w - 92, 24),
+        );
+        let browse = w.button(tr!(browse), ID_TEMP_BROWSE, (x + COLUMN_W - 86, 351, 86, 26));
+        // The second of its kind in the window: it says what it is for.
+        w.set_accessible_name(browse, tr!(temp_folder_browse));
 
         let my_id = app::with(|a| a.my_id.clone());
-        w.label(tr!(my_id_label), (x, 336, COLUMN_W, 18));
-        let id_edit = w.edit(&my_id, 0, (x, 356, COLUMN_W - 92, 24));
+        w.label(tr!(my_id_label), (x, 392, COLUMN_W, 18));
+        let id_edit = w.edit(&my_id, 0, (x, 412, COLUMN_W - 92, 24));
         super::send(
             id_edit,
             windows_sys::Win32::UI::Controls::EM_SETREADONLY,
             1,
             0,
         );
-        w.button(tr!(copy), ID_COPY, (x + COLUMN_W - 86, 355, 86, 26));
+        w.button(tr!(copy), ID_COPY, (x + COLUMN_W - 86, 411, 86, 26));
         self.my_id = id_edit;
         // Applies at once, like blocking: it is not one of the settings
         // that OK saves.
         let change_w = w.button_width(tr!(change_id_button), 86);
-        w.button(tr!(change_id_button), ID_CHANGE_ID, (x, 388, change_w, 26));
-        let right_bottom = 414;
+        w.button(tr!(change_id_button), ID_CHANGE_ID, (x, 444, change_w, 26));
+        let right_bottom = 470;
 
         let buttons_y = left_bottom.max(right_bottom) + 22;
         w.button(tr!(ok), ID_OK, (WIDTH - 14 - 186, buttons_y, 90, 30));
@@ -473,6 +524,13 @@ impl Handler for SettingsDialog {
                 if let Some(dir) = shell::pick_folder(w.hwnd, tr!(pick_save_folder), Some(&current))
                 {
                     set_text(self.dir, &dir.display().to_string());
+                }
+            }
+            ID_TEMP_BROWSE => {
+                let current = PathBuf::from(get_text(self.temp_dir).trim());
+                if let Some(dir) = shell::pick_folder(w.hwnd, tr!(pick_temp_folder), Some(&current))
+                {
+                    set_text(self.temp_dir, &dir.display().to_string());
                 }
             }
             ID_BLOCKED => super::blocked::show(w.hwnd),

@@ -382,6 +382,10 @@ struct Settings {
     always_save_dir: Option<PathBuf>,
     auto_accept: bool,
     received_folder: ReceivedFolder,
+    /// The folder that the user chose for temporary files, or none for the
+    /// system's place.
+    #[serde(default)]
+    temp_dir: Option<PathBuf>,
     #[serde(flatten)]
     limit: LimitSettings,
 }
@@ -500,7 +504,11 @@ struct PendingOffer {
 struct State {
     cfg: Config,
     data_dir: PathBuf,
+    /// The profile's folder for temporary archives in the system's place
+    /// (see `State::temp_in_use`).
     temp_dir: PathBuf,
+    /// The `profile` this copy runs with.
+    profile: Option<String>,
     net: NetHandle,
     /// Whether the network reports us online (`None` until it says).
     online: Option<bool>,
@@ -669,10 +677,15 @@ impl Core {
 
         // The language comes from the settings, so the message about an
         // unusable settings file has to wait until it is chosen.
-        let (cfg, cfg_error) = match Config::load(&data_dir) {
+        let (mut cfg, cfg_error) = match Config::load(&data_dir) {
             Ok(cfg) => (cfg, None),
             Err(e) => (Config::default(), Some(e)),
         };
+        // A folder for temporary files that was chosen before is looked at
+        // for leftovers at each start, until nothing of Dodavo's is in it.
+        if cfg.forget_temp_dirs(profile.as_deref(), net::session::has_temp_archives) {
+            let _ = cfg.save(&data_dir);
+        }
         // On Android, the language of the app's own texts, which the system
         // keeps.
         #[cfg(not(target_os = "macos"))]
@@ -762,7 +775,11 @@ impl Core {
                 net = net::start(
                     secret,
                     data_dir.clone(),
-                    temp_dir.clone(),
+                    net::TempDirs {
+                        default: temp_dir.clone(),
+                        chosen: cfg.temp_dir_for(profile.as_deref()),
+                        before: cfg.temp_dirs_before_for(profile.as_deref()),
+                    },
                     cfg.blocked_ids(),
                     cfg.limits(),
                     move |event| {
@@ -780,6 +797,7 @@ impl Core {
                 cfg,
                 data_dir,
                 temp_dir,
+                profile: profile.clone(),
                 net,
                 online: None,
                 net_problem: None,
@@ -880,7 +898,7 @@ impl Core {
                         let out: SpaceOut = space::check_space(
                             &pending.offer,
                             &dir,
-                            &state.temp_dir,
+                            &state.temp_in_use(),
                             state.cfg.received_folder,
                         )
                         .into();
@@ -1285,7 +1303,7 @@ impl Core {
             };
             (
                 pending.offer.clone(),
-                state.temp_dir.clone(),
+                state.temp_in_use(),
                 state.cfg.received_folder,
             )
         };
@@ -1514,7 +1532,7 @@ impl Core {
         let (name, known, cfg, temp_dir) = {
             let state = lock(&self.state);
             let (name, known) = peer_name(&state.cfg, &from, &offer.sender_name);
-            (name, known, state.cfg.clone(), state.temp_dir.clone())
+            (name, known, state.cfg.clone(), state.temp_in_use())
         };
         let pending = PendingOffer {
             from_id: from.clone(),
@@ -1804,12 +1822,25 @@ fn install_panic_hook(outbox: &'static Outbox) {
     }));
 }
 
-/// Saves the settings, which also tells the network whom they block and
-/// what the limits are (also if the file cannot be saved). Returns the text
+impl State {
+    /// The folder for the temporary archives of new transfers: the user's
+    /// choice, or the system's place (see `Config::temp_dir_for`).
+    fn temp_in_use(&self) -> PathBuf {
+        self.cfg
+            .temp_dir_for(self.profile.as_deref())
+            .unwrap_or_else(|| self.temp_dir.clone())
+    }
+}
+
+/// Saves the settings, which also tells the network whom they block, what
+/// the limits are and where temporary archives go (also if the file cannot be saved). Returns the text
 /// of an error.
 fn save(state: &State) -> Option<String> {
     state.net.set_blocked(state.cfg.blocked_ids());
     state.net.set_limits(state.cfg.limits());
+    state
+        .net
+        .set_temp_dir(state.cfg.temp_dir_for(state.profile.as_deref()));
     state.cfg.save(&state.data_dir).err().map(|e| {
         ui()
             .settings_not_saved
@@ -1911,12 +1942,14 @@ impl Settings {
             always_save_dir: Some(cfg.always_save_folder()),
             auto_accept: cfg.auto_accept,
             received_folder: cfg.received_folder,
+            temp_dir: cfg.temp_dir.clone(),
             limit: LimitSettings::of(cfg),
         }
     }
 
     fn apply_to(&self, cfg: &mut Config) {
         self.limit.apply_to(cfg);
+        cfg.set_temp_dir(self.temp_dir.clone());
         cfg.my_name = self.my_name.trim().to_string();
         cfg.start_with_windows = self.open_at_login;
         cfg.start_minimized = self.hide_at_login;
@@ -1947,6 +1980,11 @@ impl Settings {
             if !usable {
                 return Some(ui().invalid_save_folder.to_string());
             }
+        }
+        if let Some(dir) = &self.temp_dir
+            && !(dir.is_absolute() && std::fs::create_dir_all(dir).is_ok())
+        {
+            return Some(ui().invalid_temp_folder.to_string());
         }
         self.limit.problem()
     }
@@ -2067,6 +2105,7 @@ mod tests {
                 cfg: Config::default(),
                 data_dir: dir.to_path_buf(),
                 temp_dir: dir.to_path_buf(),
+                profile: None,
                 net: NetHandle::idle(),
                 online: None,
                 net_problem: None,

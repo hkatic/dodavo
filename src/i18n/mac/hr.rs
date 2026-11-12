@@ -51,6 +51,11 @@ pub const HR: Strings = Strings {
     received_both: "Zadrži raspakiranu mapu i ZIP datoteku",
     enter_my_name: "Unesite svoje ime. Prikazuje se osobama kojima šaljete datoteke.",
     invalid_save_folder: "Odaberite valjanu mapu za spremanje primljenih datoteka.",
+    temp_folder_label: "Mapa za privremene datoteke:",
+    temp_folder_default: "Zadana mapa",
+    use_default: "Koristi zadanu",
+    pick_temp_folder: "Odaberite mapu za privremene datoteke",
+    invalid_temp_folder: "Mapa za privremene datoteke ne može se koristiti. Odaberite drugu mapu.",
     settings_not_saved: "Postavke se ne mogu spremiti:\n{error}",
     settings_title: "Postavke",
     about_text: "Šaljite datoteke i mape izravno s računala na računalo – \

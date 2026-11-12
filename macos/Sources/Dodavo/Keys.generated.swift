@@ -41,6 +41,11 @@ enum K: String {
     case received_both
     case enter_my_name
     case invalid_save_folder
+    case temp_folder_label
+    case temp_folder_default
+    case use_default
+    case pick_temp_folder
+    case invalid_temp_folder
     case settings_not_saved
     case settings_title
     case about_text

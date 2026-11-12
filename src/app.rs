@@ -277,11 +277,19 @@ pub fn update_cfg(f: impl FnOnce(&mut Config)) {
         // Whoever is blocked now is, also if the file cannot be saved.
         a.net.set_blocked(a.cfg.blocked_ids());
         a.net.set_limits(a.cfg.limits());
+        a.net
+            .set_temp_dir(a.cfg.temp_dir_for(a.profile.as_deref()));
         a.cfg.save(&a.data_dir)
     });
     if let Err(e) = result {
         ui::error(main_window(), &tr!(settings_not_saved, error = e));
     }
+}
+
+/// The folder for the temporary archives of new transfers (see
+/// `Config::temp_dir_in_use`).
+pub fn temp_dir() -> std::path::PathBuf {
+    with(|a| a.cfg.temp_dir_in_use(a.profile.as_deref()))
 }
 
 /// Blocks the sender `id` under `name` (see `Config::block`) and declines

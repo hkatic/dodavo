@@ -335,10 +335,15 @@ fn main() {
     let data_dir = config::data_dir(profile);
     // The language comes from the settings, so the message about an unusable
     // settings file has to wait until the language is chosen.
-    let (cfg, cfg_error) = match config::Config::load(&data_dir) {
+    let (mut cfg, cfg_error) = match config::Config::load(&data_dir) {
         Ok(cfg) => (cfg, None),
         Err(e) => (config::Config::default(), Some(e)),
     };
+    // A folder for temporary files that was chosen before is looked at for
+    // leftovers at each start, until nothing of Dodavo's is in it.
+    if cfg.forget_temp_dirs(profile, net::session::has_temp_archives) {
+        let _ = cfg.save(&data_dir);
+    }
     i18n::init(cfg.language.as_deref());
     if let Some(e) = cfg_error {
         let mut text = tr!(settings_unreadable, path = e.path.display(), error = e.error);
@@ -374,7 +379,11 @@ fn main() {
     let net = net::start(
         secret,
         data_dir.clone(),
-        archive::temp_dir_for(profile),
+        net::TempDirs {
+            default: archive::temp_dir_for(profile),
+            chosen: cfg.temp_dir_for(profile),
+            before: cfg.temp_dirs_before_for(profile),
+        },
         cfg.blocked_ids(),
         cfg.limits(),
         app::event_sink,

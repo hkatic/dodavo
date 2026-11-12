@@ -51,6 +51,11 @@ pub const SL: Strings = Strings {
     received_both: "Obdrži razpakirano mapo in datoteko ZIP",
     enter_my_name: "Vnesite svoje ime. Prikazano je osebam, ki jim pošiljate datoteke.",
     invalid_save_folder: "Izberite veljavno mapo za shranjevanje prejetih datotek.",
+    temp_folder_label: "Mapa za začasne datoteke:",
+    temp_folder_default: "Privzeta mapa",
+    use_default: "Uporabi privzeto",
+    pick_temp_folder: "Izberite mapo za začasne datoteke",
+    invalid_temp_folder: "Mape za začasne datoteke ni mogoče uporabiti. Izberite drugo mapo.",
     settings_not_saved: "Nastavitev ni bilo mogoče shraniti:\n{error}",
     settings_title: "Nastavitve",
     about_text: "Pošiljajte datoteke in mape neposredno od računalnika do računalnika – \
