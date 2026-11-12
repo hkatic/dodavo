@@ -15,6 +15,7 @@ pub const COPYRIGHT_YEARS: &str = env!("DODAVO_COPYRIGHT_YEARS");
 pub const DONATE_URL: &str = "https://paypal.me/hrvix";
 
 pub mod archive;
+pub mod chat;
 pub mod config;
 pub mod format;
 pub mod i18n;
@@ -22,6 +23,9 @@ pub mod identity;
 pub mod limit;
 pub mod net;
 pub mod platform;
+pub mod sound;
+#[cfg(test)]
+mod sound_synth;
 pub mod source;
 pub mod space;
 /// Not on Android, which Google Play alone updates.

@@ -26,6 +26,7 @@
 <li><a href="#sending">Slanje datoteka i mapa</a></li>
 <li><a href="#receiving">Primanje datoteka i mapa</a></li>
 <li><a href="#progress">Praćenje prijenosa</a></li>
+<li><a href="#chat">Čavrljanje s osobom</a></li>
 <li><a href="#background">Rad u području obavijesti</a></li>
 <li><a href="#settings">Postavke</a></li>
 <li><a href="#shortcuts">Tipkovni prečaci</a></li>
@@ -314,6 +315,59 @@
 <p>Kada je prozor ponovno vidljiv, ponaša se kao da nikada nije bio skriven: na kraju prijenosa postavlja uobičajena pitanja umjesto da samo prikaže obavijest.</p>
 </section>
 
+<section aria-labelledby="chat">
+<h2 id="chat">Čavrljanje s osobom</h2>
+<p>S osobom možete razmjenjivati kratke tekstne poruke, primjerice da biste rekli što joj upravo šaljete ili pitali nešto o onome što vam je ponuđeno. Poruke putuju izravno s jednog računala na drugo, šifrirane, istom vrstom veze kao i datoteke. Oboje morate imati pokrenut Dodavo i biti na mreži u istom trenutku, a Dodavo na drugoj strani također mora imati čavrljanje.</p>
+<h3 id="chat-open">Otvaranje čavrljanja</h3>
+<ul>
+<li>U glavnom prozoru odaberite osobu i pritisnite <kbd>Ctrl</kbd>+<kbd>M</kbd>, ili na izborniku <span class="ui">Datoteka</span> odaberite <span class="ui">Čavrljanje s primateljem…</span>, ili u izborniku radnji te osobe (<kbd>Enter</kbd>) odaberite <span class="ui">Čavrljanje…</span>.</li>
+<li>U prozoru Dolazni prijenos i u prozoru napretka aktivirajte gumb <span class="ui">Čavrljanje</span> (<kbd>Alt</kbd>+<kbd>V</kbd>) da biste pisali osobi s kojom se prijenos odvija.</li>
+<li>Kada vam netko piše, prozor čavrljanja s tom osobom otvara se sam. Ne preuzima fokus s onoga što radite.</li>
+</ul>
+<p>Za svaku osobu postoji jedan prozor čavrljanja. Njegov je naslov <span class="ui">Čavrljanje –</span> i ime osobe, a fokus je na početku u polju <span class="ui">Poruka</span>.</p>
+<h3 id="chat-several">Pisanje većem broju osoba odjednom</h3>
+<p>Da biste istu poruku poslali većem broju osoba, potvrdite njihove potvrdne okvire na popisu primatelja (<kbd>razmaknica</kbd>) i pritisnite <kbd>Ctrl</kbd>+<kbd>M</kbd>, ili na izborniku <span class="ui">Datoteka</span> odaberite <span class="ui">Čavrljanje s primateljem…</span>. Umjesto čavrljanja otvara se prozor <span class="ui">Poruka za više osoba</span>: navodi primatelje te ima polje <span class="ui">Poruka</span> i gumbe <span class="ui">Pošalji</span> (<kbd>Enter</kbd>) i <span class="ui">Odustani</span> (<kbd>Esc</kbd>). Svaka osoba dobiva poruku kao privatnu poruku od vas. Ne vidi tko ju je još dobio, a svaki odgovor stiže u čavrljanje s tom osobom. Poruka se dodaje u vaš razgovor sa svakom od njih, a potvrdni se okviri poništavaju nakon slanja. Ako se nekoj od njih ne može isporučiti, o tome govori obavijest, a u tom je razgovoru označena kao neposlana. Kada je potvrđen jedan okvir, <kbd>Ctrl</kbd>+<kbd>M</kbd> otvara čavrljanje s tom osobom.</p>
+<h3 id="chat-window">Prozor čavrljanja</h3>
+<p>Kontrole, redoslijedom tipke Tab:</p>
+<dl>
+<dt><span class="ui">Povijest</span> (<kbd>Alt</kbd>+<kbd>P</kbd>)</dt>
+<dd>Popis u kojem je svaka poruka jedna stavka, a najnovija je posljednja. Svaka stavka kaže tko je napisao poruku, kada, i njezin tekst, primjerice <span class="ui">Ana, 14:32: Slike stižu.</span> ili <span class="ui">Vi, 14:33: Hvala!</span>. Poruka od nekog drugog dana ima i datum. Poruke čitate tipkama <kbd>Strelica gore</kbd> i <kbd>Strelica dolje</kbd>, tipkama <kbd>Home</kbd> i <kbd>End</kbd> idete na prvu i posljednju, a tipkama <kbd>Ctrl</kbd>+<kbd>C</kbd> kopirate odabranu poruku. Kada prijeđete na popis, odabrana je najnovija poruka.</dd>
+<dt>Redak stanja</dt>
+<dd>Jedan redak ispod povijesti koji prikazuje poruku koja je stigla posljednja, da druga osoba piše, ili zašto poruka nije poslana. Ne može dobiti fokus tipkovnice; čitači zaslona čitaju ga kada se promijeni i kada prozor dođe u prvi plan.</dd>
+<dt><span class="ui">Poruka</span> (<kbd>Alt</kbd>+<kbd>O</kbd>)</dt>
+<dd>Ovdje pišete. Poruka može imati do 4000 znakova.</dd>
+<dt><span class="ui">Pošalji</span> (<kbd>Alt</kbd>+<kbd>Š</kbd> ili <kbd>Enter</kbd>)</dt>
+<dd>Šalje poruku i dodaje je u povijest. Fokus ostaje u polju <span class="ui">Poruka</span>.</dd>
+<dt><span class="ui">Dodaj u moje primatelje</span> (<kbd>Alt</kbd>+<kbd>D</kbd>)</dt>
+<dd>Samo za osobu koja nije na vašem popisu primatelja: otvara prozor Dodaj primatelja s upisanim imenom i ID-om kontakta te osobe.</dd>
+<dt><span class="ui">Blokiraj</span> (<kbd>Alt</kbd>+<kbd>B</kbd>)</dt>
+<dd>Nakon vaše potvrde blokira osobu i zatvara čavrljanje. Blokirana osoba ne može vam ni pisati ni išta poslati.</dd>
+<dt><span class="ui">Izbriši razgovor…</span> (<kbd>Alt</kbd>+<kbd>R</kbd>)</dt>
+<dd>Nakon vaše potvrde briše poruke s tom osobom s vašeg računala. Zadani je odgovor <span class="ui">Ne</span>.</dd>
+<dt><span class="ui">Zatvori</span> (<kbd>Esc</kbd>)</dt>
+<dd>Zatvara prozor. Razgovor ostaje spremljen i ponovno je tu kada otvorite čavrljanje.</dd>
+</dl>
+<h3 id="chat-receiving">Kada stigne poruka</h3>
+<ul>
+<li>Dok je prozor čavrljanja u prvom planu, poruka se dodaje u povijest i prikazuje u retku stanja, gdje je čitači zaslona pročitaju, s imenom osobe na početku.</li>
+<li>Dok ste u nekom drugom prozoru, prozor čavrljanja otvara se ili ostaje gdje jest, bez preuzimanja fokusa, njegov gumb na programskoj traci treperi, a obavijest <span class="ui">Poruka – pošiljatelj:</span> s imenom osobe prikazuje poruku. Čitači zaslona obično čitaju obavijesti. Odabirom obavijesti čavrljanje dolazi u prvi plan.</li>
+<li>U oba slučaja reproducira se zvuk, osim ako ste ga isključili.</li>
+</ul>
+<p>Kada druga osoba počne pisati, redak stanja to kaže, primjerice <span class="ui">Ana piše…</span>. Dok je prozor čavrljanja u prvom planu, to se najavljuje jednom, uz kratak zvuk; ne ponavlja se dok osoba nastavlja pisati. Na isti način druga osoba doznaje da vi pišete. Oboje možete isključiti u postavkama.</p>
+<h3 id="chat-failed">Kada se poruka ne može poslati</h3>
+<p>Poruka koja se ne može isporučiti označena je u povijesti, primjerice <span class="ui">Vi, 14:35 (nije poslano): Jesi li tu?</span>, redak stanja kaže zašto, i reproducira se zvuk. Dodavo ne pokušava ponovno sam. Tekst se vraća u polje <span class="ui">Poruka</span> ako je ono prazno, pa ga tipkom <kbd>Enter</kbd> možete poslati ponovno. Razlozi koje možete vidjeti:</p>
+<ul>
+<li><span class="ui">Drugo računalo nije pronađeno na mreži</span> ili <span class="ui">Isteklo je vrijeme za povezivanje</span>: Dodavo nije pokrenut na drugom računalu ili jedno od vas nije na mreži.</li>
+<li><span class="ui">Ova osoba ne prima vaše poruke</span>: druga osoba prima poruke samo od svojih primatelja ili vas je blokirala.</li>
+<li><span class="ui">Dodavo na drugoj strani nema čavrljanje</span>: druga osoba ima Dodavo bez čavrljanja.</li>
+<li><span class="ui">Veza je prekinuta</span> ili <span class="ui">Druga strana nije potvrdila poruku</span>: veza je završila prije nego što je poruka potvrđena.</li>
+</ul>
+<h3 id="chat-who">Tko vam može pisati</h3>
+<p>Ako to ne promijenite, pisati vam može svatko tko ima vaš ID kontakta i nije blokiran, kao što vam svatko može ponuditi datoteku. Čavrljanje s osobom koja nije na vašem popisu primatelja iznad povijesti prikazuje upozorenje s njezinim ID-om kontakta. U postavkama, na kartici <span class="ui">Čavrljanje</span>, možete odabrati <span class="ui">Samo moji primatelji</span>: poruke svih ostalih tada se odbijaju, a da ih vi ne vidite, i njihov pošiljatelj doznaje da ne primate njegove poruke.</p>
+<h3 id="chat-history">Gdje se čuvaju razgovori</h3>
+<p>Razgovori se čuvaju na vašem računalu, uz vaše postavke, dok ih ne izbrišete: najnovijih 2000 poruka sa svakom osobom. Ne šalju se nikamo drugamo. <span class="ui">Izbriši razgovor…</span> u prozoru čavrljanja briše jedan, a <span class="ui">Izbriši sve razgovore…</span> u postavkama, na kartici <span class="ui">Čavrljanje</span>, briše sve. Brisanjem se poruke uklanjaju samo s vašeg računala; druga osoba zadržava svoj primjerak.</p>
+</section>
+
 <section aria-labelledby="background">
 <h2 id="background">Rad u području obavijesti</h2>
 <p>Kada zatvorite glavni prozor, Dodavo nastavlja raditi u području obavijesti na kraju programske trake kako bi mogao primati datoteke. Kada se to dogodi prvi put, obavijest vas o tome izvješćuje.</p>
@@ -329,7 +383,7 @@
 
 <section aria-labelledby="settings">
 <h2 id="settings">Postavke</h2>
-<p>U glavnom prozoru pritisnite <kbd>Ctrl</kbd>+<kbd>Zarez</kbd> ili na izborniku <span class="ui">Datoteka</span> odaberite <span class="ui">Postavke…</span>. Pritisnite <kbd>Enter</kbd> ili aktivirajte gumb <span class="ui">U redu</span> da biste spremili promjene, odnosno pritisnite <kbd>Esc</kbd> ili aktivirajte gumb <span class="ui">Odustani</span> da biste ih odbacili. Postavke su na tri kartice: <span class="ui">Općenito</span>, <span class="ui">Prijenosi</span> i <span class="ui">Primanje</span>. Tipka <kbd>Tab</kbd> ide s kartica kroz postavke odabrane kartice, a potom na gumbe <span class="ui">U redu</span> i <span class="ui">Odustani</span>. Karticu mijenjate tipkama <kbd>Ctrl</kbd>+<kbd>Tab</kbd> ili <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Tab</kbd> bilo gdje u prozoru, odnosno tipkama <kbd>Strelica lijevo</kbd> i <kbd>Strelica desno</kbd> dok je fokus na karticama. Postavke svake kartice, redoslijedom tipke Tab:</p>
+<p>U glavnom prozoru pritisnite <kbd>Ctrl</kbd>+<kbd>Zarez</kbd> ili na izborniku <span class="ui">Datoteka</span> odaberite <span class="ui">Postavke…</span>. Pritisnite <kbd>Enter</kbd> ili aktivirajte gumb <span class="ui">U redu</span> da biste spremili promjene, odnosno pritisnite <kbd>Esc</kbd> ili aktivirajte gumb <span class="ui">Odustani</span> da biste ih odbacili. Postavke su na pet kartica: <span class="ui">Općenito</span>, <span class="ui">Prijenosi</span>, <span class="ui">Primanje</span>, <span class="ui">Čavrljanje</span> i <span class="ui">Zvukovi</span>. Tipka <kbd>Tab</kbd> ide s kartica kroz postavke odabrane kartice, a potom na gumbe <span class="ui">U redu</span> i <span class="ui">Odustani</span>. Karticu mijenjate tipkama <kbd>Ctrl</kbd>+<kbd>Tab</kbd> ili <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Tab</kbd> bilo gdje u prozoru, odnosno tipkama <kbd>Strelica lijevo</kbd> i <kbd>Strelica desno</kbd> dok je fokus na karticama. Postavke svake kartice, redoslijedom tipke Tab:</p>
 <h3 id="settings-general">Općenito</h3>
 <dl>
 <dt><span class="ui">Vaše ime (prikazuje se osobama kojima šaljete datoteke)</span></dt>
@@ -383,6 +437,34 @@
 <dt><span class="ui">Blokirani pošiljatelji…</span></dt>
 <dd>Otvara popis pošiljatelja koje ste blokirali, na kojem ih možete deblokirati. Pogledajte <a href="#blocking">Blokiranje pošiljatelja</a>.</dd>
 </dl>
+<h3 id="settings-chat">Čavrljanje</h3>
+<dl>
+<dt><span class="ui">Tko mi može slati poruke</span></dt>
+<dd>Popis s mogućnostima <span class="ui">Svi koji nisu blokirani</span> i <span class="ui">Samo moji primatelji</span>. Uz drugu mogućnost poruka osobe koja nije na vašem popisu primatelja odbija se, a da je vi ne vidite. Pogledajte <a href="#chat-who">Tko vam može pisati</a>.</dd>
+<dt><span class="ui">Pokaži drugoj osobi kada pišem</span></dt>
+<dd>Kada je odabrano, prozor čavrljanja druge osobe kaže da pišete dok pišete poruku. Uključeno je ako ga ne isključite.</dd>
+<dt><span class="ui">Najavi kada druga osoba piše</span></dt>
+<dd>Kada je odabrano, prozor čavrljanja u prvom planu najavljuje čitačima zaslona, i zvukom, da je druga osoba počela pisati. Kada nije odabrano, redak stanja to i dalje prikazuje. Uključeno je ako ga ne isključite.</dd>
+<dt><span class="ui">Izbriši sve razgovore…</span></dt>
+<dd>Nakon vaše potvrde briše sve razgovore s vašeg računala. To se događa odmah, bez obzira na to zatvorite li potom postavke gumbom <span class="ui">U redu</span> ili <span class="ui">Odustani</span>.</dd>
+</dl>
+<h3 id="settings-sounds">Zvukovi</h3>
+<p>Dodavo za događaje s popisa u nastavku reproducira vlastiti kratki zvuk. Možete isključiti sve zvukove, isključiti pojedine ili bilo koji zamijeniti svojom zvučnom datotekom.</p>
+<dl>
+<dt><span class="ui">Reproduciraj zvukove</span></dt>
+<dd>Kada nije odabrano, Dodavo ne reproducira nijedan zvuk. Ono što je postavljeno za svaki događaj ostaje sačuvano. Uključeno je ako ga ne isključite.</dd>
+<dt><span class="ui">Događaji</span></dt>
+<dd>Popis događaja, svaki s onim što reproducira, primjerice <span class="ui">Primljena poruka: zadani zvuk</span>. Događaji su: <span class="ui">Primljena poruka</span>, <span class="ui">Poslana poruka</span>, <span class="ui">Druga osoba piše</span>, <span class="ui">Poruka nije poslana</span>, <span class="ui">Dolazna stavka</span>, <span class="ui">Prijenos je započeo</span>, <span class="ui">Prijenos je dovršen</span>, <span class="ui">Prijenos nije uspio</span>, <span class="ui">Prijenos je odbijen ili otkazan</span>, <span class="ui">Veza je prekinuta</span> i <span class="ui">Prijenos se nastavlja</span>. Događaj odaberite tipkama sa strelicama; kontrole koje slijede odnose se na njega.</dd>
+<dt><span class="ui">Zvuk</span></dt>
+<dd>Popis s mogućnostima <span class="ui">Zadani</span> (ugrađeni zvuk), <span class="ui">Bez zvuka</span> i <span class="ui">Moja datoteka</span>. Nakon što odaberete <span class="ui">Moja datoteka</span>, datoteku odaberite gumbom <span class="ui">Pregledaj…</span>; mora biti WAV datoteka. Dok je ne odaberete, događaj reproducira ono što je i prije.</dd>
+<dt><span class="ui">Pregledaj…</span></dt>
+<dd>Odabire drugu WAV datoteku za odabrani događaj. Dostupno je dok je odabrano <span class="ui">Moja datoteka</span>.</dd>
+<dt><span class="ui">Poslušaj</span></dt>
+<dd>Reproducira ono što je postavljeno za odabrani događaj, i dok <span class="ui">Reproduciraj zvukove</span> nije odabrano, tako da ga možete čuti prije spremanja.</dd>
+<dt><span class="ui">Vrati sve na zadano</span></dt>
+<dd>Svakom događaju vraća njegov ugrađeni zvuk.</dd>
+</dl>
+<p>Ako se vaša zvučna datoteka poslije ne može reproducirati, primjerice zato što je premještena, Dodavo umjesto nje reproducira ugrađeni zvuk.</p>
 <h3 id="change-id">Promjena vašeg ID-a kontakta</h3>
 <p>Svoj ID kontakta možete zamijeniti novim, na primjer kada je dospio do osoba od kojih ne želite ništa primati. Dosadašnji ID kontakta tada trajno prestaje vrijediti: nitko vas više ne može doseći pomoću njega i ne može se vratiti. Svi koji vam i dalje trebaju moći slati datoteke moraju od vas dobiti novi ID kontakta i njime zamijeniti stari naredbom <span class="ui">Uredi primatelja…</span>. Vaši primatelji, blokirani pošiljatelji i postavke ostaju kakvi jesu.</p>
 <p>Nijedan prijenos ne može se nastaviti pod drugim ID-om kontakta. Dodavo vam kaže koliko je prijenosa u tijeku ili čeka vaš odgovor i otkazuje ih kada potvrdite. Jedna vrsta prijenosa ne može se tako otkazati: slanje čiji su svi podaci već poslani, a primatelj ih još nije potvrdio. Dok takav prijenos postoji, Dodavo vas o tome obavještava i zadržava vaš ID kontakta; pokušajte ponovno kada taj prijenos završi.</p>
@@ -409,6 +491,7 @@
 <tr><td><kbd>F2</kbd></td><td>Uređivanje odabranog primatelja</td></tr>
 <tr><td><kbd>Delete</kbd></td><td>Uklanjanje odabranog primatelja</td></tr>
 <tr><td><kbd>Ctrl</kbd>+<kbd>B</kbd></td><td>Blokiranje odabranog primatelja</td></tr>
+<tr><td><kbd>Ctrl</kbd>+<kbd>M</kbd></td><td>Čavrljanje s odabranim primateljem ili jedna poruka svima čiji je okvir potvrđen</td></tr>
 <tr><td><kbd>Ctrl</kbd>+<kbd>T</kbd></td><td>Prikaz prozora svih prijenosa u tijeku</td></tr>
 <tr><td><kbd>Ctrl</kbd>+<kbd>Zarez</kbd></td><td>Otvaranje postavki</td></tr>
 <tr><td><kbd>Enter</kbd> ili dvostruki klik</td><td>Otvaranje izbornika radnji odabranog primatelja</td></tr>
@@ -445,6 +528,7 @@
 <tr><td><kbd>Alt</kbd>+<kbd>S</kbd></td><td>Prelazak na polje Spremi u</td></tr>
 <tr><td><kbd>Alt</kbd>+<kbd>P</kbd></td><td>Odabir mape</td></tr>
 <tr><td><kbd>Alt</kbd>+<kbd>D</kbd></td><td>Dodavanje nepoznatog pošiljatelja u moje primatelje</td></tr>
+<tr><td><kbd>Alt</kbd>+<kbd>V</kbd></td><td>Čavrljanje s pošiljateljem</td></tr>
 </tbody>
 </table>
 <table>
@@ -471,6 +555,7 @@
 <tr><td><kbd>Alt</kbd>+<kbd>N</kbd></td><td>Nastavljanje prijenosa</td></tr>
 <tr><td><kbd>Alt</kbd>+<kbd>Z</kbd></td><td>Minimiziranje u pozadinu</td></tr>
 <tr><td><kbd>Esc</kbd></td><td>Zatvaranje prozora (pita želite li nastaviti u pozadini ili otkazati)</td></tr>
+<tr><td><kbd>Alt</kbd>+<kbd>V</kbd></td><td>Čavrljanje s drugom osobom</td></tr>
 </tbody>
 </table>
 <table>
@@ -484,6 +569,23 @@
 <tr><td><kbd>Alt</kbd>+<kbd>I</kbd> ili <kbd>Enter</kbd></td><td>Instaliranje ažuriranja</td></tr>
 <tr><td><kbd>Alt</kbd>+<kbd>K</kbd> ili <kbd>Esc</kbd></td><td>Podsjeti me kasnije (zatvaranje prozora)</td></tr>
 <tr><td><kbd>Alt</kbd>+<kbd>O</kbd></td><td>Odustajanje od preuzimanja</td></tr>
+</tbody>
+</table>
+<table>
+<caption>Prozor čavrljanja</caption>
+<thead>
+<tr><th scope="col">Tipke</th><th scope="col">Radnja</th></tr>
+</thead>
+<tbody>
+<tr><td><kbd>Enter</kbd> ili <kbd>Alt</kbd>+<kbd>Š</kbd></td><td>Slanje poruke</td></tr>
+<tr><td><kbd>Alt</kbd>+<kbd>O</kbd></td><td>Prelazak na polje Poruka</td></tr>
+<tr><td><kbd>Alt</kbd>+<kbd>P</kbd></td><td>Prelazak na povijest</td></tr>
+<tr><td><kbd>Strelica gore</kbd> i <kbd>Strelica dolje</kbd> u povijesti</td><td>Čitanje prethodne ili sljedeće poruke</td></tr>
+<tr><td><kbd>Ctrl</kbd>+<kbd>C</kbd> u povijesti</td><td>Kopiranje odabrane poruke</td></tr>
+<tr><td><kbd>Alt</kbd>+<kbd>D</kbd></td><td>Dodavanje osobe u moje primatelje, kada nije među njima</td></tr>
+<tr><td><kbd>Alt</kbd>+<kbd>B</kbd></td><td>Blokiranje osobe</td></tr>
+<tr><td><kbd>Alt</kbd>+<kbd>R</kbd></td><td>Brisanje razgovora</td></tr>
+<tr><td><kbd>Esc</kbd></td><td>Zatvaranje prozora; razgovor ostaje spremljen</td></tr>
 </tbody>
 </table>
 <table>

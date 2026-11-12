@@ -5,6 +5,7 @@
 //! a record on disk ([`session::TransferRecord`]) and survives lost
 //! connections and restarts: the sender dials again, the receiver waits.
 
+pub mod chat;
 pub mod protocol;
 mod receive;
 pub(crate) mod send;
@@ -25,6 +26,7 @@ use iroh_mdns_address_lookup::MdnsAddressLookup;
 use tokio::sync::{mpsc, oneshot, watch};
 
 pub use crate::config::{OverLimit, ReceivedFolder};
+pub use chat::ChatPolicy;
 pub use protocol::{Kind, Offer};
 use session::{Control, Fate, Session, Streams};
 pub use session::{Role, TransferRecord};
@@ -61,6 +63,20 @@ pub enum Command {
     },
     Resume {
         id: u64,
+    },
+    /// Sends a chat message to `to` (see [`chat`]). `id` is the sender's
+    /// number for it, which `Event::ChatSent` or `Event::ChatFailed`
+    /// repeats.
+    Chat {
+        to: EndpointId,
+        id: u64,
+        text: String,
+    },
+    /// Tells `to` that the user is writing a chat message, or has stopped.
+    /// Nothing reports whether that got there.
+    Typing {
+        to: EndpointId,
+        on: bool,
     },
     /// The system says that the network changed (another Wi-Fi, mobile
     /// data, or back from sleep). Android tells only the app, so iroh hears
@@ -352,6 +368,30 @@ pub enum Event {
         id: u64,
         outcome: Outcome,
     },
+    /// A chat message arrived. `name` is what the sender calls themselves.
+    Chat {
+        from: EndpointId,
+        name: String,
+        text: String,
+    },
+    /// The chat message `id` (see `Command::Chat`) arrived at the other side.
+    ChatSent {
+        to: EndpointId,
+        id: u64,
+    },
+    /// The chat message `id` was not delivered, with the reason for the
+    /// user. Nothing tries it again.
+    ChatFailed {
+        to: EndpointId,
+        id: u64,
+        error: String,
+    },
+    /// The other person of a chat is writing a message, or has stopped
+    /// (which is not always said: who shows it lets it lapse).
+    Typing {
+        from: EndpointId,
+        on: bool,
+    },
 }
 
 static NEXT_ID: AtomicU64 = AtomicU64::new(1);
@@ -422,6 +462,9 @@ pub(crate) struct Shared {
     /// Whether an endpoint is bound and commands are taken (see
     /// `NetHandle::is_up`).
     up: Arc<AtomicBool>,
+    /// The chat connections, where this side takes any (see
+    /// [`start_with_chat`]).
+    chat: Option<Arc<chat::Chats>>,
 }
 
 /// The blocked senders, shared by the network and its handle.
@@ -615,6 +658,7 @@ pub struct NetHandle {
     limits: Arc<Mutex<Limits>>,
     temp_chosen: Arc<Mutex<Option<PathBuf>>>,
     up: Arc<AtomicBool>,
+    chat: Arc<Mutex<ChatPolicy>>,
 }
 
 /// Where the temporary archives of folder transfers go (see [`start`]).
@@ -663,6 +707,7 @@ impl NetHandle {
             limits: Arc::default(),
             temp_chosen: Arc::default(),
             up: Arc::default(),
+            chat: Arc::default(),
         }
     }
 
@@ -703,6 +748,13 @@ impl NetHandle {
     /// that wait for an answer and transfers under way go on.
     pub fn set_limits(&self, limits: Limits) {
         *self.limits.lock().unwrap() = limits;
+    }
+
+    /// From now on, chat messages are taken as `policy` says, also on the
+    /// connections that are open. Does nothing where the network was
+    /// started without chat (see [`start_with_chat`]).
+    pub fn set_chat(&self, policy: ChatPolicy) {
+        *self.chat.lock().unwrap() = policy;
     }
 
     /// Suspends all transfers and closes connections so that peers learn
@@ -755,7 +807,8 @@ const IDENTITY_WAIT: Duration = Duration::from_secs(5);
 /// system's place alone, see [`TempDirs`]). Offers from the
 /// `blocked` senders are declined from the start (see
 /// `NetHandle::set_blocked`), and `limits` hold from the start (see
-/// `NetHandle::set_limits`).
+/// `NetHandle::set_limits`). Such a network takes no chat connections: who
+/// dials one is told that this side cannot chat.
 pub fn start(
     secret: SecretKey,
     data_dir: PathBuf,
@@ -764,7 +817,25 @@ pub fn start(
     limits: Limits,
     sink: impl Fn(Event) + Send + Sync + 'static,
 ) -> NetHandle {
+    start_with_chat(secret, data_dir, temp_dir, blocked, limits, None, sink)
+}
+
+/// [`start`], for a user interface that shows chats when `chat` says who
+/// may send messages (see `NetHandle::set_chat`): only then does the
+/// endpoint take chat connections, so that no message is confirmed to its
+/// sender and then shown to nobody.
+pub fn start_with_chat(
+    secret: SecretKey,
+    data_dir: PathBuf,
+    temp_dir: impl Into<TempDirs>,
+    blocked: impl IntoIterator<Item = EndpointId>,
+    limits: Limits,
+    chat: Option<ChatPolicy>,
+    sink: impl Fn(Event) + Send + Sync + 'static,
+) -> NetHandle {
     let (tx, rx) = mpsc::unbounded_channel();
+    let chats = chat.is_some();
+    let chat = Arc::new(Mutex::new(chat.unwrap_or_default()));
     let blocked = Blocked::new(Mutex::new(blocked.into_iter().collect()));
     let limits = Arc::new(Mutex::new(limits));
     let up = Arc::new(AtomicBool::new(false));
@@ -784,6 +855,7 @@ pub fn start(
         blocked: blocked.clone(),
         limits: limits.clone(),
         up: up.clone(),
+        chat: chats.then(|| Arc::new(chat::Chats::new(chat.clone()))),
     });
     std::thread::Builder::new()
         .name("network".into())
@@ -801,6 +873,7 @@ pub fn start(
         limits,
         temp_chosen,
         up,
+        chat,
     }
 }
 
@@ -827,10 +900,16 @@ fn start_send(
     });
 }
 
-async fn bind(secret: SecretKey) -> anyhow::Result<Endpoint> {
+/// Binds an endpoint that takes transfers and, with `chat`, chat
+/// connections.
+async fn bind(secret: SecretKey, chat: bool) -> anyhow::Result<Endpoint> {
+    let mut alpns = vec![protocol::ALPN.to_vec()];
+    if chat {
+        alpns.push(protocol::CHAT_ALPN.to_vec());
+    }
     let endpoint = Endpoint::builder(presets::N0)
         .secret_key(secret)
-        .alpns(vec![protocol::ALPN.to_vec()])
+        .alpns(alpns)
         .address_lookup(MdnsAddressLookup::builder())
         .bind()
         .await?;
@@ -1145,7 +1224,7 @@ async fn restore_records(shared: &Arc<Shared>) -> Vec<(u64, TransferRecord, Arc<
 async fn bind_patiently(secret: &SecretKey, shared: &Shared) -> Endpoint {
     let mut failed = false;
     loop {
-        match bind(secret.clone()).await {
+        match bind(secret.clone(), shared.chat.is_some()).await {
             Ok(ep) => {
                 // What the status says of the failure holds no more, and
                 // the endpoint says nothing of itself for a while (see
@@ -1215,7 +1294,11 @@ fn serve(shared: &Arc<Shared>, endpoint: &Endpoint) -> tokio::task::JoinHandle<(
                     return;
                 };
                 let Ok(conn) = accepting.await else { return };
-                accept(shared, endpoint, conn).await;
+                if conn.alpn() == protocol::CHAT_ALPN {
+                    chat::accept(shared, conn).await;
+                } else {
+                    accept(shared, endpoint, conn).await;
+                }
             });
         }
     })
@@ -1303,6 +1386,12 @@ async fn run(secret: SecretKey, shared: Arc<Shared>, mut rx: mpsc::UnboundedRece
                 if let Some(ctl) = shared.control(id) {
                     ctl.paused.send_replace(false);
                 }
+            }
+            Command::Chat { to, id, text } => {
+                chat::send(&shared, &endpoint, to, chat::Out::Text { id, text });
+            }
+            Command::Typing { to, on } => {
+                chat::send(&shared, &endpoint, to, chat::Out::Typing(on));
             }
             Command::NetworkChange => {
                 let endpoint = endpoint.clone();
@@ -2902,6 +2991,7 @@ mod tests {
             blocked: Blocked::default(),
             limits: Arc::default(),
             up: Arc::default(),
+            chat: None,
         });
         (shared, events)
     }
@@ -3546,6 +3636,223 @@ mod tests {
         assert!(session::records(&stopped.dir_a).is_empty());
         assert!(session::records(&stopped.dir_b).is_empty());
         assert!(leftovers(&stopped.recv_dir).is_empty());
+        a.shutdown(Duration::from_secs(5));
+        b.shutdown(Duration::from_secs(5));
+        std::fs::remove_dir_all(&base).ok();
+    }
+
+    /// A network that takes chat messages as `policy` says.
+    fn start_chatting(
+        key: SecretKey,
+        dir: PathBuf,
+        blocked: impl IntoIterator<Item = EndpointId>,
+        policy: ChatPolicy,
+        tx: mpsc::Sender<Event>,
+    ) -> NetHandle {
+        let temp = dir.join("temp");
+        start_with_chat(key, dir, temp, blocked, Limits::default(), Some(policy), sink(tx))
+    }
+
+    fn named(name: &str) -> ChatPolicy {
+        ChatPolicy {
+            my_name: name.into(),
+            ..Default::default()
+        }
+    }
+
+    /// How the chat message `id` ended for its sender: `Ok` once it has
+    /// arrived, or why it has not.
+    #[track_caller]
+    fn chat_result(rx: &mpsc::Receiver<Event>, id: u64) -> Result<(), String> {
+        let event = wait_for(rx, |e| {
+            matches!(e, Event::ChatSent { id: i, .. } | Event::ChatFailed { id: i, .. } if *i == id)
+        });
+        match event {
+            Event::ChatFailed { error, .. } => Err(error),
+            _ => Ok(()),
+        }
+    }
+
+    /// Messages go both ways, each confirmed to its sender and shown with
+    /// the name the sender chose, and so does word that someone is typing.
+    #[test]
+    fn a_chat_goes_both_ways() {
+        let base = scratch("chat");
+        let (tx_a, rx_a) = mpsc::channel();
+        let (tx_b, rx_b) = mpsc::channel();
+        let (key_a, key_b) = (SecretKey::generate(), SecretKey::generate());
+        let (id_a, id_b) = (key_a.public(), key_b.public());
+        let a = start_chatting(key_a, base.join("a"), [], named("Ana"), tx_a);
+        let b = start_chatting(key_b, base.join("b"), [], named("  Bo  "), tx_b);
+        wait_for(&rx_a, |e| matches!(e, Event::Online(true)));
+        wait_for(&rx_b, |e| matches!(e, Event::Online(true)));
+        reach(&a, &rx_a, &b, &rx_b, id_b, &base);
+
+        a.send(Command::Typing { to: id_b, on: true });
+        let event = wait_for(&rx_b, |e| matches!(e, Event::Typing { .. }));
+        assert!(matches!(event, Event::Typing { from, on: true } if from == id_a));
+        a.send(Command::Chat {
+            to: id_b,
+            id: 1,
+            text: "Šaljem ti slike.".into(),
+        });
+        let event = wait_for(&rx_b, |e| matches!(e, Event::Chat { .. }));
+        let Event::Chat { from, name, text } = event else {
+            unreachable!()
+        };
+        assert_eq!(
+            (from, name.as_str(), text.as_str()),
+            (id_a, "Ana", "Šaljem ti slike.")
+        );
+        assert_eq!(chat_result(&rx_a, 1), Ok(()));
+
+        // The answer, with the name as it is shown.
+        b.send(Command::Chat {
+            to: id_a,
+            id: 7,
+            text: "Hvala!".into(),
+        });
+        let event = wait_for(&rx_a, |e| matches!(e, Event::Chat { .. }));
+        let Event::Chat { from, name, text } = event else {
+            unreachable!()
+        };
+        assert_eq!((from, name.as_str(), text.as_str()), (id_b, "Bo", "Hvala!"));
+        assert_eq!(chat_result(&rx_b, 7), Ok(()));
+
+        // Several at once arrive in their order.
+        for id in 10..15 {
+            a.send(Command::Chat {
+                to: id_b,
+                id,
+                text: id.to_string(),
+            });
+        }
+        let mut texts = Vec::new();
+        while texts.len() < 5 {
+            if let Event::Chat { text, .. } = wait_for(&rx_b, |e| matches!(e, Event::Chat { .. })) {
+                texts.push(text);
+            }
+        }
+        assert_eq!(texts, ["10", "11", "12", "13", "14"]);
+
+        // B goes away: A is told that B stopped typing, and a message to
+        // nobody fails.
+        b.send(Command::Typing { to: id_a, on: true });
+        wait_for(&rx_a, |e| matches!(e, Event::Typing { on: true, .. }));
+        b.shutdown(Duration::from_secs(5));
+        wait_for(&rx_a, |e| matches!(e, Event::Typing { on: false, .. }));
+        a.send(Command::Chat {
+            to: id_b,
+            id: 20,
+            text: "Jesi li tu?".into(),
+        });
+        assert!(chat_result(&rx_a, 20).is_err());
+        a.shutdown(Duration::from_secs(5));
+        std::fs::remove_dir_all(&base).ok();
+    }
+
+    /// A message from a blocked sender, and one from someone who is not a
+    /// recipient where only recipients may write, is refused: its sender is
+    /// told so, and nothing is seen here.
+    #[test]
+    fn a_chat_is_refused_unseen() {
+        let base = scratch("chat-refused");
+        let (tx_a, rx_a) = mpsc::channel();
+        let (tx_b, rx_b) = mpsc::channel();
+        let (key_a, key_b) = (SecretKey::generate(), SecretKey::generate());
+        let (id_a, id_b) = (key_a.public(), key_b.public());
+        let a = start_chatting(key_a, base.join("a"), [], named("Ana"), tx_a);
+        let b = start_chatting(key_b, base.join("b"), [id_a], named("Bo"), tx_b);
+        wait_for(&rx_a, |e| matches!(e, Event::Online(true)));
+        wait_for(&rx_b, |e| matches!(e, Event::Online(true)));
+        reach(&a, &rx_a, &b, &rx_b, id_b, &base);
+        let say = |id| {
+            a.send(Command::Chat {
+                to: id_b,
+                id,
+                text: "Halo?".into(),
+            });
+            chat_result(&rx_a, id)
+        };
+        let refused = Err(crate::i18n::tr!(chat_error_refused).to_string());
+
+        assert_eq!(say(1), refused);
+        b.set_blocked([]);
+        b.set_chat(ChatPolicy {
+            from: crate::config::ChatFrom::Recipients,
+            ..named("Bo")
+        });
+        assert_eq!(say(2), refused);
+        let seen: Vec<Event> = rx_b.try_iter().collect();
+        assert!(
+            !seen
+                .iter()
+                .any(|e| matches!(e, Event::Chat { .. } | Event::Typing { .. })),
+            "{seen:?}"
+        );
+
+        b.set_chat(ChatPolicy {
+            from: crate::config::ChatFrom::Recipients,
+            recipients: [id_a].into_iter().collect(),
+            ..named("Bo")
+        });
+        assert_eq!(say(3), Ok(()));
+        wait_for(&rx_b, |e| matches!(e, Event::Chat { .. }));
+        // Blocked in the middle of the chat: the next message is refused on
+        // the connection that is open.
+        b.set_blocked([id_a]);
+        assert!(say(4).is_err());
+        let seen: Vec<Event> = rx_b.try_iter().collect();
+        assert!(
+            !seen.iter().any(|e| matches!(e, Event::Chat { .. })),
+            "{seen:?}"
+        );
+        a.shutdown(Duration::from_secs(5));
+        b.shutdown(Duration::from_secs(5));
+        std::fs::remove_dir_all(&base).ok();
+    }
+
+    /// A side whose user interface shows no chats takes no chat connection,
+    /// and who writes to it is told that it cannot chat, as is one that
+    /// shows no chats itself.
+    #[test]
+    fn a_side_without_chat_says_so() {
+        let base = scratch("chat-none");
+        let (tx_a, rx_a) = mpsc::channel();
+        let (tx_b, rx_b) = mpsc::channel();
+        let (key_a, key_b) = (SecretKey::generate(), SecretKey::generate());
+        let (id_a, id_b) = (key_a.public(), key_b.public());
+        let a = start_chatting(key_a, base.join("a"), [], named("Ana"), tx_a);
+        let b = start(
+            key_b,
+            base.join("b"),
+            base.join("b").join("temp"),
+            [],
+            Limits::default(),
+            sink(tx_b),
+        );
+        wait_for(&rx_a, |e| matches!(e, Event::Online(true)));
+        wait_for(&rx_b, |e| matches!(e, Event::Online(true)));
+        reach(&a, &rx_a, &b, &rx_b, id_b, &base);
+        let cannot = Err(crate::i18n::tr!(chat_error_cannot_chat).to_string());
+
+        a.send(Command::Chat {
+            to: id_b,
+            id: 1,
+            text: "Halo?".into(),
+        });
+        assert_eq!(chat_result(&rx_a, 1), cannot);
+        b.send(Command::Chat {
+            to: id_a,
+            id: 2,
+            text: "Halo?".into(),
+        });
+        assert_eq!(chat_result(&rx_b, 2), cannot);
+        let seen: Vec<Event> = rx_a.try_iter().chain(rx_b.try_iter()).collect();
+        assert!(
+            !seen.iter().any(|e| matches!(e, Event::Chat { .. })),
+            "{seen:?}"
+        );
         a.shutdown(Duration::from_secs(5));
         b.shutdown(Duration::from_secs(5));
         std::fs::remove_dir_all(&base).ok();

@@ -26,6 +26,7 @@
 <li><a href="#sending">Sending files and folders</a></li>
 <li><a href="#receiving">Receiving files and folders</a></li>
 <li><a href="#progress">Following a transfer</a></li>
+<li><a href="#chat">Chatting with a person</a></li>
 <li><a href="#background">Running in the notification area</a></li>
 <li><a href="#settings">Settings</a></li>
 <li><a href="#shortcuts">Keyboard shortcuts</a></li>
@@ -314,6 +315,59 @@
 <p>Once the window is visible again, it behaves as if it had never been hidden: when the transfer ends, it asks the usual questions instead of only showing a notification.</p>
 </section>
 
+<section aria-labelledby="chat">
+<h2 id="chat">Chatting with a person</h2>
+<p>You can exchange short text messages with a person, for example to say what you are about to send or to ask about something you were offered. Messages go directly from one computer to the other, encrypted, over the same kind of connection as files. Both of you have to be running Dodavo and be online at the same moment, and the Dodavo on the other side has to have chat too.</p>
+<h3 id="chat-open">Opening a chat</h3>
+<ul>
+<li>In the main window, select the person and press <kbd>Ctrl</kbd>+<kbd>M</kbd>, or choose <span class="ui">Chat with Recipient…</span> from the <span class="ui">File</span> menu, or <span class="ui">Chat…</span> from the person's menu of actions (<kbd>Enter</kbd>).</li>
+<li>In the Incoming Transfer window and in a progress window, activate <span class="ui">Chat</span> (<kbd>Alt</kbd>+<kbd>C</kbd>) to write to the person the transfer is with.</li>
+<li>When someone writes to you, their chat window opens by itself. It does not take the focus from what you are doing.</li>
+</ul>
+<p>There is one chat window for each person. Its title is <span class="ui">Chat with</span> followed by the person's name, and the focus starts in the <span class="ui">Message</span> field.</p>
+<h3 id="chat-several">Writing to several people at once</h3>
+<p>To send the same message to several people, check their boxes in the recipient list (<kbd>Space</kbd>) and press <kbd>Ctrl</kbd>+<kbd>M</kbd>, or choose <span class="ui">Chat with Recipient…</span> from the <span class="ui">File</span> menu. Instead of a chat, the <span class="ui">Message to Several People</span> window opens: it names the recipients, and has a <span class="ui">Message</span> field and the buttons <span class="ui">Send</span> (<kbd>Enter</kbd>) and <span class="ui">Cancel</span> (<kbd>Esc</kbd>). Each person gets the message as a private message from you. They do not see who else got it, and each answer arrives in the chat with that person. The message is added to your conversation with each of them, and the boxes are cleared once it was sent. If it cannot be delivered to one of them, a notification says so, and that conversation marks it as not sent. With one box checked, <kbd>Ctrl</kbd>+<kbd>M</kbd> opens the chat with that person.</p>
+<h3 id="chat-window">The chat window</h3>
+<p>The controls, in Tab order:</p>
+<dl>
+<dt><span class="ui">History</span> (<kbd>Alt</kbd>+<kbd>H</kbd>)</dt>
+<dd>A list with one message per item, the newest last. Each item says who wrote the message, when, and the text, for example <span class="ui">Ana, 14:32: The photos are on their way.</span> or <span class="ui">You, 14:33: Thanks!</span>. A message from another day also has its date. Use the <kbd>Up arrow</kbd> and <kbd>Down arrow</kbd> keys to read the messages, <kbd>Home</kbd> and <kbd>End</kbd> for the first and the last one, and <kbd>Ctrl</kbd>+<kbd>C</kbd> to copy the selected message. When you move to the list, the newest message is selected.</dd>
+<dt>The status line</dt>
+<dd>One line below the history that shows the message that arrived last, that the other person is typing, or why a message was not sent. It cannot receive the keyboard focus; screen readers read it when it changes and when the window comes to the front.</dd>
+<dt><span class="ui">Message</span> (<kbd>Alt</kbd>+<kbd>M</kbd>)</dt>
+<dd>Where you write. A message can have up to 4000 characters.</dd>
+<dt><span class="ui">Send</span> (<kbd>Alt</kbd>+<kbd>S</kbd> or <kbd>Enter</kbd>)</dt>
+<dd>Sends the message and adds it to the history. The focus stays in the <span class="ui">Message</span> field.</dd>
+<dt><span class="ui">Add to My Recipients</span> (<kbd>Alt</kbd>+<kbd>A</kbd>)</dt>
+<dd>Only for a person who is not in your recipient list: opens the Add Recipient window with their name and Contact ID filled in.</dd>
+<dt><span class="ui">Block</span> (<kbd>Alt</kbd>+<kbd>B</kbd>)</dt>
+<dd>Blocks the person after you confirm, and closes the chat. A blocked person can neither write to you nor send you anything.</dd>
+<dt><span class="ui">Delete Conversation…</span> (<kbd>Alt</kbd>+<kbd>D</kbd>)</dt>
+<dd>Deletes the messages with this person from your computer after you confirm. The default answer is <span class="ui">No</span>.</dd>
+<dt><span class="ui">Close</span> (<kbd>Esc</kbd>)</dt>
+<dd>Closes the window. The conversation is kept, and is there again when you open the chat.</dd>
+</dl>
+<h3 id="chat-receiving">When a message arrives</h3>
+<ul>
+<li>While the chat window is in front, the message is added to the history and shown in the status line, where screen readers read it out, with the name of the person first.</li>
+<li>While you are in another window, the chat window opens or stays where it is without taking the focus, its taskbar button flashes, and a notification, <span class="ui">Message from</span> with the person's name, shows the message. Screen readers usually read notifications. Selecting the notification brings the chat to the front.</li>
+<li>A sound plays in both cases, unless you turned it off.</li>
+</ul>
+<p>When the other person starts writing, the status line says so, for example <span class="ui">Ana is typing…</span>. While the chat window is in front, this is announced once, with a short sound; it is not repeated while they go on writing. The other person is told in the same way when you write. Both can be turned off in Settings.</p>
+<h3 id="chat-failed">When a message cannot be sent</h3>
+<p>A message that cannot be delivered is marked in the history, for example <span class="ui">You, 14:35 (not sent): Are you there?</span>, the status line says why, and a sound plays. Dodavo does not try again by itself. The text is put back into the <span class="ui">Message</span> field if that is empty, so that you can press <kbd>Enter</kbd> to send it again. The reasons you may see:</p>
+<ul>
+<li><span class="ui">The other computer could not be found on the network</span> or <span class="ui">Connection attempt timed out</span>: Dodavo is not running on the other computer, or one of you is offline.</li>
+<li><span class="ui">This person does not accept messages from you</span>: the other person takes messages only from their recipients, or has blocked you.</li>
+<li><span class="ui">Dodavo on the other side does not have chat</span>: the other person has a Dodavo without chat.</li>
+<li><span class="ui">The connection was lost</span> or <span class="ui">The other side did not confirm the message</span>: the connection ended before the message was confirmed.</li>
+</ul>
+<h3 id="chat-who">Who can write to you</h3>
+<p>Unless you change it, anyone who has your Contact ID and is not blocked can write to you, as anyone can offer you a file. A chat with a person who is not in your recipient list shows a warning with their Contact ID above the history. In Settings, on the <span class="ui">Chat</span> tab, you can choose <span class="ui">Only my recipients</span>: messages from anyone else are then refused without you seeing them, and their sender is told that you do not accept messages from them.</p>
+<h3 id="chat-history">Where conversations are kept</h3>
+<p>Conversations are kept on your computer, with your settings, until you delete them: the newest 2000 messages with each person. They are not sent anywhere else. <span class="ui">Delete Conversation…</span> in a chat window deletes one, and <span class="ui">Delete All Conversations…</span> in Settings, on the <span class="ui">Chat</span> tab, deletes all of them. Deleting removes the messages from your computer only; the other person keeps their copy.</p>
+</section>
+
 <section aria-labelledby="background">
 <h2 id="background">Running in the notification area</h2>
 <p>When you close the main window, Dodavo keeps running in the notification area at the end of the taskbar, so that it can receive files. The first time this happens, a notification explains it.</p>
@@ -329,7 +383,7 @@
 
 <section aria-labelledby="settings">
 <h2 id="settings">Settings</h2>
-<p>In the main window, press <kbd>Ctrl</kbd>+<kbd>Comma</kbd>, or choose <span class="ui">Settings…</span> from the <span class="ui">File</span> menu. Press <kbd>Enter</kbd> or activate <span class="ui">OK</span> to save your changes, or press <kbd>Esc</kbd> or activate <span class="ui">Cancel</span> to discard them. The settings are on three tabs: <span class="ui">General</span>, <span class="ui">Transfers</span> and <span class="ui">Receiving</span>. <kbd>Tab</kbd> goes from the tabs through the settings of the selected tab, and then to <span class="ui">OK</span> and <span class="ui">Cancel</span>. To change the tab, press <kbd>Ctrl</kbd>+<kbd>Tab</kbd> or <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Tab</kbd> anywhere in the window, or the <kbd>Left arrow</kbd> and <kbd>Right arrow</kbd> keys while the focus is on the tabs. The settings of each tab, in Tab order:</p>
+<p>In the main window, press <kbd>Ctrl</kbd>+<kbd>Comma</kbd>, or choose <span class="ui">Settings…</span> from the <span class="ui">File</span> menu. Press <kbd>Enter</kbd> or activate <span class="ui">OK</span> to save your changes, or press <kbd>Esc</kbd> or activate <span class="ui">Cancel</span> to discard them. The settings are on five tabs: <span class="ui">General</span>, <span class="ui">Transfers</span>, <span class="ui">Receiving</span>, <span class="ui">Chat</span> and <span class="ui">Sounds</span>. <kbd>Tab</kbd> goes from the tabs through the settings of the selected tab, and then to <span class="ui">OK</span> and <span class="ui">Cancel</span>. To change the tab, press <kbd>Ctrl</kbd>+<kbd>Tab</kbd> or <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Tab</kbd> anywhere in the window, or the <kbd>Left arrow</kbd> and <kbd>Right arrow</kbd> keys while the focus is on the tabs. The settings of each tab, in Tab order:</p>
 <h3 id="settings-general">General</h3>
 <dl>
 <dt><span class="ui">Your name (shown to the people you send files to)</span></dt>
@@ -383,6 +437,34 @@
 <dt><span class="ui">Blocked Senders…</span></dt>
 <dd>Opens the list of the senders you blocked, where you can unblock them. See <a href="#blocking">Blocking a sender</a>.</dd>
 </dl>
+<h3 id="settings-chat">Chat</h3>
+<dl>
+<dt><span class="ui">Who can send me messages</span></dt>
+<dd>A list with <span class="ui">Anyone who is not blocked</span> and <span class="ui">Only my recipients</span>. With the second choice, a message from someone who is not in your recipient list is refused without you seeing it. See <a href="#chat-who">Who can write to you</a>.</dd>
+<dt><span class="ui">Tell the other person when I am typing</span></dt>
+<dd>When selected, the other person's chat window says that you are typing while you write a message. It is on unless you clear it.</dd>
+<dt><span class="ui">Announce when the other person is typing</span></dt>
+<dd>When selected, the chat window in front announces to screen readers, and with a sound, that the other person has started typing. When cleared, the status line still shows it. It is on unless you clear it.</dd>
+<dt><span class="ui">Delete All Conversations…</span></dt>
+<dd>Deletes every conversation from your computer after you confirm. This happens at once, whether you then close Settings with <span class="ui">OK</span> or <span class="ui">Cancel</span>.</dd>
+</dl>
+<h3 id="settings-sounds">Sounds</h3>
+<p>Dodavo plays a short sound of its own for the events in the list below. You can turn all sounds off, turn single ones off, or replace any of them with a sound file of yours.</p>
+<dl>
+<dt><span class="ui">Play sounds</span></dt>
+<dd>When cleared, Dodavo plays no sound. What each event is set to is kept. It is on unless you clear it.</dd>
+<dt><span class="ui">Events</span></dt>
+<dd>A list of the events, each with what it plays, for example <span class="ui">Message received: default sound</span>. The events are: <span class="ui">Message received</span>, <span class="ui">Message sent</span>, <span class="ui">The other person is typing</span>, <span class="ui">Message not sent</span>, <span class="ui">Incoming item</span>, <span class="ui">Transfer started</span>, <span class="ui">Transfer completed</span>, <span class="ui">Transfer failed</span>, <span class="ui">Transfer declined or cancelled</span>, <span class="ui">Connection lost</span> and <span class="ui">Transfer continues</span>. Select an event with the arrow keys; the controls that follow apply to it.</dd>
+<dt><span class="ui">Sound</span></dt>
+<dd>A list with <span class="ui">Default</span> (the built-in sound), <span class="ui">None</span> and <span class="ui">A file of my own</span>. After choosing <span class="ui">A file of my own</span>, pick the file with <span class="ui">Browse…</span>; it has to be a WAV file. Until you have picked one, the event plays what it did before.</dd>
+<dt><span class="ui">Browse…</span></dt>
+<dd>Chooses another WAV file for the selected event. It is available while <span class="ui">A file of my own</span> is chosen.</dd>
+<dt><span class="ui">Play</span></dt>
+<dd>Plays what the selected event is set to, also while <span class="ui">Play sounds</span> is cleared, so that you can hear it before you save.</dd>
+<dt><span class="ui">Reset All</span></dt>
+<dd>Sets every event back to its built-in sound.</dd>
+</dl>
+<p>If a sound file of yours cannot be played later, for example because it was moved, Dodavo plays the built-in sound instead.</p>
 <h3 id="change-id">Changing your Contact ID</h3>
 <p>You can replace your Contact ID with a new one, for example when it has reached people you do not want to receive anything from. The current Contact ID then stops working for good: nobody can reach you with it any more, and it cannot be brought back. Everyone who should still be able to send you files has to get the new Contact ID from you and replace the old one with <span class="ui">Edit Recipient…</span>. Your recipients, your blocked senders and your settings stay as they are.</p>
 <p>No transfer can continue under another Contact ID. Dodavo tells you how many transfers are under way or waiting for your answer, and cancels them when you confirm. One kind of transfer cannot be cancelled this way: a send whose data has all been sent and that the recipient has not confirmed yet. While there is such a transfer, Dodavo tells you so and keeps your Contact ID; try again when that transfer has ended.</p>
@@ -409,6 +491,7 @@
 <tr><td><kbd>F2</kbd></td><td>Edit the selected recipient</td></tr>
 <tr><td><kbd>Delete</kbd></td><td>Remove the selected recipient</td></tr>
 <tr><td><kbd>Ctrl</kbd>+<kbd>B</kbd></td><td>Block the selected recipient</td></tr>
+<tr><td><kbd>Ctrl</kbd>+<kbd>M</kbd></td><td>Chat with the selected recipient, or write one message to everyone who is checked</td></tr>
 <tr><td><kbd>Ctrl</kbd>+<kbd>T</kbd></td><td>Show the windows of all transfers in progress</td></tr>
 <tr><td><kbd>Ctrl</kbd>+<kbd>Comma</kbd></td><td>Open Settings</td></tr>
 <tr><td><kbd>Enter</kbd> or a double-click</td><td>Open the menu of actions for the selected recipient</td></tr>
@@ -445,6 +528,7 @@
 <tr><td><kbd>Alt</kbd>+<kbd>S</kbd></td><td>Move to the Save to field</td></tr>
 <tr><td><kbd>Alt</kbd>+<kbd>B</kbd></td><td>Browse for a folder</td></tr>
 <tr><td><kbd>Alt</kbd>+<kbd>M</kbd></td><td>Add the unknown sender to my recipients</td></tr>
+<tr><td><kbd>Alt</kbd>+<kbd>C</kbd></td><td>Chat with the sender</td></tr>
 </tbody>
 </table>
 <table>
@@ -471,6 +555,7 @@
 <tr><td><kbd>Alt</kbd>+<kbd>R</kbd></td><td>Resume the transfer</td></tr>
 <tr><td><kbd>Alt</kbd>+<kbd>B</kbd></td><td>Minimize to background</td></tr>
 <tr><td><kbd>Esc</kbd></td><td>Close the window (asks whether to continue in the background or cancel)</td></tr>
+<tr><td><kbd>Alt</kbd>+<kbd>C</kbd></td><td>Chat with the other person</td></tr>
 </tbody>
 </table>
 <table>
@@ -484,6 +569,23 @@
 <tr><td><kbd>Alt</kbd>+<kbd>I</kbd> or <kbd>Enter</kbd></td><td>Install the update</td></tr>
 <tr><td><kbd>Alt</kbd>+<kbd>L</kbd> or <kbd>Esc</kbd></td><td>Remind me later (close the window)</td></tr>
 <tr><td><kbd>Alt</kbd>+<kbd>C</kbd></td><td>Cancel the download</td></tr>
+</tbody>
+</table>
+<table>
+<caption>Chat window</caption>
+<thead>
+<tr><th scope="col">Keys</th><th scope="col">Action</th></tr>
+</thead>
+<tbody>
+<tr><td><kbd>Enter</kbd> or <kbd>Alt</kbd>+<kbd>S</kbd></td><td>Send the message</td></tr>
+<tr><td><kbd>Alt</kbd>+<kbd>M</kbd></td><td>Move to the Message field</td></tr>
+<tr><td><kbd>Alt</kbd>+<kbd>H</kbd></td><td>Move to the history</td></tr>
+<tr><td><kbd>Up arrow</kbd> and <kbd>Down arrow</kbd> in the history</td><td>Read the previous or the next message</td></tr>
+<tr><td><kbd>Ctrl</kbd>+<kbd>C</kbd> in the history</td><td>Copy the selected message</td></tr>
+<tr><td><kbd>Alt</kbd>+<kbd>A</kbd></td><td>Add the person to my recipients, when they are not among them</td></tr>
+<tr><td><kbd>Alt</kbd>+<kbd>B</kbd></td><td>Block the person</td></tr>
+<tr><td><kbd>Alt</kbd>+<kbd>D</kbd></td><td>Delete the conversation</td></tr>
+<tr><td><kbd>Esc</kbd></td><td>Close the window; the conversation is kept</td></tr>
 </tbody>
 </table>
 <table>

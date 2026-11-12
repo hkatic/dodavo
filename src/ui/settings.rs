@@ -6,19 +6,24 @@ use windows_sys::Win32::{
     Foundation::{HWND, LPARAM, LRESULT},
     UI::{
         Controls::{NMHDR, TCN_SELCHANGE},
-        WindowsAndMessaging::{BN_CLICKED, IDCANCEL},
+        WindowsAndMessaging::{
+            BN_CLICKED, CB_SETCURSEL, CBN_SELCHANGE, IDCANCEL, LB_ADDSTRING, LB_DELETESTRING,
+            LB_GETCURSEL, LB_INSERTSTRING, LB_RESETCONTENT, LB_SETCURSEL, LBN_SELCHANGE,
+            LBS_NOINTEGRALHEIGHT, LBS_NOTIFY, WS_EX_CLIENTEDGE, WS_TABSTOP, WS_VSCROLL,
+        },
     },
 };
 
 use super::{
-    error, get_text, info, set_text, shell,
+    confirm_no, error, get_text, info, send, set_text, shell, sound, wide,
     window::{self, CreateOptions, Handler, Window},
 };
 use crate::{
     app,
-    config::{CloseAction, ConnectionLostAction, OverLimit, ReceivedFolder},
+    config::{ChatFrom, CloseAction, ConnectionLostAction, OverLimit, ReceivedFolder, SoundChoice},
     i18n::{Lang, tr},
     limit::{self, Unit},
+    sound::SoundEvent,
 };
 
 const ID_OK: u16 = 1;
@@ -50,6 +55,21 @@ const ID_TEMP_BROWSE: u16 = 34;
 const ID_TABS: u16 = 35;
 const ID_CLOSE_WHEN_ENDED: u16 = 36;
 const ID_WARN_FAT_TEMP: u16 = 37;
+const ID_CHAT_FROM: u16 = 38;
+const ID_SEND_TYPING: u16 = 39;
+const ID_ANNOUNCE_TYPING: u16 = 40;
+const ID_DELETE_CHATS: u16 = 41;
+const ID_SOUNDS_ON: u16 = 42;
+const ID_SOUND_EVENTS: u16 = 43;
+const ID_SOUND_CHOICE: u16 = 44;
+const ID_SOUND_BROWSE: u16 = 45;
+const ID_SOUND_PLAY: u16 = 46;
+const ID_SOUNDS_RESET: u16 = 47;
+
+/// The places of the choices in the list of what an event plays.
+const SOUND_DEFAULT: usize = 0;
+const SOUND_OFF: usize = 1;
+const SOUND_FILE: usize = 2;
 
 /// The window (96-DPI units): a margin around a page of settings.
 const MARGIN: i32 = 14;
@@ -60,6 +80,7 @@ const WIDTH: i32 = MARGIN + PAGE_W + MARGIN;
 const PAGE_GENERAL: usize = 0;
 const PAGE_TRANSFERS: usize = 1;
 const PAGE_RECEIVING: usize = 2;
+// Chat and Sounds follow; nothing on them can be refused.
 
 struct SettingsDialog {
     /// The row of tabs, and the controls of each tab's page.
@@ -101,6 +122,53 @@ struct SettingsDialog {
     warn_fat_temp: HWND,
     /// The read-only field with this installation's Contact ID.
     my_id: HWND,
+    /// Who may send chat messages, and what is said about typing.
+    chat_from: HWND,
+    send_typing: HWND,
+    announce_typing: HWND,
+    /// Whether any sound plays, the events that have one, and what the
+    /// selected event plays.
+    sounds_on: HWND,
+    sound_events: HWND,
+    sound_choice: HWND,
+    sound_browse: HWND,
+    sound_play: HWND,
+    /// What each event plays, in the order of `SoundEvent::ALL`, as it is
+    /// set here; saved with OK.
+    sounds: Vec<SoundChoice>,
+    /// The file that each event last played here, which its choice of a
+    /// file brings back: the arrow keys pass the other choices on their way.
+    sound_files: Vec<Option<PathBuf>>,
+}
+
+/// The name of an event that has a sound.
+fn sound_name(event: SoundEvent) -> &'static str {
+    match event {
+        SoundEvent::MessageReceived => tr!(sound_message_received),
+        SoundEvent::MessageSent => tr!(sound_message_sent),
+        SoundEvent::Typing => tr!(sound_typing),
+        SoundEvent::MessageFailed => tr!(sound_message_failed),
+        SoundEvent::Incoming => tr!(sound_incoming),
+        SoundEvent::Started => tr!(sound_started),
+        SoundEvent::Completed => tr!(sound_completed),
+        SoundEvent::Failed => tr!(sound_failed),
+        SoundEvent::Cancelled => tr!(sound_cancelled),
+        SoundEvent::ConnectionLost => tr!(sound_connection_lost),
+        SoundEvent::Continues => tr!(sound_continues),
+    }
+}
+
+/// An event with what it plays, as the list of events shows it and a screen
+/// reader reads it.
+fn sound_entry(event: SoundEvent, choice: &SoundChoice) -> String {
+    let sound = match choice {
+        SoundChoice::Default => tr!(sound_default).to_string(),
+        SoundChoice::Off => tr!(sound_off).to_string(),
+        SoundChoice::File(path) => path
+            .file_name()
+            .map_or_else(|| path.display().to_string(), |n| n.to_string_lossy().into_owned()),
+    };
+    tr!(sound_entry, event = sound_name(event), sound = sound)
 }
 
 pub fn show(owner: HWND) {
@@ -134,6 +202,16 @@ pub fn show(owner: HWND) {
         temp_dir: std::ptr::null_mut(),
         warn_fat_temp: std::ptr::null_mut(),
         my_id: std::ptr::null_mut(),
+        chat_from: std::ptr::null_mut(),
+        send_typing: std::ptr::null_mut(),
+        announce_typing: std::ptr::null_mut(),
+        sounds_on: std::ptr::null_mut(),
+        sound_events: std::ptr::null_mut(),
+        sound_choice: std::ptr::null_mut(),
+        sound_browse: std::ptr::null_mut(),
+        sound_play: std::ptr::null_mut(),
+        sounds: Vec::new(),
+        sound_files: Vec::new(),
     };
     let hwnd = window::create(
         CreateOptions {
@@ -226,6 +304,115 @@ impl SettingsDialog {
         window::enable(self.ask_after, stays);
     }
 
+    /// The event that is selected in the list of events.
+    fn sound_selected(&self) -> Option<usize> {
+        let index = send(self.sound_events, LB_GETCURSEL, 0, 0);
+        (index >= 0 && (index as usize) < self.sounds.len()).then_some(index as usize)
+    }
+
+    /// Shows what the selected event plays in the fields below the list.
+    fn show_sound(&self) {
+        let Some(choice) = self.sound_selected().map(|i| &self.sounds[i]) else {
+            return;
+        };
+        let place = match choice {
+            SoundChoice::Default => SOUND_DEFAULT,
+            SoundChoice::Off => SOUND_OFF,
+            SoundChoice::File(_) => SOUND_FILE,
+        };
+        send(self.sound_choice, CB_SETCURSEL, place, 0);
+        window::enable(self.sound_browse, place == SOUND_FILE);
+        // The focus must not stay on a button that cannot be used.
+        if place == SOUND_OFF && window::focused() == self.sound_play {
+            window::focus(self.sound_choice);
+        }
+        window::enable(self.sound_play, place != SOUND_OFF);
+    }
+
+    /// Sets what the selected event plays, and shows it in the list.
+    fn set_sound(&mut self, choice: SoundChoice) {
+        let Some(index) = self.sound_selected() else {
+            return;
+        };
+        let entry = sound_entry(SoundEvent::ALL[index], &choice);
+        if let SoundChoice::File(path) = &choice {
+            self.sound_files[index] = Some(path.clone());
+        }
+        self.sounds[index] = choice;
+        send(self.sound_events, LB_DELETESTRING, index, 0);
+        send(
+            self.sound_events,
+            LB_INSERTSTRING,
+            index,
+            wide(&entry).as_ptr() as isize,
+        );
+        send(self.sound_events, LB_SETCURSEL, index, 0);
+        self.show_sound();
+    }
+
+    /// Asks for a sound file for the selected event. Whether one was chosen.
+    fn browse_sound(&mut self, w: &Window) -> bool {
+        let chosen = shell::pick_many(w.hwnd, tr!(sound_pick_title), false);
+        let Some(path) = chosen.into_iter().next() else {
+            return false;
+        };
+        if !sound::is_wav(&path) {
+            error(w.hwnd, tr!(sound_not_wav));
+            return false;
+        }
+        self.set_sound(SoundChoice::File(path));
+        true
+    }
+
+    /// Another choice was made in the list of what the selected event plays.
+    fn sound_chosen(&mut self) {
+        match window::combo_selection(self.sound_choice) {
+            Some(SOUND_DEFAULT) => self.set_sound(SoundChoice::Default),
+            Some(SOUND_OFF) => self.set_sound(SoundChoice::Off),
+            // The file is chosen with Browse…, which is available now. No
+            // file is asked for here: the arrow keys pass this choice on
+            // their way through the list. Until there is a file, the event
+            // plays what it did; one that it had here comes back.
+            Some(SOUND_FILE) => {
+                let had = self.sound_selected().and_then(|i| self.sound_files[i].clone());
+                match had {
+                    Some(path) => self.set_sound(SoundChoice::File(path)),
+                    None => window::enable(self.sound_browse, true),
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn fill_sounds(&self) {
+        send(self.sound_events, LB_RESETCONTENT, 0, 0);
+        for (event, choice) in SoundEvent::ALL.iter().zip(&self.sounds) {
+            let entry = sound_entry(*event, choice);
+            send(
+                self.sound_events,
+                LB_ADDSTRING,
+                0,
+                wide(&entry).as_ptr() as isize,
+            );
+        }
+        send(self.sound_events, LB_SETCURSEL, 0, 0);
+        self.show_sound();
+    }
+
+    /// Deletes every chat that is kept, if the user confirms it. At once,
+    /// like blocking: it is not one of the settings that OK saves.
+    fn delete_chats(&self, w: &Window) {
+        if !confirm_no(w.hwnd, tr!(chat_delete_all_confirm)) {
+            return;
+        }
+        match super::chat::delete_all() {
+            Ok(None) => info(w.hwnd, tr!(chat_deleted_all)),
+            // A chat window asks something: that comes first.
+            Ok(Some(busy)) => window::bring_to_front(busy),
+            Err(e) => error(w.hwnd, &tr!(chat_delete_failed, error = e)),
+        }
+    }
+
     fn save(&self, w: &Window) -> bool {
         let my_name = get_text(self.my_name).trim().to_string();
         if my_name.is_empty() {
@@ -293,6 +480,13 @@ impl SettingsDialog {
             return false;
         };
         let warn_fat_temp = window::is_checked(self.warn_fat_temp);
+        let chat_from = window::combo_selection(self.chat_from)
+            .and_then(|i| ChatFrom::ALL.get(i).copied())
+            .unwrap_or_default();
+        let send_typing = window::is_checked(self.send_typing);
+        let announce_typing = window::is_checked(self.announce_typing);
+        let sounds_on = window::is_checked(self.sounds_on);
+        let sounds = self.sounds.clone();
         // Unset, it follows Downloads to wherever that is moved.
         let dir = dir.filter(|d| *d != crate::platform::downloads_dir());
         app::update_cfg(|c| {
@@ -321,6 +515,13 @@ impl SettingsDialog {
             c.language = language;
             c.set_temp_dir(temp_dir);
             c.warn_fat_temp = warn_fat_temp;
+            c.chat_from = chat_from;
+            c.send_typing = send_typing;
+            c.announce_typing = announce_typing;
+            c.sounds.on = sounds_on;
+            for (event, choice) in SoundEvent::ALL.into_iter().zip(sounds) {
+                c.sounds.set(event, choice);
+            }
         });
         shell::set_start_with_windows(autostart);
         if let Some(on) = explorer_menu {
@@ -346,6 +547,8 @@ impl Handler for SettingsDialog {
                 tr!(settings_tab_general),
                 tr!(settings_tab_transfers),
                 tr!(settings_tab_receiving),
+                tr!(settings_tab_chat),
+                tr!(settings_tab_sounds),
             ],
             ID_TABS,
             (x, 10, width, 26),
@@ -601,6 +804,86 @@ impl Handler for SettingsDialog {
         bottom = bottom.max(y + 26);
         self.pages.push(w.controls_from(start));
 
+        // Chat: who may write, and what is said about typing.
+        let start = w.control_count();
+        let mut y = top;
+        w.caption(tr!(chat_from_label), (x, y, width, 18));
+        let choices = [tr!(chat_from_anyone), tr!(chat_from_recipients)];
+        let selected = ChatFrom::ALL
+            .iter()
+            .position(|&f| f == cfg.chat_from)
+            .unwrap_or(0);
+        self.chat_from = w.combobox(&choices, selected, ID_CHAT_FROM, (x, y + 20, 300, 24));
+        y += 58;
+        self.send_typing = w.checkbox(
+            tr!(send_typing),
+            ID_SEND_TYPING,
+            cfg.send_typing,
+            (x, y, width, 20),
+        );
+        y += 24;
+        self.announce_typing = w.checkbox(
+            tr!(announce_typing),
+            ID_ANNOUNCE_TYPING,
+            cfg.announce_typing,
+            (x, y, width, 20),
+        );
+        y += 34;
+        let delete_w = w.button_width(tr!(chat_delete_all), 160);
+        w.button(tr!(chat_delete_all), ID_DELETE_CHATS, (x, y, delete_w, 26));
+        bottom = bottom.max(y + 26);
+        self.pages.push(w.controls_from(start));
+
+        // Sounds: whether any plays, and what each event plays.
+        let start = w.control_count();
+        let mut y = top;
+        self.sounds_on = w.checkbox(
+            tr!(sounds_on),
+            ID_SOUNDS_ON,
+            cfg.sounds.on,
+            (x, y, width, 20),
+        );
+        y += 30;
+        // The caption right before the list gives it its accessible name.
+        w.caption(tr!(sounds_events_label), (x, y, width, 18));
+        self.sound_events = w.add_ex(
+            "LISTBOX",
+            "",
+            WS_TABSTOP | WS_VSCROLL | (LBS_NOTIFY | LBS_NOINTEGRALHEIGHT) as u32,
+            WS_EX_CLIENTEDGE,
+            ID_SOUND_EVENTS,
+            (x, y + 20, width, 190),
+        );
+        y += 220;
+        w.caption(tr!(sound_choice_label), (x, y, width, 18));
+        let choices = [
+            tr!(sound_choice_default),
+            tr!(sound_choice_off),
+            tr!(sound_choice_file),
+        ];
+        self.sound_choice = w.combobox(&choices, 0, ID_SOUND_CHOICE, (x, y + 20, 240, 24));
+        self.sound_browse = w.button(tr!(browse), ID_SOUND_BROWSE, (x + 246, y + 19, 86, 26));
+        let play_w = w.button_width(tr!(sound_play), 86);
+        self.sound_play = w.button(tr!(sound_play), ID_SOUND_PLAY, (x + 338, y + 19, play_w, 26));
+        y += 58;
+        let reset_w = w.button_width(tr!(sounds_reset), 110);
+        w.button(tr!(sounds_reset), ID_SOUNDS_RESET, (x, y, reset_w, 26));
+        bottom = bottom.max(y + 26);
+        self.pages.push(w.controls_from(start));
+        self.sounds = SoundEvent::ALL
+            .iter()
+            .map(|&event| cfg.sounds.choice(event))
+            .collect();
+        self.sound_files = self
+            .sounds
+            .iter()
+            .map(|choice| match choice {
+                SoundChoice::File(path) => Some(path.clone()),
+                _ => None,
+            })
+            .collect();
+        self.fill_sounds();
+
         let buttons_y = bottom + 22;
         w.button(tr!(ok), ID_OK, (WIDTH - MARGIN - 186, buttons_y, 90, 30));
         w.button(
@@ -633,6 +916,25 @@ impl Handler for SettingsDialog {
                 }
             }
             ID_BLOCKED => super::blocked::show(w.hwnd),
+            ID_DELETE_CHATS => self.delete_chats(w),
+            ID_SOUND_EVENTS if code == LBN_SELCHANGE as u16 => self.show_sound(),
+            ID_SOUND_CHOICE if code == CBN_SELCHANGE as u16 => self.sound_chosen(),
+            ID_SOUND_EVENTS | ID_SOUND_CHOICE => return false,
+            ID_SOUND_BROWSE => {
+                self.browse_sound(w);
+            }
+            // Also while sounds are off: this is how one is tried.
+            ID_SOUND_PLAY => {
+                if let Some(index) = self.sound_selected() {
+                    sound::play_choice(SoundEvent::ALL[index], &self.sounds[index]);
+                }
+            }
+            ID_SOUNDS_RESET => {
+                self.sounds = vec![SoundChoice::Default; SoundEvent::ALL.len()];
+                self.sound_files = vec![None; SoundEvent::ALL.len()];
+                self.fill_sounds();
+                window::focus(self.sound_events);
+            }
             ID_COPY => {
                 let my_id = app::with(|a| a.my_id.clone());
                 shell::copy_to_clipboard(w.hwnd, &my_id);

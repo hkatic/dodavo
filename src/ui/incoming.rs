@@ -38,6 +38,7 @@ const ID_ADD_CONTACT: u16 = 13;
 const ID_DIR: u16 = 14;
 const ID_ITEMS: u16 = 15;
 const ID_BLOCK: u16 = 16;
+const ID_CHAT: u16 = 17;
 const EN_KILLFOCUS: u16 = 0x0200;
 
 const WIDTH: i32 = 480;
@@ -102,10 +103,14 @@ struct Incoming {
     accept_button: HWND,
     decline_button: HWND,
     block_button: HWND,
+    /// Opens the chat with the sender.
+    chat_button: HWND,
     /// The width of each of the two buttons, in 96-DPI units.
     button_w: i32,
-    /// The width of the Block button, which stands apart on the left.
+    /// The widths of the Block and Chat buttons, which stand apart on the
+    /// left.
     block_w: i32,
+    chat_w: i32,
 }
 
 /// Whether `offer` fits into `dir`, with `folder` deciding what is kept of a
@@ -169,8 +174,10 @@ fn open(id: u64, from: &str, name: &str, known: bool, offer: Offer) -> HWND {
         accept_button: null,
         decline_button: null,
         block_button: null,
+        chat_button: null,
         button_w: 0,
         block_w: 0,
+        chat_w: 0,
     };
     let hwnd = window::create(
         CreateOptions {
@@ -399,6 +406,18 @@ impl Incoming {
         w.place(self.space, (14, y + 52, CONTENT_W, 36));
         let right = 14 + CONTENT_W;
         w.place(self.block_button, (14, y + 102, self.block_w, 30));
+        // Chat stands beside Block. Where the texts are too wide for one
+        // row (a large text size), it gets a row of its own below.
+        let answers_x = right - 2 * self.button_w - 6;
+        let beside = 14 + self.block_w + 6;
+        let fits = beside + self.chat_w + 12 <= answers_x;
+        let below = if fits { 0 } else { 36 };
+        let chat_at = if fits {
+            (beside, y + 102)
+        } else {
+            (14, y + 138)
+        };
+        w.place(self.chat_button, (chat_at.0, chat_at.1, self.chat_w, 30));
         w.place(
             self.accept_button,
             (right - 2 * self.button_w - 6, y + 102, self.button_w, 30),
@@ -407,7 +426,7 @@ impl Incoming {
             self.decline_button,
             (right - self.button_w, y + 102, self.button_w, 30),
         );
-        let height = y + 170;
+        let height = y + 170 + below;
         if window::is_minimized(w.hwnd) {
             self.pending_height.set(Some(height));
         } else {
@@ -564,6 +583,8 @@ impl Handler for Incoming {
         // In the tab order as on the screen: Block stands left of the answers.
         self.block_w = w.button_width(tr!(block_sender), 96);
         self.block_button = w.button(tr!(block_sender), ID_BLOCK, later);
+        self.chat_w = w.button_width(tr!(chat_button), 0);
+        self.chat_button = w.button(tr!(chat_button), ID_CHAT, later);
         self.accept_button = w.button(tr!(accept), ID_ACCEPT, later);
         self.decline_button = w.button(tr!(decline), ID_DECLINE, later);
         self.show_offers(w);
@@ -590,6 +611,10 @@ impl Handler for Incoming {
             ID_ACCEPT => self.accept(w),
             ID_DECLINE => w.close(),
             ID_BLOCK => self.block(w),
+            // To ask the sender what this is, before answering.
+            ID_CHAT => {
+                super::chat::open(&self.from, &self.name, true);
+            }
             _ => return false,
         }
         true

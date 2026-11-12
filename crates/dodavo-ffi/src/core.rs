@@ -1631,6 +1631,12 @@ impl Core {
                     self.outbox.push(Out::DocumentDone { uri });
                 }
             }
+            // The network here is started without chat (`net::start`), so
+            // nobody's message is taken and none of these comes.
+            Event::Chat { .. }
+            | Event::ChatSent { .. }
+            | Event::ChatFailed { .. }
+            | Event::Typing { .. } => {}
         }
     }
 

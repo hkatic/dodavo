@@ -24,7 +24,7 @@ Without a direct path, data goes through number0's free public relays. A relay-o
 
 ### Nothing explains why peers on different protocol versions cannot connect
 
-After a change of the ALPN, the two sides cannot connect, and the user only sees iroh's own English text (the last case of `net::connect_error_text`). Decide how a newer version handles this before the first change of the ALPN. A new release cannot change what 1.0.0 itself shows.
+After a change of the transfers' ALPN, the two sides cannot connect, and the user only sees iroh's own English text (the last case of `net::connect_error_text`). Decide how a newer version handles this before the first change of that ALPN. A new release cannot change what 1.0.0 itself shows. The chat, which has an ALPN of its own, tells a side that does not take it (`net::chat::no_such_protocol`, "Dodavo on the other side does not have chat"); a transfer's dial can tell the same way.
 
 ### An offer was reported as declined although nobody answered (not explained)
 
@@ -43,6 +43,18 @@ The labels of check boxes are drawn in grey on the dark background, with less co
 Each offer gets its own `IncomingWindowController`, centred on the same spot, so the ones behind are easily missed and their transfers wait. Windows puts them in one window with one answer (`incoming::open_or_add`). Each window also speaks of its one item only, so the line that counts the items over the size limit (`limit::notice`) never shows on a Mac.
 
 ## Low
+
+### A very long chat message is cut off in the history on Windows
+
+Windows allows no list item higher than 255 pixels, so a message that wraps over more lines than fit (about a dozen at the usual text size) shows only its beginning in the history (`ui::chat::MAX_ITEM_PX`). Screen readers get the whole text, and Ctrl+C copies all of it. A history that draws itself, or a view of the selected message, would show the rest.
+
+### With messages from recipients only, an answer from someone else is refused
+
+With `Only my recipients` chosen, the user can still write to a person who is not a recipient (from the Incoming Transfer window, say), and that person's answer is refused like any message of theirs (`net::chat::takes`), which they are told. Either a person the user wrote to should be let through for a while, or the chat should say that answers cannot arrive.
+
+### A chat message that the program exits on is kept as sent
+
+A message is written to the conversation when it is sent, and marked as not sent when the network says so. If Dodavo exits before the other side has confirmed it, nothing marks it, and the conversation shows it as sent although it may not have arrived.
 
 - **A transfer cancelled by a change of the Contact ID stays waiting on a side that was not connected.** Change My Contact ID cancels every transfer, which the other side learns only if it is connected at that moment. One that is not goes on asking the old Contact ID, which nobody answers any more, and shows its transfer as waiting for the connection until the user cancels it or it expires after 30 days. A tombstone cannot answer either, since the old identity is gone.
 

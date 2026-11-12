@@ -36,6 +36,7 @@ use crate::{
 const ID_CANCEL: u16 = 11;
 const ID_PAUSE: u16 = 12;
 const ID_BACKGROUND: u16 = 13;
+const ID_CHAT: u16 = 14;
 const RANGE: usize = 1000;
 /// Posted to itself after the transfer ended, to ask or close outside of event handling.
 const WM_APP_FINISHED: u32 = WM_APP + 10;
@@ -1144,7 +1145,8 @@ impl Handler for Progress {
         let cancel_w = w
             .button_width(tr!(cancel), 92)
             .max(w.button_width(tr!(close), 92));
-        let width = MIN_WIDTH.max(pause_w + background_w + cancel_w + 2 * 6 + 28);
+        let chat_w = w.button_width(tr!(chat_button), 0);
+        let width = MIN_WIDTH.max(chat_w + pause_w + background_w + cancel_w + 2 * 6 + 16 + 28);
         let cw = width - 28;
         // The status line holds two lines at the usual text size. The
         // longest texts (with the other side's name, which can be long) may
@@ -1214,6 +1216,9 @@ impl Handler for Progress {
         let background_x = cancel_x - 6 - background_w;
         let pause_x = background_x - 6 - pause_w;
         let button_y = 200 + dy;
+        // Chat with the other side stands apart on the left, and comes
+        // first in the tab order, as on the screen.
+        w.button(tr!(chat_button), ID_CHAT, (14, button_y, chat_w, 28));
         self.pause = w.button(tr!(pause), ID_PAUSE, (pause_x, button_y, pause_w, 28));
         window::enable(self.pause, false);
         self.background_button = w.button(
@@ -1231,6 +1236,11 @@ impl Handler for Progress {
 
     fn on_command(&mut self, w: &Window, id: u16, _code: u16) -> bool {
         match id {
+            ID_CHAT => {
+                if let Some((peer, name)) = app::transfer_peer(self.id) {
+                    super::chat::open(&peer, &name, true);
+                }
+            }
             ID_PAUSE if self.active => self.toggle_pause(),
             ID_BACKGROUND if self.active => self.go_background(w),
             ID_CANCEL if self.active => {

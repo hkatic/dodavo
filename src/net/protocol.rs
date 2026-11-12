@@ -33,6 +33,10 @@ use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use crate::i18n::tr;
 
 pub const ALPN: &[u8] = b"dodavo/3";
+/// The protocol of the chat (see `net::chat`), which an endpoint takes
+/// beside `ALPN` only where its user interface can show messages. A name of
+/// its own, so that it can change without touching the transfers.
+pub const CHAT_ALPN: &[u8] = b"dodavo-chat/1";
 const MAX_MSG_LEN: usize = 64 * 1024;
 /// The largest `Data` frame.
 pub const CHUNK: usize = 256 * 1024;
@@ -141,8 +145,42 @@ pub enum Msg {
     Resumed,
 }
 
+/// What the two sides of a chat connection say to each other
+/// (`CHAT_ALPN`), on its one bidirectional stream, framed as [`Msg`] is:
+///
+/// ```text
+/// who dials                           who is dialed
+///   Hello{name}      ─────────────▶
+///                    ◀─────────────  Welcome{name} | Refused
+///   Text{id, text}   ◀────────────▶  (either side, at any time)
+///   Received{id}     ◀────────────▶  (the answer to each `Text`)
+///   Typing{on}       ◀────────────▶
+/// ```
+///
+/// A change to it needs a new ALPN, as a change to [`Msg`] does.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ChatMsg {
+    /// The first message, with the display name the dialer chose for
+    /// themselves.
+    Hello { name: String },
+    /// The answer to `Hello`, with this side's name.
+    Welcome { name: String },
+    /// This side takes no messages from the other: the answer to `Hello`,
+    /// or to a `Text` once that has changed.
+    Refused,
+    /// A message, with a number that its `Received` repeats.
+    Text { id: u64, text: String },
+    /// The `Text` with this number is with the user.
+    Received { id: u64 },
+    /// The user on this side is writing a message, or has stopped.
+    Typing { on: bool },
+}
+
+/// The longest text of a chat message, in bytes.
+pub const MAX_CHAT_TEXT: usize = 16 * 1024;
+
 /// A message as it goes onto the stream: length prefix and body.
-pub fn encode(msg: &Msg) -> anyhow::Result<Vec<u8>> {
+pub fn encode<T: Serialize>(msg: &T) -> anyhow::Result<Vec<u8>> {
     let body = postcard::to_stdvec(msg)?;
     let mut bytes = Vec::with_capacity(body.len() + 4);
     bytes.extend_from_slice(&(body.len() as u32).to_le_bytes());
@@ -151,11 +189,26 @@ pub fn encode(msg: &Msg) -> anyhow::Result<Vec<u8>> {
 }
 
 pub async fn write_msg<W: AsyncWrite + Unpin>(w: &mut W, msg: &Msg) -> anyhow::Result<()> {
+    write_as(w, msg).await
+}
+
+pub async fn read_msg<R: AsyncRead + Unpin>(r: &mut R) -> anyhow::Result<Msg> {
+    read_as(r).await
+}
+
+/// Writes any of the protocols' messages (see [`encode`]).
+pub async fn write_as<W: AsyncWrite + Unpin, T: Serialize>(
+    w: &mut W,
+    msg: &T,
+) -> anyhow::Result<()> {
     w.write_all(&encode(msg)?).await?;
     Ok(())
 }
 
-pub async fn read_msg<R: AsyncRead + Unpin>(r: &mut R) -> anyhow::Result<Msg> {
+/// Reads any of the protocols' messages.
+pub async fn read_as<R: AsyncRead + Unpin, T: serde::de::DeserializeOwned>(
+    r: &mut R,
+) -> anyhow::Result<T> {
     let len = r.read_u32_le().await? as usize;
     anyhow::ensure!(len <= MAX_MSG_LEN, tr!(error_message_too_large));
     let mut buf = vec![0u8; len];
@@ -211,6 +264,28 @@ mod tests {
         }
         for m in &msgs {
             assert_eq!(&read_msg(&mut b).await.unwrap(), m);
+        }
+    }
+
+    #[tokio::test]
+    async fn chat_roundtrip() {
+        let (mut a, mut b) = tokio::io::duplex(1024);
+        let msgs = vec![
+            ChatMsg::Hello { name: "Ana".into() },
+            ChatMsg::Welcome { name: "Željko".into() },
+            ChatMsg::Refused,
+            ChatMsg::Text {
+                id: u64::MAX,
+                text: "Stiže ti mapa sa slikama.".into(),
+            },
+            ChatMsg::Received { id: 7 },
+            ChatMsg::Typing { on: true },
+        ];
+        for m in &msgs {
+            write_as(&mut a, m).await.unwrap();
+        }
+        for m in &msgs {
+            assert_eq!(&read_as::<_, ChatMsg>(&mut b).await.unwrap(), m);
         }
     }
 

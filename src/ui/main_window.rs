@@ -52,6 +52,7 @@ const ID_LICENSE: u16 = 116;
 const ID_DONATE: u16 = 117;
 const ID_BLOCK: u16 = 118;
 const ID_CHANGE_ID: u16 = 119;
+const ID_CHAT: u16 = 120;
 const ID_LIST: u16 = 200;
 /// The first automatic update check, shortly after the start.
 const TIMER_UPDATE_START: usize = 1;
@@ -170,6 +171,7 @@ fn build_menu() -> (HMENU, HMENU) {
     let file = unsafe { CreatePopupMenu() };
     menu_item(file, ID_SEND_FILE, tr!(menu_send_file));
     menu_item(file, ID_SEND_FOLDER, tr!(menu_send_folder));
+    menu_item(file, ID_CHAT, tr!(menu_chat));
     menu_separator(file);
     menu_item(file, ID_ADD, tr!(menu_add));
     menu_item(file, ID_EDIT, tr!(menu_edit));
@@ -201,7 +203,7 @@ fn build_menu() -> (HMENU, HMENU) {
 
 /// The shortcuts of the main window. Menus show them after a tab in their
 /// texts (`i18n`), and the help lists them.
-fn accelerators() -> [ACCEL; 9] {
+fn accelerators() -> [ACCEL; 10] {
     let virt = FVIRTKEY | FCONTROL;
     [
         ACCEL {
@@ -243,6 +245,11 @@ fn accelerators() -> [ACCEL; 9] {
             fVirt: virt,
             key: b'T' as u16,
             cmd: ID_SHOW_TRANSFERS,
+        },
+        ACCEL {
+            fVirt: virt,
+            key: b'M' as u16,
+            cmd: ID_CHAT,
         },
         // The key the Mac has for its settings, with Command.
         ACCEL {
@@ -693,6 +700,26 @@ impl MainWindow {
         }
     }
 
+    /// Opens the chat with the recipient a send would go to. With several
+    /// boxes checked there is no one chat: a message is asked for, which
+    /// each of them gets as their own, and the boxes are cleared once it
+    /// was sent, as after a send.
+    fn chat(&self, w: &Window) {
+        let Some(contacts) = self.recipients(w) else {
+            return;
+        };
+        match contacts.as_slice() {
+            [contact] => {
+                super::chat::open(&contact.id, &contact.name, true);
+            }
+            several => {
+                if super::chat::message_several(w.hwnd, several) {
+                    list_clear_checks(self.list);
+                }
+            }
+        }
+    }
+
     fn copy_my_id(&self, w: &Window) {
         let id = app::with(|a| a.my_id.clone());
         if shell::copy_to_clipboard(w.hwnd, &id) {
@@ -777,6 +804,7 @@ impl MainWindow {
             ID_EDIT => self.edit_recipient(w),
             ID_REMOVE => self.remove_recipient(w),
             ID_BLOCK => self.block_recipient(w),
+            ID_CHAT => self.chat(w),
             ID_COPY_ID => self.copy_my_id(w),
             ID_CHANGE_ID => {
                 app::change_contact_id(w.hwnd);
@@ -824,6 +852,7 @@ impl MainWindow {
         if let Some(contact) = contact {
             menu_item(menu, ID_SEND_FILE, tr!(ctx_send_file));
             menu_item(menu, ID_SEND_FOLDER, tr!(ctx_send_folder));
+            menu_item(menu, ID_CHAT, tr!(ctx_chat));
             match app::transfer_windows_of(&contact.id).len() {
                 0 => {}
                 1 => menu_item(menu, ID_SHOW_CONTACT_TRANSFERS, tr!(ctx_show_transfer)),
@@ -1101,6 +1130,9 @@ impl Handler for MainWindow {
                             h if h.is_null() => window::bring_to_front(w.hwnd),
                             h => window::bring_to_front(h),
                         },
+                        Some(tray::BalloonAction::Chat { peer, name }) => {
+                            super::chat::open(&peer, &name, true);
+                        }
                         Some(tray::BalloonAction::SendTo) => match send_to::open_window() {
                             Some(h) => window::bring_to_front(h),
                             None => window::bring_to_front(w.hwnd),

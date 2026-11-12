@@ -251,6 +251,16 @@ pub fn window_brush() -> HBRUSH {
     }
 }
 
+/// The colors of text in a field or a list, and of what is behind it, for a
+/// control that draws its own items.
+pub fn input_colors() -> (COLORREF, COLORREF) {
+    if is_dark() {
+        (DARK_TEXT, DARK_INPUT_BG)
+    } else {
+        unsafe { (GetSysColor(COLOR_WINDOWTEXT), GetSysColor(COLOR_WINDOW)) }
+    }
+}
+
 fn class_name(hwnd: HWND) -> String {
     let mut buf = [0u16; 64];
     let n = unsafe { GetClassNameW(hwnd, buf.as_mut_ptr(), buf.len() as i32) };

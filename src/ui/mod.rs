@@ -3,6 +3,7 @@
 pub mod about;
 pub mod accessibility;
 pub mod blocked;
+pub mod chat;
 pub mod help;
 pub mod incoming;
 pub mod license;
@@ -12,6 +13,7 @@ pub mod recipient;
 pub mod send_to;
 pub mod settings;
 pub mod shell;
+pub mod sound;
 pub mod theme;
 pub mod tray;
 pub mod update;

@@ -23,8 +23,9 @@ use crate::{
     i18n::{tr, trn},
     identity,
     net::{self, Command, Event, Kind, NetHandle, Outcome, Phase, Role},
+    sound::SoundEvent,
     ui::{
-        self, APP_NAME, format_size, incoming, progress,
+        self, APP_NAME, format_size, incoming, progress, sound,
         tray::{self, BalloonAction},
     },
     update,
@@ -49,6 +50,8 @@ pub struct App {
     pub transfers: HashMap<u64, Transfer>,
     /// Open "incoming transfer" windows by transfer id.
     pub offers: HashMap<u64, HWND>,
+    /// Open chat windows by the other person's Contact ID, in lower case.
+    pub chats: HashMap<String, HWND>,
     /// What selecting the last notification does.
     pub balloon_action: Option<BalloonAction>,
     /// The open "Update Available" window, if any.
@@ -277,6 +280,7 @@ pub fn update_cfg(f: impl FnOnce(&mut Config)) {
         // Whoever is blocked now is, also if the file cannot be saved.
         a.net.set_blocked(a.cfg.blocked_ids());
         a.net.set_limits(a.cfg.limits());
+        a.net.set_chat(a.cfg.chat_policy());
         a.net
             .set_temp_dir(a.cfg.temp_dir_for(a.profile.as_deref()));
         a.cfg.save(&a.data_dir)
@@ -298,6 +302,7 @@ pub fn temp_dir() -> std::path::PathBuf {
 pub fn block_sender(name: &str, id: &str, except: HWND) {
     update_cfg(|c| c.block(name, id));
     incoming::decline_from(id, except);
+    ui::chat::close(id);
     ui::main_window::refresh_list();
 }
 
@@ -524,6 +529,10 @@ fn start_send(contact: &Contact, path: PathBuf, kind: Kind, activate: bool) {
     );
     with(|a| a.transfers.insert(id, transfer));
     refresh_transfer_views(id, true);
+    // Once for all the items that start together.
+    if activate {
+        sound::play(SoundEvent::Started);
+    }
     let my_name = with(|a| a.cfg.my_name.clone());
     net_send(Command::Send {
         id,
@@ -572,6 +581,11 @@ pub fn accept_offer(
     );
     with(|a| a.transfers.insert(id, transfer));
     refresh_transfer_views(id, true);
+    // The user's answer; one that starts by itself has the sound of an
+    // incoming item.
+    if activate {
+        sound::play(SoundEvent::Started);
+    }
     net_send(Command::Respond {
         id,
         accept: Some(net::Accept { dir, folder }),
@@ -718,6 +732,8 @@ pub fn cancel_all_transfers() {
 enum Lane {
     Transfer(u64),
     Update,
+    /// The chat with one person.
+    Chat(iroh::EndpointId),
 }
 
 /// The lane of an event; `None` for one that never waits for a window.
@@ -734,11 +750,17 @@ fn lane_of(event: &Queued) -> Option<Lane> {
             | Event::CancelWaits { id }
             | Event::Path { id, .. }
             | Event::Finished { id, .. } => Some(Lane::Transfer(*id)),
+            Event::Chat { from: peer, .. }
+            | Event::ChatSent { to: peer, .. }
+            | Event::ChatFailed { to: peer, .. } => Some(Lane::Chat(*peer)),
+            // That someone is typing is over in a moment: a chat that is
+            // busy misses it.
             Event::BindFailed(_)
             | Event::Connecting
             | Event::Online(_)
             | Event::OverLimit { .. }
-            | Event::Progress { .. } => None,
+            | Event::Progress { .. }
+            | Event::Typing { .. } => None,
         },
     }
 }
@@ -913,6 +935,7 @@ fn handle_net_event(event: Event) -> Option<Event> {
                         && !(cfg.warn_fat_temp && space.temp_warning.is_some())
                 }
             });
+            sound::play(SoundEvent::Incoming);
             if let Some(dir) = auto_dir {
                 accept_offer(id, &from, &name, &offer, dir, false);
                 tray::balloon(
@@ -990,12 +1013,18 @@ fn handle_net_event(event: Event) -> Option<Event> {
             }
         }
         Event::Phase { id, phase } => {
-            with(|a| {
-                if let Some(t) = a.transfers.get_mut(&id) {
-                    t.phase = Some(phase);
-                    t.clear_rate();
-                }
+            let before = with(|a| {
+                let t = a.transfers.get_mut(&id)?;
+                let before = t.phase.replace(phase);
+                t.clear_rate();
+                Some(before)
             });
+            // Here, and not once the window has taken the phase: an event
+            // that finds its window busy comes again, and by then the
+            // transfer has the phase, so the sound plays once.
+            if let Some(event) = before.and_then(|before| phase_sound(before, phase)) {
+                sound::play(event);
+            }
             refresh_transfer_views(id, true);
             if let Some(h) = transfer_window(id) {
                 let Some(notice) = progress::set_phase(h, phase) else {
@@ -1048,12 +1077,23 @@ fn handle_net_event(event: Event) -> Option<Event> {
                     return Some(Event::Finished { id, outcome });
                 }
                 with(|a| a.offers.remove(&id));
+                sound::play(SoundEvent::Cancelled);
             }
-            with(|a| {
-                if let Some(t) = a.transfers.get_mut(&id) {
-                    t.active = false;
-                }
+            // Once, also when the event comes again for a busy window.
+            let ended = with(|a| {
+                a.transfers
+                    .get_mut(&id)
+                    .is_some_and(|t| std::mem::replace(&mut t.active, false))
             });
+            if ended {
+                sound::play(match &outcome {
+                    Outcome::Completed(_) => SoundEvent::Completed,
+                    Outcome::Declined | Outcome::Cancelled | Outcome::CancelledByPeer => {
+                        SoundEvent::Cancelled
+                    }
+                    Outcome::Unreachable(_) | Outcome::Failed(_) => SoundEvent::Failed,
+                });
+            }
             refresh_transfer_views(id, true);
             if let Some(h) = transfer_window(id) {
                 let Some(done) = progress::finish(h, &outcome) else {
@@ -1071,8 +1111,41 @@ fn handle_net_event(event: Event) -> Option<Event> {
                 }
             }
         }
+        Event::Chat { from, name, text } => {
+            // Blocked while the message waited here (its chat was asking
+            // whether to block, say): it is not shown, as none is from now
+            // on.
+            if with(|a| a.cfg.is_blocked(&from.to_string())) {
+                return None;
+            }
+            if !ui::chat::received(&from.to_string(), &name, &text) {
+                return Some(Event::Chat { from, name, text });
+            }
+        }
+        Event::ChatSent { id, .. } => ui::chat::sent(id),
+        Event::ChatFailed { to, id, error } => {
+            if !ui::chat::failed(id, &error) {
+                return Some(Event::ChatFailed { to, id, error });
+            }
+        }
+        Event::Typing { from, on } => ui::chat::typing(&from.to_string(), on),
     }
     None
+}
+
+/// The sound of a transfer that goes from the phase `before` to `phase`:
+/// when it loses its connection, and when it goes on after that.
+fn phase_sound(before: Option<Phase>, phase: Phase) -> Option<SoundEvent> {
+    let lost = |phase| matches!(phase, Phase::WaitingForConnection { lost: true });
+    // The first phase of a transfer is no change: one that is picked up
+    // after a restart begins as waiting for its connection.
+    let before = before?;
+    match phase {
+        _ if lost(before) == lost(phase) => None,
+        _ if lost(phase) => Some(SoundEvent::ConnectionLost),
+        Phase::Transferring | Phase::Verifying => Some(SoundEvent::Continues),
+        _ => None,
+    }
 }
 
 /// Gives the notification that a change in the progress window of transfer
@@ -1086,6 +1159,15 @@ fn give_phase_notice(id: u64, notice: progress::PhaseNotice) {
             Some(BalloonAction::Transfer(id)),
         );
     }
+}
+
+/// The Contact ID and the name of the other side of the transfer `id`,
+/// where the ID is known.
+pub fn transfer_peer(id: u64) -> Option<(String, String)> {
+    with(|a| {
+        let t = a.transfers.get(&id)?;
+        (!t.peer_id.is_empty()).then(|| (t.peer_id.clone(), t.peer_name.clone()))
+    })
 }
 
 pub fn transfer_window(id: u64) -> Option<HWND> {
@@ -1105,9 +1187,44 @@ pub fn offer_window_closed(id: u64) {
     with(|a| a.offers.remove(&id));
 }
 
+/// Forgets the closed chat window `hwnd` of the chat with `peer`.
+pub fn chat_window_closed(peer: &str, hwnd: HWND) {
+    with(|a| {
+        if a.chats.get(peer) == Some(&hwnd) {
+            a.chats.remove(peer);
+        }
+    });
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_lost_connection_and_its_return_have_sounds() {
+        let lost = Phase::WaitingForConnection { lost: true };
+        let waiting = Phase::WaitingForConnection { lost: false };
+        assert_eq!(
+            phase_sound(Some(Phase::Transferring), lost),
+            Some(SoundEvent::ConnectionLost)
+        );
+        assert_eq!(phase_sound(Some(lost), lost), None);
+        assert_eq!(
+            phase_sound(Some(lost), Phase::Transferring),
+            Some(SoundEvent::Continues)
+        );
+        assert_eq!(
+            phase_sound(Some(lost), Phase::Verifying),
+            Some(SoundEvent::Continues)
+        );
+        // Paused meanwhile, or picked up after a restart: nothing went on.
+        assert_eq!(phase_sound(Some(lost), Phase::Paused), None);
+        assert_eq!(phase_sound(Some(waiting), Phase::Transferring), None);
+        assert_eq!(phase_sound(None, Phase::Connecting), None);
+        // A transfer of the last run begins like this, with nothing lost.
+        assert_eq!(phase_sound(None, lost), None);
+        assert_eq!(phase_sound(Some(Phase::Connecting), Phase::Transferring), None);
+    }
 
     /// A transfer that may wait for days must not keep dialogs away.
     #[test]

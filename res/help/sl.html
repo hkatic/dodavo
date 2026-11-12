@@ -26,6 +26,7 @@
 <li><a href="#sending">Pošiljanje datotek in map</a></li>
 <li><a href="#receiving">Prejemanje datotek in map</a></li>
 <li><a href="#progress">Spremljanje prenosa</a></li>
+<li><a href="#chat">Klepet z osebo</a></li>
 <li><a href="#background">Delovanje v območju za obvestila</a></li>
 <li><a href="#settings">Nastavitve</a></li>
 <li><a href="#shortcuts">Bližnjice na tipkovnici</a></li>
@@ -314,6 +315,59 @@
 <p>Ko je okno znova vidno, se vede, kot da nikoli ne bi bilo skrito: ob koncu prenosa postavi običajna vprašanja, namesto da bi samo prikazalo obvestilo.</p>
 </section>
 
+<section aria-labelledby="chat">
+<h2 id="chat">Klepet z osebo</h2>
+<p>Z osebo si lahko izmenjujete kratka besedilna sporočila, na primer da poveste, kaj ji pravkar pošiljate, ali vprašate kaj o tem, kar vam je bilo ponujeno. Sporočila potujejo neposredno iz enega računalnika v drugega, šifrirana, po enaki vrsti povezave kot datoteke. Oba morata imeti zagnan Dodavo in biti povezana v istem trenutku, Dodavo na drugi strani pa mora prav tako imeti klepet.</p>
+<h3 id="chat-open">Odpiranje klepeta</h3>
+<ul>
+<li>V glavnem oknu izberite osebo in pritisnite <kbd>Ctrl</kbd>+<kbd>M</kbd> ali v meniju <span class="ui">Datoteka</span> izberite <span class="ui">Klepet s prejemnikom…</span> ali v meniju dejanj te osebe (<kbd>Enter</kbd>) izberite <span class="ui">Klepet…</span>.</li>
+<li>V oknu Dohodni prenos in v oknu napredka aktivirajte gumb <span class="ui">Klepet</span> (<kbd>Alt</kbd>+<kbd>K</kbd>), da pišete osebi, s katero poteka prenos.</li>
+<li>Ko vam kdo piše, se okno klepeta s to osebo odpre samo. Ne prevzame fokusa s tistega, kar počnete.</li>
+</ul>
+<p>Za vsako osebo je eno okno klepeta. Njegov naslov je <span class="ui">Klepet –</span> in ime osebe, fokus pa je na začetku v polju <span class="ui">Sporočilo</span>.</p>
+<h3 id="chat-several">Pisanje več osebam hkrati</h3>
+<p>Če želite isto sporočilo poslati več osebam, potrdite njihova potrditvena polja na seznamu prejemnikov (<kbd>preslednica</kbd>) in pritisnite <kbd>Ctrl</kbd>+<kbd>M</kbd> ali v meniju <span class="ui">Datoteka</span> izberite <span class="ui">Klepet s prejemnikom…</span>. Namesto klepeta se odpre okno <span class="ui">Sporočilo več osebam</span>: navaja prejemnike ter ima polje <span class="ui">Sporočilo</span> in gumba <span class="ui">Pošlji</span> (<kbd>Enter</kbd>) in <span class="ui">Prekliči</span> (<kbd>Esc</kbd>). Vsaka oseba dobi sporočilo kot zasebno sporočilo od vas. Ne vidi, kdo ga je še dobil, vsak odgovor pa prispe v klepet s to osebo. Sporočilo se doda v vaš pogovor z vsako od njih, potrditvena polja pa se po pošiljanju počistijo. Če ga kateri od njih ni mogoče dostaviti, to pove obvestilo, v tistem pogovoru pa je označeno kot neposlano. Ko je potrjeno eno polje, <kbd>Ctrl</kbd>+<kbd>M</kbd> odpre klepet s to osebo.</p>
+<h3 id="chat-window">Okno klepeta</h3>
+<p>Kontrolniki v vrstnem redu tipke Tab:</p>
+<dl>
+<dt><span class="ui">Zgodovina</span> (<kbd>Alt</kbd>+<kbd>Z</kbd>)</dt>
+<dd>Seznam, v katerem je vsako sporočilo en element, najnovejše pa je zadnje. Vsak element pove, kdo je napisal sporočilo, kdaj, in njegovo besedilo, na primer <span class="ui">Ana, 14:32: Slike so na poti.</span> ali <span class="ui">Vi, 14:33: Hvala!</span>. Sporočilo z drugega dne ima tudi datum. Sporočila berete s tipkama <kbd>Puščica gor</kbd> in <kbd>Puščica dol</kbd>, s tipkama <kbd>Home</kbd> in <kbd>End</kbd> greste na prvo in zadnje, s tipkama <kbd>Ctrl</kbd>+<kbd>C</kbd> pa kopirate izbrano sporočilo. Ko se premaknete na seznam, je izbrano najnovejše sporočilo.</dd>
+<dt>Vrstica stanja</dt>
+<dd>Ena vrstica pod zgodovino, ki prikazuje sporočilo, ki je prispelo zadnje, da druga oseba piše, ali zakaj sporočilo ni bilo poslano. Ne more dobiti fokusa tipkovnice; bralniki zaslona jo preberejo, ko se spremeni in ko okno pride v ospredje.</dd>
+<dt><span class="ui">Sporočilo</span> (<kbd>Alt</kbd>+<kbd>S</kbd>)</dt>
+<dd>Tukaj pišete. Sporočilo ima lahko do 4000 znakov.</dd>
+<dt><span class="ui">Pošlji</span> (<kbd>Alt</kbd>+<kbd>P</kbd> ali <kbd>Enter</kbd>)</dt>
+<dd>Pošlje sporočilo in ga doda v zgodovino. Fokus ostane v polju <span class="ui">Sporočilo</span>.</dd>
+<dt><span class="ui">Dodaj med moje prejemnike</span> (<kbd>Alt</kbd>+<kbd>D</kbd>)</dt>
+<dd>Samo za osebo, ki je ni na vašem seznamu prejemnikov: odpre okno Dodaj prejemnika z vpisanim imenom in ID-jem stika te osebe.</dd>
+<dt><span class="ui">Blokiraj</span> (<kbd>Alt</kbd>+<kbd>B</kbd>)</dt>
+<dd>Po vaši potrditvi blokira osebo in zapre klepet. Blokirana oseba vam ne more ne pisati ne ničesar poslati.</dd>
+<dt><span class="ui">Izbriši pogovor…</span> (<kbd>Alt</kbd>+<kbd>G</kbd>)</dt>
+<dd>Po vaši potrditvi izbriše sporočila s to osebo iz vašega računalnika. Privzeti odgovor je <span class="ui">Ne</span>.</dd>
+<dt><span class="ui">Zapri</span> (<kbd>Esc</kbd>)</dt>
+<dd>Zapre okno. Pogovor ostane shranjen in je spet tam, ko odprete klepet.</dd>
+</dl>
+<h3 id="chat-receiving">Ko prispe sporočilo</h3>
+<ul>
+<li>Ko je okno klepeta v ospredju, se sporočilo doda v zgodovino in prikaže v vrstici stanja, kjer ga bralniki zaslona preberejo, z imenom osebe na začetku.</li>
+<li>Ko ste v drugem oknu, se okno klepeta odpre ali ostane, kjer je, ne da bi prevzelo fokus, njegov gumb v opravilni vrstici utripa, obvestilo <span class="ui">Sporočilo – pošiljatelj:</span> z imenom osebe pa prikaže sporočilo. Bralniki zaslona obvestila običajno preberejo. Z izbiro obvestila pride klepet v ospredje.</li>
+<li>V obeh primerih se predvaja zvok, razen če ste ga izklopili.</li>
+</ul>
+<p>Ko druga oseba začne pisati, vrstica stanja to pove, na primer <span class="ui">Ana piše…</span>. Ko je okno klepeta v ospredju, se to napove enkrat, s kratkim zvokom; ne ponavlja se, dokler oseba piše naprej. Na enak način druga oseba izve, da pišete vi. Oboje lahko izklopite v nastavitvah.</p>
+<h3 id="chat-failed">Ko sporočila ni mogoče poslati</h3>
+<p>Sporočilo, ki ga ni mogoče dostaviti, je v zgodovini označeno, na primer <span class="ui">Vi, 14:35 (ni poslano): Si tam?</span>, vrstica stanja pove, zakaj, in predvaja se zvok. Dodavo ne poskuša znova sam. Besedilo se vrne v polje <span class="ui">Sporočilo</span>, če je to prazno, tako da ga lahko s tipko <kbd>Enter</kbd> pošljete znova. Razlogi, ki jih lahko vidite:</p>
+<ul>
+<li><span class="ui">Drugega računalnika ni bilo mogoče najti v omrežju</span> ali <span class="ui">Časovna omejitev poskusa povezave je potekla</span>: Dodavo v drugem računalniku ni zagnan ali pa eden od vaju ni povezan.</li>
+<li><span class="ui">Ta oseba ne sprejema vaših sporočil</span>: druga oseba sprejema sporočila samo od svojih prejemnikov ali pa vas je blokirala.</li>
+<li><span class="ui">Dodavo na drugi strani nima klepeta</span>: druga oseba ima Dodavo brez klepeta.</li>
+<li><span class="ui">Povezava je bila prekinjena</span> ali <span class="ui">Druga stran ni potrdila sporočila</span>: povezava se je končala, preden je bilo sporočilo potrjeno.</li>
+</ul>
+<h3 id="chat-who">Kdo vam lahko piše</h3>
+<p>Če tega ne spremenite, vam lahko piše vsak, ki ima vaš ID stika in ni blokiran, tako kot vam lahko vsak ponudi datoteko. Klepet z osebo, ki je ni na vašem seznamu prejemnikov, nad zgodovino prikazuje opozorilo z njenim ID-jem stika. V nastavitvah lahko na zavihku <span class="ui">Klepet</span> izberete <span class="ui">Samo moji prejemniki</span>: sporočila vseh drugih se tedaj zavrnejo, ne da bi jih videli, njihov pošiljatelj pa izve, da ne sprejemate njegovih sporočil.</p>
+<h3 id="chat-history">Kje so shranjeni pogovori</h3>
+<p>Pogovori so shranjeni v vašem računalniku, skupaj z vašimi nastavitvami, dokler jih ne izbrišete: najnovejših 2000 sporočil z vsako osebo. Ne pošiljajo se nikamor drugam. <span class="ui">Izbriši pogovor…</span> v oknu klepeta izbriše enega, <span class="ui">Izbriši vse pogovore…</span> v nastavitvah na zavihku <span class="ui">Klepet</span> pa vse. Z brisanjem se sporočila odstranijo samo iz vašega računalnika; druga oseba obdrži svojo kopijo.</p>
+</section>
+
 <section aria-labelledby="background">
 <h2 id="background">Delovanje v območju za obvestila</h2>
 <p>Ko zaprete glavno okno, se Dodavo še naprej izvaja v območju za obvestila na koncu opravilne vrstice, da lahko prejema datoteke. Ko se to zgodi prvič, vas o tem obvesti obvestilo.</p>
@@ -329,7 +383,7 @@
 
 <section aria-labelledby="settings">
 <h2 id="settings">Nastavitve</h2>
-<p>V glavnem oknu pritisnite <kbd>Ctrl</kbd>+<kbd>Vejica</kbd> ali v meniju <span class="ui">Datoteka</span> izberite <span class="ui">Nastavitve…</span>. Pritisnite <kbd>Enter</kbd> ali aktivirajte gumb <span class="ui">V redu</span>, da shranite spremembe, ali pritisnite <kbd>Esc</kbd> oziroma aktivirajte gumb <span class="ui">Prekliči</span>, da jih zavržete. Nastavitve so na treh zavihkih: <span class="ui">Splošno</span>, <span class="ui">Prenosi</span> in <span class="ui">Prejemanje</span>. Tipka <kbd>Tab</kbd> se pomika z zavihkov po nastavitvah izbranega zavihka in nato na gumba <span class="ui">V redu</span> in <span class="ui">Prekliči</span>. Zavihek zamenjate s tipkama <kbd>Ctrl</kbd>+<kbd>Tab</kbd> ali <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Tab</kbd> kjer koli v oknu ali s tipkama <kbd>Puščica levo</kbd> in <kbd>Puščica desno</kbd>, ko je fokus na zavihkih. Nastavitve vsakega zavihka v vrstnem redu tipke Tab:</p>
+<p>V glavnem oknu pritisnite <kbd>Ctrl</kbd>+<kbd>Vejica</kbd> ali v meniju <span class="ui">Datoteka</span> izberite <span class="ui">Nastavitve…</span>. Pritisnite <kbd>Enter</kbd> ali aktivirajte gumb <span class="ui">V redu</span>, da shranite spremembe, ali pritisnite <kbd>Esc</kbd> oziroma aktivirajte gumb <span class="ui">Prekliči</span>, da jih zavržete. Nastavitve so na petih zavihkih: <span class="ui">Splošno</span>, <span class="ui">Prenosi</span>, <span class="ui">Prejemanje</span>, <span class="ui">Klepet</span> in <span class="ui">Zvoki</span>. Tipka <kbd>Tab</kbd> se pomika z zavihkov po nastavitvah izbranega zavihka in nato na gumba <span class="ui">V redu</span> in <span class="ui">Prekliči</span>. Zavihek zamenjate s tipkama <kbd>Ctrl</kbd>+<kbd>Tab</kbd> ali <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Tab</kbd> kjer koli v oknu ali s tipkama <kbd>Puščica levo</kbd> in <kbd>Puščica desno</kbd>, ko je fokus na zavihkih. Nastavitve vsakega zavihka v vrstnem redu tipke Tab:</p>
 <h3 id="settings-general">Splošno</h3>
 <dl>
 <dt><span class="ui">Vaše ime (prikazano osebam, ki jim pošiljate datoteke)</span></dt>
@@ -383,6 +437,34 @@
 <dt><span class="ui">Blokirani pošiljatelji…</span></dt>
 <dd>Odpre seznam pošiljateljev, ki ste jih blokirali, na katerem jih lahko odblokirate. Glejte <a href="#blocking">Blokiranje pošiljatelja</a>.</dd>
 </dl>
+<h3 id="settings-chat">Klepet</h3>
+<dl>
+<dt><span class="ui">Kdo mi lahko pošilja sporočila</span></dt>
+<dd>Seznam z možnostma <span class="ui">Vsi, ki niso blokirani</span> in <span class="ui">Samo moji prejemniki</span>. Pri drugi možnosti se sporočilo osebe, ki je ni na vašem seznamu prejemnikov, zavrne, ne da bi ga videli. Glejte <a href="#chat-who">Kdo vam lahko piše</a>.</dd>
+<dt><span class="ui">Drugi osebi pokaži, kdaj pišem</span></dt>
+<dd>Ko je izbrano, okno klepeta druge osebe pove, da pišete, medtem ko pišete sporočilo. Vklopljeno je, če tega ne izklopite.</dd>
+<dt><span class="ui">Napovej, kdaj druga oseba piše</span></dt>
+<dd>Ko je izbrano, okno klepeta v ospredju bralnikom zaslona in z zvokom napove, da je druga oseba začela pisati. Ko ni izbrano, vrstica stanja to še vedno prikazuje. Vklopljeno je, če tega ne izklopite.</dd>
+<dt><span class="ui">Izbriši vse pogovore…</span></dt>
+<dd>Po vaši potrditvi izbriše vse pogovore iz vašega računalnika. To se zgodi takoj, ne glede na to, ali nastavitve nato zaprete z gumbom <span class="ui">V redu</span> ali <span class="ui">Prekliči</span>.</dd>
+</dl>
+<h3 id="settings-sounds">Zvoki</h3>
+<p>Dodavo za dogodke s spodnjega seznama predvaja svoj kratek zvok. Izklopite lahko vse zvoke, izklopite posamezne ali katerega koli zamenjate s svojo zvočno datoteko.</p>
+<dl>
+<dt><span class="ui">Predvajaj zvoke</span></dt>
+<dd>Ko ni izbrano, Dodavo ne predvaja nobenega zvoka. Kar je nastavljeno za posamezen dogodek, ostane shranjeno. Vklopljeno je, če tega ne izklopite.</dd>
+<dt><span class="ui">Dogodki</span></dt>
+<dd>Seznam dogodkov, vsak s tem, kar predvaja, na primer <span class="ui">Prejeto sporočilo: privzeti zvok</span>. Dogodki so: <span class="ui">Prejeto sporočilo</span>, <span class="ui">Poslano sporočilo</span>, <span class="ui">Druga oseba piše</span>, <span class="ui">Sporočilo ni poslano</span>, <span class="ui">Dohodni element</span>, <span class="ui">Prenos se je začel</span>, <span class="ui">Prenos je končan</span>, <span class="ui">Prenos ni uspel</span>, <span class="ui">Prenos je zavrnjen ali preklican</span>, <span class="ui">Povezava je prekinjena</span> in <span class="ui">Prenos se nadaljuje</span>. Dogodek izberite s puščičnimi tipkami; kontrolniki, ki sledijo, veljajo zanj.</dd>
+<dt><span class="ui">Zvok</span></dt>
+<dd>Seznam z možnostmi <span class="ui">Privzeti</span> (vgrajeni zvok), <span class="ui">Brez zvoka</span> in <span class="ui">Moja datoteka</span>. Ko izberete <span class="ui">Moja datoteka</span>, datoteko izberite z gumbom <span class="ui">Prebrskaj…</span>; biti mora datoteka WAV. Dokler je ne izberete, dogodek predvaja to, kar je prej.</dd>
+<dt><span class="ui">Prebrskaj…</span></dt>
+<dd>Izbere drugo datoteko WAV za izbrani dogodek. Na voljo je, dokler je izbrano <span class="ui">Moja datoteka</span>.</dd>
+<dt><span class="ui">Poslušaj</span></dt>
+<dd>Predvaja, kar je nastavljeno za izbrani dogodek, tudi ko <span class="ui">Predvajaj zvoke</span> ni izbrano, tako da ga lahko slišite pred shranjevanjem.</dd>
+<dt><span class="ui">Ponastavi vse</span></dt>
+<dd>Vsakemu dogodku vrne njegov vgrajeni zvok.</dd>
+</dl>
+<p>Če vaše zvočne datoteke pozneje ni mogoče predvajati, na primer ker je bila premaknjena, Dodavo namesto nje predvaja vgrajeni zvok.</p>
 <h3 id="change-id">Spreminjanje vašega ID-ja stika</h3>
 <p>Svoj ID stika lahko zamenjate z novim, na primer, ko je prišel do oseb, od katerih ne želite ničesar prejemati. Dosedanji ID stika takrat za vedno preneha veljati: nihče vas z njim ne more več doseči in ni ga mogoče povrniti. Vsi, ki naj bi vam še lahko pošiljali datoteke, morajo od vas dobiti novi ID stika in z njim zamenjati starega z ukazom <span class="ui">Uredi prejemnika…</span>. Vaši prejemniki, blokirani pošiljatelji in nastavitve ostanejo, kakršni so.</p>
 <p>Noben prenos se ne more nadaljevati pod drugim ID-jem stika. Dodavo vam pove, koliko prenosov poteka ali čaka na vaš odgovor, in jih po vaši potrditvi prekliče. Ene vrste prenosa tako ni mogoče preklicati: pošiljanja, pri katerem so bili vsi podatki že poslani, prejemnik pa jih še ni potrdil. Dokler tak prenos obstaja, vas Dodavo o tem obvesti in ohrani vaš ID stika; poskusite znova, ko se ta prenos konča.</p>
@@ -409,6 +491,7 @@
 <tr><td><kbd>F2</kbd></td><td>Urejanje izbranega prejemnika</td></tr>
 <tr><td><kbd>Delete</kbd></td><td>Odstranjevanje izbranega prejemnika</td></tr>
 <tr><td><kbd>Ctrl</kbd>+<kbd>B</kbd></td><td>Blokiranje izbranega prejemnika</td></tr>
+<tr><td><kbd>Ctrl</kbd>+<kbd>M</kbd></td><td>Klepet z izbranim prejemnikom ali eno sporočilo vsem, ki so potrjeni</td></tr>
 <tr><td><kbd>Ctrl</kbd>+<kbd>T</kbd></td><td>Prikaz oken vseh prenosov, ki potekajo</td></tr>
 <tr><td><kbd>Ctrl</kbd>+<kbd>Vejica</kbd></td><td>Odpiranje nastavitev</td></tr>
 <tr><td><kbd>Enter</kbd> ali dvoklik</td><td>Odpiranje menija dejanj izbranega prejemnika</td></tr>
@@ -445,6 +528,7 @@
 <tr><td><kbd>Alt</kbd>+<kbd>S</kbd></td><td>Premik v polje Shrani v</td></tr>
 <tr><td><kbd>Alt</kbd>+<kbd>P</kbd></td><td>Izbira mape</td></tr>
 <tr><td><kbd>Alt</kbd>+<kbd>D</kbd></td><td>Dodajanje neznanega pošiljatelja med moje prejemnike</td></tr>
+<tr><td><kbd>Alt</kbd>+<kbd>K</kbd></td><td>Klepet s pošiljateljem</td></tr>
 </tbody>
 </table>
 <table>
@@ -471,6 +555,7 @@
 <tr><td><kbd>Alt</kbd>+<kbd>N</kbd></td><td>Nadaljevanje prenosa</td></tr>
 <tr><td><kbd>Alt</kbd>+<kbd>P</kbd></td><td>Pomanjšanje v ozadje</td></tr>
 <tr><td><kbd>Esc</kbd></td><td>Zapiranje okna (vpraša, ali želite nadaljevati v ozadju ali preklicati)</td></tr>
+<tr><td><kbd>Alt</kbd>+<kbd>K</kbd></td><td>Klepet z drugo osebo</td></tr>
 </tbody>
 </table>
 <table>
@@ -484,6 +569,23 @@
 <tr><td><kbd>Alt</kbd>+<kbd>N</kbd> ali <kbd>Enter</kbd></td><td>Namestitev posodobitve</td></tr>
 <tr><td><kbd>Alt</kbd>+<kbd>P</kbd> ali <kbd>Esc</kbd></td><td>Opomni me pozneje (zapiranje okna)</td></tr>
 <tr><td><kbd>Alt</kbd>+<kbd>K</kbd></td><td>Preklic prenosa</td></tr>
+</tbody>
+</table>
+<table>
+<caption>Okno klepeta</caption>
+<thead>
+<tr><th scope="col">Tipke</th><th scope="col">Dejanje</th></tr>
+</thead>
+<tbody>
+<tr><td><kbd>Enter</kbd> ali <kbd>Alt</kbd>+<kbd>P</kbd></td><td>Pošiljanje sporočila</td></tr>
+<tr><td><kbd>Alt</kbd>+<kbd>S</kbd></td><td>Premik v polje Sporočilo</td></tr>
+<tr><td><kbd>Alt</kbd>+<kbd>Z</kbd></td><td>Premik v zgodovino</td></tr>
+<tr><td><kbd>Puščica gor</kbd> in <kbd>Puščica dol</kbd> v zgodovini</td><td>Branje prejšnjega ali naslednjega sporočila</td></tr>
+<tr><td><kbd>Ctrl</kbd>+<kbd>C</kbd> v zgodovini</td><td>Kopiranje izbranega sporočila</td></tr>
+<tr><td><kbd>Alt</kbd>+<kbd>D</kbd></td><td>Dodajanje osebe med moje prejemnike, kadar je ni med njimi</td></tr>
+<tr><td><kbd>Alt</kbd>+<kbd>B</kbd></td><td>Blokiranje osebe</td></tr>
+<tr><td><kbd>Alt</kbd>+<kbd>G</kbd></td><td>Brisanje pogovora</td></tr>
+<tr><td><kbd>Esc</kbd></td><td>Zapiranje okna; pogovor ostane shranjen</td></tr>
 </tbody>
 </table>
 <table>

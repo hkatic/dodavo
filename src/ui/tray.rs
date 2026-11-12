@@ -20,7 +20,7 @@ use windows_sys::Win32::{
     System::LibraryLoader::GetModuleHandleW,
     UI::{
         Shell::{
-            NIF_ICON, NIF_INFO, NIF_MESSAGE, NIF_TIP, NIIF_INFO, NIM_ADD, NIM_DELETE, NIM_MODIFY,
+            NIF_ICON, NIF_INFO, NIF_MESSAGE, NIF_TIP, NIIF_INFO, NIIF_NOSOUND, NIM_ADD, NIM_DELETE, NIM_MODIFY,
             NOTIFYICONDATAW, Shell_NotifyIconW,
         },
         WindowsAndMessaging::{
@@ -52,6 +52,9 @@ pub enum BalloonAction {
     /// Brings the Send with Dodavo window to the front, or the main window
     /// once that has closed.
     SendTo,
+    /// Opens the chat with the person who has the Contact ID `peer`, and
+    /// is shown as `name` unless they are a recipient.
+    Chat { peer: String, name: String },
 }
 
 thread_local! {
@@ -166,7 +169,12 @@ pub fn balloon(hwnd: HWND, title: &str, text: &str, action: Option<BalloonAction
     crate::app::with(|a| a.balloon_action = action);
     let mut nid = base(hwnd);
     nid.uFlags = NIF_INFO;
-    nid.dwInfoFlags = NIIF_INFO;
+    // The event has just had its own sound: Windows' is left out.
+    nid.dwInfoFlags = if super::sound::just_played() {
+        NIIF_INFO | NIIF_NOSOUND
+    } else {
+        NIIF_INFO
+    };
     let mut info_title = nid.szInfoTitle;
     copy_into(&mut info_title, title);
     nid.szInfoTitle = info_title;

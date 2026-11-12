@@ -11,7 +11,8 @@ mod ui;
 #[cfg(windows)]
 // The Win32 user interface reaches the library through `crate::net` and so on.
 pub(crate) use dodavo_core::{
-    archive, config, format, i18n, identity, limit, net, platform, space, update, view,
+    archive, chat, config, format, i18n, identity, limit, net, platform, sound, space, update,
+    view,
 };
 
 #[cfg(windows)]
@@ -376,7 +377,7 @@ fn main() {
     // nothing but its main window would then show that it is running.
     let start_hidden =
         args.minimized || cfg.start_minimized || (!send.is_empty() && cfg.minimize_to_tray);
-    let net = net::start(
+    let net = net::start_with_chat(
         secret,
         data_dir.clone(),
         net::TempDirs {
@@ -386,6 +387,7 @@ fn main() {
         },
         cfg.blocked_ids(),
         cfg.limits(),
+        Some(cfg.chat_policy()),
         app::event_sink,
     );
     app::install(app::App {
@@ -399,6 +401,7 @@ fn main() {
         net_problem: None,
         transfers: Default::default(),
         offers: Default::default(),
+        chats: Default::default(),
         balloon_action: None,
         update_window: std::ptr::null_mut(),
         update_job: None,

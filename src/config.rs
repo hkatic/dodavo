@@ -132,6 +132,79 @@ impl ReceivedFolder {
     ];
 }
 
+/// Who may send chat messages (see `net::chat`). A blocked sender never may.
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ChatFrom {
+    /// Everyone who is not blocked. A message from someone who is not a
+    /// recipient comes with a warning, as an offered item does.
+    #[default]
+    Anyone,
+    /// Only recipients. Anyone else is refused, and nothing here shows it.
+    Recipients,
+}
+
+impl ChatFrom {
+    /// In the order shown in the settings.
+    pub const ALL: [ChatFrom; 2] = [ChatFrom::Anyone, ChatFrom::Recipients];
+}
+
+/// What plays at an event that has a sound (see `sound::SoundEvent`).
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum SoundChoice {
+    /// The built-in sound.
+    #[default]
+    Default,
+    /// Nothing.
+    Off,
+    /// A WAV file of the user's.
+    File(PathBuf),
+}
+
+/// The sounds of the program, as the user set them.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(default)]
+pub struct Sounds {
+    /// Whether any sound plays.
+    pub on: bool,
+    /// The events that do not play their built-in sound, by
+    /// `SoundEvent::key`. A name that this version does not know (a later
+    /// one's) is kept as it is.
+    #[serde(skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub events: std::collections::BTreeMap<String, SoundChoice>,
+}
+
+impl Default for Sounds {
+    fn default() -> Self {
+        Sounds {
+            on: true,
+            events: Default::default(),
+        }
+    }
+}
+
+impl Sounds {
+    /// What plays at `event`, whether or not sounds are on.
+    pub fn choice(&self, event: crate::sound::SoundEvent) -> SoundChoice {
+        self.events.get(event.key()).cloned().unwrap_or_default()
+    }
+
+    pub fn set(&mut self, event: crate::sound::SoundEvent, choice: SoundChoice) {
+        if choice == SoundChoice::Default {
+            self.events.remove(event.key());
+        } else {
+            self.events.insert(event.key().into(), choice);
+        }
+    }
+
+    /// What to play at `event` now; `None` for nothing.
+    pub fn playing(&self, event: crate::sound::SoundEvent) -> Option<SoundChoice> {
+        let choice = self.choice(event);
+        (self.on && choice != SoundChoice::Off).then_some(choice)
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(default)]
 pub struct Config {
@@ -209,6 +282,14 @@ pub struct Config {
     /// What `temp_dir` was before: a start still clears leftovers there,
     /// until none are left (see `set_temp_dir`, `forget_temp_dirs`).
     pub temp_dirs_before: Vec<PathBuf>,
+    /// Who may send chat messages.
+    pub chat_from: ChatFrom,
+    /// Tell the other person of a chat when the user is writing a message.
+    pub send_typing: bool,
+    /// Announce to screen readers, and with a sound, that the other person
+    /// of the chat in front is writing a message.
+    pub announce_typing: bool,
+    pub sounds: Sounds,
 }
 
 impl Default for Config {
@@ -244,6 +325,10 @@ impl Default for Config {
             temp_dir: None,
             warn_fat_temp: true,
             temp_dirs_before: Vec::new(),
+            chat_from: ChatFrom::Anyone,
+            send_typing: true,
+            announce_typing: true,
+            sounds: Sounds::default(),
         }
     }
 }
@@ -392,6 +477,21 @@ impl Config {
             .iter()
             .filter_map(|c| c.id.to_ascii_lowercase().parse().ok())
             .collect()
+    }
+
+    /// Who may send chat messages and under what name this side answers, as
+    /// the network needs it (`net::start_with_chat`,
+    /// `net::NetHandle::set_chat`).
+    pub fn chat_policy(&self) -> crate::net::ChatPolicy {
+        crate::net::ChatPolicy {
+            from: self.chat_from,
+            recipients: self
+                .contacts
+                .iter()
+                .filter_map(|c| c.id.to_ascii_lowercase().parse().ok())
+                .collect(),
+            my_name: self.my_name.clone(),
+        }
     }
 
     /// The largest item, in bytes, that the sender `id` may send; `None` for
@@ -632,11 +732,62 @@ mod tests {
         cfg.explorer_menu = false;
         cfg.update_last_check = Some(1_700_000_000);
         cfg.update_remind_after = Some(1_700_086_400);
+        cfg.chat_from = ChatFrom::Recipients;
+        cfg.send_typing = false;
+        cfg.announce_typing = false;
+        cfg.sounds.on = false;
+        cfg.sounds.set(crate::sound::SoundEvent::Typing, SoundChoice::Off);
+        cfg.sounds.set(
+            crate::sound::SoundEvent::Completed,
+            SoundChoice::File(PathBuf::from(r"C:\Sounds\done.wav")),
+        );
         cfg.save(&dir).unwrap();
         assert_eq!(Config::load(&dir).unwrap(), cfg);
         assert!(cfg.contact_by_id("ABC").is_some());
         assert!(cfg.is_blocked("DEF"));
         std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn sounds_play_as_chosen() {
+        use crate::sound::SoundEvent;
+        let mut sounds = Sounds::default();
+        assert_eq!(sounds.playing(SoundEvent::Completed), Some(SoundChoice::Default));
+        sounds.set(SoundEvent::Completed, SoundChoice::Off);
+        assert_eq!(sounds.playing(SoundEvent::Completed), None);
+        assert_eq!(sounds.playing(SoundEvent::Failed), Some(SoundChoice::Default));
+        let file = SoundChoice::File(PathBuf::from("a.wav"));
+        sounds.set(SoundEvent::Failed, file.clone());
+        assert_eq!(sounds.playing(SoundEvent::Failed), Some(file.clone()));
+        // Off for all keeps what each one is set to.
+        sounds.on = false;
+        assert_eq!(sounds.playing(SoundEvent::Failed), None);
+        assert_eq!(sounds.choice(SoundEvent::Failed), file);
+        // The built-in sound is not written down.
+        sounds.set(SoundEvent::Failed, SoundChoice::Default);
+        sounds.set(SoundEvent::Completed, SoundChoice::Default);
+        assert!(sounds.events.is_empty());
+        // A later version's event does not make the settings unreadable.
+        let json = r#"{"on":true,"events":{"something_new":"off","typing":{"file":"t.wav"}}}"#;
+        let sounds: Sounds = serde_json::from_str(json).unwrap();
+        assert_eq!(
+            sounds.choice(SoundEvent::Typing),
+            SoundChoice::File(PathBuf::from("t.wav"))
+        );
+    }
+
+    #[test]
+    fn the_chat_policy_names_the_recipients() {
+        let id = iroh::SecretKey::generate().public();
+        let mut cfg = Config::default();
+        cfg.my_name = "Ana".into();
+        cfg.contacts.push(Contact::new("Bo", id.to_string().to_uppercase()));
+        cfg.contacts.push(Contact::new("Not an ID", "abc"));
+        cfg.chat_from = ChatFrom::Recipients;
+        let policy = cfg.chat_policy();
+        assert_eq!(policy.from, ChatFrom::Recipients);
+        assert_eq!(policy.my_name, "Ana");
+        assert_eq!(policy.recipients, [id].into_iter().collect());
     }
 
     #[test]

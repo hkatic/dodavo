@@ -5,6 +5,8 @@
 //!     cargo run --example peer -- --profile peer --out ~/Downloads/peer [--keep extract|zip|both]
 //!
 //!     send <contact id> <path>
+//!     chat <contact id> <text>
+//!     typing <contact id> [off]
 //!     pause <id> | resume <id> | cancel <id>
 //!     netchange   (tells it that the network changed, as an Android app does)
 //!     quit
@@ -55,12 +57,17 @@ fn main() {
 
     let handle: Arc<Mutex<Option<NetHandle>>> = Arc::default();
     let responder = handle.clone();
-    let net = net::start(
+    let chat = net::ChatPolicy {
+        my_name: "Dodavo test peer".into(),
+        ..Default::default()
+    };
+    let net = net::start_with_chat(
         secret,
         data_dir,
         archive::temp_dir_for(Some(&profile)),
         [],
         net::Limits::default(),
+        Some(chat),
         move |event| match event {
             Event::Progress { id, done, total } => {
                 println!("{id}: {} of {}", format_size(done), format_size(total));
@@ -83,6 +90,8 @@ fn main() {
                     });
                 }
             }
+            Event::Chat { from, name, text } => println!("chat from {from} ({name}): {text}"),
+            Event::Typing { from, on } => println!("typing {from}: {on}"),
             other => println!("{other:?}"),
         },
     );
@@ -127,10 +136,31 @@ fn main() {
                     peer_name: "peer".into(),
                 });
             }
+            ("chat" | "typing", _) => {
+                let (to, text) = rest.trim().split_once(' ').unwrap_or((rest.trim(), ""));
+                let Some(to) = identity::parse_contact_id(to) else {
+                    println!("chat <contact id> <text>, typing <contact id> [off]");
+                    continue;
+                };
+                if verb == "typing" {
+                    send(Command::Typing {
+                        to,
+                        on: text.trim() != "off",
+                    });
+                } else {
+                    let id = net::next_transfer_id();
+                    println!("{id}: saying {text:?}");
+                    send(Command::Chat {
+                        to,
+                        id,
+                        text: text.to_string(),
+                    });
+                }
+            }
             ("netchange", _) => send(Command::NetworkChange),
             ("quit", _) => break,
             ("", _) => {}
-            _ => println!("send, pause, resume, cancel, netchange or quit"),
+            _ => println!("send, chat, typing, pause, resume, cancel, netchange or quit"),
         }
     }
     if let Some(net) = &*handle.lock().unwrap() {
