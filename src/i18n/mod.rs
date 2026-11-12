@@ -395,10 +395,11 @@ strings! {
         name_taken,
         // Settings dialog.
         settings_title,
+        settings_tab_general,
+        settings_tab_transfers,
+        settings_tab_receiving,
         my_name_label,
-        sending_heading,
         show_after_send,
-        receiving_heading,
         always_save,
         always_save_folder_label,
         auto_accept,
@@ -407,7 +408,6 @@ strings! {
         received_extract,
         received_keep_zip,
         received_both,
-        general_heading,
         start_with_windows,
         start_minimized,
         keep_in_tray,
@@ -425,7 +425,6 @@ strings! {
         language_default,
         language_restart,
         temp_folder_label,
-        temp_folder_browse,
         pick_temp_folder,
         invalid_temp_folder,
         my_id_label,
@@ -858,7 +857,7 @@ mod tests {
         }
         for lang in Lang::ALL {
             let s = lang.strings();
-            let groups: [(&str, Vec<&str>); 23] = [
+            let groups: [(&str, Vec<&str>); 25] = [
                 ("menu bar", vec![s.menu_file, s.menu_transfers, s.menu_help]),
                 (
                     "File menu",
@@ -917,30 +916,44 @@ mod tests {
                         s.recipients_label,
                     ],
                 ),
+                // The pages of the settings: only the selected tab's page
+                // shows, and the controls of the others take no access key.
                 (
-                    "settings",
+                    "settings: General",
                     vec![
                         s.my_name_label,
+                        s.copy,
+                        s.language_label,
+                        s.start_with_windows,
+                        s.start_minimized,
+                        s.keep_in_tray,
+                        s.check_updates,
+                        s.explorer_menu,
+                    ],
+                ),
+                (
+                    "settings: Transfers",
+                    vec![
+                        s.close_running_label,
+                        s.connection_lost_label,
                         s.show_after_send,
+                        s.temp_folder_label,
+                        s.browse,
+                    ],
+                ),
+                (
+                    "settings: Receiving",
+                    vec![
                         s.always_save,
                         s.always_save_folder_label,
                         s.browse,
                         s.auto_accept,
                         s.received_folder_label,
                         s.ask_after_receive,
-                        s.start_with_windows,
-                        s.start_minimized,
-                        s.keep_in_tray,
-                        s.check_updates,
-                        s.explorer_menu,
-                        s.close_running_label,
-                        s.connection_lost_label,
-                        s.language_label,
-                        s.copy,
-                        s.blocked_senders_button,
                         s.limit_size,
                         s.limit_size_label,
                         s.over_limit_label,
+                        s.blocked_senders_button,
                     ],
                 ),
                 (
@@ -1036,9 +1049,8 @@ mod tests {
                     "{lang:?}: the main window button {text:?} must not have an access key"
                 );
             }
-            // Change… in the settings has none in any language: three of
-            // them have no letter left for it there, and it is not something
-            // to reach by accident. It follows Copy in the Tab order.
+            // Change… in the settings has none in any language: it is not
+            // something to reach by accident. It follows Copy in the Tab order.
             assert_eq!(key(s.change_id_button), None, "{lang:?}");
         }
     }

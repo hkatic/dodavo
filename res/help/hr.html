@@ -329,17 +329,38 @@
 
 <section aria-labelledby="settings">
 <h2 id="settings">Postavke</h2>
-<p>U glavnom prozoru pritisnite <kbd>Ctrl</kbd>+<kbd>Zarez</kbd> ili na izborniku <span class="ui">Datoteka</span> odaberite <span class="ui">Postavke…</span>. Pritisnite <kbd>Enter</kbd> ili aktivirajte gumb <span class="ui">U redu</span> da biste spremili promjene, odnosno pritisnite <kbd>Esc</kbd> ili aktivirajte gumb <span class="ui">Odustani</span> da biste ih odbacili. Prozor ima dva stupca: lijevo su vaše ime i postavke slanja i primanja, a desno opće postavke. Tipka <kbd>Tab</kbd> ide niz lijevi stupac, zatim niz desni, a potom na gumbe <span class="ui">U redu</span> i <span class="ui">Odustani</span>. Postavke, redoslijedom tipke Tab:</p>
+<p>U glavnom prozoru pritisnite <kbd>Ctrl</kbd>+<kbd>Zarez</kbd> ili na izborniku <span class="ui">Datoteka</span> odaberite <span class="ui">Postavke…</span>. Pritisnite <kbd>Enter</kbd> ili aktivirajte gumb <span class="ui">U redu</span> da biste spremili promjene, odnosno pritisnite <kbd>Esc</kbd> ili aktivirajte gumb <span class="ui">Odustani</span> da biste ih odbacili. Postavke su na tri kartice: <span class="ui">Općenito</span>, <span class="ui">Prijenosi</span> i <span class="ui">Primanje</span>. Tipka <kbd>Tab</kbd> ide s kartica kroz postavke odabrane kartice, a potom na gumbe <span class="ui">U redu</span> i <span class="ui">Odustani</span>. Karticu mijenjate tipkama <kbd>Ctrl</kbd>+<kbd>Tab</kbd> ili <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Tab</kbd> bilo gdje u prozoru, odnosno tipkama <kbd>Strelica lijevo</kbd> i <kbd>Strelica desno</kbd> dok je fokus na karticama. Postavke svake kartice, redoslijedom tipke Tab:</p>
+<h3 id="settings-general">Općenito</h3>
 <dl>
 <dt><span class="ui">Vaše ime (prikazuje se osobama kojima šaljete datoteke)</span></dt>
 <dd>Ime koje druga osoba vidi kada joj nešto šaljete. Ako vas ima na svojem popisu primatelja, umjesto toga vidi ime koje vam je ona dala. Ovo polje ne smije biti prazno.</dd>
+<dt><span class="ui">Vaš ID kontakta</span></dt>
+<dd>Polje samo za čitanje s vašim punim ID-om kontakta, a iza njega gumbi <span class="ui">Kopiraj</span> i <span class="ui">Promijeni…</span>. Pogledajte <a href="#change-id">Promjena vašeg ID-a kontakta</a>.</dd>
+<dt><span class="ui">Jezik</span></dt>
+<dd>Jezik programa Dodavo i ove pomoći: <span class="ui">Zadano u sustavu Windows</span>, <span lang="en">English</span>, <span lang="hr">Hrvatski</span>, <span lang="sr-Latn">Srpski (latinica)</span> ili <span lang="sl">Slovenščina</span>. Uz mogućnost <span class="ui">Zadano u sustavu Windows</span> Dodavo koristi prvi od vaših jezika prikaza u sustavu Windows koji podržava, a inače engleski. Novi jezik koristi se nakon ponovnog pokretanja programa Dodavo.</dd>
+<dt><span class="ui">Pokreni pri prijavi u sustav Windows</span></dt>
+<dd>Pokreće Dodavo u području obavijesti kada se prijavite u Windows, pa uvijek možete primati datoteke.</dd>
+<dt><span class="ui">Uvijek pokreni minimizirano u područje obavijesti</span></dt>
+<dd>Dodavo se pokreće bez prikazivanja glavnog prozora.</dd>
+<dt><span class="ui">Nastavi raditi u području obavijesti kada se prozor zatvori</span></dt>
+<dd>Kada nije odabrano, zatvaranjem glavnog prozora izlazite iz programa Dodavo.</dd>
+<dt><span class="ui">Automatski provjeravaj ima li ažuriranja (jednom dnevno)</span></dt>
+<dd>Dodavo jednom dnevno na stranici programa Dodavo na GitHubu provjerava je li dostupna novija verzija i nudi njezinu instalaciju. Pogledajte <a href="#update">Ažuriranje programa Dodavo</a>.</dd>
+<dt><span class="ui">Dodaj Dodavo u izbornike Eksplorera za datoteke</span></dt>
+<dd>Dodaje <span class="ui">Pošalji programom Dodavo</span> u kontekstni izbornik datoteka i mapa, a Dodavo u njihov izbornik <span class="ui">Pošalji u</span>. Ova je mogućnost uključena dok je ne isključite, a dostupna je ako je Dodavo instaliran svojim instalacijskim programom. Pogledajte <a href="#send-from-explorer">Slanje iz Eksplorera za datoteke</a>.</dd>
 </dl>
-<h3 id="settings-sending">Slanje datoteka</h3>
+<h3 id="settings-transfers">Prijenosi</h3>
 <dl>
+<dt><span class="ui">Pri zatvaranju prozora prijenosa koji je u tijeku</span></dt>
+<dd>Popis s mogućnostima <span class="ui">Pitaj svaki put</span>, <span class="ui">Nastavi u pozadini</span> i <span class="ui">Otkaži prijenos</span>. Pogledajte <a href="#closing-progress">Zatvaranje prozora napretka tijekom prijenosa</a>.</dd>
+<dt><span class="ui">Ako se veza prekine tijekom prijenosa</span></dt>
+<dd>Popis s mogućnostima <span class="ui">Pitaj svaki put</span>, <span class="ui">Pričekaj vezu i nastavi</span> i <span class="ui">Otkaži prijenos</span>. Pogledajte <a href="#connection-lost">Kada se veza prekine</a>.</dd>
 <dt><span class="ui">Nakon slanja prikaži poruku kad datoteka ili mapa stigne</span></dt>
 <dd>Prikazuje poruku kada druga osoba primi stavku koju ste poslali. Kada nije odabrano, prozor napretka zatvara se sam, a rezultat javlja obavijest. Pogledajte <a href="#after-sending">Kada poslana stavka stigne</a>.</dd>
+<dt><span class="ui">Mapa za privremene datoteke</span></dt>
+<dd>Ovdje Dodavo, u vlastitoj mapi naziva <code>Dodavo</code>, čuva ZIP arhivu mape dok je šalje: isprva je to privremena mapa koju daje Windows. Drugu mapu, primjerice na pogonu s više slobodnog prostora, odaberite gumbom <span class="ui">Pregledaj…</span>; ispraznite polje da biste se vratili na onu koju daje Windows. Odabir vrijedi za prijenose koji počnu nakon toga. Ako mapa nije dostupna kada prijenos počne (njezin pogon nije priključen), taj prijenos koristi privremenu mapu sustava Windows.</dd>
 </dl>
-<h3 id="settings-receiving">Primanje datoteka</h3>
+<h3 id="settings-receiving">Primanje</h3>
 <dl>
 <dt><span class="ui">Uvijek spremaj primljene datoteke u ovu mapu</span></dt>
 <dd>Kada je odabrano, primljene se stavke spremaju u mapu iz polja <span class="ui">Mapa za spremanje</span> ispod, koju možete odabrati gumbom <span class="ui">Pregledaj…</span>. To je vaša mapa Preuzimanja ako ne odaberete drugu. Kada nije odabrano, Dodavo uvijek pita gdje spremiti: svaki prijenos otvara prozor Dolazni prijenos, koji predlaže mapu koju ste koristili prošli put ili mapu Preuzimanja. Ova je mogućnost uključena dok je ne isključite.</dd>
@@ -357,29 +378,6 @@
 <dd>Popis s mogućnostima <span class="ui">Pitaj me prije nego što počne</span>, <span class="ui">Odbij je i nemoj me obavijestiti</span> i <span class="ui">Odbij je i obavijesti me</span>. Vrijedi i za ograničenja koja primatelji imaju sami za sebe, pa je dostupan i bez gornjeg ograničenja.</dd>
 <dt><span class="ui">Blokirani pošiljatelji…</span></dt>
 <dd>Otvara popis pošiljatelja koje ste blokirali, na kojem ih možete deblokirati. Pogledajte <a href="#blocking">Blokiranje pošiljatelja</a>.</dd>
-</dl>
-<h3 id="settings-general">Općenito</h3>
-<dl>
-<dt><span class="ui">Pokreni pri prijavi u sustav Windows</span></dt>
-<dd>Pokreće Dodavo u području obavijesti kada se prijavite u Windows, pa uvijek možete primati datoteke.</dd>
-<dt><span class="ui">Uvijek pokreni minimizirano u područje obavijesti</span></dt>
-<dd>Dodavo se pokreće bez prikazivanja glavnog prozora.</dd>
-<dt><span class="ui">Nastavi raditi u području obavijesti kada se prozor zatvori</span></dt>
-<dd>Kada nije odabrano, zatvaranjem glavnog prozora izlazite iz programa Dodavo.</dd>
-<dt><span class="ui">Automatski provjeravaj ima li ažuriranja (jednom dnevno)</span></dt>
-<dd>Dodavo jednom dnevno na stranici programa Dodavo na GitHubu provjerava je li dostupna novija verzija i nudi njezinu instalaciju. Pogledajte <a href="#update">Ažuriranje programa Dodavo</a>.</dd>
-<dt><span class="ui">Dodaj Dodavo u izbornike Eksplorera za datoteke</span></dt>
-<dd>Dodaje <span class="ui">Pošalji programom Dodavo</span> u kontekstni izbornik datoteka i mapa, a Dodavo u njihov izbornik <span class="ui">Pošalji u</span>. Ova je mogućnost uključena dok je ne isključite, a dostupna je ako je Dodavo instaliran svojim instalacijskim programom. Pogledajte <a href="#send-from-explorer">Slanje iz Eksplorera za datoteke</a>.</dd>
-<dt><span class="ui">Pri zatvaranju prozora prijenosa koji je u tijeku</span></dt>
-<dd>Popis s mogućnostima <span class="ui">Pitaj svaki put</span>, <span class="ui">Nastavi u pozadini</span> i <span class="ui">Otkaži prijenos</span>. Pogledajte <a href="#closing-progress">Zatvaranje prozora napretka tijekom prijenosa</a>.</dd>
-<dt><span class="ui">Ako se veza prekine tijekom prijenosa</span></dt>
-<dd>Popis s mogućnostima <span class="ui">Pitaj svaki put</span>, <span class="ui">Pričekaj vezu i nastavi</span> i <span class="ui">Otkaži prijenos</span>. Pogledajte <a href="#connection-lost">Kada se veza prekine</a>.</dd>
-<dt><span class="ui">Jezik</span></dt>
-<dd>Jezik programa Dodavo i ove pomoći: <span class="ui">Zadano u sustavu Windows</span>, <span lang="en">English</span>, <span lang="hr">Hrvatski</span>, <span lang="sr-Latn">Srpski (latinica)</span> ili <span lang="sl">Slovenščina</span>. Uz mogućnost <span class="ui">Zadano u sustavu Windows</span> Dodavo koristi prvi od vaših jezika prikaza u sustavu Windows koji podržava, a inače engleski. Novi jezik koristi se nakon ponovnog pokretanja programa Dodavo.</dd>
-<dt><span class="ui">Mapa za privremene datoteke</span></dt>
-<dd>Ovdje Dodavo, u vlastitoj mapi naziva <code>Dodavo</code>, čuva ZIP arhivu mape dok je šalje: isprva je to privremena mapa koju daje Windows. Drugu mapu, primjerice na pogonu s više slobodnog prostora, odaberite gumbom <span class="ui">Pregledaj…</span>; ispraznite polje da biste se vratili na onu koju daje Windows. Odabir vrijedi za prijenose koji počnu nakon toga. Ako mapa nije dostupna kada prijenos počne (njezin pogon nije priključen), taj prijenos koristi privremenu mapu sustava Windows.</dd>
-<dt><span class="ui">Vaš ID kontakta</span></dt>
-<dd>Polje samo za čitanje s vašim punim ID-om kontakta, a iza njega gumbi <span class="ui">Kopiraj</span> i <span class="ui">Promijeni…</span>. Pogledajte <a href="#change-id">Promjena vašeg ID-a kontakta</a>.</dd>
 </dl>
 <h3 id="change-id">Promjena vašeg ID-a kontakta</h3>
 <p>Svoj ID kontakta možete zamijeniti novim, na primjer kada je dospio do osoba od kojih ne želite ništa primati. Dosadašnji ID kontakta tada trajno prestaje vrijediti: nitko vas više ne može doseći pomoću njega i ne može se vratiti. Svi koji vam i dalje trebaju moći slati datoteke moraju od vas dobiti novi ID kontakta i njime zamijeniti stari naredbom <span class="ui">Uredi primatelja…</span>. Vaši primatelji, blokirani pošiljatelji i postavke ostaju kakvi jesu.</p>
@@ -568,7 +566,7 @@
 <p>Da. Možete pokrenuti koliko god prijenosa želite, istoj osobi ili različitim osobama, a svaki ima vlastiti prozor napretka. Da biste poslali više datoteka ili mapa u jednom potezu, povucite ih iz Eksplorera za datoteke na osobu na popisu primatelja; nakon što potvrdite, svaka se stavka šalje kao zaseban prijenos. Pogledajte <a href="#drag-and-drop">Povlačenje stavki na osobu</a>. Možete ih i odabrati u Eksploreru za datoteke i poslati odande: pogledajte <a href="#send-from-explorer">Slanje iz Eksplorera za datoteke</a>. Stupac <span class="ui">Prijenos</span> na popisu primatelja i izbornik <span class="ui">Prijenosi</span> prate ih sve. Da biste iste stavke poslali većem broju osoba odjednom, pogledajte <a href="#send-to-several">Slanje većem broju osoba</a>.</p>
 
 <h3 id="faq-where">Gdje se spremaju primljene datoteke?</h3>
-<p>U vašu mapu Preuzimanja, osim ako ste u postavkama pod <span class="ui">Uvijek spremaj primljene datoteke u ovu mapu</span> odabrali drugu. Ako poništite odabir te mogućnosti, Dodavo pita svaki put. Kad god se otvori prozor Dolazni prijenos, mapu za taj prijenos možete promijeniti pod <span class="ui">Spremi u:</span>. Ako stavka istog naziva ondje već postoji, nova dobiva broj dodan nazivu; ništa se nikada ne prebrisuje. Pogledajte <a href="#incoming-window">Prozor Dolazni prijenos</a> i <a href="#settings-receiving">Primanje datoteka</a>.</p>
+<p>U vašu mapu Preuzimanja, osim ako ste u postavkama pod <span class="ui">Uvijek spremaj primljene datoteke u ovu mapu</span> odabrali drugu. Ako poništite odabir te mogućnosti, Dodavo pita svaki put. Kad god se otvori prozor Dolazni prijenos, mapu za taj prijenos možete promijeniti pod <span class="ui">Spremi u:</span>. Ako stavka istog naziva ondje već postoji, nova dobiva broj dodan nazivu; ništa se nikada ne prebrisuje. Pogledajte <a href="#incoming-window">Prozor Dolazni prijenos</a> i <a href="#settings-receiving">Primanje</a>.</p>
 
 <h3 id="faq-lan">Radi li Dodavo bez internetske veze?</h3>
 <p>Da, između računala u istoj lokalnoj mreži, na primjer kod kuće ili u uredu. Ona se u mreži pronalaze izravno. Redak stanja tada kaže <span class="ui">Izvan mreže – provjerite internetsku vezu. Prijenosi unutar lokalne mreže i dalje rade.</span>, a prijenosi na računala drugdje čekaju dok ponovno ne budete na mreži.</p>

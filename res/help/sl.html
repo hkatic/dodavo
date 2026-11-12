@@ -329,17 +329,38 @@
 
 <section aria-labelledby="settings">
 <h2 id="settings">Nastavitve</h2>
-<p>V glavnem oknu pritisnite <kbd>Ctrl</kbd>+<kbd>Vejica</kbd> ali v meniju <span class="ui">Datoteka</span> izberite <span class="ui">Nastavitve…</span>. Pritisnite <kbd>Enter</kbd> ali aktivirajte gumb <span class="ui">V redu</span>, da shranite spremembe, ali pritisnite <kbd>Esc</kbd> oziroma aktivirajte gumb <span class="ui">Prekliči</span>, da jih zavržete. Okno ima dva stolpca: levo sta vaše ime in nastavitve za pošiljanje in prejemanje, desno pa splošne nastavitve. Tipka <kbd>Tab</kbd> se pomika navzdol po levem stolpcu, nato po desnem in nato na gumba <span class="ui">V redu</span> in <span class="ui">Prekliči</span>. Nastavitve v vrstnem redu tipke Tab:</p>
+<p>V glavnem oknu pritisnite <kbd>Ctrl</kbd>+<kbd>Vejica</kbd> ali v meniju <span class="ui">Datoteka</span> izberite <span class="ui">Nastavitve…</span>. Pritisnite <kbd>Enter</kbd> ali aktivirajte gumb <span class="ui">V redu</span>, da shranite spremembe, ali pritisnite <kbd>Esc</kbd> oziroma aktivirajte gumb <span class="ui">Prekliči</span>, da jih zavržete. Nastavitve so na treh zavihkih: <span class="ui">Splošno</span>, <span class="ui">Prenosi</span> in <span class="ui">Prejemanje</span>. Tipka <kbd>Tab</kbd> se pomika z zavihkov po nastavitvah izbranega zavihka in nato na gumba <span class="ui">V redu</span> in <span class="ui">Prekliči</span>. Zavihek zamenjate s tipkama <kbd>Ctrl</kbd>+<kbd>Tab</kbd> ali <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Tab</kbd> kjer koli v oknu ali s tipkama <kbd>Puščica levo</kbd> in <kbd>Puščica desno</kbd>, ko je fokus na zavihkih. Nastavitve vsakega zavihka v vrstnem redu tipke Tab:</p>
+<h3 id="settings-general">Splošno</h3>
 <dl>
 <dt><span class="ui">Vaše ime (prikazano osebam, ki jim pošiljate datoteke)</span></dt>
 <dd>Ime, ki ga druga oseba vidi, ko ji nekaj pošljete. Če vas ima na svojem seznamu prejemnikov, namesto tega vidi ime, ki vam ga je dala sama. To polje ne sme biti prazno.</dd>
+<dt><span class="ui">Vaš ID stika</span></dt>
+<dd>Polje samo za branje z vašim celotnim ID-jem stika, za njim pa gumba <span class="ui">Kopiraj</span> in <span class="ui">Spremeni…</span>. Glejte <a href="#change-id">Spreminjanje vašega ID-ja stika</a>.</dd>
+<dt><span class="ui">Jezik</span></dt>
+<dd>Jezik programa Dodavo in te pomoči: <span class="ui">Privzeto v sistemu Windows</span>, <span lang="en">English</span>, <span lang="hr">Hrvatski</span>, <span lang="sr-Latn">Srpski (latinica)</span> ali <span lang="sl">Slovenščina</span>. Z možnostjo <span class="ui">Privzeto v sistemu Windows</span> Dodavo uporabi prvega od vaših jezikov prikaza v sistemu Windows, ki ga podpira, sicer pa angleščino. Novi jezik bo uporabljen po vnovičnem zagonu programa Dodavo.</dd>
+<dt><span class="ui">Zaženi ob vpisu v Windows</span></dt>
+<dd>Ob vpisu v Windows zažene Dodavo v območju za obvestila, tako da lahko vedno prejemate datoteke.</dd>
+<dt><span class="ui">Vedno zaženi pomanjšano v območje za obvestila</span></dt>
+<dd>Dodavo se zažene, ne da bi prikazal glavno okno.</dd>
+<dt><span class="ui">Ob zaprtju okna nadaljuj delovanje v območju za obvestila</span></dt>
+<dd>Ko ni izbrano, z zaprtjem glavnega okna zaprete Dodavo.</dd>
+<dt><span class="ui">Samodejno preverjaj, ali so na voljo posodobitve (enkrat na dan)</span></dt>
+<dd>Dodavo enkrat na dan na strani programa Dodavo na GitHubu preveri, ali je na voljo novejša različica, in ponudi njeno namestitev. Glejte <a href="#update">Posodabljanje programa Dodavo</a>.</dd>
+<dt><span class="ui">Dodaj Dodavo v menije Raziskovalca</span></dt>
+<dd>Doda <span class="ui">Pošlji s programom Dodavo</span> v priročni meni datotek in map, Dodavo pa v njihov meni <span class="ui">Pošlji v</span>. Ta možnost je vklopljena, dokler je ne izklopite, na voljo pa je, če je bil Dodavo nameščen s svojim namestitvenim programom. Glejte <a href="#send-from-explorer">Pošiljanje iz Raziskovalca</a>.</dd>
 </dl>
-<h3 id="settings-sending">Pošiljanje datotek</h3>
+<h3 id="settings-transfers">Prenosi</h3>
 <dl>
+<dt><span class="ui">Ob zapiranju okna prenosa, ki še poteka</span></dt>
+<dd>Seznam z možnostmi <span class="ui">Vprašaj vsakič</span>, <span class="ui">Nadaljuj v ozadju</span> in <span class="ui">Prekliči prenos</span>. Glejte <a href="#closing-progress">Zapiranje okna napredka med prenosom</a>.</dd>
+<dt><span class="ui">Če se povezava med prenosom prekine</span></dt>
+<dd>Seznam z možnostmi <span class="ui">Vprašaj vsakič</span>, <span class="ui">Počakaj na povezavo in nadaljuj</span> in <span class="ui">Prekliči prenos</span>. Glejte <a href="#connection-lost">Ko se povezava prekine</a>.</dd>
 <dt><span class="ui">Po pošiljanju pokaži sporočilo, ko datoteka ali mapa prispe</span></dt>
 <dd>Prikaže sporočilo, ko druga oseba prejme element, ki ste ga poslali. Ko ni izbrano, se okno napredka zapre samo, rezultat pa sporoči obvestilo. Glejte <a href="#after-sending">Ko poslani element prispe</a>.</dd>
+<dt><span class="ui">Mapa za začasne datoteke</span></dt>
+<dd>Tu Dodavo v svoji mapi z imenom <code>Dodavo</code> hrani arhiv ZIP mape, medtem ko jo pošilja: sprva je to začasna mapa, ki jo da Windows. Drugo mapo, na primer na pogonu z več prostega prostora, izberite z gumbom <span class="ui">Prebrskaj…</span>; izpraznite polje, da se vrnete na tisto, ki jo da Windows. Izbira velja za prenose, ki se začnejo pozneje. Če mapa ob začetku prenosa ni dosegljiva (njen pogon ni priključen), ta prenos uporabi začasno mapo sistema Windows.</dd>
 </dl>
-<h3 id="settings-receiving">Prejemanje datotek</h3>
+<h3 id="settings-receiving">Prejemanje</h3>
 <dl>
 <dt><span class="ui">Vedno shrani prejete datoteke v to mapo</span></dt>
 <dd>Ko je izbrano, se prejeti elementi shranijo v mapo iz spodnjega polja <span class="ui">Mapa za shranjevanje</span>, ki jo lahko izberete z gumbom <span class="ui">Prebrskaj…</span>. To je vaša mapa Prenosi, če ne izberete druge. Ko ni izbrano, Dodavo vedno vpraša, kam naj shrani: vsak prenos odpre okno Dohodni prenos, ki predlaga mapo, ki ste jo uporabili zadnjič, ali mapo Prenosi. Ta možnost je vklopljena, dokler je ne izklopite.</dd>
@@ -357,29 +378,6 @@
 <dd>Seznam z možnostmi <span class="ui">Vprašaj me, preden se začne</span>, <span class="ui">Zavrni ga in me ne obvesti</span> in <span class="ui">Zavrni ga in me obvesti</span>. Velja tudi za omejitve, ki jih imajo prejemniki sami zase, zato je na voljo tudi brez zgornje omejitve.</dd>
 <dt><span class="ui">Blokirani pošiljatelji…</span></dt>
 <dd>Odpre seznam pošiljateljev, ki ste jih blokirali, na katerem jih lahko odblokirate. Glejte <a href="#blocking">Blokiranje pošiljatelja</a>.</dd>
-</dl>
-<h3 id="settings-general">Splošno</h3>
-<dl>
-<dt><span class="ui">Zaženi ob vpisu v Windows</span></dt>
-<dd>Ob vpisu v Windows zažene Dodavo v območju za obvestila, tako da lahko vedno prejemate datoteke.</dd>
-<dt><span class="ui">Vedno zaženi pomanjšano v območje za obvestila</span></dt>
-<dd>Dodavo se zažene, ne da bi prikazal glavno okno.</dd>
-<dt><span class="ui">Ob zaprtju okna nadaljuj delovanje v območju za obvestila</span></dt>
-<dd>Ko ni izbrano, z zaprtjem glavnega okna zaprete Dodavo.</dd>
-<dt><span class="ui">Samodejno preverjaj, ali so na voljo posodobitve (enkrat na dan)</span></dt>
-<dd>Dodavo enkrat na dan na strani programa Dodavo na GitHubu preveri, ali je na voljo novejša različica, in ponudi njeno namestitev. Glejte <a href="#update">Posodabljanje programa Dodavo</a>.</dd>
-<dt><span class="ui">Dodaj Dodavo v menije Raziskovalca</span></dt>
-<dd>Doda <span class="ui">Pošlji s programom Dodavo</span> v priročni meni datotek in map, Dodavo pa v njihov meni <span class="ui">Pošlji v</span>. Ta možnost je vklopljena, dokler je ne izklopite, na voljo pa je, če je bil Dodavo nameščen s svojim namestitvenim programom. Glejte <a href="#send-from-explorer">Pošiljanje iz Raziskovalca</a>.</dd>
-<dt><span class="ui">Ob zapiranju okna prenosa, ki še poteka</span></dt>
-<dd>Seznam z možnostmi <span class="ui">Vprašaj vsakič</span>, <span class="ui">Nadaljuj v ozadju</span> in <span class="ui">Prekliči prenos</span>. Glejte <a href="#closing-progress">Zapiranje okna napredka med prenosom</a>.</dd>
-<dt><span class="ui">Če se povezava med prenosom prekine</span></dt>
-<dd>Seznam z možnostmi <span class="ui">Vprašaj vsakič</span>, <span class="ui">Počakaj na povezavo in nadaljuj</span> in <span class="ui">Prekliči prenos</span>. Glejte <a href="#connection-lost">Ko se povezava prekine</a>.</dd>
-<dt><span class="ui">Jezik</span></dt>
-<dd>Jezik programa Dodavo in te pomoči: <span class="ui">Privzeto v sistemu Windows</span>, <span lang="en">English</span>, <span lang="hr">Hrvatski</span>, <span lang="sr-Latn">Srpski (latinica)</span> ali <span lang="sl">Slovenščina</span>. Z možnostjo <span class="ui">Privzeto v sistemu Windows</span> Dodavo uporabi prvega od vaših jezikov prikaza v sistemu Windows, ki ga podpira, sicer pa angleščino. Novi jezik bo uporabljen po vnovičnem zagonu programa Dodavo.</dd>
-<dt><span class="ui">Mapa za začasne datoteke</span></dt>
-<dd>Tu Dodavo v svoji mapi z imenom <code>Dodavo</code> hrani arhiv ZIP mape, medtem ko jo pošilja: sprva je to začasna mapa, ki jo da Windows. Drugo mapo, na primer na pogonu z več prostega prostora, izberite z gumbom <span class="ui">Prebrskaj…</span>; izpraznite polje, da se vrnete na tisto, ki jo da Windows. Izbira velja za prenose, ki se začnejo pozneje. Če mapa ob začetku prenosa ni dosegljiva (njen pogon ni priključen), ta prenos uporabi začasno mapo sistema Windows.</dd>
-<dt><span class="ui">Vaš ID stika</span></dt>
-<dd>Polje samo za branje z vašim celotnim ID-jem stika, za njim pa gumba <span class="ui">Kopiraj</span> in <span class="ui">Spremeni…</span>. Glejte <a href="#change-id">Spreminjanje vašega ID-ja stika</a>.</dd>
 </dl>
 <h3 id="change-id">Spreminjanje vašega ID-ja stika</h3>
 <p>Svoj ID stika lahko zamenjate z novim, na primer, ko je prišel do oseb, od katerih ne želite ničesar prejemati. Dosedanji ID stika takrat za vedno preneha veljati: nihče vas z njim ne more več doseči in ni ga mogoče povrniti. Vsi, ki naj bi vam še lahko pošiljali datoteke, morajo od vas dobiti novi ID stika in z njim zamenjati starega z ukazom <span class="ui">Uredi prejemnika…</span>. Vaši prejemniki, blokirani pošiljatelji in nastavitve ostanejo, kakršni so.</p>
@@ -568,7 +566,7 @@
 <p>Da. Začnete lahko poljubno število prenosov, isti osebi ali različnim osebam, vsak pa ima svoje okno napredka. Če želite poslati več datotek ali map naenkrat, jih iz Raziskovalca povlecite na osebo na seznamu prejemnikov; ko potrdite, se vsak element pošlje kot ločen prenos. Glejte <a href="#drag-and-drop">Vlečenje elementov na osebo</a>. Lahko jih tudi izberete v Raziskovalcu in pošljete od tam: glejte <a href="#send-from-explorer">Pošiljanje iz Raziskovalca</a>. Stolpec <span class="ui">Prenos</span> na seznamu prejemnikov in meni <span class="ui">Prenosi</span> spremljata vse. Če želite iste elemente poslati več osebam hkrati, glejte <a href="#send-to-several">Pošiljanje več osebam</a>.</p>
 
 <h3 id="faq-where">Kam se shranijo prejete datoteke?</h3>
-<p>V vašo mapo Prenosi, razen če ste v nastavitvah pod <span class="ui">Vedno shrani prejete datoteke v to mapo</span> izbrali drugo. Če to možnost počistite, Dodavo vpraša vsakič. Kadar koli se odpre okno Dohodni prenos, lahko mapo za ta prenos spremenite pod <span class="ui">Shrani v:</span>. Če element z istim imenom tam že obstaja, dobi novi imenu dodano številko; nikoli se nič ne prepiše. Glejte <a href="#incoming-window">Okno Dohodni prenos</a> in <a href="#settings-receiving">Prejemanje datotek</a>.</p>
+<p>V vašo mapo Prenosi, razen če ste v nastavitvah pod <span class="ui">Vedno shrani prejete datoteke v to mapo</span> izbrali drugo. Če to možnost počistite, Dodavo vpraša vsakič. Kadar koli se odpre okno Dohodni prenos, lahko mapo za ta prenos spremenite pod <span class="ui">Shrani v:</span>. Če element z istim imenom tam že obstaja, dobi novi imenu dodano številko; nikoli se nič ne prepiše. Glejte <a href="#incoming-window">Okno Dohodni prenos</a> in <a href="#settings-receiving">Prejemanje</a>.</p>
 
 <h3 id="faq-lan">Ali Dodavo deluje brez internetne povezave?</h3>
 <p>Da, med računalniki v istem lokalnem omrežju, na primer doma ali v pisarni. Ti se v omrežju najdejo neposredno. Vrstica stanja tedaj pove <span class="ui">Brez povezave – preverite internetno povezavo. Prenosi v lokalnem omrežju še vedno delujejo.</span>, prenosi v računalnike drugje pa počakajo, dokler niste spet povezani.</p>

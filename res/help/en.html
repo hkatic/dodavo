@@ -329,17 +329,38 @@
 
 <section aria-labelledby="settings">
 <h2 id="settings">Settings</h2>
-<p>In the main window, press <kbd>Ctrl</kbd>+<kbd>Comma</kbd>, or choose <span class="ui">Settings…</span> from the <span class="ui">File</span> menu. Press <kbd>Enter</kbd> or activate <span class="ui">OK</span> to save your changes, or press <kbd>Esc</kbd> or activate <span class="ui">Cancel</span> to discard them. The window has two columns: on the left your name and the settings for sending and receiving, on the right the general settings. <kbd>Tab</kbd> goes down the left column, then down the right one, and then to <span class="ui">OK</span> and <span class="ui">Cancel</span>. The settings, in Tab order:</p>
+<p>In the main window, press <kbd>Ctrl</kbd>+<kbd>Comma</kbd>, or choose <span class="ui">Settings…</span> from the <span class="ui">File</span> menu. Press <kbd>Enter</kbd> or activate <span class="ui">OK</span> to save your changes, or press <kbd>Esc</kbd> or activate <span class="ui">Cancel</span> to discard them. The settings are on three tabs: <span class="ui">General</span>, <span class="ui">Transfers</span> and <span class="ui">Receiving</span>. <kbd>Tab</kbd> goes from the tabs through the settings of the selected tab, and then to <span class="ui">OK</span> and <span class="ui">Cancel</span>. To change the tab, press <kbd>Ctrl</kbd>+<kbd>Tab</kbd> or <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Tab</kbd> anywhere in the window, or the <kbd>Left arrow</kbd> and <kbd>Right arrow</kbd> keys while the focus is on the tabs. The settings of each tab, in Tab order:</p>
+<h3 id="settings-general">General</h3>
 <dl>
 <dt><span class="ui">Your name (shown to the people you send files to)</span></dt>
 <dd>The name the other person sees when you send them something. If they have you in their recipient list, they see the name they gave you instead. This field must not be empty.</dd>
+<dt><span class="ui">Your Contact ID</span></dt>
+<dd>A read-only field with your full Contact ID, followed by the buttons <span class="ui">Copy</span> and <span class="ui">Change…</span>. See <a href="#change-id">Changing your Contact ID</a>.</dd>
+<dt><span class="ui">Language</span></dt>
+<dd>The language of Dodavo and of this help: <span class="ui">Windows default</span>, <span lang="en">English</span>, <span lang="hr">Hrvatski</span>, <span lang="sr-Latn">Srpski (latinica)</span> or <span lang="sl">Slovenščina</span>. With <span class="ui">Windows default</span>, Dodavo uses the first of your Windows display languages that it supports, or English. A new language is used after Dodavo is restarted.</dd>
+<dt><span class="ui">Start with Windows</span></dt>
+<dd>Starts Dodavo in the notification area when you sign in to Windows, so that you can always receive files.</dd>
+<dt><span class="ui">Always start minimized to the notification area</span></dt>
+<dd>Dodavo starts without showing its main window.</dd>
+<dt><span class="ui">Keep running in the notification area when the window is closed</span></dt>
+<dd>When cleared, closing the main window exits Dodavo.</dd>
+<dt><span class="ui">Check for updates automatically (once a day)</span></dt>
+<dd>Dodavo asks the Dodavo page on GitHub once a day whether a newer version is available and offers to install it. See <a href="#update">Updating Dodavo</a>.</dd>
+<dt><span class="ui">Add Dodavo to File Explorer's menus</span></dt>
+<dd>Adds <span class="ui">Send with Dodavo</span> to the context menu of files and folders, and Dodavo to their <span class="ui">Send to</span> menu. It is on unless you clear it, and available when Dodavo was installed with its setup program. See <a href="#send-from-explorer">Sending from File Explorer</a>.</dd>
 </dl>
-<h3 id="settings-sending">Sending files</h3>
+<h3 id="settings-transfers">Transfers</h3>
 <dl>
+<dt><span class="ui">When closing the window of a running transfer</span></dt>
+<dd>A list with <span class="ui">Ask every time</span>, <span class="ui">Continue in the background</span> and <span class="ui">Cancel the transfer</span>. See <a href="#closing-progress">Closing a progress window during a transfer</a>.</dd>
+<dt><span class="ui">If the connection is lost during a transfer</span></dt>
+<dd>A list with <span class="ui">Ask every time</span>, <span class="ui">Wait for the connection and continue</span> and <span class="ui">Cancel the transfer</span>. See <a href="#connection-lost">When the connection is lost</a>.</dd>
 <dt><span class="ui">After sending, show a message once the item has arrived</span></dt>
 <dd>Shows a message when the other person has received an item you sent. When cleared, the progress window closes by itself and a notification reports the result. See <a href="#after-sending">When a sent item has arrived</a>.</dd>
+<dt><span class="ui">Folder for temporary files</span></dt>
+<dd>Where Dodavo keeps the ZIP archive of a folder while it sends it, in a folder of its own named <code>Dodavo</code>: at first the temporary folder that Windows gives. Choose another folder with <span class="ui">Browse…</span>, for example on a drive with more free space; clear the field to go back to the one that Windows gives. The choice holds for transfers that start afterwards. If the folder cannot be reached when a transfer starts (its drive is not connected), that transfer uses the temporary folder of Windows.</dd>
 </dl>
-<h3 id="settings-receiving">Receiving files</h3>
+<h3 id="settings-receiving">Receiving</h3>
 <dl>
 <dt><span class="ui">Always save received files to this folder</span></dt>
 <dd>When selected, received items are saved in the folder in the <span class="ui">Folder</span> field below, which you can choose with <span class="ui">Browse…</span>. It is your Downloads folder unless you choose another one. When cleared, Dodavo always asks where to save: every transfer opens the Incoming Transfer window, which suggests the folder you used last, or Downloads. It is on unless you clear it.</dd>
@@ -357,29 +378,6 @@
 <dd>A list with <span class="ui">Ask me before it starts</span>, <span class="ui">Decline it without telling me</span> and <span class="ui">Decline it and tell me</span>. It also applies to the limits that recipients have of their own, so it is available without the limit above.</dd>
 <dt><span class="ui">Blocked Senders…</span></dt>
 <dd>Opens the list of the senders you blocked, where you can unblock them. See <a href="#blocking">Blocking a sender</a>.</dd>
-</dl>
-<h3 id="settings-general">General</h3>
-<dl>
-<dt><span class="ui">Start with Windows</span></dt>
-<dd>Starts Dodavo in the notification area when you sign in to Windows, so that you can always receive files.</dd>
-<dt><span class="ui">Always start minimized to the notification area</span></dt>
-<dd>Dodavo starts without showing its main window.</dd>
-<dt><span class="ui">Keep running in the notification area when the window is closed</span></dt>
-<dd>When cleared, closing the main window exits Dodavo.</dd>
-<dt><span class="ui">Check for updates automatically (once a day)</span></dt>
-<dd>Dodavo asks the Dodavo page on GitHub once a day whether a newer version is available and offers to install it. See <a href="#update">Updating Dodavo</a>.</dd>
-<dt><span class="ui">Add Dodavo to File Explorer's menus</span></dt>
-<dd>Adds <span class="ui">Send with Dodavo</span> to the context menu of files and folders, and Dodavo to their <span class="ui">Send to</span> menu. It is on unless you clear it, and available when Dodavo was installed with its setup program. See <a href="#send-from-explorer">Sending from File Explorer</a>.</dd>
-<dt><span class="ui">When closing the window of a running transfer</span></dt>
-<dd>A list with <span class="ui">Ask every time</span>, <span class="ui">Continue in the background</span> and <span class="ui">Cancel the transfer</span>. See <a href="#closing-progress">Closing a progress window during a transfer</a>.</dd>
-<dt><span class="ui">If the connection is lost during a transfer</span></dt>
-<dd>A list with <span class="ui">Ask every time</span>, <span class="ui">Wait for the connection and continue</span> and <span class="ui">Cancel the transfer</span>. See <a href="#connection-lost">When the connection is lost</a>.</dd>
-<dt><span class="ui">Language</span></dt>
-<dd>The language of Dodavo and of this help: <span class="ui">Windows default</span>, <span lang="en">English</span>, <span lang="hr">Hrvatski</span>, <span lang="sr-Latn">Srpski (latinica)</span> or <span lang="sl">Slovenščina</span>. With <span class="ui">Windows default</span>, Dodavo uses the first of your Windows display languages that it supports, or English. A new language is used after Dodavo is restarted.</dd>
-<dt><span class="ui">Folder for temporary files</span></dt>
-<dd>Where Dodavo keeps the ZIP archive of a folder while it sends it, in a folder of its own named <code>Dodavo</code>: at first the temporary folder that Windows gives. Choose another folder with <span class="ui">Browse…</span>, for example on a drive with more free space; clear the field to go back to the one that Windows gives. The choice holds for transfers that start afterwards. If the folder cannot be reached when a transfer starts (its drive is not connected), that transfer uses the temporary folder of Windows.</dd>
-<dt><span class="ui">Your Contact ID</span></dt>
-<dd>A read-only field with your full Contact ID, followed by the buttons <span class="ui">Copy</span> and <span class="ui">Change…</span>. See <a href="#change-id">Changing your Contact ID</a>.</dd>
 </dl>
 <h3 id="change-id">Changing your Contact ID</h3>
 <p>You can replace your Contact ID with a new one, for example when it has reached people you do not want to receive anything from. The current Contact ID then stops working for good: nobody can reach you with it any more, and it cannot be brought back. Everyone who should still be able to send you files has to get the new Contact ID from you and replace the old one with <span class="ui">Edit Recipient…</span>. Your recipients, your blocked senders and your settings stay as they are.</p>
@@ -568,7 +566,7 @@
 <p>Yes. You can start as many transfers as you like, to the same person or to different people, and each has its own progress window. To send several files or folders in one go, drag them from File Explorer onto the person in your recipient list; after you confirm, each item is sent as a separate transfer. See <a href="#drag-and-drop">Dragging items onto a person</a>. You can also select them in File Explorer and send them from there: see <a href="#send-from-explorer">Sending from File Explorer</a>. The <span class="ui">Transfer</span> column of the recipient list and the <span class="ui">Transfers</span> menu keep track of all of them. To send the same items to several people at once, see <a href="#send-to-several">Sending to several people</a>.</p>
 
 <h3 id="faq-where">Where are received files saved?</h3>
-<p>In your Downloads folder, unless you chose another one in Settings under <span class="ui">Always save received files to this folder</span>. If you clear that option, Dodavo asks every time. Whenever the Incoming Transfer window opens, you can change the folder under <span class="ui">Save to:</span> for that transfer. If an item with the same name already exists there, the new one gets a number added to its name; nothing is ever overwritten. See <a href="#incoming-window">The Incoming Transfer window</a> and <a href="#settings-receiving">Receiving files</a>.</p>
+<p>In your Downloads folder, unless you chose another one in Settings under <span class="ui">Always save received files to this folder</span>. If you clear that option, Dodavo asks every time. Whenever the Incoming Transfer window opens, you can change the folder under <span class="ui">Save to:</span> for that transfer. If an item with the same name already exists there, the new one gets a number added to its name; nothing is ever overwritten. See <a href="#incoming-window">The Incoming Transfer window</a> and <a href="#settings-receiving">Receiving</a>.</p>
 
 <h3 id="faq-lan">Does Dodavo work without an internet connection?</h3>
 <p>Yes, between computers on the same local network, for example at home or in an office. They find each other on the network directly. The status line then says <span class="ui">Offline – check your internet connection. Transfers within your local network still work.</span>, and transfers to computers elsewhere wait until you are online again.</p>

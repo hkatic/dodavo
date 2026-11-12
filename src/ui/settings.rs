@@ -3,8 +3,11 @@
 use std::path::{Path, PathBuf};
 
 use windows_sys::Win32::{
-    Foundation::HWND,
-    UI::WindowsAndMessaging::{BN_CLICKED, IDCANCEL},
+    Foundation::{HWND, LPARAM, LRESULT},
+    UI::{
+        Controls::{NMHDR, TCN_SELCHANGE},
+        WindowsAndMessaging::{BN_CLICKED, IDCANCEL},
+    },
 };
 
 use super::{
@@ -44,15 +47,22 @@ const ID_LIMIT_UNIT: u16 = 31;
 const ID_OVER_LIMIT: u16 = 32;
 const ID_TEMP_DIR: u16 = 33;
 const ID_TEMP_BROWSE: u16 = 34;
+const ID_TABS: u16 = 35;
 
-/// The two columns (96-DPI units): headings start at their `x`, the
-/// settings under them are indented.
-const LEFT_X: i32 = 14;
-const RIGHT_X: i32 = 500;
-const COLUMN_W: i32 = 466;
-const WIDTH: i32 = RIGHT_X + COLUMN_W + 14;
+/// The window (96-DPI units): a margin around a page of settings.
+const MARGIN: i32 = 14;
+const PAGE_W: i32 = 466;
+const WIDTH: i32 = MARGIN + PAGE_W + MARGIN;
+
+/// The pages, in the order of their tabs.
+const PAGE_GENERAL: usize = 0;
+const PAGE_TRANSFERS: usize = 1;
+const PAGE_RECEIVING: usize = 2;
 
 struct SettingsDialog {
+    /// The row of tabs, and the controls of each tab's page.
+    tabs: HWND,
+    pages: Vec<Vec<HWND>>,
     my_name: HWND,
     always: HWND,
     dir_label: HWND,
@@ -88,6 +98,8 @@ struct SettingsDialog {
 
 pub fn show(owner: HWND) {
     let handler = SettingsDialog {
+        tabs: std::ptr::null_mut(),
+        pages: Vec::new(),
         my_name: std::ptr::null_mut(),
         always: std::ptr::null_mut(),
         dir_label: std::ptr::null_mut(),
@@ -146,6 +158,30 @@ fn same_folder(a: &Path, b: &Path) -> bool {
 }
 
 impl SettingsDialog {
+    /// Shows the controls of one page and hides those of the others. The
+    /// focus goes to the tabs if it was on a control that is hidden now, and
+    /// a screen reader then says which tab is selected.
+    fn show_page(&self, index: usize) {
+        window::select_tab(self.tabs, index);
+        let focus = window::focused();
+        for (i, page) in self.pages.iter().enumerate() {
+            for &ctl in page {
+                window::show(ctl, i == index);
+            }
+            if i != index && page.contains(&focus) {
+                window::focus(self.tabs);
+            }
+        }
+    }
+
+    /// Reports what cannot be saved, on the page of the field it is about,
+    /// and leaves the focus in that field.
+    fn refuse(&self, w: &Window, page: usize, field: HWND, text: &str) {
+        self.show_page(page);
+        error(w.hwnd, text);
+        window::focus(field);
+    }
+
     fn update_enabled(&self) {
         let on = window::is_checked(self.always);
         window::enable(self.dir_label, on);
@@ -165,7 +201,7 @@ impl SettingsDialog {
     fn save(&self, w: &Window) -> bool {
         let my_name = get_text(self.my_name).trim().to_string();
         if my_name.is_empty() {
-            error(w.hwnd, tr!(enter_my_name));
+            self.refuse(w, PAGE_GENERAL, self.my_name, tr!(enter_my_name));
             return false;
         }
         let always = window::is_checked(self.always);
@@ -175,7 +211,7 @@ impl SettingsDialog {
             match &dir {
                 Some(d) if d.is_absolute() && std::fs::create_dir_all(d).is_ok() => {}
                 _ => {
-                    error(w.hwnd, tr!(invalid_save_folder));
+                    self.refuse(w, PAGE_RECEIVING, self.dir, tr!(invalid_save_folder));
                     return false;
                 }
             }
@@ -193,8 +229,7 @@ impl SettingsDialog {
         let size_limit = match limit::from_input(&get_text(self.limit_size), unit) {
             Ok(bytes) => Some(bytes),
             Err(text) if limited => {
-                error(w.hwnd, &text);
-                window::focus(self.limit_size);
+                self.refuse(w, PAGE_RECEIVING, self.limit_size, &text);
                 return false;
             }
             Err(_) => None,
@@ -231,8 +266,7 @@ impl SettingsDialog {
         if let Some(dir) = &temp_dir
             && !(dir.is_absolute() && std::fs::create_dir_all(dir).is_ok())
         {
-            error(w.hwnd, tr!(invalid_temp_folder));
-            window::focus(self.temp_dir);
+            self.refuse(w, PAGE_TRANSFERS, self.temp_dir, tr!(invalid_temp_folder));
             return false;
         }
         // Unset, it follows Downloads to wherever that is moved.
@@ -276,54 +310,183 @@ impl SettingsDialog {
 impl Handler for SettingsDialog {
     fn on_create(&mut self, w: &Window) {
         let cfg = app::cfg();
-        // Tab goes down the left column (sending and receiving), then down
-        // the right one (general settings), then to OK and Cancel.
-        let heading = |text: &str, x: i32, y: i32| {
-            let h = w.label(text, (x, y, COLUMN_W, 18));
-            w.make_bold(h);
-        };
-        let (x, inner_x, inner_w) = (LEFT_X, LEFT_X + 10, COLUMN_W - 10);
-        // Fields that belong to a check box are indented further.
-        let (sub_x, sub_w) = (x + 28, COLUMN_W - 28);
-        w.caption(tr!(my_name_label), (x, 12, COLUMN_W, 18));
-        self.my_name = w.edit(&cfg.my_name, ID_MY_NAME, (x, 32, COLUMN_W, 24));
+        // Tab goes from the tabs down the page that shows, then to OK and
+        // Cancel. Every page is made here, one after the other.
+        let (x, width) = (MARGIN, PAGE_W);
+        // Fields that belong to a check box are indented.
+        let (sub_x, sub_w) = (x + 18, width - 18);
+        self.tabs = w.tabs(
+            &[
+                tr!(settings_tab_general),
+                tr!(settings_tab_transfers),
+                tr!(settings_tab_receiving),
+            ],
+            ID_TABS,
+            (x, 10, width, 26),
+        );
+        let tabs_h = w.tabs_height(self.tabs);
+        w.place(self.tabs, (x, 10, width, tabs_h));
+        let top = 10 + tabs_h + 14;
 
-        heading(tr!(sending_heading), x, 70);
+        // General: who the user is, and how Dodavo starts and looks.
+        let start = w.control_count();
+        let mut y = top;
+        w.caption(tr!(my_name_label), (x, y, width, 18));
+        self.my_name = w.edit(&cfg.my_name, ID_MY_NAME, (x, y + 20, width, 24));
+        y += 56;
+        let my_id = app::with(|a| a.my_id.clone());
+        w.label(tr!(my_id_label), (x, y, width, 18));
+        self.my_id = w.edit(&my_id, 0, (x, y + 20, width - 92, 24));
+        super::send(
+            self.my_id,
+            windows_sys::Win32::UI::Controls::EM_SETREADONLY,
+            1,
+            0,
+        );
+        w.button(tr!(copy), ID_COPY, (x + width - 86, y + 19, 86, 26));
+        // Applies at once, like blocking: it is not one of the settings
+        // that OK saves.
+        let change_w = w.button_width(tr!(change_id_button), 86);
+        w.button(
+            tr!(change_id_button),
+            ID_CHANGE_ID,
+            (x, y + 52, change_w, 26),
+        );
+        y += 90;
+        w.caption(tr!(language_label), (x, y, width, 18));
+        let mut languages = vec![tr!(language_default)];
+        languages.extend(Lang::ALL.iter().map(|l| l.native_name()));
+        let selected = cfg
+            .language
+            .as_deref()
+            .and_then(Lang::from_code)
+            .and_then(|l| Lang::ALL.iter().position(|&x| x == l))
+            .map_or(0, |i| i + 1);
+        self.language = w.combobox(&languages, selected, ID_LANGUAGE, (x, y + 20, 300, 24));
+        y += 58;
+        self.autostart = w.checkbox(
+            tr!(start_with_windows),
+            ID_AUTOSTART,
+            cfg.start_with_windows,
+            (x, y, width, 20),
+        );
+        y += 24;
+        self.minimized = w.checkbox(
+            tr!(start_minimized),
+            ID_MINIMIZED,
+            cfg.start_minimized,
+            (x, y, width, 20),
+        );
+        y += 24;
+        self.tray = w.checkbox(
+            tr!(keep_in_tray),
+            ID_TRAY,
+            cfg.minimize_to_tray,
+            (x, y, width, 20),
+        );
+        y += 24;
+        self.check_updates = w.checkbox(
+            tr!(check_updates),
+            ID_CHECK_UPDATES,
+            cfg.check_updates,
+            (x, y, width, 20),
+        );
+        y += 24;
+        self.explorer_menu_available =
+            shell::explorer_menu_available(app::with(|a| a.profile.clone()).as_deref());
+        self.explorer_menu = w.checkbox(
+            tr!(explorer_menu),
+            ID_EXPLORER_MENU,
+            self.explorer_menu_available && cfg.explorer_menu,
+            (x, y, width, 20),
+        );
+        window::enable(self.explorer_menu, self.explorer_menu_available);
+        let mut bottom = y + 20;
+        self.pages.push(w.controls_from(start));
+
+        // Transfers: what holds for sending and for receiving.
+        let start = w.control_count();
+        let mut y = top;
+        w.caption(tr!(close_running_label), (x, y, width, 18));
+        let actions = [tr!(close_ask), tr!(close_background), tr!(close_cancel)];
+        let selected = CloseAction::ALL
+            .iter()
+            .position(|&a| a == cfg.close_running_transfer)
+            .unwrap_or(0);
+        self.close_running =
+            w.combobox(&actions, selected, ID_CLOSE_RUNNING, (x, y + 20, 300, 24));
+        y += 56;
+        w.caption(tr!(connection_lost_label), (x, y, width, 18));
+        let actions = [tr!(lost_ask), tr!(lost_wait), tr!(lost_cancel)];
+        let selected = ConnectionLostAction::ALL
+            .iter()
+            .position(|&a| a == cfg.connection_lost)
+            .unwrap_or(0);
+        self.connection_lost = w.combobox(
+            &actions,
+            selected,
+            ID_CONNECTION_LOST,
+            (x, y + 20, 300, 24),
+        );
+        y += 58;
         self.show_after_send = w.checkbox(
             tr!(show_after_send),
             ID_SHOW_AFTER_SEND,
             cfg.show_after_send,
-            (inner_x, 94, inner_w, 20),
+            (x, y, width, 20),
         );
+        y += 32;
+        // The folder in which Dodavo keeps its own folder of temporary
+        // files: the user's choice, or what Windows gives.
+        w.caption(tr!(temp_folder_label), (x, y, width, 18));
+        let temp = cfg.temp_dir.clone().unwrap_or_else(system_temp);
+        self.temp_dir = w.edit(
+            &temp.display().to_string(),
+            ID_TEMP_DIR,
+            (x, y + 20, width - 92, 24),
+        );
+        w.button(
+            tr!(browse),
+            ID_TEMP_BROWSE,
+            (x + width - 86, y + 19, 86, 26),
+        );
+        y += 46;
+        bottom = bottom.max(y);
+        self.pages.push(w.controls_from(start));
 
-        heading(tr!(receiving_heading), x, 128);
+        // Receiving: where items go, what starts by itself and who may send.
+        let start = w.control_count();
+        let mut y = top;
         self.always = w.checkbox(
             tr!(always_save),
             ID_ALWAYS,
             cfg.always_save,
-            (inner_x, 152, inner_w, 20),
+            (x, y, width, 20),
         );
+        y += 24;
         let dir = cfg.always_save_folder();
         // The label right before the field gives it its accessible name (the
         // check box above would otherwise not be used as the name).
-        self.dir_label = w.caption(tr!(always_save_folder_label), (sub_x, 176, sub_w, 18));
+        self.dir_label = w.caption(tr!(always_save_folder_label), (sub_x, y, sub_w, 18));
         self.dir = w.edit(
             &dir.display().to_string(),
             ID_DIR,
-            (sub_x, 198, sub_w - 92, 24),
+            (sub_x, y + 22, sub_w - 92, 24),
         );
-        self.browse = w.button(tr!(browse), ID_BROWSE, (x + COLUMN_W - 86, 197, 86, 26));
+        self.browse = w.button(tr!(browse), ID_BROWSE, (x + width - 86, y + 21, 86, 26));
+        y += 56;
         self.auto = w.checkbox(
             tr!(auto_accept),
             ID_AUTO,
             cfg.auto_accept,
-            (inner_x, 232, inner_w, 20),
+            (x, y, width, 20),
         );
+        y += 22;
         let note = tr!(auto_accept_note);
         let note_h = w.text_height(note, sub_w).max(18);
-        w.label(note, (sub_x, 254, sub_w, note_h));
-        let mut y = 254 + note_h + 8;
-        w.caption(tr!(received_folder_label), (inner_x, y, inner_w, 18));
+        w.label(note, (sub_x, y, sub_w, note_h));
+        y += note_h + 8;
+        w.caption(tr!(received_folder_label), (x, y, width, 18));
         let choices = [
             tr!(received_extract),
             tr!(received_keep_zip),
@@ -339,27 +502,22 @@ impl Handler for SettingsDialog {
             .map(|c| w.text_width(c) + 40)
             .max()
             .unwrap_or(0)
-            .clamp(300, inner_w);
+            .clamp(300, width);
         self.received_folder = w.combobox(
             &choices,
             selected,
             ID_RECEIVED_FOLDER,
-            (inner_x, y + 20, combo_w, 24),
+            (x, y + 20, combo_w, 24),
         );
         y += 56;
         self.ask_after = w.checkbox(
             tr!(ask_after_receive),
             ID_ASK_AFTER,
             cfg.ask_after_receive,
-            (inner_x, y, inner_w, 20),
+            (x, y, width, 20),
         );
         y += 30;
-        self.limit = w.checkbox(
-            tr!(limit_size),
-            ID_LIMIT,
-            cfg.limit_size,
-            (inner_x, y, inner_w, 20),
-        );
+        self.limit = w.checkbox(tr!(limit_size), ID_LIMIT, cfg.limit_size, (x, y, width, 20));
         y += 26;
         // The size and its unit follow their label on one line.
         let label = tr!(limit_size_label);
@@ -375,7 +533,7 @@ impl Handler for SettingsDialog {
         // It follows a field, not a label, so it gets its name.
         w.set_accessible_name(self.limit_unit, tr!(limit_unit_name));
         y += 34;
-        w.caption(tr!(over_limit_label), (inner_x, y, inner_w, 18));
+        w.caption(tr!(over_limit_label), (x, y, width, 18));
         let actions = [tr!(over_ask), tr!(over_decline), tr!(over_decline_tell)];
         let selected = OverLimit::ALL
             .iter()
@@ -386,133 +544,34 @@ impl Handler for SettingsDialog {
             .map(|a| w.text_width(a) + 40)
             .max()
             .unwrap_or(0)
-            .clamp(300, inner_w);
+            .clamp(300, width);
         self.over_limit = w.combobox(
             &actions,
             selected,
             ID_OVER_LIMIT,
-            (inner_x, y + 20, combo_w, 24),
+            (x, y + 20, combo_w, 24),
         );
         y += 56;
         let blocked_w = w.button_width(tr!(blocked_senders_button), 160);
         w.button(
             tr!(blocked_senders_button),
             ID_BLOCKED,
-            (inner_x, y, blocked_w, 26),
+            (x, y, blocked_w, 26),
         );
-        let left_bottom = y + 26;
+        bottom = bottom.max(y + 26);
+        self.pages.push(w.controls_from(start));
 
-        let (x, inner_x, inner_w) = (RIGHT_X, RIGHT_X + 10, COLUMN_W - 10);
-        heading(tr!(general_heading), x, 12);
-        self.autostart = w.checkbox(
-            tr!(start_with_windows),
-            ID_AUTOSTART,
-            cfg.start_with_windows,
-            (inner_x, 36, inner_w, 20),
-        );
-        self.minimized = w.checkbox(
-            tr!(start_minimized),
-            ID_MINIMIZED,
-            cfg.start_minimized,
-            (inner_x, 60, inner_w, 20),
-        );
-        self.tray = w.checkbox(
-            tr!(keep_in_tray),
-            ID_TRAY,
-            cfg.minimize_to_tray,
-            (inner_x, 84, inner_w, 20),
-        );
-        self.check_updates = w.checkbox(
-            tr!(check_updates),
-            ID_CHECK_UPDATES,
-            cfg.check_updates,
-            (inner_x, 108, inner_w, 20),
-        );
-        self.explorer_menu_available =
-            shell::explorer_menu_available(app::with(|a| a.profile.clone()).as_deref());
-        self.explorer_menu = w.checkbox(
-            tr!(explorer_menu),
-            ID_EXPLORER_MENU,
-            self.explorer_menu_available && cfg.explorer_menu,
-            (inner_x, 132, inner_w, 20),
-        );
-        window::enable(self.explorer_menu, self.explorer_menu_available);
-        w.caption(tr!(close_running_label), (inner_x, 164, inner_w, 18));
-        let actions = [tr!(close_ask), tr!(close_background), tr!(close_cancel)];
-        let selected = CloseAction::ALL
-            .iter()
-            .position(|&a| a == cfg.close_running_transfer)
-            .unwrap_or(0);
-        self.close_running = w.combobox(
-            &actions,
-            selected,
-            ID_CLOSE_RUNNING,
-            (inner_x, 184, 300, 24),
-        );
-        w.caption(tr!(connection_lost_label), (inner_x, 220, inner_w, 18));
-        let actions = [tr!(lost_ask), tr!(lost_wait), tr!(lost_cancel)];
-        let selected = ConnectionLostAction::ALL
-            .iter()
-            .position(|&a| a == cfg.connection_lost)
-            .unwrap_or(0);
-        self.connection_lost = w.combobox(
-            &actions,
-            selected,
-            ID_CONNECTION_LOST,
-            (inner_x, 240, 300, 24),
-        );
-        w.caption(tr!(language_label), (inner_x, 276, inner_w, 18));
-        let mut languages = vec![tr!(language_default)];
-        languages.extend(Lang::ALL.iter().map(|l| l.native_name()));
-        let selected = cfg
-            .language
-            .as_deref()
-            .and_then(Lang::from_code)
-            .and_then(|l| Lang::ALL.iter().position(|&x| x == l))
-            .map_or(0, |i| i + 1);
-        self.language = w.combobox(&languages, selected, ID_LANGUAGE, (inner_x, 296, 300, 24));
-        // The folder in which Dodavo keeps its own folder of temporary
-        // files: the user's choice, or what Windows gives.
-        // Without an access key: two of the languages have no letter of
-        // the caption left in this window.
-        w.caption(tr!(temp_folder_label), (inner_x, 332, inner_w, 18));
-        let temp = cfg.temp_dir.clone().unwrap_or_else(system_temp);
-        self.temp_dir = w.edit(
-            &temp.display().to_string(),
-            ID_TEMP_DIR,
-            (inner_x, 352, inner_w - 92, 24),
-        );
-        let browse = w.button(tr!(browse), ID_TEMP_BROWSE, (x + COLUMN_W - 86, 351, 86, 26));
-        // The second of its kind in the window: it says what it is for.
-        w.set_accessible_name(browse, tr!(temp_folder_browse));
-
-        let my_id = app::with(|a| a.my_id.clone());
-        w.label(tr!(my_id_label), (x, 392, COLUMN_W, 18));
-        let id_edit = w.edit(&my_id, 0, (x, 412, COLUMN_W - 92, 24));
-        super::send(
-            id_edit,
-            windows_sys::Win32::UI::Controls::EM_SETREADONLY,
-            1,
-            0,
-        );
-        w.button(tr!(copy), ID_COPY, (x + COLUMN_W - 86, 411, 86, 26));
-        self.my_id = id_edit;
-        // Applies at once, like blocking: it is not one of the settings
-        // that OK saves.
-        let change_w = w.button_width(tr!(change_id_button), 86);
-        w.button(tr!(change_id_button), ID_CHANGE_ID, (x, 444, change_w, 26));
-        let right_bottom = 470;
-
-        let buttons_y = left_bottom.max(right_bottom) + 22;
-        w.button(tr!(ok), ID_OK, (WIDTH - 14 - 186, buttons_y, 90, 30));
+        let buttons_y = bottom + 22;
+        w.button(tr!(ok), ID_OK, (WIDTH - MARGIN - 186, buttons_y, 90, 30));
         w.button(
             tr!(cancel),
             IDCANCEL as u16,
-            (WIDTH - 14 - 90, buttons_y, 90, 30),
+            (WIDTH - MARGIN - 90, buttons_y, 90, 30),
         );
-        w.set_client_size(WIDTH, buttons_y + 30 + 14);
+        w.set_client_size(WIDTH, buttons_y + 30 + MARGIN);
         w.default_id.set(ID_OK);
         self.update_enabled();
+        self.show_page(PAGE_GENERAL);
         window::focus(self.my_name);
     }
 
@@ -552,5 +611,12 @@ impl Handler for SettingsDialog {
             _ => return false,
         }
         true
+    }
+
+    fn on_notify(&mut self, _w: &Window, hdr: &NMHDR, _lparam: LPARAM) -> Option<LRESULT> {
+        if hdr.hwndFrom == self.tabs && hdr.code == TCN_SELCHANGE {
+            self.show_page(window::tab_selection(self.tabs));
+        }
+        None
     }
 }

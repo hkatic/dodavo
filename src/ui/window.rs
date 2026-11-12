@@ -20,9 +20,13 @@ use windows_sys::Win32::{
     },
     System::LibraryLoader::{GetModuleHandleW, GetProcAddress},
     UI::{
-        Controls::NMHDR,
+        Controls::{
+            NMHDR, TCIF_TEXT, TCITEMW, TCM_GETCURSEL, TCM_GETITEMCOUNT, TCM_GETITEMRECT,
+            TCM_INSERTITEMW, TCM_SETCURSEL, TCN_SELCHANGE,
+        },
         Input::KeyboardAndMouse::{
-            EnableWindow, GetFocus, IsWindowEnabled, SetActiveWindow, SetFocus,
+            EnableWindow, GetFocus, GetKeyState, IsWindowEnabled, SetActiveWindow, SetFocus,
+            VIRTUAL_KEY, VK_CONTROL, VK_MENU, VK_NEXT, VK_PRIOR, VK_SHIFT, VK_TAB,
         },
         Shell::{DefSubclassProc, RemoveWindowSubclass, SetWindowSubclass},
         WindowsAndMessaging::*,
@@ -613,6 +617,45 @@ impl Window {
         h
     }
 
+    /// A row of tabs, the first one selected. The window shows the controls
+    /// of the selected tab's page below it: it makes them after this control,
+    /// as its own children, and shows only one page's at a time, so Tab goes
+    /// from the tabs through the page that shows. The arrow keys change the
+    /// tab while the row has the focus, and Ctrl+Tab and Ctrl+Page Down from
+    /// anywhere in the window (see [`switch_tab`]); the handler hears of
+    /// both as `TCN_SELCHANGE` in `on_notify`. The row is as high as
+    /// [`Window::tabs_height`] says once it has its tabs.
+    pub fn tabs(&self, titles: &[&str], id: u16, rect: (i32, i32, i32, i32)) -> HWND {
+        let h = self.add("SysTabControl32", "", WS_TABSTOP, id, rect);
+        for (i, title) in titles.iter().enumerate() {
+            let mut text = wide(title);
+            let mut item: TCITEMW = unsafe { std::mem::zeroed() };
+            item.mask = TCIF_TEXT;
+            item.pszText = text.as_mut_ptr();
+            super::send(h, TCM_INSERTITEMW, i, &item as *const _ as isize);
+        }
+        h
+    }
+
+    /// The height in 96-DPI units that a row of tabs needs for its tabs and
+    /// the line under them, in this window's font.
+    pub fn tabs_height(&self, tabs: HWND) -> i32 {
+        let mut rc: RECT = unsafe { std::mem::zeroed() };
+        super::send(tabs, TCM_GETITEMRECT, 0, &mut rc as *mut _ as isize);
+        (rc.bottom.max(0) as u32 * 96).div_ceil(self.dpi.get()) as i32 + 3
+    }
+
+    /// The number of controls made so far. With [`Window::controls_from`] it
+    /// tells which controls a part of `on_create` made.
+    pub fn control_count(&self) -> usize {
+        self.ctls.borrow().len()
+    }
+
+    /// The controls made since [`Window::control_count`] was `start`.
+    pub fn controls_from(&self, start: usize) -> Vec<HWND> {
+        self.ctls.borrow()[start..].iter().map(|c| c.hwnd).collect()
+    }
+
     /// Width of `text` (without the access key marker) in 96-DPI units, as
     /// drawn in this window's font.
     pub fn text_width(&self, text: &str) -> i32 {
@@ -836,6 +879,64 @@ pub fn set_checked(hwnd: HWND, checked: bool) {
 pub fn combo_selection(hwnd: HWND) -> Option<usize> {
     let i = super::send(hwnd, CB_GETCURSEL, 0, 0);
     (i >= 0).then_some(i as usize)
+}
+
+/// The selected tab of a row of tabs.
+pub fn tab_selection(tabs: HWND) -> usize {
+    super::send(tabs, TCM_GETCURSEL, 0, 0).max(0) as usize
+}
+
+/// Selects a tab. The row of tabs tells nobody of it, as when a program
+/// selects in any control.
+pub fn select_tab(tabs: HWND, index: usize) {
+    super::send(tabs, TCM_SETCURSEL, index, 0);
+}
+
+/// Ctrl+Tab and Ctrl+Page Down select the next tab of a window that has a
+/// row of tabs, Ctrl+Shift+Tab and Ctrl+Page Up the one before, from the
+/// last to the first and back, as in the property sheets of Windows. The
+/// window hears of it as it does of a click on a tab. Returns whether the
+/// key was one of these, for the message loop to leave it at that.
+pub fn switch_tab(root: HWND, msg: &MSG) -> bool {
+    if msg.message != WM_KEYDOWN {
+        return false;
+    }
+    let down = |key: VIRTUAL_KEY| unsafe { GetKeyState(key as i32) } < 0;
+    let forward = match msg.wParam as VIRTUAL_KEY {
+        VK_TAB => !down(VK_SHIFT),
+        VK_NEXT => true,
+        VK_PRIOR => false,
+        _ => return false,
+    };
+    if !down(VK_CONTROL) || down(VK_MENU) {
+        return false;
+    }
+    let tabs = unsafe {
+        FindWindowExW(
+            root,
+            std::ptr::null_mut(),
+            wide("SysTabControl32").as_ptr(),
+            std::ptr::null(),
+        )
+    };
+    if tabs.is_null() {
+        return false;
+    }
+    let count = super::send(tabs, TCM_GETITEMCOUNT, 0, 0).max(1) as usize;
+    let step = if forward { 1 } else { count - 1 };
+    select_tab(tabs, (tab_selection(tabs) + step) % count);
+    let hdr = NMHDR {
+        hwndFrom: tabs,
+        idFrom: unsafe { GetDlgCtrlID(tabs) } as usize,
+        code: TCN_SELCHANGE,
+    };
+    super::send(root, WM_NOTIFY, hdr.idFrom, &hdr as *const _ as isize);
+    true
+}
+
+/// The control that has the keyboard focus, in any window of this thread.
+pub fn focused() -> HWND {
+    unsafe { GetFocus() }
 }
 
 pub fn enable(hwnd: HWND, enabled: bool) {

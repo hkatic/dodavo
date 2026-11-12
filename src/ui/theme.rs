@@ -18,11 +18,13 @@ use windows_sys::{
         Graphics::{
             Dwm::DwmSetWindowAttribute,
             Gdi::{
-                COLOR_BTNFACE, COLOR_HIGHLIGHT, COLOR_WINDOW, COLOR_WINDOWTEXT, CreateSolidBrush,
-                DT_CENTER, DT_HIDEPREFIX, DT_SINGLELINE, DT_VCENTER, DeleteObject, DrawTextW,
-                FillRect, GetSysColor, GetSysColorBrush, GetWindowDC, HBRUSH, HDC, MapWindowPoints,
-                OffsetRect, RDW_ALLCHILDREN, RDW_ERASE, RDW_FRAME, RDW_INVALIDATE, RedrawWindow,
-                ReleaseDC, SetBkColor, SetBkMode, SetTextColor, TRANSPARENT,
+                BeginPaint, COLOR_BTNFACE, COLOR_HIGHLIGHT, COLOR_WINDOW, COLOR_WINDOWTEXT,
+                CreateSolidBrush, DT_CENTER, DT_HIDEPREFIX, DT_NOPREFIX, DT_SINGLELINE, DT_VCENTER,
+                DeleteObject, DrawFocusRect, DrawTextW, EndPaint, FillRect, GetSysColor,
+                GetSysColorBrush, GetWindowDC, HBRUSH, HDC, InflateRect, InvalidateRect,
+                MapWindowPoints, OffsetRect, PAINTSTRUCT, RDW_ALLCHILDREN, RDW_ERASE, RDW_FRAME,
+                RDW_INVALIDATE, RedrawWindow, ReleaseDC, SelectObject, SetBkColor, SetBkMode,
+                SetTextColor, TRANSPARENT,
             },
         },
         System::{
@@ -36,9 +38,10 @@ use windows_sys::{
                 DRAWITEMSTRUCT, LVM_GETHEADER, LVM_SETBKCOLOR, LVM_SETTEXTBKCOLOR,
                 LVM_SETTEXTCOLOR, NM_CUSTOMDRAW, NMCUSTOMDRAW, NMHDR, ODS_DISABLED, ODS_GRAYED,
                 ODS_HOTLIGHT, ODS_INACTIVE, ODS_NOACCEL, ODS_SELECTED, PBM_SETBARCOLOR,
-                PBM_SETBKCOLOR, SetWindowTheme,
+                PBM_SETBKCOLOR, SetWindowTheme, TCIF_TEXT, TCITEMW, TCM_GETCURSEL,
+                TCM_GETITEMCOUNT, TCM_GETITEMRECT, TCM_GETITEMW, TCM_SETCURSEL, WM_MOUSELEAVE,
             },
-            Input::KeyboardAndMouse::IsWindowEnabled,
+            Input::KeyboardAndMouse::{GetFocus, IsWindowEnabled},
             Shell::{DefSubclassProc, SetWindowSubclass},
             WindowsAndMessaging::*,
         },
@@ -349,6 +352,10 @@ unsafe extern "system" fn theme_child(hwnd: HWND, _: LPARAM) -> i32 {
             }
             unsafe { SetWindowSubclass(hwnd, Some(listview_subclass), 1, 0) };
         }
+        // Windows has no dark look for a row of tabs: Dodavo draws it then.
+        "systabcontrol32" => unsafe {
+            SetWindowSubclass(hwnd, Some(tabs_subclass), 2, 0);
+        },
         "msctls_progress32" => {
             if dark {
                 set_theme(hwnd, Some(""));
@@ -390,6 +397,112 @@ unsafe extern "system" fn listview_subclass(
             }
         }
         DefSubclassProc(hwnd, msg, wp, lp)
+    }
+}
+
+/// Draws a row of tabs in dark mode: the selected tab is lighter and has a
+/// line under it, and shows the focus rectangle while the row has the focus.
+/// The control itself still does everything else, so the keyboard, the mouse
+/// and screen readers find it as it is in light mode.
+unsafe extern "system" fn tabs_subclass(
+    hwnd: HWND,
+    msg: u32,
+    wp: WPARAM,
+    lp: LPARAM,
+    _id: usize,
+    _data: usize,
+) -> LRESULT {
+    unsafe {
+        if !is_dark() {
+            return DefSubclassProc(hwnd, msg, wp, lp);
+        }
+        match msg {
+            WM_ERASEBKGND => 1,
+            WM_PAINT => {
+                let mut ps: PAINTSTRUCT = std::mem::zeroed();
+                let dc = BeginPaint(hwnd, &mut ps);
+                paint_tabs(hwnd, dc);
+                EndPaint(hwnd, &ps);
+                0
+            }
+            _ => {
+                let r = DefSubclassProc(hwnd, msg, wp, lp);
+                // The control draws parts of itself at these, in its light look.
+                if matches!(
+                    msg,
+                    TCM_SETCURSEL
+                        | WM_SETFOCUS
+                        | WM_KILLFOCUS
+                        | WM_KEYDOWN
+                        | WM_LBUTTONDOWN
+                        | WM_MOUSEMOVE
+                        | WM_MOUSELEAVE
+                        | WM_UPDATEUISTATE
+                ) {
+                    InvalidateRect(hwnd, std::ptr::null(), 0);
+                }
+                r
+            }
+        }
+    }
+}
+
+unsafe fn paint_tabs(hwnd: HWND, dc: HDC) {
+    let b = brushes();
+    unsafe {
+        let mut client: RECT = std::mem::zeroed();
+        GetClientRect(hwnd, &mut client);
+        FillRect(dc, &client, b.window);
+        // The line under the row, which the selected tab's own line covers.
+        let line = RECT {
+            top: client.bottom - 1,
+            ..client
+        };
+        FillRect(dc, &line, b.menu_hot);
+        let old_font = SelectObject(dc, send(hwnd, WM_GETFONT, 0, 0) as _);
+        SetBkMode(dc, TRANSPARENT as i32);
+        let selected = send(hwnd, TCM_GETCURSEL, 0, 0);
+        let focused = GetFocus() == hwnd;
+        let hide_focus = send(hwnd, WM_QUERYUISTATE, 0, 0) as u32 & UISF_HIDEFOCUS != 0;
+        let accent = CreateSolidBrush(DARK_PROGRESS);
+        for i in 0..send(hwnd, TCM_GETITEMCOUNT, 0, 0) {
+            let mut rc: RECT = std::mem::zeroed();
+            send(hwnd, TCM_GETITEMRECT, i as usize, &mut rc as *mut _ as isize);
+            let mut text = [0u16; 128];
+            let mut item: TCITEMW = std::mem::zeroed();
+            item.mask = TCIF_TEXT;
+            item.pszText = text.as_mut_ptr();
+            item.cchTextMax = text.len() as i32;
+            send(hwnd, TCM_GETITEMW, i as usize, &mut item as *mut _ as isize);
+            let len = text.iter().position(|&c| c == 0).unwrap_or(0);
+            if i == selected {
+                FillRect(dc, &rc, b.menu_hot);
+                let under = RECT {
+                    top: client.bottom - 3,
+                    bottom: client.bottom,
+                    ..rc
+                };
+                FillRect(dc, &under, accent);
+            }
+            SetTextColor(dc, DARK_TEXT);
+            DrawTextW(
+                dc,
+                text.as_ptr(),
+                len as i32,
+                &mut rc,
+                DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX,
+            );
+            if i == selected && focused && !hide_focus {
+                let mut inner = rc;
+                InflateRect(&mut inner, -3, -3);
+                // It is drawn by inverting, in these colors.
+                SetTextColor(dc, rgb(0, 0, 0));
+                SetBkColor(dc, rgb(255, 255, 255));
+                DrawFocusRect(dc, &inner);
+            }
+        }
+        DeleteObject(accent);
+        SelectObject(dc, old_font);
     }
 }
 

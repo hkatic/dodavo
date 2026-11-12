@@ -401,6 +401,9 @@ pub fn translate(msg: &MSG) -> bool {
             return true;
         }
         if window::all_windows().contains(&root) {
+            if window::switch_tab(root, msg) {
+                return true;
+            }
             return IsDialogMessageW(root, msg) != 0;
         }
         false
