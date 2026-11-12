@@ -612,9 +612,8 @@ fn new_receive(
         temp_dir,
         data_dir,
         name,
-        offer.kind,
+        &offer,
         folder,
-        &offer.token,
     )?;
     if !first.take() {
         // Cancelled meanwhile: nothing of it may stay.
@@ -668,21 +667,21 @@ fn prepare_part(
     temp_dir: &Path,
     data_dir: &Path,
     name: &str,
-    kind: Kind,
+    offer: &Offer,
     folder: ReceivedFolder,
-    token: &Token,
 ) -> anyhow::Result<(PathBuf, FileId)> {
     std::fs::create_dir_all(dest_dir)?;
-    // A zip that is only unpacked arrives in the temp folder; files go
-    // straight to the destination folder, and so do the zips of folders that
-    // are kept as such.
-    let part = if session::temporary_part(kind, folder) {
+    // Everything arrives in the destination folder, on the drive that the
+    // user chose for it: also the zip of a folder that is only unpacked,
+    // which is deleted at the end. Only where that drive cannot hold the
+    // zip does it arrive in the temp folder.
+    let part = if session::part_in_temp(offer.kind, folder, offer.size, dest_dir) {
         std::fs::create_dir_all(temp_dir)?;
-        let zip = session::temp_archive(temp_dir, Role::Receive, token);
+        let zip = session::temp_archive(temp_dir, Role::Receive, &offer.token);
         std::fs::File::create(&zip)?;
         zip
     } else {
-        let part_name = match kind {
+        let part_name = match offer.kind {
             Kind::File => format!("{name}.part"),
             Kind::Folder => format!("{name}.zip.part"),
         };
@@ -1957,9 +1956,8 @@ mod tests {
             &temp,
             &base.join("data"),
             "a.txt",
-            Kind::File,
+            &offered(Kind::File, 5),
             ReceivedFolder::Extract,
-            &[1; 16],
         )
         .unwrap();
         assert_eq!(part, old);
@@ -1972,6 +1970,65 @@ mod tests {
         // A whole multiple of the 10 ms that FAT and exFAT keep.
         #[cfg(windows)]
         assert_eq!(archive::testing::created(&part) % 100_000, 0);
+        std::fs::remove_dir_all(&base).ok();
+    }
+
+    /// An offer of `size` bytes, for a new part.
+    fn offered(kind: Kind, size: u64) -> Offer {
+        Offer {
+            kind,
+            name: "x".into(),
+            size,
+            file_count: 1,
+            content_size: size,
+            largest_file: 5,
+            sender_name: "Ana".into(),
+            token: [1; 16],
+            modified: None,
+            created: None,
+        }
+    }
+
+    /// The zip of a folder arrives in the destination folder, whatever is
+    /// kept of it: the drive that the user chose is the one that needs the
+    /// room. Only a zip that the destination cannot hold (4 GiB or more on
+    /// FAT32) arrives in the temporary folder.
+    #[test]
+    fn the_zip_of_a_folder_arrives_in_the_destination() {
+        let base = scratch("zip-in-destination");
+        let (dest, temp) = (base.join("dest"), base.join("temp"));
+        let new_part = |folder, size| {
+            prepare_part(
+                &dest,
+                &temp,
+                &base.join("data"),
+                "Photos",
+                &offered(Kind::Folder, size),
+                folder,
+            )
+            .unwrap()
+            .0
+        };
+        for (n, folder) in ReceivedFolder::ALL.into_iter().enumerate() {
+            let part = new_part(folder, 5);
+            assert_eq!(part.parent(), Some(dest.as_path()), "{folder:?}");
+            let name = part.file_name().unwrap().to_string_lossy().into_owned();
+            assert!(name.starts_with("Photos.zip") && name.ends_with(".part"), "{name}");
+            assert_eq!(names_in(&dest).len(), n + 1);
+        }
+        assert!(!temp.exists(), "nothing is in the temporary folder");
+
+        let big = session::FAT32_MAX_FILE + 1;
+        archive::PRETEND_FAT.set(true);
+        let (small, large, kept) = (
+            new_part(ReceivedFolder::Extract, session::FAT32_MAX_FILE),
+            new_part(ReceivedFolder::Extract, big),
+            new_part(ReceivedFolder::KeepZip, big),
+        );
+        archive::PRETEND_FAT.set(false);
+        assert_eq!(small.parent(), Some(dest.as_path()));
+        assert_eq!(large.parent(), Some(temp.as_path()));
+        assert_eq!(kept.parent(), Some(dest.as_path()));
         std::fs::remove_dir_all(&base).ok();
     }
 
@@ -1996,9 +2053,8 @@ mod tests {
                 &base.join("temp"),
                 &base.join("data"),
                 "a.txt",
-                Kind::File,
+                &offered(Kind::File, 5),
                 ReceivedFolder::Extract,
-                &[1; 16],
             );
             archive::PRETEND_WEAK.set(false);
             made.unwrap().0

@@ -505,6 +505,20 @@ pub struct Packed {
     pub largest: u64,
 }
 
+/// How many bytes the files in the folder `root` have together, which its
+/// zip is at most a little larger than (see [`zip_folder`]).
+pub fn folder_size(root: &Path) -> anyhow::Result<u64> {
+    Ok(collect(root, PORTABLE_NAMES)?
+        .iter()
+        .fold(0u64, |sum, entry| sum.saturating_add(entry.size)))
+}
+
+/// Keeps a file that is only Dodavo's own out of sight where the system has
+/// a way to (see `hide`). Best effort.
+pub fn keep_out_of_sight(path: &Path) {
+    let _ = hide(path);
+}
+
 /// Packs the *contents* of `root` into a zip file at `dest` and says what
 /// it packed. `progress(done_bytes, total_bytes)` is called regularly.
 pub fn zip_folder(

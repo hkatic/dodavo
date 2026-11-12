@@ -102,10 +102,12 @@ pub enum Side {
 /// fields of `Side::Receive`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ReceiveFiles {
-    /// The `.part` file. For a folder that is only unpacked, its zip in the
-    /// temporary folder (see [`temporary_part`]); for a folder whose zip is
-    /// kept, `<name>.zip.part` in the destination folder. Once it has been
-    /// renamed to its final name (see `moving`), the item itself.
+    /// The `.part` file, in the destination folder: for a folder, its zip as
+    /// `<name>.zip.part`, which is deleted at the end where the folder is
+    /// only unpacked (see [`temporary_part`]; such a zip is in the temporary
+    /// folder where the destination cannot hold it, see [`part_in_temp`],
+    /// and in records of earlier versions). Once it has been renamed to its
+    /// final name (see `moving`), the item itself.
     #[serde(rename = "part_path")]
     pub part: PathBuf,
     /// The folder that a received folder is being unpacked into, noted
@@ -273,11 +275,28 @@ pub(crate) fn part_missing() -> io::Error {
 }
 
 /// Whether the part file of a receive is only temporary: the zip of a folder
-/// that is only unpacked, which waits in the temporary folder and is deleted
-/// at the end. Every other part is the item itself, under a provisional name
-/// in the destination folder.
+/// that is only unpacked, which is deleted at the end. Every other part is
+/// the item itself, under a provisional name.
 pub fn temporary_part(kind: Kind, folder: ReceivedFolder) -> bool {
     kind == Kind::Folder && folder == ReceivedFolder::Extract
+}
+
+/// The largest file FAT32 can hold: 4 GiB less one byte.
+pub const FAT32_MAX_FILE: u64 = u32::MAX as u64;
+
+/// Whether the part file of a new receive into `dest_dir` goes to the
+/// temporary folder and not, as every other part, to the destination: only
+/// a [`temporary_part`] of `size` bytes that the destination's file system
+/// cannot hold (FAT32, and FAT), while the files in it may well fit there.
+pub fn part_in_temp(kind: Kind, folder: ReceivedFolder, size: u64, dest_dir: &Path) -> bool {
+    temporary_part(kind, folder)
+        && size > FAT32_MAX_FILE
+        && crate::platform::disk_free(dest_dir).is_some_and(|(root, _)| {
+            matches!(
+                archive::file_system(&root).as_deref(),
+                Some("FAT32" | "FAT")
+            )
+        })
 }
 
 fn temp_prefix(role: Role) -> &'static str {
@@ -291,6 +310,58 @@ fn temp_prefix(role: Role) -> &'static str {
 /// of a folder being sent, or a [`temporary_part`].
 pub fn temp_archive(temp_dir: &Path, role: Role, token: &Token) -> PathBuf {
     temp_dir.join(format!("{}{}.zip", temp_prefix(role), token_hex(token)))
+}
+
+/// Where a send notes a zip that it packs outside the temporary folder (see
+/// [`note_packing`]).
+fn packing_note(data_dir: &Path, token: &Token) -> PathBuf {
+    records_dir(data_dir).join(format!("{}.packing", token_hex(token)))
+}
+
+/// Notes that the send of `token` is about to pack its folder into `zip`,
+/// which is not in the temporary folder: a send has no record until it is
+/// accepted, and [`cleanup_temp`] looks only there, so after a crash
+/// meanwhile only this note finds the zip (see [`cleanup_packing`]). Returns
+/// the note, which goes once the zip is deleted or has its record.
+pub fn note_packing(data_dir: &Path, token: &Token, zip: &Path) -> io::Result<PathBuf> {
+    let note = packing_note(data_dir, token);
+    fs::create_dir_all(records_dir(data_dir))?;
+    let mut file = fs::File::create(&note)?;
+    io::Write::write_all(&mut file, &serde_json::to_vec(zip)?)?;
+    file.sync_all()?;
+    Ok(note)
+}
+
+/// At a start: deletes the zips that sends of an earlier run were packing
+/// outside the temporary folder when the program ended without them (see
+/// [`note_packing`]), and the notes. A zip that has a record by now is that
+/// record's, and nothing is deleted that is not named as such a zip is,
+/// whatever the note says.
+pub fn cleanup_packing(data_dir: &Path) {
+    let Ok(entries) = fs::read_dir(records_dir(data_dir)) else {
+        return;
+    };
+    for note in entries.flatten().map(|entry| entry.path()) {
+        if note.extension().and_then(|e| e.to_str()) != Some("packing") {
+            continue;
+        }
+        let token = note
+            .file_stem()
+            .map(|stem| stem.to_string_lossy().to_ascii_lowercase())
+            .unwrap_or_default();
+        let has_record = note.with_extension("json").exists();
+        let zip = fs::read(&note)
+            .ok()
+            .and_then(|text| serde_json::from_slice::<PathBuf>(&text).ok());
+        if let Some(zip) = zip
+            && !has_record
+            && zip.file_name().and_then(|name| name.to_str())
+                == Some(format!("{}{token}.zip", temp_prefix(Role::Send)).as_str())
+        {
+            let _ = fs::remove_file(&zip);
+        }
+        let _ = fs::remove_file(&note);
+    }
 }
 
 /// Whether a file name is that of a [`temp_archive`].
@@ -621,33 +692,39 @@ impl TransferRecord {
     /// only temporary. The part file of a received item has already been
     /// renamed into place, so its old name may by now belong to another
     /// transfer of the same name and must not be deleted; only a temporary
-    /// part is. A record that cannot be deleted now is completed again at
-    /// the next start, and never continued or discarded: the tombstone,
-    /// which is written first, says that the transfer completed (see
-    /// [`load_all`]).
-    pub fn complete(&self, data_dir: &Path) {
-        self.complete_with(data_dir, false);
+    /// part is, which is in the destination folder under its own name, and
+    /// only while it is still the transfer's (see [`Owned`]). A record that
+    /// cannot be deleted now, or whose temporary part cannot, is completed
+    /// again at the next start, and never continued or discarded: the
+    /// tombstone, which is written first, says that the transfer completed
+    /// (see [`load_all`], which forgets such a record once it is old).
+    /// Returns whether nothing is left to try again.
+    pub fn complete(&self, data_dir: &Path) -> bool {
+        self.complete_with(data_dir, false)
     }
 
     /// [`complete`](Self::complete), with `patient` as with [`remove_file`].
-    fn complete_with(&self, data_dir: &Path, patient: bool) {
+    fn complete_with(&self, data_dir: &Path, patient: bool) -> bool {
         match &self.side {
             Side::Receive { files, .. } => {
-                self.remove(data_dir);
-                if self.part_is_temporary() {
-                    remove_file(&files.part, patient);
-                }
-                // Once: the record that would keep trying is gone.
+                // The folders once: only the part keeps the record.
                 for folder in &files.leftovers {
                     folder.remove_folder();
                 }
+                if self.part_is_temporary() && !self.remove_part(patient) {
+                    return false;
+                }
+                self.remove(data_dir);
+                true
             }
             // No need to mark the record as ended first (see `discard`): one
             // that is left completes at the next start.
             Side::Send { .. } => {
-                if self.delete_files(patient).is_none() {
+                let gone = self.delete_files(patient).is_none();
+                if gone {
                     self.remove(data_dir);
                 }
+                gone
             }
         }
     }
@@ -1073,8 +1150,15 @@ pub fn load_all(data_dir: &Path) -> Found {
     );
     for (path, read) in read {
         match read {
-            // Its item is in place: nothing of it may be deleted.
-            Some((record, Verdict::Completed)) => record.complete(data_dir),
+            // Its item is in place: nothing of it may be deleted. What is
+            // left to delete of it is tried once more; when the record is
+            // old, for the last time (its tombstone goes then too, and
+            // without it the record would look like one that goes on).
+            Some((record, Verdict::Completed)) => {
+                if !record.complete(data_dir) && clock.is_old_file(&path) {
+                    record.remove(data_dir);
+                }
+            }
             Some((mut record, verdict)) => {
                 // The part file was renamed right before the program ended.
                 // Also when the transfer is over: its files are where the
@@ -2298,6 +2382,106 @@ mod tests {
         assert!(!kept.part_is_temporary());
         kept.complete(&dir);
         assert!(kept_part.exists());
+        fs::remove_dir_all(&dir).ok();
+    }
+
+    /// A zip that a send was packing outside the temporary folder when the
+    /// program ended is deleted at the next start, by its note; never a
+    /// file of another name, nor a zip that has its record.
+    #[test]
+    fn a_start_deletes_the_zip_a_send_was_packing() {
+        let dir = scratch("packing");
+        let elsewhere = dir.join("elsewhere");
+        fs::create_dir_all(&elsewhere).unwrap();
+        let note = |token: u8, file: &Path| {
+            fs::write(file, b"zip").unwrap();
+            note_packing(&dir, &[token; 16], file).unwrap()
+        };
+        let orphan = temp_archive(&elsewhere, Role::Send, &[1; 16]);
+        let other = elsewhere.join("holiday.zip");
+        let wrong_token = temp_archive(&elsewhere, Role::Send, &[9; 16]);
+        let owned = temp_archive(&elsewhere, Role::Send, &[4; 16]);
+        let notes = [
+            note(1, &orphan),
+            note(2, &other),
+            note(3, &wrong_token),
+            note(4, &owned),
+        ];
+        let mut sending = record(4, receive_side(&dir, &owned, None));
+        sending.side = Side::Send {
+            source: dir.join("Photos"),
+            data_path: owned.clone(),
+            source_len: 3,
+            source_mtime: None,
+            sent: 0,
+            staging: None,
+        };
+        sending.save(&dir).unwrap();
+        cleanup_packing(&dir);
+        assert!(!orphan.exists());
+        assert!(other.exists() && wrong_token.exists() && owned.exists());
+        assert!(notes.iter().all(|note| !note.exists()));
+        assert_eq!(records(&dir).len(), 1);
+        fs::remove_dir_all(&dir).ok();
+    }
+
+    /// The zip of a folder that was only unpacked is in the destination
+    /// folder, under a name of its own: a completed receive deletes it, but
+    /// only while it is still that zip, and keeps its record while the zip
+    /// cannot be deleted, so that the next start tries again (and no start
+    /// continues it: its tombstone says that it completed).
+    #[test]
+    fn completing_deletes_the_zip_that_was_unpacked() {
+        let dir = scratch("complete-zip");
+        let part = dir.join("Photos.zip.part");
+        let unpacked = |token: u8| {
+            fs::write(&part, b"zip").unwrap();
+            let mut side = receive_side(&dir, &part, Some(3));
+            if let Side::Receive { part_id, .. } = &mut side {
+                *part_id = archive::file_id(&part).ok();
+            }
+            let mut r = record(token, side);
+            r.offer.kind = Kind::Folder;
+            r.save(&dir).unwrap();
+            write_tombstone(&dir, &r.token, Ended::Completed);
+            r
+        };
+        let r = unpacked(6);
+        assert!(r.part_is_temporary());
+        assert!(r.complete(&dir));
+        assert!(!part.exists());
+        assert!(!record_path(&dir, &r.token).exists());
+
+        // Another file has the name by now: it stays, and the record goes.
+        let r = unpacked(7);
+        fs::remove_file(&part).unwrap();
+        let other = dir.join("other");
+        fs::write(&other, b"someone else's").unwrap();
+        fs::rename(&other, &part).unwrap();
+        if archive::file_id(&part).is_ok_and(|id| r.owned_part().is_some_and(|p| !p.id.same_item(&id))) {
+            assert!(r.complete(&dir));
+            assert_eq!(fs::read(&part).unwrap(), b"someone else's");
+            assert!(!record_path(&dir, &r.token).exists());
+        }
+        fs::remove_file(&part).ok();
+
+        // Held by another program: the record stays, a start tries again
+        // without taking the transfer up, and deletes the zip once it can.
+        #[cfg(windows)]
+        {
+            let r = unpacked(8);
+            let held = archive::testing::hold_readable(&part);
+            assert!(!r.complete(&dir));
+            assert!(part.exists());
+            let found = load_all(&dir);
+            assert!(found.going_on.is_empty() && found.over.is_empty());
+            assert!(record_path(&dir, &r.token).exists());
+            drop(held);
+            let found = load_all(&dir);
+            assert!(found.going_on.is_empty() && found.over.is_empty());
+            assert!(!part.exists());
+            assert!(!record_path(&dir, &r.token).exists());
+        }
         fs::remove_dir_all(&dir).ok();
     }
 

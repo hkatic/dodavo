@@ -6,7 +6,10 @@ use std::path::Path;
 use crate::{
     format::format_size,
     i18n::{os_tr, tr},
-    net::{Kind, Offer, ReceivedFolder},
+    net::{
+        Kind, Offer, ReceivedFolder,
+        session::{self, FAT32_MAX_FILE},
+    },
     platform::disk_free,
 };
 
@@ -22,14 +25,11 @@ pub struct Space {
     pub text: String,
 }
 
-/// The largest file FAT32 can hold: 4 GiB less one byte.
-const FAT32_MAX_FILE: u64 = u32::MAX as u64;
-
-/// The largest single file a transfer of `offer` saves in the destination
-/// folder: the file, the zip of a folder where it is kept, and the largest
-/// file of a folder where it is unpacked. (The zip that is only unpacked is
-/// in the temporary folder, which is not on FAT32 in practice, and which
-/// choosing another folder could not help with.)
+/// The largest single file a transfer of `offer` has to save in the
+/// destination folder: the file, the zip of a folder where it is kept, and
+/// the largest file of a folder where it is unpacked. (The zip that is only
+/// unpacked arrives there too, but in the temporary folder where the
+/// destination cannot hold it: see `session::part_in_temp`.)
 fn largest_saved_file(offer: &Offer, folder: ReceivedFolder) -> u64 {
     match (offer.kind, folder) {
         (Kind::File, _) | (Kind::Folder, ReceivedFolder::KeepZip) => offer.size,
@@ -39,17 +39,25 @@ fn largest_saved_file(offer: &Offer, folder: ReceivedFolder) -> u64 {
 }
 
 /// Bytes needed on the destination drive and on the drive of the temporary
-/// folder. A folder that is only unpacked arrives as a zip in the temporary
-/// folder and is then unpacked into the destination, so both need room at
-/// the same time. A zip that is kept arrives in the destination.
-fn space_needed(offer: &Offer, folder: ReceivedFolder, same_volume: bool) -> (u64, u64) {
+/// folder. Everything arrives in the destination: a folder that is unpacked
+/// as a zip, which is then unpacked next to it, so both need room at the
+/// same time. `in_temp` says that the zip arrives in the temporary folder
+/// (see `session::part_in_temp`), which may be on another drive
+/// (`same_volume`).
+fn space_needed(
+    offer: &Offer,
+    folder: ReceivedFolder,
+    in_temp: bool,
+    same_volume: bool,
+) -> (u64, u64) {
     match (offer.kind, folder) {
         (Kind::File, _) | (Kind::Folder, ReceivedFolder::KeepZip) => (offer.size, 0),
-        (Kind::Folder, ReceivedFolder::Both) => (offer.size.saturating_add(offer.content_size), 0),
-        (Kind::Folder, ReceivedFolder::Extract) if same_volume => {
+        (Kind::Folder, ReceivedFolder::Extract) if in_temp && !same_volume => {
+            (offer.content_size, offer.size)
+        }
+        (Kind::Folder, ReceivedFolder::Both | ReceivedFolder::Extract) => {
             (offer.size.saturating_add(offer.content_size), 0)
         }
-        (Kind::Folder, ReceivedFolder::Extract) => (offer.content_size, offer.size),
     }
 }
 
@@ -88,7 +96,8 @@ pub fn check_space_of(offers: &[&Offer], dir: &Path, temp: &Path, folder: Receiv
     };
     let mut volumes = vec![(dest_root.clone(), dest_free)];
     let any_folder = offers.iter().any(|offer| offer.kind == Kind::Folder);
-    let uses_temp = any_folder && folder == ReceivedFolder::Extract;
+    let in_temp = |offer: &Offer| session::part_in_temp(offer.kind, folder, offer.size, dir);
+    let uses_temp = offers.iter().any(|offer| in_temp(offer));
     if uses_temp {
         let Some(temp) = disk_free(temp) else {
             return unknown();
@@ -123,7 +132,7 @@ pub fn check_space_of(offers: &[&Offer], dir: &Path, temp: &Path, folder: Receiv
     }
     let (dest_need, temp_need) = offers
         .iter()
-        .map(|offer| space_needed(offer, folder, same_volume))
+        .map(|offer| space_needed(offer, folder, in_temp(offer), same_volume))
         .fold((0u64, 0u64), |(dest, temp), (more_dest, more_temp)| {
             (
                 dest.saturating_add(more_dest),
@@ -176,16 +185,40 @@ mod tests {
         use ReceivedFolder::*;
         let (file, folder) = (offer(Kind::File), offer(Kind::Folder));
         for mode in ReceivedFolder::ALL {
-            assert_eq!(space_needed(&file, mode, true), (100, 0));
-            assert_eq!(space_needed(&file, mode, false), (100, 0));
+            assert_eq!(space_needed(&file, mode, false, true), (100, 0));
+            assert_eq!(space_needed(&file, mode, false, false), (100, 0));
         }
-        // The zip and the unpacked folder exist at the same time; the zip
-        // that is only unpacked is in the temporary folder.
-        assert_eq!(space_needed(&folder, Extract, true), (250, 0));
-        assert_eq!(space_needed(&folder, Extract, false), (150, 100));
-        // A zip that is kept arrives in the destination.
-        assert_eq!(space_needed(&folder, KeepZip, false), (100, 0));
-        assert_eq!(space_needed(&folder, Both, false), (250, 0));
+        // The zip and the unpacked folder exist at the same time, both in
+        // the destination, wherever the temporary folder is.
+        assert_eq!(space_needed(&folder, Extract, false, true), (250, 0));
+        assert_eq!(space_needed(&folder, Extract, false, false), (250, 0));
+        // Only a zip that the destination cannot hold is in the temporary
+        // folder, which counts when that is another drive.
+        assert_eq!(space_needed(&folder, Extract, true, true), (250, 0));
+        assert_eq!(space_needed(&folder, Extract, true, false), (150, 100));
+        assert_eq!(space_needed(&folder, KeepZip, false, false), (100, 0));
+        assert_eq!(space_needed(&folder, Both, false, false), (250, 0));
+    }
+
+    /// The zip of a folder that is only unpacked goes to the temporary
+    /// folder only where the destination cannot hold a file that large.
+    #[test]
+    fn only_a_zip_too_large_for_fat32_is_in_the_temporary_folder() {
+        use ReceivedFolder::*;
+        let dir = std::env::temp_dir();
+        let in_temp = |kind, folder, size| session::part_in_temp(kind, folder, size, &dir);
+        let big = FAT32_MAX_FILE + 1;
+        assert!(!in_temp(Kind::Folder, Extract, big));
+        crate::archive::PRETEND_FAT.set(true);
+        let on_fat = [
+            in_temp(Kind::Folder, Extract, big),
+            in_temp(Kind::Folder, Extract, FAT32_MAX_FILE),
+            in_temp(Kind::Folder, KeepZip, big),
+            in_temp(Kind::Folder, Both, big),
+            in_temp(Kind::File, Extract, big),
+        ];
+        crate::archive::PRETEND_FAT.set(false);
+        assert_eq!(on_fat, [true, false, false, false, false]);
     }
 
     /// What has to fit on a file system that limits the size of a file: the

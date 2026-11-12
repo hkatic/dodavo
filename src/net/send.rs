@@ -37,15 +37,104 @@ const RETRY_MIN: Duration = Duration::from_secs(2);
 const RETRY_MAX: Duration = Duration::from_secs(15);
 
 /// Deletes the temporary zip of a folder transfer when dropped (until the
-/// transfer has a record, which then owns the zip).
-struct TempFile(Option<PathBuf>);
+/// transfer has a record, which then owns the zip), and then the note of a
+/// zip that is not in the temporary folder (see `session::note_packing`).
+struct TempFile(Option<PathBuf>, Option<PathBuf>);
 
 impl Drop for TempFile {
     fn drop(&mut self) {
         if let Some(p) = &self.0 {
             let _ = std::fs::remove_file(p);
         }
+        if let Some(note) = &self.1 {
+            let _ = std::fs::remove_file(note);
+        }
     }
+}
+
+/// Where the zip of a folder is packed.
+#[derive(Debug, PartialEq, Eq)]
+enum PackIn {
+    /// In the temporary folder.
+    Temp,
+    /// In the folder that contains the folder being sent.
+    Beside,
+}
+
+/// Where to pack a zip of about `needed` bytes: in the temporary folder,
+/// unless its drive lacks the room while the folder being sent is on another
+/// drive that has it (a large folder on an external drive, with a small
+/// system drive). `temp` and `beside` are those drives with their free
+/// space (see `platform::disk_free`), `None` where it cannot be told. With
+/// room in neither, the temporary folder it is: a zip can come out smaller
+/// than its files, and otherwise packing fails with the system's own words
+/// for a full disk.
+fn pack_in(
+    needed: u64,
+    temp: Option<&(PathBuf, u64)>,
+    beside: Option<&(PathBuf, u64)>,
+) -> PackIn {
+    match (temp, beside) {
+        (Some((temp_root, temp_free)), Some((root, free)))
+            if *temp_free < needed
+                && *free >= needed
+                && !root.as_os_str().eq_ignore_ascii_case(temp_root.as_os_str()) =>
+        {
+            PackIn::Beside
+        }
+        _ => PackIn::Temp,
+    }
+}
+
+/// Makes the empty zip that the folder at `source` is packed into, for the
+/// send of `token`, and returns it with the note of one that is not in the
+/// temporary folder (see [`pack_in`], `session::note_packing`). A folder
+/// that takes no new file beside it (a read-only drive) is packed in the
+/// temporary folder after all. Blocking.
+fn new_zip(
+    shared: &Shared,
+    source: &std::path::Path,
+    token: &Token,
+) -> std::io::Result<(PathBuf, Option<PathBuf>)> {
+    let in_temp = |temp_dir: &std::path::Path| {
+        std::fs::create_dir_all(temp_dir)?;
+        Ok((session::temp_archive(temp_dir, Role::Send, token), None))
+    };
+    let Some(parent) = source.parent().filter(|_| !source::is_document(source)) else {
+        return in_temp(&shared.temp_dir);
+    };
+    // The temporary folder may not be there yet: its drive is that of the
+    // nearest folder above it that is.
+    let temp = shared
+        .temp_dir
+        .ancestors()
+        .find_map(crate::platform::disk_free);
+    let beside = crate::platform::disk_free(parent);
+    let needed = match (&temp, &beside) {
+        // Only where it can matter: it reads the whole folder's listing.
+        (Some((temp_root, _)), Some((root, _)))
+            if !root.as_os_str().eq_ignore_ascii_case(temp_root.as_os_str()) =>
+        {
+            archive::folder_size(source).unwrap_or(0)
+        }
+        _ => 0,
+    };
+    if pack_in(needed, temp.as_ref(), beside.as_ref()) == PackIn::Temp {
+        return in_temp(&shared.temp_dir);
+    }
+    let zip = session::temp_archive(parent, Role::Send, token);
+    let Ok(note) = session::note_packing(&shared.data_dir, token, &zip) else {
+        return in_temp(&shared.temp_dir);
+    };
+    let made = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&zip);
+    if made.is_err() {
+        let _ = std::fs::remove_file(&note);
+        return in_temp(&shared.temp_dir);
+    }
+    Ok((zip, Some(note)))
 }
 
 /// Deletes the copy of a shared item when dropped (until the transfer has a
@@ -274,7 +363,7 @@ async fn start(
     let mut staged = Staged(staging.clone());
 
     // 1. Prepare the data (zip folders). `size` is what gets streamed.
-    let mut temp = TempFile(None);
+    let mut temp = TempFile(None, None);
     let what = Prepare {
         path: &path,
         shown: &shown,
@@ -406,6 +495,7 @@ async fn start(
             }
         };
     }
+    // The record names the zip now; the note of it goes with `temp`.
     temp.0 = None;
     staged.0 = None;
     if let Some(ending) = session.stop_deferring() {
@@ -532,9 +622,18 @@ async fn prepare(
                 id,
                 phase: Phase::Preparing,
             });
-            tokio::fs::create_dir_all(&shared.temp_dir).await?;
-            let zip_path = session::temp_archive(&shared.temp_dir, Role::Send, token);
-            temp.0 = Some(zip_path.clone());
+            // What another app shared, or a listed document, has no folder
+            // of its own to pack beside.
+            let (zip_path, note) = if items.is_some() {
+                tokio::fs::create_dir_all(&shared.temp_dir).await?;
+                let zip = session::temp_archive(&shared.temp_dir, Role::Send, token);
+                (zip, None)
+            } else {
+                let (shared, source, token) = (shared.clone(), path.clone(), *token);
+                tokio::task::spawn_blocking(move || new_zip(&shared, &source, &token)).await??
+            };
+            let beside = note.is_some();
+            (temp.0, temp.1) = (Some(zip_path.clone()), note);
             let shared2 = shared.clone();
             let cancel = ctl.cancel.clone();
             let src = path.clone();
@@ -552,6 +651,11 @@ async fn prepare(
                 }
             })
             .await??;
+            // Among the user's own files it is in nobody's way: only now,
+            // as Windows lets no one write a hidden file anew.
+            if beside {
+                archive::keep_out_of_sight(&zip_path);
+            }
             let size = tokio::fs::metadata(&zip_path).await?.len();
             Ok((zip_path, packed, size))
         }
@@ -1037,6 +1141,28 @@ impl Sender<'_> {
                 None => return Err(lost(tr!(error_connection_lost))),
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod packing_tests {
+    use super::*;
+
+    /// A folder is packed in the temporary folder, unless that drive lacks
+    /// the room and the folder's own drive, another one, has it.
+    #[test]
+    fn a_folder_is_packed_where_there_is_room() {
+        let drive = |name: &str, free| Some((PathBuf::from(name), free));
+        let pack = |temp: Option<(PathBuf, u64)>, beside: Option<(PathBuf, u64)>| {
+            pack_in(100, temp.as_ref(), beside.as_ref())
+        };
+        assert_eq!(pack(drive("C:\\", 100), drive("E:\\", 500)), PackIn::Temp);
+        assert_eq!(pack(drive("C:\\", 99), drive("E:\\", 100)), PackIn::Beside);
+        // No room there either, the same drive, or nothing known.
+        assert_eq!(pack(drive("C:\\", 99), drive("E:\\", 99)), PackIn::Temp);
+        assert_eq!(pack(drive("C:\\", 99), drive("c:\\", 500)), PackIn::Temp);
+        assert_eq!(pack(None, drive("E:\\", 500)), PackIn::Temp);
+        assert_eq!(pack(drive("C:\\", 99), None), PackIn::Temp);
     }
 }
 

@@ -987,6 +987,8 @@ async fn restore_records(shared: &Arc<Shared>) -> Vec<(u64, TransferRecord, Arc<
     let (going_on, over) = {
         let (data_dir, temp_dir) = (shared.data_dir.clone(), shared.temp_dir.clone());
         session::off_runtime(move || {
+            // Before the records are read: an old note would go with them.
+            session::cleanup_packing(&data_dir);
             let found = session::load_all(&data_dir);
             let all = found
                 .going_on
