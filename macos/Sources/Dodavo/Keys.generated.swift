@@ -46,6 +46,13 @@ enum K: String {
     case use_default
     case pick_temp_folder
     case invalid_temp_folder
+    case warn_fat_temp
+    case temp_fat_title
+    case temp_fat_receive
+    case temp_fat_send
+    case temp_fat_choose
+    case continue_anyway
+    case dont_warn_again
     case settings_not_saved
     case settings_title
     case about_text

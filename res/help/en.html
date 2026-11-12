@@ -361,6 +361,8 @@
 <dd>Shows a message when the other person has received an item you sent. When cleared, the progress window closes by itself and a notification reports the result. See <a href="#after-sending">When a sent item has arrived</a>.</dd>
 <dt><span class="ui">Folder for temporary files</span></dt>
 <dd>Where Dodavo keeps the ZIP archive of a folder while it sends it, in a folder of its own named <code>Dodavo</code>: at first the temporary folder that Windows gives. Choose another folder with <span class="ui">Browse…</span>, for example on a drive with more free space; clear the field to go back to the one that Windows gives. The choice holds for transfers that start afterwards. If the folder cannot be reached when a transfer starts (its drive is not connected), that transfer uses the temporary folder of Windows.</dd>
+<dt><span class="ui">Warn when a temporary file is too large for a FAT32 drive</span></dt>
+<dd>When selected, Dodavo tells you before a transfer whose temporary ZIP archive would be 4 GB or more while the drive it is made on uses FAT32, which cannot hold a file that large: when you send such a folder, and when you accept a folder of that size for a FAT32 drive with <span class="ui">Keep only the unpacked folder</span>. The message offers <span class="ui">Choose another folder for temporary files…</span>, <span class="ui">Continue anyway</span> and <span class="ui">Cancel</span>, and <span class="ui">Don't warn me again</span> clears this setting. Such a transfer is not accepted by itself. It is on unless you clear it.</dd>
 </dl>
 <h3 id="settings-receiving">Receiving</h3>
 <dl>

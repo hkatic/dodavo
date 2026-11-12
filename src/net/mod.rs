@@ -7,7 +7,7 @@
 
 pub mod protocol;
 mod receive;
-mod send;
+pub(crate) mod send;
 pub mod session;
 
 use std::{

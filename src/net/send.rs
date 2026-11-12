@@ -54,7 +54,7 @@ impl Drop for TempFile {
 
 /// Where the zip of a folder is packed.
 #[derive(Debug, PartialEq, Eq)]
-enum PackIn {
+pub(crate) enum PackIn {
     /// In the temporary folder.
     Temp,
     /// In the folder that contains the folder being sent.
@@ -69,7 +69,7 @@ enum PackIn {
 /// room in neither, the temporary folder it is: a zip can come out smaller
 /// than its files, and otherwise packing fails with the system's own words
 /// for a full disk.
-fn pack_in(
+pub(crate) fn pack_in(
     needed: u64,
     temp: Option<&(PathBuf, u64)>,
     beside: Option<&(PathBuf, u64)>,

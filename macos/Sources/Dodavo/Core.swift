@@ -103,6 +103,8 @@ struct Settings: Codable {
     /// The folder that the user chose for temporary files, or none for the
     /// system's place.
     var tempDir: String?
+    /// Whether to tell of a temporary archive that its volume cannot hold.
+    var warnFatTemp: Bool
     /// The general limit on the size of an item: whether there is one, its
     /// size as typed, in `limitUnit` ("mb" or "gb"), and what happens to a
     /// larger item ("ask", "decline" or "decline_and_tell").

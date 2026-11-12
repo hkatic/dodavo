@@ -23,6 +23,84 @@ pub struct Space {
     pub fits: bool,
     /// A sentence describing the result.
     pub text: String,
+    /// On Windows and on a Mac: says that the transfer would keep an archive
+    /// in the folder for temporary files that the file system there cannot
+    /// hold (FAT32), so that it would fail unless the user chooses another
+    /// folder for them. Whether the user wants to be told is the caller's to
+    /// see to (`Config::warn_fat_temp`).
+    pub temp_warning: Option<String>,
+}
+
+/// Whether the volume at `root` limits a file to less than 4 GiB (FAT32, and
+/// FAT).
+fn limits_files(root: &Path) -> bool {
+    matches!(
+        crate::archive::file_system(root).as_deref(),
+        Some("FAT32" | "FAT")
+    )
+}
+
+/// What to tell the user before the folder at `path` is sent with `temp` as
+/// the folder for temporary files: that the volume on which it would be
+/// packed (see `send::pack_in`) cannot hold an archive as large as the
+/// folder's files are together. Nothing for a file, which is sent from where
+/// it is, and nothing on Android, where the app's own storage holds the
+/// archives. It reads the whole folder's listing, but only where one of the
+/// two volumes limits its files. Blocking.
+#[cfg(any(windows, target_os = "macos"))]
+pub fn send_temp_warning(path: &Path, temp: &Path) -> Option<String> {
+    use crate::net::send::{PackIn, pack_in};
+    if crate::source::is_document(path) || !path.is_dir() {
+        return None;
+    }
+    // The temporary folder may not be there yet: its drive is that of the
+    // nearest folder above it that is.
+    let temp = temp.ancestors().find_map(disk_free);
+    let beside = path.parent().and_then(disk_free);
+    let limited = |volume: &Option<(std::path::PathBuf, u64)>| {
+        volume.as_ref().is_some_and(|(root, _)| limits_files(root))
+    };
+    if !limited(&temp) && !limited(&beside) {
+        return None;
+    }
+    let size = crate::archive::folder_size(path).ok()?;
+    if size <= FAT32_MAX_FILE {
+        return None;
+    }
+    let volume = match pack_in(size, temp.as_ref(), beside.as_ref()) {
+        PackIn::Temp => temp,
+        PackIn::Beside => beside,
+    };
+    let (root, _) = volume.filter(|(root, _)| limits_files(root))?;
+    let item = path
+        .file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_else(|| path.display().to_string());
+    Some(os_tr!(
+        temp_fat_send,
+        item = item,
+        drive = drive_name(&root),
+        size = format_size(size)
+    ))
+}
+
+/// What to tell the user before offers are accepted of which `largest` bytes
+/// is the largest archive that arrives in the folder for temporary files, on
+/// the volume at `root`.
+#[cfg(any(windows, target_os = "macos"))]
+fn receive_temp_warning(root: &Path, largest: u64) -> Option<String> {
+    (largest > FAT32_MAX_FILE && limits_files(root)).then(|| {
+        os_tr!(
+            temp_fat_receive,
+            drive = drive_name(root),
+            size = format_size(largest)
+        )
+    })
+}
+
+#[cfg(not(any(windows, target_os = "macos")))]
+fn receive_temp_warning(_root: &Path, _largest: u64) -> Option<String> {
+    None
 }
 
 /// The largest single file a transfer of `offer` has to save in the
@@ -90,6 +168,7 @@ pub fn check_space_of(offers: &[&Offer], dir: &Path, temp: &Path, folder: Receiv
         enough: None,
         fits: true,
         text: tr!(space_unknown).to_string(),
+        temp_warning: None,
     };
     let Some((dest_root, dest_free)) = disk_free(dir) else {
         return unknown();
@@ -114,12 +193,7 @@ pub fn check_space_of(offers: &[&Offer], dir: &Path, temp: &Path, folder: Receiv
         .map(|offer| largest_saved_file(offer, folder))
         .max()
         .unwrap_or(0);
-    if largest > FAT32_MAX_FILE
-        && matches!(
-            crate::archive::file_system(&dest_root).as_deref(),
-            Some("FAT32" | "FAT")
-        )
-    {
+    if largest > FAT32_MAX_FILE && limits_files(&dest_root) {
         return Space {
             enough: None,
             fits: false,
@@ -128,8 +202,20 @@ pub fn check_space_of(offers: &[&Offer], dir: &Path, temp: &Path, folder: Receiv
                 drive = drive_name(&dest_root),
                 size = format_size(largest)
             ),
+            temp_warning: None,
         };
     }
+    // The zip that the destination cannot hold arrives in the temporary
+    // folder, whose file system may not hold it either.
+    let temp_warning = volumes.get(1).and_then(|(root, _)| {
+        let largest = offers
+            .iter()
+            .filter(|offer| in_temp(offer))
+            .map(|offer| offer.size)
+            .max()
+            .unwrap_or(0);
+        receive_temp_warning(root, largest)
+    });
     let (dest_need, temp_need) = offers
         .iter()
         .map(|offer| space_needed(offer, folder, in_temp(offer), same_volume))
@@ -158,6 +244,7 @@ pub fn check_space_of(offers: &[&Offer], dir: &Path, temp: &Path, folder: Receiv
         enough: Some(short.is_none()),
         fits: true,
         text,
+        temp_warning,
     }
 }
 
@@ -277,6 +364,75 @@ mod tests {
         let together = check_space_of(&[&small, &big], &dir, &dir, ReceivedFolder::Extract);
         crate::archive::PRETEND_FAT.set(false);
         assert!(!together.fits);
+    }
+
+    /// A zip that a FAT32 destination cannot hold arrives in the folder for
+    /// temporary files, and the user is told when that is on FAT32 as well.
+    #[cfg(any(windows, target_os = "macos"))]
+    #[test]
+    fn an_archive_too_large_for_the_temporary_folder_is_told() {
+        let dir = std::env::temp_dir();
+        let mut big = offer(Kind::Folder);
+        big.size = FAT32_MAX_FILE + 1;
+        big.largest_file = 10;
+        let plain = check_space(&big, &dir, &dir, ReceivedFolder::Extract);
+        assert!(plain.fits && plain.temp_warning.is_none());
+        crate::archive::PRETEND_FAT.set(true);
+        let unpacked = check_space(&big, &dir, &dir, ReceivedFolder::Extract);
+        // Kept as a zip, it does not fit in the destination at all.
+        let kept = check_space(&big, &dir, &dir, ReceivedFolder::KeepZip);
+        big.size = FAT32_MAX_FILE;
+        let small = check_space(&big, &dir, &dir, ReceivedFolder::Extract);
+        crate::archive::PRETEND_FAT.set(false);
+        assert!(unpacked.fits);
+        let warning = unpacked.temp_warning.expect("a warning");
+        assert!(warning.contains("FAT"), "{warning}");
+        assert!(!kept.fits && kept.temp_warning.is_none());
+        assert!(small.fits && small.temp_warning.is_none());
+    }
+
+    /// A file is sent from where it is, and a small folder's archive fits
+    /// anywhere: neither is worth a word, on FAT32 or not.
+    #[cfg(any(windows, target_os = "macos"))]
+    #[test]
+    fn a_small_folder_and_a_file_send_without_a_warning() {
+        let dir = std::env::temp_dir().join(format!("dodavo-space-{}", std::process::id()));
+        let folder = dir.join("folder");
+        std::fs::create_dir_all(&folder).unwrap();
+        let file = folder.join("file.txt");
+        std::fs::write(&file, b"x").unwrap();
+        assert_eq!(send_temp_warning(&folder, &dir), None);
+        crate::archive::PRETEND_FAT.set(true);
+        let on_fat = [
+            send_temp_warning(&folder, &dir),
+            send_temp_warning(&file, &dir),
+        ];
+        crate::archive::PRETEND_FAT.set(false);
+        assert_eq!(on_fat, [None, None]);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// A folder whose archive can be too large for the drive it is packed
+    /// on is told of before it is sent, by its name.
+    #[cfg(any(windows, target_os = "macos"))]
+    #[test]
+    fn a_folder_too_large_for_fat32_is_told_before_it_is_sent() {
+        let dir = std::env::temp_dir().join(format!("dodavo-space-big-{}", std::process::id()));
+        let folder = dir.join("Large folder");
+        std::fs::create_dir_all(&folder).unwrap();
+        // A file of that length without its data, where there is room for it.
+        let made = std::fs::File::create(folder.join("big.bin"))
+            .and_then(|file| file.set_len(FAT32_MAX_FILE + 1));
+        if made.is_ok() {
+            assert_eq!(send_temp_warning(&folder, &dir), None);
+            crate::archive::PRETEND_FAT.set(true);
+            let warning = send_temp_warning(&folder, &dir);
+            crate::archive::PRETEND_FAT.set(false);
+            let warning = warning.expect("a warning");
+            assert!(warning.contains("Large folder"), "{warning}");
+            assert!(warning.contains("FAT"), "{warning}");
+        }
+        std::fs::remove_dir_all(&dir).ok();
     }
 
     #[cfg(windows)]

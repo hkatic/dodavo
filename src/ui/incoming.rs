@@ -281,7 +281,16 @@ impl Incoming {
             &app::temp_dir(),
             app::cfg().received_folder,
         );
-        set_text(self.space, &space.text);
+        // The window says why it asks about an offer that would otherwise
+        // have started by itself.
+        match space
+            .temp_warning
+            .as_deref()
+            .filter(|_| app::cfg().warn_fat_temp)
+        {
+            Some(warning) => set_text(self.space, &format!("{} {warning}", space.text)),
+            None => set_text(self.space, &space.text),
+        }
         space
     }
 
@@ -436,11 +445,27 @@ impl Incoming {
             );
             return;
         }
-        let space = self.update_space();
-        if !space.fits {
-            error(w.hwnd, &space.text);
-            return;
-        }
+        let space = loop {
+            let space = self.update_space();
+            if !space.fits {
+                error(w.hwnd, &space.text);
+                return;
+            }
+            let warning = space
+                .temp_warning
+                .as_deref()
+                .filter(|_| app::cfg().warn_fat_temp);
+            let Some(warning) = warning else {
+                break space;
+            };
+            // With another folder for temporary files, everything is
+            // looked at again.
+            match app::ask_about_temp(w.hwnd, warning) {
+                app::TempAnswer::Again => {}
+                app::TempAnswer::GoOn => break space,
+                app::TempAnswer::Cancel => return,
+            }
+        };
         if space.enough == Some(false)
             && !confirm(w.hwnd, &tr!(space_confirm, details = space.text))
         {

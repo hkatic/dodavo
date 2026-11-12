@@ -112,14 +112,35 @@ final class IncomingWindowController: NSWindowController, NSWindowDelegate {
 
     private struct Check: Decodable {
         let problem: String?
+        let tempWarning: String?
         let confirm: String?
     }
 
     @objc private func acceptOffer() {
+        accept(ignoringTemp: false)
+    }
+
+    /// Accepts the offer unless something stands in the way. `ignoringTemp`:
+    /// the user has heard of the temporary file that is too large for its
+    /// volume, and goes on anyway.
+    private func accept(ignoringTemp: Bool) {
         guard let window = window else { return }
-        let check: Check? = Core.call("check_accept", ["id": offer.id, "dir": dir])
+        let check: Check? = Core.call(
+            "check_accept", ["id": offer.id, "dir": dir, "ignore_temp": ignoringTemp])
         if let problem = check?.problem {
             showAlert(problem, on: window)
+            return
+        }
+        if let warning = check?.tempWarning {
+            warnAboutTempFolder(
+                warning, on: window,
+                again: { [weak self] in
+                    // With another folder for temporary files, the line
+                    // about the space may say something else.
+                    self?.refreshSpace()
+                    self?.accept(ignoringTemp: false)
+                },
+                goOn: { [weak self] in self?.accept(ignoringTemp: true) })
             return
         }
         guard let question = check?.confirm else {

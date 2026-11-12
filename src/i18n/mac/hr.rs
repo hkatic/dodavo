@@ -56,6 +56,13 @@ pub const HR: Strings = Strings {
     use_default: "Koristi zadanu",
     pick_temp_folder: "Odaberite mapu za privremene datoteke",
     invalid_temp_folder: "Mapa za privremene datoteke ne može se koristiti. Odaberite drugu mapu.",
+    warn_fat_temp: "Upozori kada je privremena datoteka prevelika za svoj disk",
+    temp_fat_title: "Privremena datoteka prevelika je za svoj disk",
+    temp_fat_receive: "Mapa za privremene datoteke nalazi se na disku „{drive}”, koji koristi format MS-DOS (FAT) i ne može spremiti datoteke od 4 GB ili veće. Ovaj prijenos ondje drži arhivu od {size} dok se mapa ne raspakira, pa ne bi uspio.",
+    temp_fat_send: "Prije slanja mape Dodavo je pakira u arhivu, ovdje na disku „{drive}”, koji koristi format MS-DOS (FAT) i ne može spremiti datoteke od 4 GB ili veće. Arhiva stavke „{item}” može biti velika do {size}, pa prijenos možda neće uspjeti.",
+    temp_fat_choose: "Odaberi drugu mapu…",
+    continue_anyway: "Ipak nastavi",
+    dont_warn_again: "Ne upozoravaj me ponovno",
     settings_not_saved: "Postavke se ne mogu spremiti:\n{error}",
     settings_title: "Postavke",
     about_text: "Šaljite datoteke i mape izravno s računala na računalo – \

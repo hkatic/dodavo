@@ -56,6 +56,13 @@ pub const SL: Strings = Strings {
     use_default: "Uporabi privzeto",
     pick_temp_folder: "Izberite mapo za začasne datoteke",
     invalid_temp_folder: "Mape za začasne datoteke ni mogoče uporabiti. Izberite drugo mapo.",
+    warn_fat_temp: "Opozori, ko je začasna datoteka prevelika za svoj disk",
+    temp_fat_title: "Začasna datoteka je prevelika za svoj disk",
+    temp_fat_receive: "Mapa za začasne datoteke je na disku »{drive}«, ki uporablja obliko MS-DOS (FAT) in ne more shraniti datotek, velikih 4 GB ali več. Ta prenos tam hrani arhiv velikosti {size}, dokler mapa ni razpakirana, zato ne bi uspel.",
+    temp_fat_send: "Pred pošiljanjem mape jo Dodavo zapakira v arhiv, tukaj na disku »{drive}«, ki uporablja obliko MS-DOS (FAT) in ne more shraniti datotek, velikih 4 GB ali več. Arhiv elementa »{item}« je lahko velik do {size}, zato prenos morda ne bo uspel.",
+    temp_fat_choose: "Izberi drugo mapo …",
+    continue_anyway: "Vseeno nadaljuj",
+    dont_warn_again: "Ne opozarjaj me več",
     settings_not_saved: "Nastavitev ni bilo mogoče shraniti:\n{error}",
     settings_title: "Nastavitve",
     about_text: "Pošiljajte datoteke in mape neposredno od računalnika do računalnika – \

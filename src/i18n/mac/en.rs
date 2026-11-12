@@ -56,6 +56,13 @@ pub const EN: Strings = Strings {
     use_default: "Use Default",
     pick_temp_folder: "Choose the folder for temporary files",
     invalid_temp_folder: "The folder for temporary files cannot be used. Choose another folder.",
+    warn_fat_temp: "Warn when a temporary file is too large for its volume",
+    temp_fat_title: "A temporary file is too large for its volume",
+    temp_fat_receive: "The folder for temporary files is on “{drive}”, which uses the MS-DOS (FAT) format and cannot hold files of 4 GB or more. This transfer keeps an archive of {size} there until the folder is unpacked, so it would fail.",
+    temp_fat_send: "Before a folder is sent, Dodavo packs it into an archive, here on “{drive}”, which uses the MS-DOS (FAT) format and cannot hold files of 4 GB or more. The archive of “{item}” can be as large as {size}, so the transfer may fail.",
+    temp_fat_choose: "Choose Another Folder…",
+    continue_anyway: "Continue Anyway",
+    dont_warn_again: "Don't warn me again",
     settings_not_saved: "The settings could not be saved:\n{error}",
     settings_title: "Settings",
     about_text: "Send files and folders directly from computer to computer – \

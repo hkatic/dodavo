@@ -34,6 +34,10 @@ Seen once on 2026-11-01: an offer from a contact waited in the Incoming Transfer
 
 Seen once on 2026-11-01: after a 500 MB transfer failed on a 200 MB NTFS volume, the volume stayed at 204 KB free although no files were left on it. FAT32 and exFAT volumes got all their space back. It may be a deleted part that another program, such as Defender or the indexer, still held open; that was not checked.
 
+### In dark mode on Windows 11, the labels of check boxes are hard to read
+
+The labels of check boxes are drawn in grey on the dark background, with less contrast than the other texts of the same window (Settings, the Incoming Transfer window), as seen on Windows 11 build 26300. `theme::theme_child` gives them the classic look so that they take the text color of `WM_CTLCOLORSTATIC`, which they do not there. Light mode and high contrast are not affected.
+
 ### On a Mac, several offers from one person open a window each, on top of each other
 
 Each offer gets its own `IncomingWindowController`, centred on the same spot, so the ones behind are easily missed and their transfers wait. Windows puts them in one window with one answer (`incoming::open_or_add`). Each window also speaks of its one item only, so the line that counts the items over the size limit (`limit::notice`) never shows on a Mac.

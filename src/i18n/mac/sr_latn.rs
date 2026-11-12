@@ -56,6 +56,13 @@ pub const SR_LATN: Strings = Strings {
     use_default: "Koristi podrazumevanu",
     pick_temp_folder: "Izaberite fasciklu za privremene datoteke",
     invalid_temp_folder: "Fascikla za privremene datoteke ne može da se koristi. Izaberite drugu fasciklu.",
+    warn_fat_temp: "Upozori kada je privremena datoteka prevelika za svoj disk",
+    temp_fat_title: "Privremena datoteka je prevelika za svoj disk",
+    temp_fat_receive: "Fascikla za privremene datoteke nalazi se na disku „{drive}“, koji koristi format MS-DOS (FAT) i ne može da sačuva datoteke od 4 GB ili veće. Ovaj prenos tamo drži arhivu od {size} dok se fascikla ne raspakuje, pa ne bi uspeo.",
+    temp_fat_send: "Pre slanja fascikle Dodavo je pakuje u arhivu, ovde na disku „{drive}“, koji koristi format MS-DOS (FAT) i ne može da sačuva datoteke od 4 GB ili veće. Arhiva stavke „{item}“ može biti velika do {size}, pa prenos možda neće uspeti.",
+    temp_fat_choose: "Izaberi drugu fasciklu…",
+    continue_anyway: "Ipak nastavi",
+    dont_warn_again: "Ne upozoravaj me ponovo",
     settings_not_saved: "Postavke nije moguće sačuvati:\n{error}",
     settings_title: "Postavke",
     about_text: "Šaljite datoteke i fascikle direktno sa računara na računar – \

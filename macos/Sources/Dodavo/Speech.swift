@@ -106,6 +106,54 @@ func confirmBlocking(
     }
 }
 
+/// Tells of a temporary archive that its volume cannot hold (`warning`, from
+/// the core's `check_send` or `check_accept`), as a sheet on `window`. The
+/// user chooses another folder for temporary files, after which `again`
+/// looks at the transfer once more; goes on anyway (`goOn`); or leaves the
+/// transfer. The check box turns the warning off (Settings has it too).
+func warnAboutTempFolder(
+    _ warning: String, on window: NSWindow, again: @escaping () -> Void,
+    goOn: @escaping () -> Void
+) {
+    let alert = NSAlert()
+    alert.alertStyle = .warning
+    alert.messageText = L[.temp_fat_title]
+    alert.informativeText = warning
+    alert.addButton(withTitle: L[.temp_fat_choose])
+    alert.addButton(withTitle: L[.continue_anyway])
+    alert.addButton(withTitle: L[.cancel])
+    alert.buttons[2].keyEquivalent = "\u{1b}"
+    alert.showsSuppressionButton = true
+    alert.suppressionButton?.title = L[.dont_warn_again]
+    alert.beginSheetModal(for: window) { response in
+        if alert.suppressionButton?.state == .on, response != .alertThirdButtonReturn {
+            Core.perform("warn_fat_temp", ["on": false])
+        }
+        switch response {
+        case .alertFirstButtonReturn:
+            let panel = NSOpenPanel()
+            panel.canChooseFiles = false
+            panel.canChooseDirectories = true
+            panel.canCreateDirectories = true
+            panel.message = L[.pick_temp_folder]
+            panel.prompt = L[.choose_folder_prompt]
+            panel.beginSheetModal(for: window) { response in
+                if response == .OK, let url = panel.url,
+                    let error = Core.errorOf("set_temp_dir", ["dir": url.path])
+                {
+                    showAlert(error, on: window)
+                    return
+                }
+                again()
+            }
+        case .alertSecondButtonReturn:
+            goOn()
+        default:
+            break
+        }
+    }
+}
+
 /// An alert as a sheet on `window`, or on its own without one.
 func showAlert(_ text: String, informative: String = "", on window: NSWindow?) {
     let alert = NSAlert()

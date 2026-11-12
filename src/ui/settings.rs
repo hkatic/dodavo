@@ -49,6 +49,7 @@ const ID_TEMP_DIR: u16 = 33;
 const ID_TEMP_BROWSE: u16 = 34;
 const ID_TABS: u16 = 35;
 const ID_CLOSE_WHEN_ENDED: u16 = 36;
+const ID_WARN_FAT_TEMP: u16 = 37;
 
 /// The window (96-DPI units): a margin around a page of settings.
 const MARGIN: i32 = 14;
@@ -95,6 +96,9 @@ struct SettingsDialog {
     /// The folder for temporary files, as the user chose it or Windows
     /// gives it.
     temp_dir: HWND,
+    /// Whether to tell of a temporary archive that is too large for the
+    /// drive of that folder.
+    warn_fat_temp: HWND,
     /// The read-only field with this installation's Contact ID.
     my_id: HWND,
 }
@@ -128,6 +132,7 @@ pub fn show(owner: HWND) {
         connection_lost: std::ptr::null_mut(),
         language: std::ptr::null_mut(),
         temp_dir: std::ptr::null_mut(),
+        warn_fat_temp: std::ptr::null_mut(),
         my_id: std::ptr::null_mut(),
     };
     let hwnd = window::create(
@@ -150,8 +155,22 @@ fn tidy(path: &Path) -> PathBuf {
 
 /// The folder that Windows gives for temporary files, in which Dodavo keeps
 /// its own (see `platform::temp_base`).
-fn system_temp() -> PathBuf {
+pub fn system_temp() -> PathBuf {
     tidy(&std::env::temp_dir())
+}
+
+/// The user's choice of a folder for temporary files, as written in `text`:
+/// none for an empty text or the folder that Windows gives, and an error for
+/// a folder that cannot be used.
+pub fn temp_dir_choice(text: &str) -> Result<Option<PathBuf>, ()> {
+    let text = text.trim();
+    let dir = (!text.is_empty())
+        .then(|| tidy(Path::new(text)))
+        .filter(|dir| !same_folder(dir, &system_temp()));
+    match &dir {
+        Some(dir) if !(dir.is_absolute() && std::fs::create_dir_all(dir).is_ok()) => Err(()),
+        _ => Ok(dir),
+    }
 }
 
 /// Whether two paths name the same folder, as far as their writing tells.
@@ -269,16 +288,11 @@ impl SettingsDialog {
             .map(|l| l.code().to_string());
         let language_changed = language != app::cfg().language;
         // Empty, or the folder that Windows gives: no choice of the user's.
-        let temp_text = get_text(self.temp_dir).trim().to_string();
-        let temp_dir = (!temp_text.is_empty())
-            .then(|| tidy(Path::new(&temp_text)))
-            .filter(|dir| !same_folder(dir, &system_temp()));
-        if let Some(dir) = &temp_dir
-            && !(dir.is_absolute() && std::fs::create_dir_all(dir).is_ok())
-        {
+        let Ok(temp_dir) = temp_dir_choice(&get_text(self.temp_dir)) else {
             self.refuse(w, PAGE_TRANSFERS, self.temp_dir, tr!(invalid_temp_folder));
             return false;
-        }
+        };
+        let warn_fat_temp = window::is_checked(self.warn_fat_temp);
         // Unset, it follows Downloads to wherever that is moved.
         let dir = dir.filter(|d| *d != crate::platform::downloads_dir());
         app::update_cfg(|c| {
@@ -306,6 +320,7 @@ impl SettingsDialog {
             c.connection_lost = connection_lost;
             c.language = language;
             c.set_temp_dir(temp_dir);
+            c.warn_fat_temp = warn_fat_temp;
         });
         shell::set_start_with_windows(autostart);
         if let Some(on) = explorer_menu {
@@ -468,7 +483,14 @@ impl Handler for SettingsDialog {
             ID_TEMP_BROWSE,
             (x + width - 86, y + 19, 86, 26),
         );
-        y += 46;
+        y += 54;
+        self.warn_fat_temp = w.checkbox(
+            tr!(warn_fat_temp),
+            ID_WARN_FAT_TEMP,
+            cfg.warn_fat_temp,
+            (x, y, width, 20),
+        );
+        y += 20;
         bottom = bottom.max(y);
         self.pages.push(w.controls_from(start));
 

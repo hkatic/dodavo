@@ -428,6 +428,13 @@ strings! {
         temp_folder_label,
         pick_temp_folder,
         invalid_temp_folder,
+        warn_fat_temp,
+        temp_fat_instruction,
+        temp_fat_receive,
+        temp_fat_send,
+        temp_fat_choose,
+        temp_fat_continue,
+        dont_warn_again,
         my_id_label,
         copy,
         change_id_button,
@@ -858,7 +865,7 @@ mod tests {
         }
         for lang in Lang::ALL {
             let s = lang.strings();
-            let groups: [(&str, Vec<&str>); 25] = [
+            let groups: [(&str, Vec<&str>); 26] = [
                 ("menu bar", vec![s.menu_file, s.menu_transfers, s.menu_help]),
                 (
                     "File menu",
@@ -941,7 +948,13 @@ mod tests {
                         s.show_after_send,
                         s.temp_folder_label,
                         s.browse,
+                        s.warn_fat_temp,
                     ],
+                ),
+                // Its third choice, Cancel, has no access key (Escape).
+                (
+                    "temporary file too large",
+                    vec![s.temp_fat_choose, s.temp_fat_continue, s.dont_warn_again],
                 ),
                 (
                     "settings: Receiving",

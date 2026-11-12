@@ -392,6 +392,9 @@ pub fn start_sends(owner: HWND, contacts: &[Contact], paths: &[PathBuf]) -> bool
         ui::error(owner, &tr!(contact_invalid, name = contact.name));
         return false;
     }
+    if !may_pack(owner, paths) {
+        return false;
+    }
     // Only the first window takes the focus, which then stays there while the
     // others open.
     let mut first = true;
@@ -407,6 +410,88 @@ pub fn start_sends(owner: HWND, contacts: &[Contact], paths: &[PathBuf]) -> bool
         }
     }
     true
+}
+
+/// What the user answered about a temporary archive that is too large for
+/// its drive (see [`ask_about_temp`]).
+pub enum TempAnswer {
+    /// Look again: another folder for temporary files may have been chosen.
+    Again,
+    /// Go on with the transfer as it is.
+    GoOn,
+    /// Leave the transfer.
+    Cancel,
+}
+
+/// Tells the user of a temporary archive that its drive cannot hold
+/// (`warning`: `space::send_temp_warning`, `Space::temp_warning`), and offers
+/// to choose another folder for temporary files, which is then saved as in
+/// the settings. Only for a user who wants to be told
+/// (`Config::warn_fat_temp`, which the check box here turns off).
+pub fn ask_about_temp(owner: HWND, warning: &str) -> TempAnswer {
+    const CHOOSE: i32 = 100;
+    const GO_ON: i32 = 101;
+    let (choice, dont_warn) = ui::ask(
+        owner,
+        tr!(temp_fat_instruction),
+        warning,
+        &[
+            (CHOOSE, tr!(temp_fat_choose)),
+            (GO_ON, tr!(temp_fat_continue)),
+            (
+                windows_sys::Win32::UI::WindowsAndMessaging::IDCANCEL,
+                tr!(cancel),
+            ),
+        ],
+        false,
+        Some(tr!(dont_warn_again)),
+    );
+    if dont_warn && matches!(choice, CHOOSE | GO_ON) {
+        update_cfg(|c| c.warn_fat_temp = false);
+    }
+    match choice {
+        CHOOSE => {
+            let current = cfg()
+                .temp_dir
+                .unwrap_or_else(ui::settings::system_temp);
+            let chosen = ui::shell::pick_folder(owner, tr!(pick_temp_folder), Some(&current));
+            match chosen.map(|dir| ui::settings::temp_dir_choice(&dir.display().to_string())) {
+                Some(Ok(dir)) => update_cfg(|c| c.set_temp_dir(dir)),
+                Some(Err(())) => ui::error(owner, tr!(invalid_temp_folder)),
+                None => {}
+            }
+            TempAnswer::Again
+        }
+        GO_ON => TempAnswer::GoOn,
+        _ => TempAnswer::Cancel,
+    }
+}
+
+/// Whether the folders among `paths` can be packed for sending, as far as
+/// the size of a file goes on the drive where their archives are made: the
+/// user is asked about one that cannot (see [`ask_about_temp`]), until none
+/// is left, the user goes on anyway or gives up.
+fn may_pack(owner: HWND, paths: &[PathBuf]) -> bool {
+    loop {
+        if !cfg().warn_fat_temp {
+            return true;
+        }
+        let temp = temp_dir();
+        // It reads the listing of a folder on such a drive.
+        let warning = ui::busy(|| {
+            paths
+                .iter()
+                .find_map(|path| crate::space::send_temp_warning(path, &temp))
+        });
+        let Some(warning) = warning else {
+            return true;
+        };
+        match ask_about_temp(owner, &warning) {
+            TempAnswer::Again => {}
+            TempAnswer::GoOn => return true,
+            TempAnswer::Cancel => return false,
+        }
+    }
 }
 
 /// Starts sending `path`. Its progress window takes the focus if `activate`.
@@ -817,12 +902,15 @@ fn handle_net_event(event: Event) -> Option<Event> {
             let (name, known) = peer_name(&from, &offer.sender_name);
             let cfg = cfg();
             // Without enough disk space, on a drive that cannot hold a file
-            // this large, or for an item over the sender's limit, ask
-            // instead (the window explains why).
+            // this large, with a temporary archive that its drive cannot
+            // hold, or for an item over the sender's limit, ask instead (the
+            // window explains why).
             let auto_dir = cfg.auto_save_dir_for(&from, &offer).filter(|d| {
                 std::fs::create_dir_all(d).is_ok() && {
                     let space = incoming::check_space(&offer, d, cfg.received_folder);
-                    space.fits && space.enough != Some(false)
+                    space.fits
+                        && space.enough != Some(false)
+                        && !(cfg.warn_fat_temp && space.temp_warning.is_some())
                 }
             });
             if let Some(dir) = auto_dir {

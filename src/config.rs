@@ -201,6 +201,11 @@ pub struct Config {
     /// keeps in a folder of its own in it (see `temp_dir_for`); `None` is
     /// the system's place for them. Windows and the Mac.
     pub temp_dir: Option<PathBuf>,
+    /// Windows and the Mac: tell the user before a transfer whose temporary
+    /// archive is too large for the file system of the folder for temporary
+    /// files (4 GiB or more on FAT32), so that another folder can be chosen
+    /// (`space::send_temp_warning`, `Space::temp_warning`).
+    pub warn_fat_temp: bool,
     /// What `temp_dir` was before: a start still clears leftovers there,
     /// until none are left (see `set_temp_dir`, `forget_temp_dirs`).
     pub temp_dirs_before: Vec<PathBuf>,
@@ -237,6 +242,7 @@ impl Default for Config {
             update_last_check: None,
             update_remind_after: None,
             temp_dir: None,
+            warn_fat_temp: true,
             temp_dirs_before: Vec::new(),
         }
     }
@@ -619,6 +625,7 @@ mod tests {
         cfg.connection_lost = ConnectionLostAction::Ask;
         cfg.show_after_send = false;
         cfg.close_when_ended = true;
+        cfg.warn_fat_temp = false;
         cfg.received_folder = ReceivedFolder::Both;
         cfg.auto_accept = false;
         cfg.check_updates = false;
@@ -695,6 +702,7 @@ mod tests {
         assert!(cfg.ask_after_receive);
         assert!(cfg.show_after_send);
         assert!(!cfg.close_when_ended);
+        assert!(cfg.warn_fat_temp);
         assert!(cfg.auto_accept);
         assert!(cfg.always_save);
         assert_eq!(cfg.always_save_dir, None);

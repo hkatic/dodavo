@@ -223,10 +223,17 @@ struct SpaceOut {
     enough: Option<bool>,
 }
 
-impl From<Space> for SpaceOut {
-    fn from(space: Space) -> Self {
+impl SpaceOut {
+    /// What the Incoming window says of `space`. A user who wants to be told
+    /// of a temporary archive that its volume cannot hold reads it here too:
+    /// it is why such an offer did not start by itself.
+    fn of(space: Space, cfg: &Config) -> SpaceOut {
+        let text = match space.temp_warning.filter(|_| cfg.warn_fat_temp) {
+            Some(warning) => format!("{} {warning}", space.text),
+            None => space.text,
+        };
         SpaceOut {
-            text: space.text,
+            text,
             fits: space.fits,
             enough: space.enough,
         }
@@ -262,11 +269,33 @@ enum Call {
         #[serde(default)]
         dir: Option<PathBuf>,
     },
-    /// What stands in the way of accepting into `dir`.
+    /// What stands in the way of accepting into `dir`. With `ignore_temp`,
+    /// the user has heard of the temporary archive that its volume cannot
+    /// hold, and goes on anyway.
     CheckAccept {
         id: u64,
         #[serde(default)]
         dir: Option<PathBuf>,
+        #[serde(default)]
+        ignore_temp: bool,
+    },
+    /// The Mac: what to tell the user before `paths` are sent (see
+    /// `space::send_temp_warning`).
+    #[cfg(target_os = "macos")]
+    CheckSend {
+        paths: Vec<PathBuf>,
+    },
+    /// The Mac: the user chose another folder for temporary files where
+    /// Dodavo told of one that cannot hold an archive.
+    #[cfg(target_os = "macos")]
+    SetTempDir {
+        dir: PathBuf,
+    },
+    /// The Mac: whether to tell of a temporary archive that its volume
+    /// cannot hold (`Config::warn_fat_temp`).
+    #[cfg(target_os = "macos")]
+    WarnFatTemp {
+        on: bool,
     },
     Accept {
         id: u64,
@@ -387,8 +416,16 @@ struct Settings {
     /// system's place.
     #[serde(default)]
     temp_dir: Option<PathBuf>,
+    /// Whether to tell of a temporary archive that its volume cannot hold.
+    #[serde(default = "yes")]
+    warn_fat_temp: bool,
     #[serde(flatten)]
     limit: LimitSettings,
+}
+
+#[cfg(target_os = "macos")]
+fn yes() -> bool {
+    true
 }
 
 /// The settings as Android's Settings screen shows them. Received items go to
@@ -897,21 +934,55 @@ impl Core {
                 let state = lock(&self.state);
                 match state.offers.get(&id) {
                     Some(pending) => {
-                        let out: SpaceOut = space::check_space(
+                        let space = space::check_space(
                             &pending.offer,
                             &dir,
                             &state.temp_in_use(),
                             state.cfg.received_folder,
-                        )
-                        .into();
-                        serde_json::to_string(&out).unwrap_or_default()
+                        );
+                        serde_json::to_string(&SpaceOut::of(space, &state.cfg)).unwrap_or_default()
                     }
                     None => "null".into(),
                 }
             }
-            Call::CheckAccept { id, dir } => {
+            Call::CheckAccept {
+                id,
+                dir,
+                ignore_temp,
+            } => {
                 let dir = dir.unwrap_or_else(dodavo_core::platform::downloads_dir);
-                json(self.check_accept(id, &dir))
+                json(self.check_accept(id, &dir, ignore_temp))
+            }
+            #[cfg(target_os = "macos")]
+            Call::CheckSend { paths } => {
+                let (warn, temp_dir) = {
+                    let state = lock(&self.state);
+                    (state.cfg.warn_fat_temp, state.temp_in_use())
+                };
+                // Off the lock: it may read the listing of a folder.
+                let warning = warn
+                    .then(|| {
+                        paths
+                            .iter()
+                            .find_map(|path| space::send_temp_warning(path, &temp_dir))
+                    })
+                    .flatten();
+                json(serde_json::json!({ "temp_warning": warning }))
+            }
+            #[cfg(target_os = "macos")]
+            Call::SetTempDir { dir } => {
+                if !(dir.is_absolute() && std::fs::create_dir_all(&dir).is_ok()) {
+                    return json(serde_json::json!({ "error": ui().invalid_temp_folder }));
+                }
+                let mut state = lock(&self.state);
+                state.cfg.set_temp_dir(Some(dir));
+                json(serde_json::json!({ "error": save(&state) }))
+            }
+            #[cfg(target_os = "macos")]
+            Call::WarnFatTemp { on } => {
+                let mut state = lock(&self.state);
+                state.cfg.warn_fat_temp = on;
+                json(serde_json::json!({ "error": save(&state) }))
             }
             Call::Accept { id, dir } => {
                 let dir = dir.unwrap_or_else(dodavo_core::platform::downloads_dir);
@@ -1326,8 +1397,8 @@ impl Core {
         None
     }
 
-    fn check_accept(&self, id: u64, dir: &Path) -> serde_json::Value {
-        let (offer, temp_dir, folder) = {
+    fn check_accept(&self, id: u64, dir: &Path, ignore_temp: bool) -> serde_json::Value {
+        let (offer, temp_dir, folder, warn) = {
             let state = lock(&self.state);
             let Some(pending) = state.offers.get(&id) else {
                 return serde_json::json!({});
@@ -1336,6 +1407,7 @@ impl Core {
                 pending.offer.clone(),
                 state.temp_in_use(),
                 state.cfg.received_folder,
+                state.cfg.warn_fat_temp && !ignore_temp,
             )
         };
         if !dir.is_absolute() {
@@ -1347,6 +1419,9 @@ impl Core {
         let space = space::check_space(&offer, dir, &temp_dir, folder);
         if !space.fits {
             return serde_json::json!({ "problem": space.text });
+        }
+        if let Some(warning) = space.temp_warning.filter(|_| warn) {
+            return serde_json::json!({ "temp_warning": warning });
         }
         if space.enough == Some(false) {
             let details = ui().space_confirm.replace("{details}", &space.text);
@@ -1571,20 +1646,25 @@ impl Core {
             offer,
         };
         // Without enough disk space, on a volume that cannot hold a file this
-        // large, or for an item over the sender's limit, ask instead (the
-        // window explains why). Off the lock: the first use of Downloads may
-        // wait for the user to allow it.
+        // large, with a temporary archive that its volume cannot hold, or
+        // for an item over the sender's limit, ask instead (the window
+        // explains why). Off the lock: the first use of Downloads may wait
+        // for the user to allow it.
         let auto_dir = cfg.auto_save_dir_for(&from, &pending.offer).filter(|d| {
             std::fs::create_dir_all(d).is_ok() && {
                 let space = space::check_space(&pending.offer, d, &temp_dir, cfg.received_folder);
-                space.fits && space.enough != Some(false)
+                space.fits
+                    && space.enough != Some(false)
+                    && !(cfg.warn_fat_temp && space.temp_warning.is_some())
             }
         });
         // The same goes for an offer that asks where to save.
         let asked = auto_dir.is_none().then(|| {
             let dir = cfg.suggested_save_dir();
-            let space: SpaceOut =
-                space::check_space(&pending.offer, &dir, &temp_dir, cfg.received_folder).into();
+            let space = SpaceOut::of(
+                space::check_space(&pending.offer, &dir, &temp_dir, cfg.received_folder),
+                &cfg,
+            );
             (dir, space)
         });
         let mut state = lock(&self.state);
@@ -1974,6 +2054,7 @@ impl Settings {
             auto_accept: cfg.auto_accept,
             received_folder: cfg.received_folder,
             temp_dir: cfg.temp_dir.clone(),
+            warn_fat_temp: cfg.warn_fat_temp,
             limit: LimitSettings::of(cfg),
         }
     }
@@ -1981,6 +2062,7 @@ impl Settings {
     fn apply_to(&self, cfg: &mut Config) {
         self.limit.apply_to(cfg);
         cfg.set_temp_dir(self.temp_dir.clone());
+        cfg.warn_fat_temp = self.warn_fat_temp;
         cfg.my_name = self.my_name.trim().to_string();
         cfg.start_with_windows = self.open_at_login;
         cfg.start_minimized = self.hide_at_login;
@@ -2234,7 +2316,7 @@ mod tests {
         std::fs::write(&in_the_way, b"").unwrap();
         let chosen = in_the_way.join("received");
 
-        let answer = core_with_offer(1, &dir).check_accept(1, &chosen);
+        let answer = core_with_offer(1, &dir).check_accept(1, &chosen, false);
 
         let problem = answer["problem"].as_str().unwrap();
         let reason = ui()

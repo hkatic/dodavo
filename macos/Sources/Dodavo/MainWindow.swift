@@ -250,8 +250,26 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSToolba
         }
     }
 
-    /// Sends each item to each of the recipients, as transfers of their own.
+    private struct SendCheck: Decodable {
+        let tempWarning: String?
+    }
+
+    /// Sends each item to each of the recipients, as transfers of their own,
+    /// after asking about a folder whose archive is too large for the volume
+    /// it would be packed on.
     private func start(_ contacts: [Contact], _ paths: [String]) {
+        let check: SendCheck? = Core.call("check_send", ["paths": paths])
+        if let warning = check?.tempWarning, let window = window {
+            warnAboutTempFolder(
+                warning, on: window,
+                again: { [weak self] in self?.start(contacts, paths) },
+                goOn: { [weak self] in self?.startNow(contacts, paths) })
+            return
+        }
+        startNow(contacts, paths)
+    }
+
+    private func startNow(_ contacts: [Contact], _ paths: [String]) {
         let ids = contacts.map { $0.id }
         if let error = Core.errorOf("send", ["peer_ids": ids, "paths": paths]) {
             showAlert(error, on: window)

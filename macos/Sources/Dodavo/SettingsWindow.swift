@@ -16,6 +16,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSTe
     private let language = NSPopUpButton()
     private let tempFolder = NSTextField(wrappingLabelWithString: "")
     private let useDefaultTemp = NSButton()
+    private let warnFatTemp = NSButton(checkboxWithTitle: L[.warn_fat_temp], target: nil, action: nil)
     private let alwaysSave = NSButton(checkboxWithTitle: L[.always_save], target: nil, action: nil)
     private let folderLabel = NSTextField(wrappingLabelWithString: "")
     private let chooseFolder = NSButton()
@@ -40,7 +41,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSTe
             ?? Settings(
                 myName: "", openAtLogin: false, hideAtLogin: false, showInMenuBar: true,
                 checkUpdates: true, language: nil, alwaysSave: true, alwaysSaveDir: nil,
-                autoAccept: true, receivedFolder: "extract", tempDir: nil, limitSize: false,
+                autoAccept: true, receivedFolder: "extract", tempDir: nil, warnFatTemp: true, limitSize: false,
                 limitNumber: "1", limitUnit: "gb", overLimit: "ask")
         settings.openAtLogin = LoginItem.isEnabled ?? settings.openAtLogin
         let tabs = NSTabViewController()
@@ -120,7 +121,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSTe
         language.action = #selector(languageChanged)
         name(language, by: languageLabel)
 
-        for box in [openAtLogin, hideAtLogin, showInMenuBar, checkUpdates] {
+        for box in [openAtLogin, hideAtLogin, showInMenuBar, checkUpdates, warnFatTemp] {
             box.target = self
             box.action = #selector(changed)
         }
@@ -149,6 +150,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSTe
             [languageLabel, language],
             [tempLabel, tempFolder],
             [NSGridCell.emptyContentView, makeRow([chooseTemp, useDefaultTemp])],
+            [NSGridCell.emptyContentView, warnFatTemp],
         ])
         grid.column(at: 0).xPlacement = .trailing
         grid.rowAlignment = .firstBaseline
@@ -348,6 +350,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSTe
         language.selectItem(at: languageIndex ?? 0)
         tempFolder.stringValue = settings.tempDir ?? L[.temp_folder_default]
         useDefaultTemp.isEnabled = settings.tempDir != nil
+        warnFatTemp.state = settings.warnFatTemp ? .on : .off
         alwaysSave.state = settings.alwaysSave ? .on : .off
         folderLabel.stringValue = settings.alwaysSaveDir ?? ""
         folderLabel.isHidden = settings.alwaysSaveDir == nil
@@ -384,6 +387,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSTe
         next.hideAtLogin = hideAtLogin.state == .on
         next.showInMenuBar = showInMenuBar.state == .on
         next.checkUpdates = checkUpdates.state == .on
+        next.warnFatTemp = warnFatTemp.state == .on
         next.alwaysSave = alwaysSave.state == .on
         next.autoAccept = autoAccept.state == .on
         next.receivedFolder = keep.selectedItem?.representedObject as? String ?? "extract"
@@ -426,9 +430,19 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSTe
         window?.makeFirstResponder(nil)
     }
 
-    /// Adding a recipient elsewhere may have unblocked them.
+    /// Adding a recipient elsewhere may have unblocked them, and the question
+    /// about a temporary file that is too large for its volume may have
+    /// changed the folder for temporary files or turned itself off (see
+    /// `warnAboutTempFolder`). Only those two: a field may be half typed.
     func windowDidBecomeKey(_: Notification) {
         reloadBlocked()
+        if let saved = Core.settings() {
+            settings.tempDir = saved.tempDir
+            settings.warnFatTemp = saved.warnFatTemp
+            tempFolder.stringValue = settings.tempDir ?? L[.temp_folder_default]
+            useDefaultTemp.isEnabled = settings.tempDir != nil
+            warnFatTemp.state = settings.warnFatTemp ? .on : .off
+        }
     }
 
     @objc private func languageChanged() {
