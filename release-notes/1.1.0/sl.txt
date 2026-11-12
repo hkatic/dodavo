@@ -1,0 +1,19 @@
+Spremembe v različici 1.1.0
+
+- Novo: Omejitev velikosti. V nastavitvah lahko določite največji element, ki vam ga sme kdo poslati, za vse ali za vsakega prejemnika posebej, in ali naj Dodavo za večjega vpraša ali ga zavrne.
+- Novo: Sprememba ID-ja stika. V nastavitvah lahko dobite nov ID stika, stari pa takrat preneha veljati.
+- Novo: Pošiljanje več prejemnikom hkrati. V sistemu Windows potrdite polja ob prejemnikih, v Macu pa jih izberite več na seznamu.
+- Novo: Blokiranje pošiljateljev. Nekoga lahko blokirate z gumbom »Blokiraj pošiljatelja«, ko prispe njegova ponudba, prejemnika s seznama pa s tipkama Ctrl+B (v Macu Command-B). Dodavo nato zavrne vse, kar ta oseba pošlje, in ji tega ne sporoči. Blokiranje lahko odpravite v nastavitvah.
+- Novo: Mapa za začasne datoteke. Izberete jo lahko v nastavitvah, Dodavo pa vas vnaprej opozori, če bi bila začasna datoteka prevelika za pogon FAT32.
+- Novo: Windows: okno napredka se lahko samo zapre, ko se prenos konča. To vklopite v nastavitvah.
+- Novo: Klepet (Windows). Osebi s seznama prejemnikov lahko napišete sporočilo: izberite jo in pritisnite Ctrl+M. Eno sporočilo lahko pošljete tudi več osebam hkrati, v nastavitvah na zavihku »Klepet« pa izberete, kdo vam sme pisati. Tudi druga stran mora imeti Dodavo 1.1.0.
+- Novo: Zvoki (Windows). Dodavo z zvokom sporoči, ko kaj prispe, ko se prenos začne, konča ali ne uspe in ko se povezava prekine. V nastavitvah na zavihku »Zvoki« lahko vsak zvok zamenjate s svojo datoteko WAV ali ga izklopite.
+- Sprememba: Prejeta mapa se razpakira na pogonu, kamor jo shranite, zato zanjo ni več potreben prostor na sistemskem pogonu.
+- Sprememba: Windows: nastavitve so razporejene po zavihkih.
+- Popravek: Dodavo ob zagonu ne sporoča več, da ni povezan, medtem ko se še povezuje.
+- Popravek: Vprašanje, odprto v oknu enega prenosa, ne zadržuje več drugih prenosov.
+- Popravek: Windows: element z zelo dolgim imenom se prejme s skrajšanim imenom, prej pa prenos ni uspel.
+- Popravek: Windows: ko prejeta mapa vsebuje dve datoteki, katerih imeni se razlikujeta samo po velikih in malih črkah, ostaneta obe, prej pa je ena zamenjala drugo.
+- Popravek: Windows: opis orodja ikone v območju za obvestila ne prikazuje več hitrosti 0 B/s, ko so vsi podatki poslani.
+- Popravek: Windows: preverjanje posodobitev ne odpre več drugega sporočila, medtem ko preverjanje že poteka.
+- Popravek: Mac: Dodavo sporoči, ko prejemnika, ki mu pošiljate, ni več na seznamu.

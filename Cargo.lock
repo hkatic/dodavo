@@ -576,7 +576,7 @@ dependencies = [
 
 [[package]]
 name = "dodavo"
-version = "1.0.1"
+version = "1.1.0"
 dependencies = [
  "anyhow",
  "blake3",
@@ -605,7 +605,7 @@ dependencies = [
 
 [[package]]
 name = "dodavo-android"
-version = "1.0.1"
+version = "1.1.0"
 dependencies = [
  "dodavo",
  "dodavo-ffi",
@@ -614,7 +614,7 @@ dependencies = [
 
 [[package]]
 name = "dodavo-ffi"
-version = "1.0.1"
+version = "1.1.0"
 dependencies = [
  "dodavo",
  "libc",

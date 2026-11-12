@@ -1,0 +1,19 @@
+Promjene u inačici 1.1.0
+
+- Novo: Ograničenje veličine. U postavkama možete odrediti najveću stavku koju vam netko smije poslati, za sve ili za svakog primatelja posebno, i hoće li Dodavo za veću pitati ili je odbiti.
+- Novo: Promjena ID-a kontakta. U postavkama možete dobiti novi ID kontakta, a stari tada prestaje vrijediti.
+- Novo: Slanje većem broju primatelja odjednom. U Windowsu označite potvrdne okvire pored primatelja, a na Macu ih odaberite više na popisu.
+- Novo: Blokiranje pošiljatelja. Nekoga možete blokirati gumbom „Blokiraj pošiljatelja” kad stigne njegova ponuda, a primatelja s popisa tipkama Ctrl+B (na Macu Command-B). Dodavo tada odbija sve što ta osoba pošalje, a ona o tome ne dobiva obavijest. Blokadu možete ukloniti u postavkama.
+- Novo: Mapa za privremene datoteke. Možete je odabrati u postavkama, a Dodavo vas unaprijed upozorava ako bi privremena datoteka bila prevelika za pogon FAT32.
+- Novo: Windows: prozor napretka može se sam zatvoriti kad prijenos završi. To se uključuje u postavkama.
+- Novo: Čavrljanje (Windows). Osobi s popisa primatelja možete napisati poruku: odaberite je i pritisnite Ctrl+M. Jedna poruka može ići i većem broju osoba odjednom, a u postavkama na kartici „Čavrljanje” birate tko vam smije pisati. I druga strana treba imati Dodavo 1.1.0.
+- Novo: Zvukovi (Windows). Dodavo zvukom javlja kad nešto stigne, kad prijenos počne, završi ili ne uspije i kad se veza prekine. U postavkama na kartici „Zvukovi” svaki zvuk možete zamijeniti svojom WAV datotekom ili ga isključiti.
+- Promjena: Primljena mapa raspakira se na disku na koji je spremate, pa za nju više ne treba mjesta na sistemskom disku.
+- Promjena: Windows: postavke su raspoređene po karticama.
+- Ispravak: Dodavo pri pokretanju više ne javlja da nije povezan dok se još povezuje.
+- Ispravak: Pitanje otvoreno u prozoru jednog prijenosa više ne zadržava ostale prijenose.
+- Ispravak: Windows: stavka s vrlo dugim nazivom prima se pod skraćenim nazivom, dok prije nije uspijevala.
+- Ispravak: Windows: kad primljena mapa sadrži dvije datoteke čiji se nazivi razlikuju samo po velikim i malim slovima, ostaju obje, dok je prije jedna zamijenila drugu.
+- Ispravak: Windows: opis alata ikone u području obavijesti više ne prikazuje brzinu 0 B/s nakon što su svi podaci poslani.
+- Ispravak: Windows: provjera ažuriranja više ne otvara drugu poruku dok provjera već traje.
+- Ispravak: Mac: Dodavo javlja kad primatelja kojem se šalje više nema na popisu.
