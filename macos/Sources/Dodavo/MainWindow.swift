@@ -318,7 +318,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSToolba
         // it is open (an offer that adds its sender, or blocks them), and the
         // items go to those chosen here, not to whoever has their places then.
         let selected = table.selectedRowIndexes.filter { contacts.indices.contains($0) }
-        let picker = RecipientPicker(contacts, selected: selected)
+        let picker = RecipientPicker(contacts, selected: IndexSet(selected))
         alert.accessoryView = picker.view
         alert.addButton(withTitle: L[.send_action])
         alert.addButton(withTitle: L[.cancel])
