@@ -54,17 +54,19 @@ class RecipientsViewModel(
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), RecipientsUiState())
 
-    fun sendFiles(contact: Contact, uris: List<Uri>) {
-        if (uris.isEmpty()) return
+    /** Sends each of the files to each of [contacts], every one as a transfer of its own. */
+    fun sendFiles(contacts: List<Contact>, uris: List<Uri>) {
+        if (uris.isEmpty() || contacts.isEmpty()) return
         viewModelScope.launch {
-            message.value = runCatching { sending.sendFiles(contact.id, uris) }
+            message.value = runCatching { sending.sendFiles(contacts.map { it.id }, uris) }
                 .getOrElse { it.message }
         }
     }
 
-    fun sendFolder(contact: Contact, tree: Uri) {
+    fun sendFolder(contacts: List<Contact>, tree: Uri) {
+        if (contacts.isEmpty()) return
         viewModelScope.launch {
-            message.value = runCatching { sending.sendFolder(contact.id, tree) }
+            message.value = runCatching { sending.sendFolder(contacts.map { it.id }, tree) }
                 .getOrElse { it.message }
         }
     }

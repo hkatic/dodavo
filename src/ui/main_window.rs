@@ -1,6 +1,9 @@
 //! The main window: the recipient list, menus, buttons and the tray icon.
 
-use std::{cell::Cell, path::PathBuf};
+use std::{
+    cell::{Cell, RefCell},
+    path::PathBuf,
+};
 
 use windows_sys::Win32::{
     Foundation::{HWND, LPARAM, LRESULT, POINT, RECT, WPARAM},
@@ -74,6 +77,9 @@ thread_local! {
     static MSG_EXIT_FOR_UPDATE: Cell<u32> = const { Cell::new(0) };
     static LIST: Cell<HWND> = const { Cell::new(std::ptr::null_mut()) };
     static STATUS: Cell<HWND> = const { Cell::new(std::ptr::null_mut()) };
+    /// The Contact IDs of the list's rows, by which a row keeps its check
+    /// when the list is filled again.
+    static ROWS: RefCell<Vec<String>> = const { RefCell::new(Vec::new()) };
 }
 
 /// The window message another instance posts to bring this one to the front.
@@ -356,7 +362,7 @@ fn create_list(w: &Window) -> HWND {
         list,
         LVM_SETEXTENDEDLISTVIEWSTYLE,
         0,
-        (LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER) as isize,
+        (LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER | LVS_EX_CHECKBOXES) as isize,
     );
     for (i, title) in [tr!(col_name), tr!(col_contact_id), tr!(col_transfer)]
         .iter()
@@ -446,6 +452,62 @@ pub fn list_select(list: HWND, index: usize) {
     send(list, LVM_ENSUREVISIBLE, index, 0);
 }
 
+/// The state image of a row whose box is checked; a cleared one has 1.
+const CHECKED_IMAGE: u32 = 2;
+
+/// The checked rows of a list view with check boxes, in the list's order.
+pub fn list_checked(list: HWND) -> Vec<usize> {
+    let count = send(list, LVM_GETITEMCOUNT, 0, 0).max(0) as usize;
+    (0..count)
+        .filter(|&i| {
+            let state = send(list, LVM_GETITEMSTATE, i, LVIS_STATEIMAGEMASK as isize) as u32;
+            state >> 12 == CHECKED_IMAGE
+        })
+        .collect()
+}
+
+/// Checks or clears the box of a row.
+pub fn list_check(list: HWND, index: usize, checked: bool) {
+    let mut item: LVITEMW = unsafe { std::mem::zeroed() };
+    item.stateMask = LVIS_STATEIMAGEMASK;
+    item.state = (if checked { CHECKED_IMAGE } else { 1 }) << 12;
+    send(list, LVM_SETITEMSTATE, index, &item as *const _ as isize);
+}
+
+/// Clears every box of a list view.
+pub fn list_clear_checks(list: HWND) {
+    for index in list_checked(list) {
+        list_check(list, index, false);
+    }
+}
+
+/// Whether a click that a list view tells of (`NM_CLICK`, `NM_DBLCLK`) was on
+/// a row's check box, which it has changed then.
+pub fn on_check_box(list: HWND, lparam: LPARAM) -> bool {
+    let click = unsafe { &*(lparam as *const NMITEMACTIVATE) };
+    let mut hit: LVHITTESTINFO = unsafe { std::mem::zeroed() };
+    hit.pt = click.ptAction;
+    send(list, LVM_HITTEST, 0, &mut hit as *mut _ as isize);
+    hit.flags & LVHT_ONITEMSTATEICON != 0
+}
+
+/// The names of several recipients as one text: all of up to three, and of
+/// more the first two and how many there are besides.
+pub fn names_of(contacts: &[Contact]) -> String {
+    let join = |contacts: &[Contact]| {
+        let names: Vec<&str> = contacts.iter().map(|c| c.name.as_str()).collect();
+        names.join(", ")
+    };
+    if contacts.len() <= 3 {
+        return join(contacts);
+    }
+    tr!(
+        names_and_more,
+        names = join(&contacts[..2]),
+        n = contacts.len() - 2
+    )
+}
+
 fn set_cell(list: HWND, index: usize, column: usize, text: &str) {
     let mut text = wide(text);
     let mut item: LVITEMW = unsafe { std::mem::zeroed() };
@@ -461,6 +523,14 @@ pub fn refresh_list() {
     let list = LIST.get();
     let contacts = app::cfg().contacts;
     let selected = selected_index();
+    // The rows have moved if a recipient was added, renamed or removed.
+    let checked: Vec<String> = ROWS.with(|rows| {
+        let rows = rows.borrow();
+        list_checked(list)
+            .into_iter()
+            .filter_map(|i| rows.get(i).cloned())
+            .collect()
+    });
     send(list, LVM_DELETEALLITEMS, 0, 0);
     for (i, c) in contacts.iter().enumerate() {
         let mut name = wide(&c.name);
@@ -471,7 +541,11 @@ pub fn refresh_list() {
         send(list, LVM_INSERTITEMW, 0, &item as *const _ as isize);
         set_cell(list, i, 1, &short_id(&c.id));
         set_cell(list, i, COL_TRANSFER, &app::transfer_status(&c.id));
+        if checked.iter().any(|id| id.eq_ignore_ascii_case(&c.id)) {
+            list_check(list, i, true);
+        }
     }
+    ROWS.set(contacts.iter().map(|c| c.id.clone()).collect());
     if let Some(sel) = selected.filter(|&s| s < contacts.len()) {
         select_index(sel);
     } else if !contacts.is_empty() {
@@ -528,19 +602,42 @@ impl MainWindow {
         }
     }
 
+    /// Who a send goes to: the recipients whose boxes are checked, and the
+    /// selected one when none is.
+    fn recipients(&self, w: &Window) -> Option<Vec<Contact>> {
+        let contacts = app::cfg().contacts;
+        let checked: Vec<Contact> = list_checked(self.list)
+            .into_iter()
+            .filter_map(|i| contacts.get(i).cloned())
+            .collect();
+        if checked.is_empty() {
+            self.selected_contact(w).map(|contact| vec![contact])
+        } else {
+            Some(checked)
+        }
+    }
+
     fn send_item(&self, w: &Window, kind: Kind) {
-        let Some(contact) = self.selected_contact(w) else {
+        let Some(contacts) = self.recipients(w) else {
             return;
         };
-        let title = match kind {
-            Kind::File => tr!(pick_file_title, name = contact.name),
-            Kind::Folder => tr!(pick_folder_title, name = contact.name),
+        // The title says who gets the items, since boxes checked a while ago
+        // may be out of sight.
+        let title = match (contacts.as_slice(), kind) {
+            ([contact], Kind::File) => tr!(pick_file_title, name = contact.name),
+            ([contact], Kind::Folder) => tr!(pick_folder_title, name = contact.name),
+            (_, Kind::File) => tr!(pick_file_title_many, names = names_of(&contacts)),
+            (_, Kind::Folder) => tr!(pick_folder_title_many, names = names_of(&contacts)),
         };
         let paths = shell::pick_many(w.hwnd, &title, kind == Kind::Folder);
-        // Only the first window takes the focus, which then stays there while
-        // the others open.
-        for (i, path) in paths.into_iter().enumerate() {
-            app::start_send(&contact, path, kind, i == 0);
+        self.send_to(w, &contacts, &paths);
+    }
+
+    /// Sends the items, and clears the boxes then: the next send is another
+    /// choice.
+    fn send_to(&self, w: &Window, contacts: &[Contact], paths: &[PathBuf]) {
+        if !paths.is_empty() && app::start_sends(w.hwnd, contacts, paths) {
+            list_clear_checks(self.list);
         }
     }
 
@@ -789,25 +886,30 @@ impl MainWindow {
         if index >= 0 {
             self.select(index as usize);
         }
-        let Some(contact) = self.selected_contact(w) else {
+        // A drop on a row whose box is not checked is for that recipient
+        // alone, whoever else is checked.
+        let on_unchecked = index >= 0 && !list_checked(self.list).contains(&(index as usize));
+        let contacts = if on_unchecked {
+            self.selected_contact(w).map(|contact| vec![contact])
+        } else {
+            self.recipients(w)
+        };
+        let Some(contacts) = contacts else {
             return;
         };
-        if paths.len() > 1
-            && !confirm(
-                w.hwnd,
-                &trn!(drop_confirm, paths.len(), name = contact.name),
-            )
-        {
+        let question = match contacts.as_slice() {
+            [_] if paths.len() == 1 => None,
+            [contact] => Some(trn!(drop_confirm, paths.len(), name = contact.name)),
+            _ => Some(trn!(
+                drop_confirm_many,
+                paths.len(),
+                names = names_of(&contacts)
+            )),
+        };
+        if question.is_some_and(|question| !confirm(w.hwnd, &question)) {
             return;
         }
-        for (i, path) in paths.into_iter().enumerate() {
-            let kind = if path.is_dir() {
-                Kind::Folder
-            } else {
-                Kind::File
-            };
-            app::start_send(&contact, path, kind, i == 0);
-        }
+        self.send_to(w, &contacts, &paths);
     }
 }
 
@@ -940,7 +1042,7 @@ impl Handler for MainWindow {
         match hdr.code {
             // Like Enter: the recipient's actions menu, below the row.
             NM_DBLCLK => {
-                if self.selected().is_some() {
+                if self.selected().is_some() && !on_check_box(self.list, lparam) {
                     self.context_menu(w, None);
                 }
                 Some(0)

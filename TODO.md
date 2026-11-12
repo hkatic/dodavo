@@ -33,6 +33,10 @@ Remove an item in the commit that settles it. This file is public, so keep secre
 
 ## Medium
 
+- Try the check boxes of the recipient lists (the main window and Send with Dodavo) with NVDA, JAWS and Narrator on Windows: each row says whether it is checked, and Space says the change. Try them in the dark theme and on Windows 7 as well.
+- Try sending to several recipients by hand on the Mac: the selection with Shift, Command and VoiceOver's VO-Command-Return, the Send panel's message, a drop on a selected row, and the list in the question for items from the Dock and Services.
+- Try the selection of recipients by hand on Android with TalkBack, on the Recipients screen and when another app shares items, on API 26 as well.
+
 - **Change the Contact ID while a send waits for the receiver's verdict.** Such a send (all of its data went out, and the receiver has not said whether it has the item) cannot be ended by a cancel, so Change My Contact ID refuses while one exists (`net::IdentityError::Busy`), which can last until the receiver is back. End such a send at a change of the identity (the receiver cannot be asked under the new one), with a text that says that the receiver may have the item.
 - **Use user-initiated data transfer jobs on Android 14 and later.** For transfers that the user starts (Send, Accept): Google recommends them over `dataSync`, which Android 15 limits to 6 hours a day. Transfers that start by themselves have to stay with the service.
 - **Try the Android app on a phone with Android 8 to 10.** The emulator was the only one; such phones keep the shared storage on sdcardfs, not FUSE.
@@ -54,6 +58,8 @@ Remove an item in the commit that settles it. This file is public, so keep secre
 - **Check the notifications live on Windows 11.** Test scripts cannot see them, so watch them by hand.
 
 ## Low
+
+- Pack a folder once for several recipients. Each of its transfers makes its own archive now, and Android copies a shared item once for each recipient.
 
 - **Open the folder of a received folder on Android.** Show folder opens Android's view of the downloads, as there is no standard way to open a folder in a file manager.
 - **Make `android/check-elf.sh` work in Git Bash on Windows.** Given an APK there, it finds no native library in it, although they are there; given the `.so` files, it works.

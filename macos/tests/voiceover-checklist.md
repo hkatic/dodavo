@@ -15,6 +15,8 @@ names, not what is actually spoken. Write what fails into `ISSUES.md`.
 - [ ] The same when the window opens later: with "Hide when opened at login" on, start Dodavo with `--minimized` and without internet, and open the main window about 4 seconds after that. The window is read first, and "Offline – check your internet connection. Transfers within your local network still work." after it.
 - [ ] Interacting with the list reads a recipient's name, Contact ID and transfer, and the arrow keys move between recipients.
 - [ ] `Return` opens the Send panel for the selected recipient.
+- [ ] `VO-Command-Return` on a second recipient selects it as well, and VoiceOver says so; `Shift` with the arrow keys does the same without VoiceOver. `Return` then opens the Send panel, whose message reads the names of all selected recipients.
+- [ ] With several recipients selected, Edit Recipient…, Remove Recipient and Block Recipient are reported as unavailable, and the menu of the selection has only Send….
 - [ ] `VO-Shift-M` on a recipient opens its menu, with Send…, Edit Recipient…, Remove Recipient and Block Recipient.
 - [ ] Block Recipient asks first, with an alert that is read, and the recipient then leaves the list.
 - [ ] Command-B does the same as Block Recipient, and does nothing without a selected recipient.
@@ -33,6 +35,7 @@ names, not what is actually spoken. Write what fails into `ISSUES.md`.
 
 - [ ] The Send panel reads its message with the recipient's name. Files and folders can both be chosen, also several.
 - [ ] Finder: Services > Send with Dodavo appears for a selected file, and the recipient question is read.
+- [ ] The recipient question has a list that is read with its name, with the recipients selected in the main window selected in it; several can be selected with `VO-Command-Return`, and `Return` sends to all of them.
 - [ ] The recipient question sends to the recipient it shows, also when the list changed while it was open. If that recipient was removed or blocked meanwhile, an alert that is read says so, and nothing is sent.
 - [ ] Copying a file onto the Dock icon is not possible with VoiceOver, so the service must be enough.
 

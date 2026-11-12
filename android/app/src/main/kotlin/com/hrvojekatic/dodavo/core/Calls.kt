@@ -8,12 +8,15 @@ import kotlinx.serialization.Serializable
 sealed interface Call {
     @Serializable
     @SerialName("send")
-    data class Send(@SerialName("peer_id") val peerId: String, val paths: List<String>) : Call
+    data class Send(@SerialName("peer_ids") val peerIds: List<String>, val paths: List<String>) : Call
 
     /** Documents from Android's pickers, read where they are. */
     @Serializable
     @SerialName("send_documents")
-    data class SendDocuments(@SerialName("peer_id") val peerId: String, val documents: List<Document>) : Call
+    data class SendDocuments(
+        @SerialName("peer_ids") val peerIds: List<String>,
+        val documents: List<Document>,
+    ) : Call
 
     /** The URIs of the documents that sends still read. */
     @Serializable

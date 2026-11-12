@@ -16,7 +16,10 @@ targets and contrast, not what is actually spoken. Write what fails into
 
 - [ ] Swiping goes: status line, the text about having no recipients (or the recipients), Add recipient, the navigation bar.
 - [ ] Each recipient is read as one item with its name and short Contact ID, or its transfer; double-tap says "Send files" and opens the file picker.
-- [ ] The button after each recipient is read as "More options for" and the name; its menu reads Send files, Send a folder, Edit, Copy Contact ID, Block and Remove.
+- [ ] The button after each recipient is read as "More options for" and the name; its menu reads Send files, Send a folder, Select, Edit, Copy Contact ID, Block and Remove.
+- [ ] Select in a recipient's menu starts the selection: the top bar reads Clear selection, "1 selected" and Send, and each recipient is read as a check box, checked or not checked, which a double-tap changes. The number selected is read when it changes, without the focus moving.
+- [ ] Outside the selection, a recipient offers "Select" for a double-tap and hold, and in TalkBack's actions menu.
+- [ ] Send in the selection reads Send files and Send a folder; the chosen items appear on the Transfers screen once for each selected recipient. Clear selection and Back leave the selection, and Add recipient is back.
 - [ ] Remove and Block ask first; the dialog is read with its title and text, and the recipient then leaves the list.
 - [ ] More options at the top reads Share my Contact ID, Copy my Contact ID, Settings, Help and About Dodavo. Copying is confirmed (by Android on 13 and later).
 
@@ -30,6 +33,7 @@ targets and contrast, not what is actually spoken. Write what fails into
 - [ ] The file picker opens, and a chosen file appears on the Transfers screen as a transfer of its own.
 - [ ] Send a folder opens the folder picker; Android's question about access is read.
 - [ ] Sharing from another app opens Send files with the recipients, and a double-tap sends.
+- [ ] There, Select at the top turns the recipients into check boxes; Send is unavailable until one is checked, and then sends to all that are.
 
 ## Incoming transfer
 

@@ -32,11 +32,13 @@ class Sending(
     private val staging = File(context.noBackupFilesDir, "tmp/staging")
 
     /**
-     * Sends each of the documents [uris] to [peerId]; an error text if that
-     * could not be done. [shared]: another app shared them, and they can be
-     * read only while this screen lasts, so they go as copies.
+     * Sends each of the documents [uris] to each of [peerIds]; an error text
+     * if that could not be done. [shared]: another app shared them, and they
+     * can be read only while this screen lasts, so they go as copies. A copy
+     * belongs to the transfer that sends it, which deletes it, so every
+     * recipient gets one of their own.
      */
-    suspend fun sendFiles(peerId: String, uris: List<Uri>, shared: Boolean = false): String? {
+    suspend fun sendFiles(peerIds: List<String>, uris: List<Uri>, shared: Boolean = false): String? {
         if (!shared) makeRoom(uris.size)
         val (inPlace, toCopy) = withContext(io) {
             uris.partition { !shared && readsInPlace(it) }
@@ -47,27 +49,42 @@ class Sending(
                 Document(uri = uri.toString(), name = name, modified = modified)
             }
         }
-        val paths = withContext(io) {
+        // For each item, its copies in the order of the recipients.
+        val copied = withContext(io) {
             copies { made ->
                 toCopy.map { uri ->
-                    val folder = newFolder().also(made::add)
                     val (name, modified) = describe(uri)
-                    val file = File(folder, name)
-                    copy(uri, file, modified)
-                    file.path
+                    var first: File? = null
+                    peerIds.map {
+                        val file = File(newFolder().also(made::add), name)
+                        // The item is read once; the other copies are made of the first.
+                        val from = first
+                        if (from == null) {
+                            copy(uri, file, modified)
+                            first = file
+                        } else {
+                            from.copyTo(file)
+                            modified?.takeIf { it > 0 }?.let(file::setLastModified)
+                        }
+                        file.path
+                    }
                 }
             }
         }
-        if (paths == null) {
+        if (copied == null) {
             documents.forEach { Documents.release(it.uri) }
             return context.getString(R.string.item_unreadable)
         }
-        if (documents.isNotEmpty()) repository.sendDocuments(peerId, documents)?.let { return it }
-        return if (paths.isNotEmpty()) repository.send(peerId, paths) else null
+        if (documents.isNotEmpty()) repository.sendDocuments(peerIds, documents)?.let { return it }
+        if (copied.isEmpty()) return null
+        peerIds.forEachIndexed { recipient, peerId ->
+            repository.send(listOf(peerId), copied.map { it[recipient] })?.let { return it }
+        }
+        return null
     }
 
-    /** Sends the folder [tree] (from the system's folder picker) to [peerId], packed where it is. */
-    suspend fun sendFolder(peerId: String, tree: Uri): String? {
+    /** Sends the folder [tree] (from the system's folder picker) to each of [peerIds], packed where it is. */
+    suspend fun sendFolder(peerIds: List<String>, tree: Uri): String? {
         val document = withContext(io) {
             runCatching {
                 val rootId = DocumentsContract.getTreeDocumentId(tree)
@@ -77,7 +94,7 @@ class Sending(
                 Document(uri = tree.toString(), name = name, modified = modified, items = items)
             }.getOrNull()
         } ?: return context.getString(R.string.item_unreadable)
-        return repository.sendDocuments(peerId, listOf(document))
+        return repository.sendDocuments(peerIds, listOf(document))
     }
 
     /**

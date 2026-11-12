@@ -381,8 +381,36 @@ pub fn peer_name(id: &str, fallback: &str) -> (String, bool) {
     })
 }
 
+/// Starts sending each of `paths` to each of `contacts`, every one as a
+/// transfer of its own, and says whether it did: nothing starts when one of
+/// the Contact IDs is not valid, which `owner` then shows.
+pub fn start_sends(owner: HWND, contacts: &[Contact], paths: &[PathBuf]) -> bool {
+    let invalid = contacts
+        .iter()
+        .find(|c| identity::parse_contact_id(&c.id).is_none());
+    if let Some(contact) = invalid {
+        ui::error(owner, &tr!(contact_invalid, name = contact.name));
+        return false;
+    }
+    // Only the first window takes the focus, which then stays there while the
+    // others open.
+    let mut first = true;
+    for contact in contacts {
+        for path in paths {
+            let kind = if path.is_dir() {
+                Kind::Folder
+            } else {
+                Kind::File
+            };
+            start_send(contact, path.clone(), kind, first);
+            first = false;
+        }
+    }
+    true
+}
+
 /// Starts sending `path`. Its progress window takes the focus if `activate`.
-pub fn start_send(contact: &Contact, path: PathBuf, kind: Kind, activate: bool) {
+fn start_send(contact: &Contact, path: PathBuf, kind: Kind, activate: bool) {
     let Some(to) = identity::parse_contact_id(&contact.id) else {
         ui::error(main_window(), &tr!(contact_invalid, name = contact.name));
         return;

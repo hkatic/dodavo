@@ -69,6 +69,9 @@ pub const SL: Strings = Strings {
     select_recipient_first: "Najprej izberite prejemnika na seznamu.",
     pick_file_title: "Izberite eno ali več datotek za pošiljanje – prejemnik: {name}",
     pick_folder_title: "Izberite eno ali več map za pošiljanje – prejemnik: {name}",
+    pick_file_title_many: "Izberite eno ali več datotek za pošiljanje – prejemniki: {names}",
+    pick_folder_title_many: "Izberite eno ali več map za pošiljanje – prejemniki: {names}",
+    names_and_more: "{names} in še {n}",
     remove_confirm: "Ali želite odstraniti »{name}« s seznama prejemnikov?",
     block_confirm: "Ali želite blokirati »{name}«?\n\n\
         Dodavo bo odslej brez vprašanja zavrnil vse, kar vam pošlje ta oseba. \
@@ -421,7 +424,7 @@ pub const SL: Strings = Strings {
     explorer_menu: "Dodaj Dodavo v menije Raziskova&lca",
     send_to_title: "Pošiljanje s programom Dodavo",
     send_to_items_label: "&Elementi:",
-    send_to_recipient_label: "&Prejemnik:",
+    send_to_recipient_label: "&Prejemniki:",
     send_to_send: "P&ošlji",
     send_to_waiting: "Izberite prejemnika za to, kar ste izbrali v Raziskovalcu.",
     send_to_failed: "Dodavo se ne odziva, zato mu izbranih elementov ni bilo mogoče predati. Poskusite znova.",
@@ -449,6 +452,12 @@ pub const SL: Strings = Strings {
         two: "Ali želite poslati {n} elementa prejemniku ({name})? Vsak element se pošlje kot ločen prenos.",
         few: "Ali želite poslati {n} elemente prejemniku ({name})? Vsak element se pošlje kot ločen prenos.",
         other: "Ali želite poslati {n} elementov prejemniku ({name})? Vsak element se pošlje kot ločen prenos.",
+    },
+    drop_confirm_many: Plural {
+        one: "Ali želite poslati {n} element vsakemu od teh prejemnikov: {names}? Element se vsakemu prejemniku pošlje kot ločen prenos.",
+        two: "Ali želite poslati {n} elementa vsakemu od teh prejemnikov: {names}? Vsak element se vsakemu prejemniku pošlje kot ločen prenos.",
+        few: "Ali želite poslati {n} elemente vsakemu od teh prejemnikov: {names}? Vsak element se vsakemu prejemniku pošlje kot ločen prenos.",
+        other: "Ali želite poslati {n} elementov vsakemu od teh prejemnikov: {names}? Vsak element se vsakemu prejemniku pošlje kot ločen prenos.",
     },
     exit_instruction: Plural {
         one: "{n} prenos še poteka.",

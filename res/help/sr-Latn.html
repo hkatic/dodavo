@@ -190,13 +190,17 @@
 <p>Datoteke i fascikle možete da prevučete iz Istraživača datoteka i otpustite ih na osobu na listi primalaca. Ako odjednom otpustite više stavki, Dodavo traži potvrdu; svaka stavka se zatim šalje kao zaseban prenos sa sopstvenim prozorom napretka.</p>
 <p>Istovremeno možete da pokrenete koliko god želite prenosa, istoj osobi ili različitim osobama.</p>
 
+<h3 id="send-to-several">Slanje većem broju osoba</h3>
+<p>Da biste iste stavke poslali većem broju osoba odjednom, potvrdite njihova polja za potvrdu na listi primalaca: tasterima sa strelicama dođite do svake osobe i pritisnite <kbd>razmaknicu</kbd> ili kliknite na polje ispred imena. Zatim pošaljite datoteku ili fasciklu kao i inače ili otpustite stavke na jednu od potvrđenih osoba. Dodavo šalje svima čije je polje potvrđeno, a izabranoj osobi kada nije potvrđeno nijedno. Prozor u kojem birate datoteke u naslovu navodi primaoce, a nakon otpuštanja stavki Dodavo traži da ih potvrdite.</p>
+<p>Svaka osoba za svaku stavku dobija zaseban prenos sa sopstvenim prozorom napretka, pa jedna osoba može da odbije prenos ili da bude odsutna dok ostale primaju stavku. Kada prenosi počnu, polja se poništavaju. Otpuštanje stavki na osobu čije polje nije potvrđeno šalje samo toj osobi. Uređivanje, uklanjanje i blokiranje odnose se na izabranu osobu, bez obzira na potvrđena polja. Prozor <span class="ui">Slanje programom Dodavo</span> ima ista polja: pogledajte <a href="#send-from-explorer">Slanje iz Istraživača datoteka</a>.</p>
+
 <h3 id="send-from-explorer">Slanje iz Istraživača datoteka</h3>
 <p>Datoteke i fascikle možete da šaljete direktno iz Istraživača datoteka, čak i kada Dodavo nije pokrenut:</p>
 <ol>
 <li>U Istraživaču datoteka izaberite jednu ili više datoteka ili fascikli.</li>
 <li>Pritisnite <kbd>Shift</kbd>+<kbd>F10</kbd> da biste otvorili kontekstualni meni ili kliknite desnim tasterom miša na izabrano. U operativnom sistemu Windows 11 desni klik prvo prikazuje kraći meni: tamo izaberite <span class="ui">Prikaži još opcija</span>. <kbd>Shift</kbd>+<kbd>F10</kbd> odmah otvara ceo meni.</li>
 <li>Izaberite <span class="ui">Pošalji programom Dodavo</span> (<kbd>D</kbd>) ili izaberite <span class="ui">Pošalji u</span>, pa <span class="ui">Dodavo</span>.</li>
-<li>Otvara se prozor <span class="ui">Slanje programom Dodavo</span>. Kaže koliko ste stavki izabrali, a fokus je na listi <span class="ui">Primalac</span>. Tasterima sa strelicama izaberite osobu i pritisnite <kbd>Enter</kbd> ili aktivirajte dugme <span class="ui">Pošalji</span>.</li>
+<li>Otvara se prozor <span class="ui">Slanje programom Dodavo</span>. Kaže koliko ste stavki izabrali, a fokus je na listi <span class="ui">Primaoci</span>. Tasterima sa strelicama izaberite osobu i pritisnite <kbd>Enter</kbd> ili aktivirajte dugme <span class="ui">Pošalji</span>. Da biste poslali većem broju osoba, prvo potvrdite svaku od njih <kbd>razmaknicom</kbd>; stavke se tada šalju svima čije je polje potvrđeno.</li>
 </ol>
 <p>Svaka stavka se šalje kao zaseban prenos sa sopstvenim prozorom napretka. Ništa se ne šalje pre nego što izaberete <span class="ui">Pošalji</span>; <kbd>Esc</kbd> ili <span class="ui">Otkaži</span> zatvara prozor bez slanja. Da biste pročitali šta ste izabrali, pritisnite <kbd>Alt</kbd>+<kbd>S</kbd> i koristite tastere sa strelicama u polju <span class="ui">Stavke</span>. Ako još nemate primaoce, prozor to kaže, a fokus je na dugmetu <span class="ui">Dodaj primaoca…</span> (<kbd>Alt</kbd>+<kbd>A</kbd>). Stavke koje pošaljete Dodavu dok je prozor otvoren dodaju se u njega.</p>
 <p>Kontekstualni meni nudi <span class="ui">Pošalji programom Dodavo</span> za najviše 100 izabranih stavki. Za više stavki koristite <span class="ui">Pošalji u</span> ili pošaljite fasciklu u kojoj se nalaze. Obe stavke možete da uklonite opcijom <span class="ui">Dodaj Dodavo u menije Istraživača datoteka</span> u <a href="#settings">postavkama</a>.</p>
@@ -397,6 +401,7 @@
 <tbody>
 <tr><td><kbd>Ctrl</kbd>+<kbd>O</kbd></td><td>Slanje datoteke izabranoj osobi</td></tr>
 <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>O</kbd></td><td>Slanje fascikle izabranoj osobi</td></tr>
+<tr><td><kbd>razmaknica</kbd> na listi primalaca</td><td>Potvrđivanje ili poništavanje polja izabrane osobe; šalje se svima čije je polje potvrđeno</td></tr>
 <tr><td><kbd>Ctrl</kbd>+<kbd>N</kbd></td><td>Dodavanje primaoca</td></tr>
 <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>C</kbd></td><td>Kopiranje vašeg ID-a kontakta u međuspremnik</td></tr>
 <tr><td><kbd>F2</kbd></td><td>Uređivanje izabranog primaoca</td></tr>
@@ -449,6 +454,7 @@
 <tr><td><kbd>Alt</kbd>+<kbd>S</kbd></td><td>Prelazak na listu izabranih stavki</td></tr>
 <tr><td><kbd>Alt</kbd>+<kbd>P</kbd></td><td>Prelazak na listu primalaca</td></tr>
 <tr><td><kbd>Alt</kbd>+<kbd>A</kbd></td><td>Dodavanje primaoca</td></tr>
+<tr><td><kbd>razmaknica</kbd> na listi primalaca</td><td>Potvrđivanje ili poništavanje polja izabrane osobe; stavke se šalju svima čije je polje potvrđeno</td></tr>
 <tr><td><kbd>Alt</kbd>+<kbd>O</kbd> ili <kbd>Enter</kbd></td><td>Slanje stavki izabranoj osobi</td></tr>
 <tr><td><kbd>Esc</kbd></td><td>Zatvaranje prozora bez slanja</td></tr>
 </tbody>
@@ -559,7 +565,7 @@
 <p>Ne, osim ako ga sami postavite. Dodavo sam ne ograničava veličinu datoteke ni fascikle; jedina ograničenja su slobodan prostor na disku koji prima i, na disku sa sistemom datoteka FAT32 (mnogi USB fleš diskovi i memorijske kartice), to da nijedna datoteka ne može biti od 4 GB ili veća. Za fasciklu je računaru koji prima potrebno mesta i za arhivu i za raspakovanu fasciklu, dakle otprilike dvostruka veličina fascikle dok traje raspakivanje (osim ako zadržava samo ZIP datoteku). Prozor Dolazni prenos kaže da li ima dovoljno prostora pre nego što prihvatite. Kako da postavite najveću veličinu stavke koju drugi mogu da vam pošalju, pogledajte u odeljku <a href="#size-limit">Ograničavanje veličine onoga što primate</a>.</p>
 
 <h3 id="faq-several">Da li mogu da pošaljem više stavki odjednom ili većem broju osoba?</h3>
-<p>Da. Možete da pokrenete koliko god prenosa želite, istoj osobi ili različitim osobama, a svaki ima sopstveni prozor napretka. Da biste poslali više datoteka ili fascikli u jednom potezu, prevucite ih iz Istraživača datoteka na osobu na listi primalaca; nakon što potvrdite, svaka stavka se šalje kao zaseban prenos. Pogledajte <a href="#drag-and-drop">Prevlačenje stavki na osobu</a>. Možete i da ih izaberete u Istraživaču datoteka i pošaljete odatle: pogledajte <a href="#send-from-explorer">Slanje iz Istraživača datoteka</a>. Kolona <span class="ui">Prenos</span> na listi primalaca i meni <span class="ui">Prenosi</span> prate ih sve.</p>
+<p>Da. Možete da pokrenete koliko god prenosa želite, istoj osobi ili različitim osobama, a svaki ima sopstveni prozor napretka. Da biste poslali više datoteka ili fascikli u jednom potezu, prevucite ih iz Istraživača datoteka na osobu na listi primalaca; nakon što potvrdite, svaka stavka se šalje kao zaseban prenos. Pogledajte <a href="#drag-and-drop">Prevlačenje stavki na osobu</a>. Možete i da ih izaberete u Istraživaču datoteka i pošaljete odatle: pogledajte <a href="#send-from-explorer">Slanje iz Istraživača datoteka</a>. Kolona <span class="ui">Prenos</span> na listi primalaca i meni <span class="ui">Prenosi</span> prate ih sve. Da biste iste stavke poslali većem broju osoba odjednom, pogledajte <a href="#send-to-several">Slanje većem broju osoba</a>.</p>
 
 <h3 id="faq-where">Gde se čuvaju primljene datoteke?</h3>
 <p>U vašoj fascikli Preuzimanja, osim ako ste u postavkama pod <span class="ui">Uvek čuvaj primljene datoteke u ovoj fascikli</span> izabrali drugu. Ako opozovete izbor te opcije, Dodavo pita svaki put. Kad god se otvori prozor Dolazni prenos, fasciklu za taj prenos možete da promenite pod <span class="ui">Sačuvaj u:</span>. Ako stavka istog naziva tamo već postoji, nova dobija broj dodat nazivu; ništa se nikada ne zamenjuje. Pogledajte <a href="#incoming-window">Prozor Dolazni prenos</a> i <a href="#settings-receiving">Primanje datoteka</a>.</p>

@@ -16,6 +16,10 @@
     <string name="menu_about">"About Dodavo"</string>
     <string name="action_send_files">"Send files"</string>
     <string name="action_send_folder">"Send a folder"</string>
+    <string name="action_select">"Select"</string>
+    <string name="action_send">"Send"</string>
+    <string name="selected_count">"%1$s selected"</string>
+    <string name="clear_selection">"Clear selection"</string>
     <string name="action_edit">"Edit"</string>
     <string name="action_copy_id">"Copy Contact ID"</string>
     <string name="action_block">"Block"</string>

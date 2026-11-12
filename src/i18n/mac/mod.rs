@@ -165,6 +165,8 @@ super::strings! {
         block,
         block_sender,
         send_panel_message,
+        send_panel_message_many,
+        names_and_more,
         send_panel_prompt,
         pick_recipient_title,
         pick_recipient_text,
@@ -276,6 +278,7 @@ super::strings! {
         quit_instruction,
         change_id_transfers,
         drop_confirm_many,
+        drop_confirm_recipients,
         transfers_in_progress,
     }
 }
