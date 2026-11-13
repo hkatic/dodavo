@@ -3362,9 +3362,19 @@ mod tests {
         let ctl = shared.register(1, false);
         ctl.cancel();
         assert!(ctl.cancelling(), "shutdown waits");
-        let waited =
-            tokio::time::timeout(Duration::from_secs(1), cancelled(&shared, 1, &ctl)).await;
-        assert!(waited.is_err(), "the transfer goes on");
+        // The save is synced to the disk, which can take seconds where the
+        // disk is slow (GitHub's Mac runner): it gets the time it needs.
+        let deadline = Instant::now() + Duration::from_secs(30);
+        {
+            let waiting = cancelled(&shared, 1, &ctl);
+            tokio::pin!(waiting);
+            while ctl.cancelling() && Instant::now() < deadline {
+                let waited = tokio::time::timeout(Duration::from_millis(100), &mut waiting).await;
+                assert!(waited.is_err(), "the transfer goes on");
+            }
+            let waited = tokio::time::timeout(Duration::from_millis(300), &mut waiting).await;
+            assert!(waited.is_err(), "the transfer goes on");
+        }
         assert!(!ctl.cancelling(), "shutdown no longer waits");
         assert!(session::records(&dir)[0].cancel_pending());
         assert!(cancel_waits_told(&events, 1), "the UI is told");
@@ -3390,13 +3400,25 @@ mod tests {
         shared.add_session(receive.clone());
         let ctl = shared.register(2, false);
         ctl.cancel();
-        let waited =
-            tokio::time::timeout(Duration::from_secs(1), cancelled(&shared, 2, &ctl)).await;
-        assert!(waited.is_err(), "left to the last step");
+        // Until the record on the disk says that the transfer has ended.
+        let ended = || {
+            let stored = session::records(&dir);
+            stored.iter().any(|r| r.token == [2; 16] && r.ended)
+        };
+        let deadline = Instant::now() + Duration::from_secs(30);
+        {
+            let waiting = cancelled(&shared, 2, &ctl);
+            tokio::pin!(waiting);
+            while !ended() && Instant::now() < deadline {
+                let waited = tokio::time::timeout(Duration::from_millis(100), &mut waiting).await;
+                assert!(waited.is_err(), "left to the last step");
+            }
+            let waited = tokio::time::timeout(Duration::from_millis(300), &mut waiting).await;
+            assert!(waited.is_err(), "left to the last step");
+        }
         assert!(ctl.cancelling(), "which ends the transfer soon");
         assert!(!cancel_waits_told(&events, 2), "nothing to tell the UI");
-        let stored = session::records(&dir);
-        assert!(stored.iter().find(|r| r.token == [2; 16]).unwrap().ended);
+        assert!(ended());
         std::fs::remove_dir_all(&dir).ok();
     }
 
