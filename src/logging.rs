@@ -1690,11 +1690,13 @@ mod tests {
 
     #[test]
     fn causes_keep_texts_out() {
-        let io = io::Error::from_raw_os_error(5);
+        // Access denied: ERROR_ACCESS_DENIED on Windows, EACCES elsewhere.
+        let denied = if cfg!(windows) { 5 } else { 13 };
+        let io = io::Error::from_raw_os_error(denied);
         let error = anyhow::Error::new(io).context(r"Cannot read C:\Users\ana\plan.docx");
         let text = cause(&error);
         assert!(
-            text.starts_with("<message>: PermissionDenied (os error 5)"),
+            text.starts_with(&format!("<message>: PermissionDenied (os error {denied})")),
             "{text}"
         );
         assert!(!text.contains("ana"));
