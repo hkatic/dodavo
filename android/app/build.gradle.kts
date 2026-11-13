@@ -136,6 +136,18 @@ val buildRust = tasks.register<Exec>("buildRust") {
         "-o", output.get().asFile.path,
         "build", "--release", "--locked", "-p", "dodavo-android",
     )
+    // cargo-ndk copies every library that cargo made, also those of
+    // dependencies that are built as libraries of their own as well (iroh,
+    // iroh-relay), which libdodavo.so has in it and does not load.
+    val libraries = output.map { dir ->
+        dir.asFileTree.matching {
+            include("**/*.so")
+            exclude("**/libdodavo.so")
+        }
+    }
+    doLast {
+        libraries.get().forEach { it.delete() }
+    }
 }
 
 tasks.named("preBuild") {

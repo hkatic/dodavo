@@ -2,8 +2,9 @@
 # Checks the native libraries of the Android app, as installer/check-imports.ps1
 # does for Windows and macos/check-floor.sh for the Mac: each one's segments are
 # aligned to 16 KB pages (which Google Play requires, and Android 15 and later
-# devices with such pages need), it needs only the system's own libraries, and
-# both ABIs are there. Fails when something is wrong.
+# devices with such pages need), it needs only the system's own libraries,
+# both ABIs are there, and an app holds none of the libraries that cargo
+# builds beside libdodavo.so. Fails when something is wrong.
 #
 #   android/check-elf.sh <app.aab | app.apk | libdodavo.so>...
 #
@@ -57,6 +58,13 @@ for input in "$@"; do
             done
             while IFS= read -r so; do
                 check_so "$so" "$(basename "$input"): ${so#"$dir"/}"
+                # A library named as cargo names what it builds for a
+                # dependency (libiroh-<hash>.so) is one that the app would
+                # carry and never load: libdodavo.so has all of Rust's code
+                # (see buildRust in android/app/build.gradle.kts).
+                if [[ "$(basename "$so")" =~ -[0-9a-f]{16}\.so$ ]]; then
+                    fail "$input has ${so#"$dir"/}, which the app does not use"
+                fi
             done < <(find "$dir" -name '*.so')
             ;;
         *)
