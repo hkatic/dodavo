@@ -16,6 +16,8 @@ struct Started: Decodable {
     let startHidden: Bool
     let showInMenuBar: Bool
     let openAtLogin: Bool
+    /// The longest chat message that can be written, in characters.
+    let chatMaxChars: Int
     let languages: [[String]]
 }
 
@@ -89,6 +91,69 @@ struct OfferInfo: Decodable {
     let overLimit: String?
 }
 
+/// What the Incoming Transfer window says of the offers of one sender that
+/// wait for one answer.
+struct OffersInfo: Decodable {
+    let headline: String
+    /// The item, or what several come to.
+    let description: String
+    /// Each item, when there are several.
+    let items: [String]
+    /// Says that something here is over the sender's limit, when it is.
+    let overLimit: String?
+    let space: SpaceInfo
+}
+
+/// A message of a chat. The window writes its time as this Mac does.
+struct ChatEntry: Decodable, Equatable {
+    let time: UInt64
+    let mine: Bool
+    /// A message of the user's that could not be sent.
+    var failed: Bool
+    let text: String
+}
+
+/// A chat as its window shows it.
+struct ChatInfo: Decodable {
+    /// The other person's Contact ID, as the chat is known by.
+    let peer: String
+    let name: String
+    /// Whether the other person is a recipient.
+    let known: Bool
+    let title: String
+    /// For a person who is not a recipient: who it is.
+    let warning: String?
+    let entries: [ChatEntry]
+    /// Which change of the chats these messages are after. What the library
+    /// says of a change carries its number, and a window leaves out what it
+    /// has already: one that opens for a message has that message.
+    let seq: UInt64
+    /// The longest message that can be written, in characters.
+    let maxChars: Int
+}
+
+/// A sound to play: the built-in one of `event`, or the user's `file` in its
+/// place.
+struct SoundInfo: Decodable {
+    let event: String
+    let file: String?
+}
+
+/// An event that has a sound, as the settings list it: `kind` is "default"
+/// (the built-in sound), "off" or "file", and `shown` says it in words.
+struct SoundSetting: Decodable {
+    let event: String
+    let name: String
+    let kind: String
+    let file: String?
+    let shown: String
+}
+
+struct SoundSettings: Decodable {
+    let on: Bool
+    let events: [SoundSetting]
+}
+
 struct Settings: Codable {
     var myName: String
     var openAtLogin: Bool
@@ -112,6 +177,12 @@ struct Settings: Codable {
     var limitNumber: String
     var limitUnit: String
     var overLimit: String
+    /// Who may send chat messages: "anyone" (who is not blocked) or "recipients".
+    var chatFrom: String
+    /// Tell the other person of a chat when the user is writing a message.
+    var sendTyping: Bool
+    /// Say aloud, and with a sound, that the other person is writing one.
+    var announceTyping: Bool
 }
 
 /// A message from Rust. An unknown one is decoded as nothing at all.
@@ -132,10 +203,29 @@ enum Message: Decodable {
     case updateProgress(String, fraction: Double?)
     case updateReady(String)
     case updateFailed(String)
+    /// A chat message arrived, and is in the chat with `peer`. `said` is the
+    /// message for the status line and for VoiceOver, `notice` what tells of
+    /// it while the chat is not in front, and `gone` how many of the oldest
+    /// messages left the chat to make room.
+    case chatMessage(
+        peer: String, name: String, seq: UInt64, entry: ChatEntry, gone: Int, said: String,
+        problem: String?, notice: Notice)
+    /// A message of the user's is in the chat with `peer`, on its way.
+    case chatAdded(peer: String, seq: UInt64, entry: ChatEntry, gone: Int, problem: String?)
+    /// A message of the user's was not delivered: the one at `index` of the
+    /// chat with `peer`, where its window still has it.
+    case chatFailed(
+        peer: String, name: String, seq: UInt64, index: Int?, text: String, said: String,
+        notice: Notice)
+    /// The other person of the chat with `peer` is typing (`text` says so),
+    /// or has stopped.
+    case chatTyping(peer: String, text: String?, announce: Bool, sound: SoundInfo?)
+    case sound(SoundInfo)
 
     private enum Keys: String, CodingKey {
         case type, online, text, row, announce, id, notice, path, offer, busy
         case headline, notes, manual, fraction
+        case peer, name, seq, entry, gone, said, problem, index, sound
     }
 
     init(from decoder: Decoder) throws {
@@ -187,6 +277,40 @@ enum Message: Decodable {
             self = .updateReady(try c.decode(String.self, forKey: .path))
         case "update_failed":
             self = .updateFailed(try c.decode(String.self, forKey: .text))
+        case "chat_message":
+            self = .chatMessage(
+                peer: try c.decode(String.self, forKey: .peer),
+                name: try c.decode(String.self, forKey: .name),
+                seq: try c.decode(UInt64.self, forKey: .seq),
+                entry: try c.decode(ChatEntry.self, forKey: .entry),
+                gone: try c.decode(Int.self, forKey: .gone),
+                said: try c.decode(String.self, forKey: .said),
+                problem: try c.decodeIfPresent(String.self, forKey: .problem),
+                notice: try c.decode(Notice.self, forKey: .notice))
+        case "chat_added":
+            self = .chatAdded(
+                peer: try c.decode(String.self, forKey: .peer),
+                seq: try c.decode(UInt64.self, forKey: .seq),
+                entry: try c.decode(ChatEntry.self, forKey: .entry),
+                gone: try c.decode(Int.self, forKey: .gone),
+                problem: try c.decodeIfPresent(String.self, forKey: .problem))
+        case "chat_failed":
+            self = .chatFailed(
+                peer: try c.decode(String.self, forKey: .peer),
+                name: try c.decode(String.self, forKey: .name),
+                seq: try c.decode(UInt64.self, forKey: .seq),
+                index: try c.decodeIfPresent(Int.self, forKey: .index),
+                text: try c.decode(String.self, forKey: .text),
+                said: try c.decode(String.self, forKey: .said),
+                notice: try c.decode(Notice.self, forKey: .notice))
+        case "chat_typing":
+            self = .chatTyping(
+                peer: try c.decode(String.self, forKey: .peer),
+                text: try c.decodeIfPresent(String.self, forKey: .text),
+                announce: try c.decode(Bool.self, forKey: .announce),
+                sound: try c.decodeIfPresent(SoundInfo.self, forKey: .sound))
+        case "sound":
+            self = .sound(try SoundInfo(from: decoder))
         default:
             throw DecodingError.dataCorruptedError(
                 forKey: .type, in: c, debugDescription: "an unknown message")
@@ -322,6 +446,15 @@ enum Core {
     static func blocked() -> [Contact] {
         call("blocked") ?? []
     }
+
+    /// The built-in sound of `event`: a WAV file that stays in memory.
+    static func builtInSound(_ event: String) -> Data? {
+        var length = 0
+        guard let bytes = dodavo_sound(event, &length), length > 0 else { return nil }
+        return Data(
+            bytesNoCopy: UnsafeMutableRawPointer(mutating: bytes), count: length,
+            deallocator: .none)
+    }
 }
 
 /// The texts of the user interface.
@@ -336,22 +469,34 @@ enum L {
         table[key.rawValue] ?? key.rawValue
     }
 
+    /// Fills the `{name}` placeholders of `text`, each once: what is filled
+    /// in is not looked at again, so a name or a message that has braces of
+    /// its own stays as it was written.
+    private static func fill(_ text: String, _ values: [String: String]) -> String {
+        var out = ""
+        var rest = Substring(text)
+        while let open = rest.firstIndex(of: "{") {
+            out += rest[..<open]
+            let after = rest[rest.index(after: open)...]
+            if let close = after.firstIndex(of: "}"), let value = values[String(after[..<close])] {
+                out += value
+                rest = after[after.index(after: close)...]
+            } else {
+                out += "{"
+                rest = after
+            }
+        }
+        return out + rest
+    }
+
     /// The text with its `{name}` placeholders filled in.
     static func f(_ key: K, _ values: [String: String]) -> String {
-        var text = L[key]
-        for (name, value) in values {
-            text = text.replacingOccurrences(of: "{\(name)}", with: value)
-        }
-        return text
+        fill(L[key], values)
     }
 
     /// The text for the number `n`.
     static func plural(_ key: PluralK, _ n: Int, _ values: [String: String] = [:]) -> String {
-        var text = Core.call("plural", ["key": key.rawValue, "n": n], as: String.self) ?? ""
-        for (name, value) in values {
-            text = text.replacingOccurrences(of: "{\(name)}", with: value)
-        }
-        return text
+        fill(Core.call("plural", ["key": key.rawValue, "n": n], as: String.self) ?? "", values)
     }
 
     /// `Settings…` on the macOS that calls it that, otherwise `Preferences…`.

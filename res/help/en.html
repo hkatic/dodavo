@@ -223,7 +223,7 @@
 <dt><span class="ui">Save to:</span> (<kbd>Alt</kbd>+<kbd>S</kbd>)</dt>
 <dd>The folder the item will be saved in. With <span class="ui">Always save received files to this folder</span> on in Settings, it is the folder from that option, which is your Downloads folder unless you chose another one. With that option off, it is the folder you used last time, or your Downloads folder. You can type a different folder, or use <span class="ui">Browse…</span> (<kbd>Alt</kbd>+<kbd>B</kbd>) to choose one.</dd>
 <dt>Free disk space</dt>
-<dd>A sentence below the folder says whether there is enough free space on that drive, how much is needed and how much is available. A folder that is unpacked needs room both for the download and for unpacking; a folder that you keep only as a ZIP file needs room for the ZIP file (see <span class="ui">After receiving a folder</span> in <a href="#settings-receiving">Settings</a>). The sentence is updated when you choose a folder with Browse or leave the folder field. On a drive with the FAT32 file system, such as many USB sticks and memory cards, no file can be 4 GB or larger: if the transfer would save such a file there, the sentence says so, and you need to choose a folder on another drive.</dd>
+<dd>A sentence below the folder says whether there is enough free space on that drive, how much is needed and how much is available. A folder that is unpacked needs room both for the download and for unpacking; a folder that you keep only as a ZIP file needs room for the ZIP file (see <span class="ui">After receiving a folder</span> in <a href="#settings-receiving">Settings</a>). What the transfers that you are still receiving have left to arrive is counted too: when that leaves too little room, the sentence says how much they will take. The sentence is updated when you choose a folder with Browse or leave the folder field. On a drive with the FAT32 file system, such as many USB sticks and memory cards, no file can be 4 GB or larger: if the transfer would save such a file there, the sentence says so, and you need to choose a folder on another drive.</dd>
 <dt><span class="ui">Accept</span> (<kbd>Alt</kbd>+<kbd>A</kbd>) and <span class="ui">Decline</span> (<kbd>Alt</kbd>+<kbd>D</kbd>)</dt>
 <dd>When the window opens, the focus is on <span class="ui">Accept</span>, so pressing <kbd>Enter</kbd> accepts; screen readers usually read the text of the window first, from the bold line to the free disk space sentence. Pressing <kbd>Esc</kbd> or closing the window declines.</dd>
 <dt><span class="ui">Block Sender</span> (<kbd>Alt</kbd>+<kbd>K</kbd>)</dt>
@@ -332,6 +332,8 @@
 <dl>
 <dt><span class="ui">History</span> (<kbd>Alt</kbd>+<kbd>H</kbd>)</dt>
 <dd>A list with one message per item, the newest last. Each item says who wrote the message, when, and the text, for example <span class="ui">Ana, 14:32: The photos are on their way.</span> or <span class="ui">You, 14:33: Thanks!</span>. A message from another day also has its date. Use the <kbd>Up arrow</kbd> and <kbd>Down arrow</kbd> keys to read the messages, <kbd>Home</kbd> and <kbd>End</kbd> for the first and the last one, and <kbd>Ctrl</kbd>+<kbd>C</kbd> to copy the selected message. When you move to the list, the newest message is selected.</dd>
+<dt><span class="ui">Selected message</span> (<kbd>Alt</kbd>+<kbd>L</kbd>)</dt>
+<dd>A read-only text field with the whole text of the message that is selected in the history. An item of the list has room for about a dozen lines, so a longer message shows only its beginning there; here you can read all of it with the arrow keys, select a part of it and copy that.</dd>
 <dt>The status line</dt>
 <dd>One line below the history that shows the message that arrived last, that the other person is typing, or why a message was not sent. It cannot receive the keyboard focus; screen readers read it when it changes and when the window comes to the front.</dd>
 <dt><span class="ui">Message</span> (<kbd>Alt</kbd>+<kbd>M</kbd>)</dt>
@@ -363,7 +365,7 @@
 <li><span class="ui">The connection was lost</span> or <span class="ui">The other side did not confirm the message</span>: the connection ended before the message was confirmed.</li>
 </ul>
 <h3 id="chat-who">Who can write to you</h3>
-<p>Unless you change it, anyone who has your Contact ID and is not blocked can write to you, as anyone can offer you a file. A chat with a person who is not in your recipient list shows a warning with their Contact ID above the history. In Settings, on the <span class="ui">Chat</span> tab, you can choose <span class="ui">Only my recipients</span>: messages from anyone else are then refused without you seeing them, and their sender is told that you do not accept messages from them.</p>
+<p>Unless you change it, anyone who has your Contact ID and is not blocked can write to you, as anyone can offer you a file. A chat with a person who is not in your recipient list shows a warning with their Contact ID above the history. In Settings, on the <span class="ui">Chat</span> tab, you can choose <span class="ui">Only my recipients</span>: messages from anyone else are then refused without you seeing them, and their sender is told that you do not accept messages from them. If you write to a person who is not in your recipient list yourself, their answers reach you all the same, for a day after your last message to them.</p>
 <h3 id="chat-history">Where conversations are kept</h3>
 <p>Conversations are kept on your computer, with your settings, until you delete them: the newest 2000 messages with each person. They are not sent anywhere else. <span class="ui">Delete Conversation…</span> in a chat window deletes one, and <span class="ui">Delete All Conversations…</span> in Settings, on the <span class="ui">Chat</span> tab, deletes all of them. Deleting removes the messages from your computer only; the other person keeps their copy.</p>
 </section>
@@ -582,6 +584,7 @@
 <tr><td><kbd>Alt</kbd>+<kbd>H</kbd></td><td>Move to the history</td></tr>
 <tr><td><kbd>Up arrow</kbd> and <kbd>Down arrow</kbd> in the history</td><td>Read the previous or the next message</td></tr>
 <tr><td><kbd>Ctrl</kbd>+<kbd>C</kbd> in the history</td><td>Copy the selected message</td></tr>
+<tr><td><kbd>Alt</kbd>+<kbd>L</kbd></td><td>Move to the whole text of the selected message</td></tr>
 <tr><td><kbd>Alt</kbd>+<kbd>A</kbd></td><td>Add the person to my recipients, when they are not among them</td></tr>
 <tr><td><kbd>Alt</kbd>+<kbd>B</kbd></td><td>Block the person</td></tr>
 <tr><td><kbd>Alt</kbd>+<kbd>D</kbd></td><td>Delete the conversation</td></tr>

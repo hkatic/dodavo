@@ -20,11 +20,17 @@ use dodavo_core::{
         self, Accept, Command, Event, Kind, NetHandle, Offer, Outcome, Role, TransferRecord,
         session::Side,
     },
+    sound::{self, SoundEvent},
     space::{self, Space},
     view::{Direction, Notice, Row, TransferView},
 };
 #[cfg(target_os = "macos")]
-use dodavo_core::{format::format_size, update, view::percent};
+use dodavo_core::{
+    config::{ChatFrom, SoundChoice},
+    format::format_size,
+    update,
+    view::percent,
+};
 // The texts of this system's user interface: the Mac's or Android's.
 #[cfg(not(target_os = "macos"))]
 use dodavo_core::i18n::android as table;
@@ -33,6 +39,10 @@ use dodavo_core::i18n::mac as table;
 use serde::{Deserialize, Serialize};
 
 use crate::Wake;
+
+/// The chats, where the user interface shows them: on a Mac so far.
+#[cfg(target_os = "macos")]
+mod chat;
 
 /// The table of this system's user interface (see `table`).
 fn ui() -> &'static table::Strings {
@@ -100,6 +110,9 @@ pub struct Started {
     show_in_menu_bar: bool,
     #[cfg(target_os = "macos")]
     open_at_login: bool,
+    /// The longest chat message that can be written, in characters.
+    #[cfg(target_os = "macos")]
+    chat_max_chars: usize,
     /// Each language by its code, with its own name for it.
     languages: Vec<(&'static str, &'static str)>,
 }
@@ -190,6 +203,60 @@ enum Out {
     UpdateFailed {
         text: String,
     },
+    /// A chat message arrived, and is in the chat with `peer`, whose window
+    /// opens for it if it is not open. `said` is the message for the window's
+    /// status line and for VoiceOver, and `notice` what tells of it while
+    /// the window is not in front. `gone`: how many of the oldest messages
+    /// left the chat to make room.
+    #[cfg(target_os = "macos")]
+    ChatMessage {
+        peer: String,
+        name: String,
+        /// Which change of the chats this is (see `chat::ChatOut`).
+        seq: u64,
+        entry: chat::EntryOut,
+        gone: usize,
+        said: String,
+        /// The chat could not be saved: this says why.
+        problem: Option<String>,
+        notice: Notice,
+    },
+    /// A message of the user's is in the chat with `peer`, on its way.
+    #[cfg(target_os = "macos")]
+    ChatAdded {
+        peer: String,
+        seq: u64,
+        entry: chat::EntryOut,
+        gone: usize,
+        problem: Option<String>,
+    },
+    /// A message of the user's was not delivered: `said` says why. It is the
+    /// message at `index` of the chat with `peer`, when the window of that
+    /// is open and still has it; `notice` tells of it when no window is.
+    #[cfg(target_os = "macos")]
+    ChatFailed {
+        peer: String,
+        name: String,
+        seq: u64,
+        index: Option<usize>,
+        /// What the message said, to send it again.
+        text: String,
+        said: String,
+        notice: Notice,
+    },
+    /// The other person of the chat with `peer` is typing, which `text`
+    /// says, or has stopped. With `announce`, the window in front says it
+    /// aloud and plays `sound`.
+    #[cfg(target_os = "macos")]
+    ChatTyping {
+        peer: String,
+        text: Option<String>,
+        announce: bool,
+        sound: Option<SoundOut>,
+    },
+    /// A sound to play now.
+    #[cfg(target_os = "macos")]
+    Sound(SoundOut),
     Error {
         text: String,
     },
@@ -197,6 +264,98 @@ enum Out {
     Fatal {
         text: String,
     },
+}
+
+/// A sound for the user interface to play: the built-in one of `event` (see
+/// `SoundEvent::key`), or the user's `file` in its place, with the built-in
+/// one for a file that cannot be played.
+#[cfg(target_os = "macos")]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+struct SoundOut {
+    event: &'static str,
+    file: Option<PathBuf>,
+}
+
+#[cfg(target_os = "macos")]
+impl SoundOut {
+    /// What `choice` plays at `event`; nothing for no sound.
+    fn of(event: SoundEvent, choice: SoundChoice) -> Option<SoundOut> {
+        let file = match choice {
+            SoundChoice::Off => return None,
+            SoundChoice::Default => None,
+            SoundChoice::File(path) => Some(path),
+        };
+        Some(SoundOut {
+            event: event.key(),
+            file,
+        })
+    }
+}
+
+/// What plays at `event` now, as the settings say; nothing while sounds are
+/// off, or for an event that has none.
+#[cfg(target_os = "macos")]
+fn sound_out(cfg: &Config, event: SoundEvent) -> Option<SoundOut> {
+    cfg.sounds
+        .playing(event)
+        .and_then(|choice| SoundOut::of(event, choice))
+}
+
+/// An event that has a sound, as the settings list it.
+#[cfg(target_os = "macos")]
+#[derive(Debug, Serialize)]
+struct SoundSetting {
+    /// See `SoundEvent::key`.
+    event: &'static str,
+    name: &'static str,
+    /// "default" (the built-in sound), "off" or "file".
+    kind: &'static str,
+    file: Option<PathBuf>,
+    /// What it plays, in words: the name of a file of the user's.
+    shown: String,
+}
+
+#[cfg(target_os = "macos")]
+impl SoundSetting {
+    fn of(event: SoundEvent, cfg: &Config) -> SoundSetting {
+        let (kind, file, shown) = match cfg.sounds.choice(event) {
+            SoundChoice::Default => ("default", None, ui().sound_choice_default.to_string()),
+            SoundChoice::Off => ("off", None, ui().sound_choice_off.to_string()),
+            SoundChoice::File(path) => {
+                let shown = path.file_name().map_or_else(
+                    || path.display().to_string(),
+                    |name| name.to_string_lossy().into_owned(),
+                );
+                ("file", Some(path), shown)
+            }
+        };
+        SoundSetting {
+            event: event.key(),
+            name: sound_name(event),
+            kind,
+            file,
+            shown,
+        }
+    }
+}
+
+/// The name of an event that has a sound.
+#[cfg(target_os = "macos")]
+fn sound_name(event: SoundEvent) -> &'static str {
+    let table = ui();
+    match event {
+        SoundEvent::MessageReceived => table.sound_message_received,
+        SoundEvent::MessageSent => table.sound_message_sent,
+        SoundEvent::Typing => table.sound_typing,
+        SoundEvent::MessageFailed => table.sound_message_failed,
+        SoundEvent::Incoming => table.sound_incoming,
+        SoundEvent::Started => table.sound_started,
+        SoundEvent::Completed => table.sound_completed,
+        SoundEvent::Failed => table.sound_failed,
+        SoundEvent::Cancelled => table.sound_cancelled,
+        SoundEvent::ConnectionLost => table.sound_connection_lost,
+        SoundEvent::Continues => table.sound_continues,
+    }
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -240,6 +399,31 @@ impl SpaceOut {
     }
 }
 
+/// What the Mac's Incoming Transfer window says of the offers of one sender
+/// that wait for one answer, as `OfferOut` says it of the one that the
+/// window opened with.
+#[cfg(target_os = "macos")]
+#[derive(Debug, Clone, Serialize)]
+struct OffersOut {
+    headline: String,
+    /// The item, or what several come to.
+    description: String,
+    /// Each item, when there are several.
+    items: Vec<String>,
+    /// Says that something here is over the sender's limit, when it is.
+    over_limit: Option<String>,
+    space: SpaceOut,
+}
+
+/// The offers that a call is about: the one, or the several.
+fn which(id: Option<u64>, ids: Vec<u64>) -> Vec<u64> {
+    if ids.is_empty() {
+        id.into_iter().collect()
+    } else {
+        ids
+    }
+}
+
 /// What the user interface can ask for.
 #[derive(Debug, Deserialize)]
 #[serde(tag = "call", rename_all = "snake_case")]
@@ -263,21 +447,36 @@ enum Call {
     /// The documents that sends still read: what the app must keep its
     /// permission for.
     Documents,
-    /// Without a folder (Android): Downloads.
+    /// Whether the offer `id`, or the offers `ids` that are answered
+    /// together, fit into `dir`. Without a folder (Android): Downloads.
     Space {
-        id: u64,
+        #[serde(default)]
+        id: Option<u64>,
+        #[serde(default)]
+        ids: Vec<u64>,
         #[serde(default)]
         dir: Option<PathBuf>,
     },
-    /// What stands in the way of accepting into `dir`. With `ignore_temp`,
-    /// the user has heard of the temporary archive that its volume cannot
-    /// hold, and goes on anyway.
+    /// What stands in the way of accepting the offer `id`, or the offers
+    /// `ids` together, into `dir`. With `ignore_temp`, the user has heard
+    /// of the temporary archive that its volume cannot hold, and goes on
+    /// anyway.
     CheckAccept {
-        id: u64,
+        #[serde(default)]
+        id: Option<u64>,
+        #[serde(default)]
+        ids: Vec<u64>,
         #[serde(default)]
         dir: Option<PathBuf>,
         #[serde(default)]
         ignore_temp: bool,
+    },
+    /// The Mac: what the Incoming Transfer window says of the offers `ids`
+    /// of one sender, which wait for one answer (see `OffersOut`).
+    #[cfg(target_os = "macos")]
+    Offers {
+        ids: Vec<u64>,
+        dir: PathBuf,
     },
     /// The Mac: what to tell the user before `paths` are sent (see
     /// `space::send_temp_warning`).
@@ -297,8 +496,12 @@ enum Call {
     WarnFatTemp {
         on: bool,
     },
+    /// Accepts the offer `id`, or the offers `ids` together.
     Accept {
-        id: u64,
+        #[serde(default)]
+        id: Option<u64>,
+        #[serde(default)]
+        ids: Vec<u64>,
         #[serde(default)]
         dir: Option<PathBuf>,
     },
@@ -386,6 +589,76 @@ enum Call {
     /// The update window was closed.
     #[cfg(target_os = "macos")]
     UpdateClosed,
+    /// The Mac: opens the chat with the person whose Contact ID is `peer`,
+    /// or reads it again (see `chat::ChatOut`). `name` is what they call
+    /// themselves, for someone who is not a recipient.
+    #[cfg(target_os = "macos")]
+    ChatOpen {
+        peer: String,
+        #[serde(default)]
+        name: String,
+    },
+    /// The window of the chat with `peer` closed.
+    #[cfg(target_os = "macos")]
+    ChatClosed {
+        peer: String,
+    },
+    /// Sends a chat message. It is in the chat at once (`Out::ChatAdded`);
+    /// whether it arrived comes later, as a sound or as `Out::ChatFailed`.
+    #[cfg(target_os = "macos")]
+    ChatSend {
+        peer: String,
+        text: String,
+    },
+    /// One message to each of several recipients, as a private message.
+    #[cfg(target_os = "macos")]
+    ChatSendSeveral {
+        peer_ids: Vec<String>,
+        text: String,
+    },
+    /// The user is writing a message to `peer`, or has stopped.
+    #[cfg(target_os = "macos")]
+    ChatTyping {
+        peer: String,
+        on: bool,
+    },
+    /// Deletes the chat with `peer` from this Mac.
+    #[cfg(target_os = "macos")]
+    ChatDelete {
+        peer: String,
+    },
+    /// Deletes every chat from this Mac.
+    #[cfg(target_os = "macos")]
+    ChatDeleteAll,
+    /// Whether any chat is kept.
+    #[cfg(target_os = "macos")]
+    AnyChats,
+    /// The Mac: whether sounds play (`on`), and the events that have one
+    /// with what each plays (`events`, see `SoundSetting`).
+    #[cfg(target_os = "macos")]
+    Sounds,
+    #[cfg(target_os = "macos")]
+    SetSoundsOn {
+        on: bool,
+    },
+    /// What `event` plays from now on: `kind` is "default", "off", or
+    /// "file" with `file`.
+    #[cfg(target_os = "macos")]
+    SetSound {
+        event: String,
+        kind: String,
+        #[serde(default)]
+        file: Option<PathBuf>,
+    },
+    /// Every event plays its built-in sound again.
+    #[cfg(target_os = "macos")]
+    ResetSounds,
+    /// Plays what `event` is set to, also while sounds are off: the
+    /// settings try a sound with it.
+    #[cfg(target_os = "macos")]
+    TrySound {
+        event: String,
+    },
     /// Android: the system says that the network changed.
     #[cfg(not(target_os = "macos"))]
     NetworkChanged,
@@ -419,6 +692,17 @@ struct Settings {
     /// Whether to tell of a temporary archive that its volume cannot hold.
     #[serde(default = "yes")]
     warn_fat_temp: bool,
+    /// Who may send chat messages: "anyone" (who is not blocked) or
+    /// "recipients".
+    #[serde(default)]
+    chat_from: ChatFrom,
+    /// Tell the other person of a chat when the user is writing a message.
+    #[serde(default = "yes")]
+    send_typing: bool,
+    /// Say aloud, and with a sound, that the other person of the chat in
+    /// front is writing a message.
+    #[serde(default = "yes")]
+    announce_typing: bool,
     #[serde(flatten)]
     limit: LimitSettings,
 }
@@ -555,6 +839,10 @@ struct State {
     net_problem: Option<String>,
     transfers: BTreeMap<u64, TransferView>,
     offers: HashMap<u64, PendingOffer>,
+    /// Each receive that is under way: its offer, the folder it is saved
+    /// into and what is kept of a folder, by which the room that it still
+    /// takes is counted (see `State::arriving`).
+    receiving: HashMap<u64, (Offer, PathBuf, ReceivedFolder)>,
     /// What was last shown of each transfer, and when.
     shown: HashMap<u64, (Row, Instant)>,
     busy: bool,
@@ -570,6 +858,9 @@ struct State {
     /// When the update check is next looked at (see `update::tick`).
     #[cfg(target_os = "macos")]
     next_update_look: Instant,
+    /// The chats whose windows are open, and the messages on their way.
+    #[cfg(target_os = "macos")]
+    chats: chat::Chats,
 }
 
 pub struct Core {
@@ -755,6 +1046,8 @@ impl Core {
             show_in_menu_bar: cfg.minimize_to_tray,
             #[cfg(target_os = "macos")]
             open_at_login: cfg.start_with_windows,
+            #[cfg(target_os = "macos")]
+            chat_max_chars: chat::Chats::MAX_CHARS,
             languages: languages(),
             ..Started::default()
         };
@@ -803,6 +1096,9 @@ impl Core {
         // A key that is thrown away keeps the rest working the same way when
         // nothing will run anyway.
         let (events, received) = mpsc::channel::<Event>();
+        // Only a copy that runs: the chats are the running copy's otherwise.
+        #[cfg(target_os = "macos")]
+        let chats = chat::Chats::new(&data_dir, secret.is_some());
         let my_id;
         let net;
         match secret {
@@ -810,7 +1106,14 @@ impl Core {
                 my_id = secret.public().to_string();
                 started.my_id = my_id.clone();
                 let sink = events.clone();
-                net = net::start(
+                // Chat connections are taken only where chats are shown, so
+                // that no message is confirmed to its sender and then shown
+                // to nobody: on a Mac so far.
+                #[cfg(target_os = "macos")]
+                let chat = Some(cfg.chat_policy());
+                #[cfg(not(target_os = "macos"))]
+                let chat = None;
+                net = net::start_with_chat(
                     secret,
                     data_dir.clone(),
                     net::TempDirs {
@@ -820,6 +1123,7 @@ impl Core {
                     },
                     cfg.blocked_ids(),
                     cfg.limits(),
+                    chat,
                     move |event| {
                         let _ = sink.send(event);
                     },
@@ -841,6 +1145,7 @@ impl Core {
                 net_problem: None,
                 transfers: BTreeMap::new(),
                 offers: HashMap::new(),
+                receiving: HashMap::new(),
                 shown: HashMap::new(),
                 busy: false,
                 documents: HashMap::new(),
@@ -850,6 +1155,8 @@ impl Core {
                 update: None,
                 #[cfg(target_os = "macos")]
                 next_update_look: Instant::now() + update::START_DELAY,
+                #[cfg(target_os = "macos")]
+                chats,
             }),
             my_id: Mutex::new(my_id),
             outbox,
@@ -929,17 +1236,11 @@ impl Core {
                 let uris: BTreeSet<&String> = state.documents.values().collect();
                 json(serde_json::json!(uris))
             }
-            Call::Space { id, dir } => {
+            Call::Space { id, ids, dir } => {
                 let dir = dir.unwrap_or_else(dodavo_core::platform::downloads_dir);
                 let state = lock(&self.state);
-                match state.offers.get(&id) {
-                    Some(pending) => {
-                        let space = space::check_space(
-                            &pending.offer,
-                            &dir,
-                            &state.temp_in_use(),
-                            state.cfg.received_folder,
-                        );
+                match state.space_for(&which(id, ids), &dir) {
+                    Some(space) => {
                         serde_json::to_string(&SpaceOut::of(space, &state.cfg)).unwrap_or_default()
                     }
                     None => "null".into(),
@@ -947,11 +1248,20 @@ impl Core {
             }
             Call::CheckAccept {
                 id,
+                ids,
                 dir,
                 ignore_temp,
             } => {
                 let dir = dir.unwrap_or_else(dodavo_core::platform::downloads_dir);
-                json(self.check_accept(id, &dir, ignore_temp))
+                json(self.check_accept(&which(id, ids), &dir, ignore_temp))
+            }
+            #[cfg(target_os = "macos")]
+            Call::Offers { ids, dir } => {
+                let state = lock(&self.state);
+                match offers_out(&state, &ids, &dir) {
+                    Some(out) => serde_json::to_string(&out).unwrap_or_default(),
+                    None => "null".into(),
+                }
             }
             #[cfg(target_os = "macos")]
             Call::CheckSend { paths } => {
@@ -984,9 +1294,9 @@ impl Core {
                 state.cfg.warn_fat_temp = on;
                 json(serde_json::json!({ "error": save(&state) }))
             }
-            Call::Accept { id, dir } => {
+            Call::Accept { id, ids, dir } => {
                 let dir = dir.unwrap_or_else(dodavo_core::platform::downloads_dir);
-                self.accept(id, dir);
+                self.accept(&which(id, ids), dir);
                 "null".into()
             }
             Call::Decline { id } => {
@@ -1211,6 +1521,82 @@ impl Core {
                 lock(&self.state).update = None;
                 "null".into()
             }
+            #[cfg(target_os = "macos")]
+            Call::ChatOpen { peer, name } => {
+                serde_json::to_string(&self.chat_open(&peer, &name)).unwrap_or_default()
+            }
+            #[cfg(target_os = "macos")]
+            Call::ChatClosed { peer } => {
+                self.chat_closed(&peer);
+                "null".into()
+            }
+            #[cfg(target_os = "macos")]
+            Call::ChatSend { peer, text } => {
+                json(serde_json::json!({ "error": self.chat_send(&peer, &text) }))
+            }
+            #[cfg(target_os = "macos")]
+            Call::ChatSendSeveral { peer_ids, text } => {
+                json(serde_json::json!({ "error": self.chat_send_several(&peer_ids, &text) }))
+            }
+            #[cfg(target_os = "macos")]
+            Call::ChatTyping { peer, on } => {
+                self.chat_typing(&peer, on);
+                "null".into()
+            }
+            #[cfg(target_os = "macos")]
+            Call::ChatDelete { peer } => {
+                json(serde_json::json!({ "error": self.chat_delete(&peer) }))
+            }
+            #[cfg(target_os = "macos")]
+            Call::ChatDeleteAll => json(serde_json::json!({ "error": self.chat_delete_all() })),
+            #[cfg(target_os = "macos")]
+            Call::AnyChats => json(serde_json::json!(self.any_chats())),
+            #[cfg(target_os = "macos")]
+            Call::Sounds => {
+                let state = lock(&self.state);
+                let events: Vec<SoundSetting> = SoundEvent::ALL
+                    .into_iter()
+                    .map(|event| SoundSetting::of(event, &state.cfg))
+                    .collect();
+                json(serde_json::json!({ "on": state.cfg.sounds.on, "events": events }))
+            }
+            #[cfg(target_os = "macos")]
+            Call::SetSoundsOn { on } => {
+                let mut state = lock(&self.state);
+                state.cfg.sounds.on = on;
+                json(serde_json::json!({ "error": save(&state) }))
+            }
+            #[cfg(target_os = "macos")]
+            Call::SetSound { event, kind, file } => {
+                let choice = match (kind.as_str(), file) {
+                    ("off", _) => SoundChoice::Off,
+                    ("file", Some(path)) => SoundChoice::File(path),
+                    _ => SoundChoice::Default,
+                };
+                let mut state = lock(&self.state);
+                if let Some(event) = SoundEvent::from_key(&event) {
+                    state.cfg.sounds.set(event, choice);
+                }
+                json(serde_json::json!({ "error": save(&state) }))
+            }
+            #[cfg(target_os = "macos")]
+            Call::ResetSounds => {
+                let mut state = lock(&self.state);
+                for event in SoundEvent::ALL {
+                    state.cfg.sounds.set(event, SoundChoice::Default);
+                }
+                json(serde_json::json!({ "error": save(&state) }))
+            }
+            #[cfg(target_os = "macos")]
+            Call::TrySound { event } => {
+                let state = lock(&self.state);
+                let sound = SoundEvent::from_key(&event)
+                    .and_then(|event| SoundOut::of(event, state.cfg.sounds.choice(event)));
+                if let Some(sound) = sound {
+                    self.outbox.push(Out::Sound(sound));
+                }
+                "null".into()
+            }
             #[cfg(not(target_os = "macos"))]
             Call::NetworkChanged => {
                 lock(&self.state).net.send(Command::NetworkChange);
@@ -1342,6 +1728,10 @@ impl Core {
                 });
             }
         }
+        // Once for all the items that start together.
+        if !paths.is_empty() {
+            self.sound(&state, SoundEvent::Started);
+        }
         None
     }
 
@@ -1394,20 +1784,27 @@ impl Core {
                 });
             }
         }
+        if !documents.is_empty() {
+            self.sound(&state, SoundEvent::Started);
+        }
         None
     }
 
-    fn check_accept(&self, id: u64, dir: &Path, ignore_temp: bool) -> serde_json::Value {
-        let (offer, temp_dir, folder, warn) = {
+    /// What stands in the way of accepting the offers `ids` together into
+    /// `dir`: nothing for offers that wait no more.
+    fn check_accept(&self, ids: &[u64], dir: &Path, ignore_temp: bool) -> serde_json::Value {
+        let (offers, temp_dir, folder, warn, arriving) = {
             let state = lock(&self.state);
-            let Some(pending) = state.offers.get(&id) else {
+            let offers = state.waiting(ids);
+            if offers.is_empty() {
                 return serde_json::json!({});
-            };
+            }
             (
-                pending.offer.clone(),
+                offers,
                 state.temp_in_use(),
                 state.cfg.received_folder,
                 state.cfg.warn_fat_temp && !ignore_temp,
+                state.arriving(),
             )
         };
         if !dir.is_absolute() {
@@ -1416,7 +1813,8 @@ impl Core {
         if let Err(e) = std::fs::create_dir_all(dir) {
             return serde_json::json!({ "problem": folder_unusable(dir, &e) });
         }
-        let space = space::check_space(&offer, dir, &temp_dir, folder);
+        let offers: Vec<&Offer> = offers.iter().collect();
+        let space = space::check_space_of(&offers, dir, &temp_dir, folder, &arriving);
         if !space.fits {
             return serde_json::json!({ "problem": space.text });
         }
@@ -1430,14 +1828,26 @@ impl Core {
         serde_json::json!({})
     }
 
-    fn accept(&self, id: u64, dir: PathBuf) {
+    /// Accepts those of the offers `ids` that still wait, into `dir`.
+    fn accept(&self, ids: &[u64], dir: PathBuf) {
         let mut state = lock(&self.state);
-        let Some(pending) = state.offers.remove(&id) else {
+        let accepted: Vec<(u64, PendingOffer)> = ids
+            .iter()
+            .filter_map(|id| Some((*id, state.offers.remove(id)?)))
+            .collect();
+        if accepted.is_empty() {
             return;
-        };
+        }
+        // Several offers answered together go to one folder: one save is
+        // enough, and one sound.
         state.cfg.last_save_dir = Some(dir.clone());
         let _ = save(&state);
-        self.begin_receive(&mut state, id, &pending, dir);
+        for (id, pending) in &accepted {
+            self.begin_receive(&mut state, *id, pending, dir.clone());
+        }
+        // The user's answer; a transfer that starts by itself has the sound
+        // of an incoming item.
+        self.sound(&state, SoundEvent::Started);
     }
 
     /// Accepts an offer: its transfer shows from now on.
@@ -1454,11 +1864,26 @@ impl Core {
         );
         view.set_received_folder(folder);
         state.transfers.insert(id, view);
+        state
+            .receiving
+            .insert(id, (pending.offer.clone(), dir.clone(), folder));
         self.show(state, id, None);
         state.net.send(Command::Respond {
             id,
             accept: Some(Accept { dir, folder }),
         });
+    }
+
+    /// Has the user interface play the sound of `event`, if the settings
+    /// have one for it. A Mac plays them so far. Before what tells of the
+    /// same event: a notification that follows a sound has none of its own.
+    fn sound(&self, state: &State, event: SoundEvent) {
+        #[cfg(target_os = "macos")]
+        if let Some(sound) = sound_out(&state.cfg, event) {
+            self.outbox.push(Out::Sound(sound));
+        }
+        #[cfg(not(target_os = "macos"))]
+        let _ = (state, event);
     }
 
     /// Passes on the state of a transfer, and whether the computer has to stay
@@ -1545,6 +1970,13 @@ impl Core {
                     view.restore_cancel(record.done_sent);
                 }
                 state.transfers.insert(id, view);
+                if let Side::Receive {
+                    dest_dir, folder, ..
+                } = &record.side
+                {
+                    let receive = (record.offer.clone(), dest_dir.clone(), *folder);
+                    state.receiving.insert(id, receive);
+                }
                 if let Some(uri) = document_read(&record) {
                     state.documents.insert(id, uri);
                 }
@@ -1564,9 +1996,14 @@ impl Core {
                 }
             }
             Event::Phase { id, phase } => {
+                let before = state.transfers.get(&id).map(TransferView::phase);
                 let notice = state.transfers.get_mut(&id).and_then(|t| t.on_phase(phase));
                 let status = state.transfers.get(&id).map(|t| t.row().status);
                 self.show(&mut state, id, status);
+                // A lost connection, and going on after one.
+                if let Some(event) = before.and_then(|before| sound::phase_sound(before, phase)) {
+                    self.sound(&state, event);
+                }
                 self.give(id, notice, None);
             }
             Event::HandedOver { id } => {
@@ -1612,18 +2049,25 @@ impl Core {
                         tr!(cancelled_balloon_title),
                         tr!(cancelled_by_peer, name = pending.from_name),
                     );
+                    self.sound(&state, SoundEvent::Cancelled);
                     self.outbox.push(Out::OfferGone { id, notice });
                 }
                 let path = match &outcome {
                     Outcome::Completed(path) => path.clone(),
                     _ => None,
                 };
+                state.receiving.remove(&id);
+                // A transfer ends once.
+                let ended = state.transfers.get(&id).is_some_and(TransferView::is_active);
                 let notice = state
                     .transfers
                     .get_mut(&id)
                     .and_then(|t| t.on_finished(&outcome));
                 let status = state.transfers.get(&id).map(|t| t.row().status);
                 self.show(&mut state, id, status);
+                if ended {
+                    self.sound(&state, sound::outcome_sound(&outcome));
+                }
                 self.give(id, notice, path);
                 if let Some(uri) = state.documents.remove(&id)
                     && !state.documents.values().any(|other| *other == uri)
@@ -1631,8 +2075,19 @@ impl Core {
                     self.outbox.push(Out::DocumentDone { uri });
                 }
             }
-            // The network here is started without chat (`net::start`), so
-            // nobody's message is taken and none of these comes.
+            #[cfg(target_os = "macos")]
+            Event::Chat { from, name, text } => {
+                self.on_chat(&mut state, from.to_string(), name, text);
+            }
+            #[cfg(target_os = "macos")]
+            Event::ChatSent { id, .. } => self.on_chat_sent(&mut state, id),
+            #[cfg(target_os = "macos")]
+            Event::ChatFailed { id, error, .. } => self.on_chat_failed(&mut state, id, &error),
+            #[cfg(target_os = "macos")]
+            Event::Typing { from, on } => self.on_peer_typing(&mut state, &from.to_string(), on),
+            // The network here is started without chat, so nobody's message
+            // is taken and none of these comes.
+            #[cfg(not(target_os = "macos"))]
             Event::Chat { .. }
             | Event::ChatSent { .. }
             | Event::ChatFailed { .. }
@@ -1641,24 +2096,27 @@ impl Core {
     }
 
     fn on_offer(&self, id: u64, from: String, offer: Offer) {
-        let (name, known, cfg, temp_dir) = {
+        let (name, known, cfg, temp_dir, arriving) = {
             let state = lock(&self.state);
             let (name, known) = peer_name(&state.cfg, &from, &offer.sender_name);
-            (name, known, state.cfg.clone(), state.temp_in_use())
+            let (cfg, temp_dir) = (state.cfg.clone(), state.temp_in_use());
+            (name, known, cfg, temp_dir, state.arriving())
         };
         let pending = PendingOffer {
             from_id: from.clone(),
             from_name: name.clone(),
             offer,
         };
-        // Without enough disk space, on a volume that cannot hold a file this
-        // large, with a temporary archive that its volume cannot hold, or
-        // for an item over the sender's limit, ask instead (the window
-        // explains why). Off the lock: the first use of Downloads may wait
-        // for the user to allow it.
+        // Without enough disk space beside what is still arriving, on a
+        // volume that cannot hold a file this large, with a temporary
+        // archive that its volume cannot hold, or for an item over the
+        // sender's limit, ask instead (the window explains why). Off the
+        // lock: the first use of Downloads may wait for the user to allow
+        // it.
+        let folder = cfg.received_folder;
         let auto_dir = cfg.auto_save_dir_for(&from, &pending.offer).filter(|d| {
             std::fs::create_dir_all(d).is_ok() && {
-                let space = space::check_space(&pending.offer, d, &temp_dir, cfg.received_folder);
+                let space = space::check_space(&pending.offer, d, &temp_dir, folder, &arriving);
                 space.fits
                     && space.enough != Some(false)
                     && !(cfg.warn_fat_temp && space.temp_warning.is_some())
@@ -1668,12 +2126,13 @@ impl Core {
         let asked = auto_dir.is_none().then(|| {
             let dir = cfg.suggested_save_dir();
             let space = SpaceOut::of(
-                space::check_space(&pending.offer, &dir, &temp_dir, cfg.received_folder),
+                space::check_space(&pending.offer, &dir, &temp_dir, folder, &arriving),
                 &cfg,
             );
             (dir, space)
         });
         let mut state = lock(&self.state);
+        self.sound(&state, SoundEvent::Incoming);
         if let Some(dir) = auto_dir {
             state.cfg.last_save_dir = Some(dir.clone());
             let _ = save(&state);
@@ -1781,7 +2240,7 @@ impl Core {
             Ok(dir) => dir,
             Err(e) => {
                 self.outbox
-                    .push(fail(update::Error::Io(e.to_string()).text()));
+                    .push(fail(update::Error::io(&e).text()));
                 return;
             }
         };
@@ -1864,6 +2323,8 @@ impl Core {
         let now = Instant::now();
         #[cfg(target_os = "macos")]
         self.tick_updates(&mut state, now);
+        #[cfg(target_os = "macos")]
+        self.tick_chats(&mut state, now);
         let ids: Vec<u64> = state.transfers.keys().copied().collect();
         for id in ids {
             let Some(view) = state.transfers.get_mut(&id) else {
@@ -1940,6 +2401,51 @@ fn install_panic_hook(outbox: &'static Outbox) {
 }
 
 impl State {
+    /// The receives that are under way, for the room that they still take
+    /// on the disk, which a new item has to fit beside (see
+    /// `space::check_space_of`).
+    fn arriving(&self) -> Vec<space::Arriving> {
+        self.receiving
+            .iter()
+            .filter_map(|(id, (offer, dir, folder))| {
+                let view = self.transfers.get(id).filter(|view| view.is_active())?;
+                Some(space::Arriving {
+                    offer: offer.clone(),
+                    dir: dir.clone(),
+                    folder: *folder,
+                    done: view.done(),
+                    unpacking: view.phase() == Some(net::Phase::Unpacking),
+                })
+            })
+            .collect()
+    }
+
+    /// Those of the offers `ids` that still wait for an answer, in that
+    /// order.
+    fn waiting(&self, ids: &[u64]) -> Vec<Offer> {
+        ids.iter()
+            .filter_map(|id| self.offers.get(id))
+            .map(|pending| pending.offer.clone())
+            .collect()
+    }
+
+    /// Whether the offers `ids` fit into `dir` together; `None` when none
+    /// of them waits any more.
+    fn space_for(&self, ids: &[u64], dir: &Path) -> Option<Space> {
+        let offers = self.waiting(ids);
+        if offers.is_empty() {
+            return None;
+        }
+        let offers: Vec<&Offer> = offers.iter().collect();
+        Some(space::check_space_of(
+            &offers,
+            dir,
+            &self.temp_in_use(),
+            self.cfg.received_folder,
+            &self.arriving(),
+        ))
+    }
+
     /// The folder for the temporary archives of new transfers: the user's
     /// choice, or the system's place (see `Config::temp_dir_for`).
     fn temp_in_use(&self) -> PathBuf {
@@ -1950,11 +2456,12 @@ impl State {
 }
 
 /// Saves the settings, which also tells the network whom they block, what
-/// the limits are and where temporary archives go (also if the file cannot be saved). Returns the text
-/// of an error.
+/// the limits are, who may send chat messages and where temporary archives
+/// go (also if the file cannot be saved). Returns the text of an error.
 fn save(state: &State) -> Option<String> {
     state.net.set_blocked(state.cfg.blocked_ids());
     state.net.set_limits(state.cfg.limits());
+    state.net.set_chat(state.cfg.chat_policy());
     state
         .net
         .set_temp_dir(state.cfg.temp_dir_for(state.profile.as_deref()));
@@ -2026,6 +2533,62 @@ fn short_id(id: &str) -> String {
     }
 }
 
+/// What the Mac's Incoming Transfer window says of the offers `ids`, saved
+/// into `dir`; `None` when none of them waits any more.
+#[cfg(target_os = "macos")]
+fn offers_out(state: &State, ids: &[u64], dir: &Path) -> Option<OffersOut> {
+    let pending: Vec<&PendingOffer> = ids.iter().filter_map(|id| state.offers.get(id)).collect();
+    let first = pending.first()?;
+    let name = &first.from_name;
+    // Under the name it will be saved as: a peer's name may hold line
+    // ends, which would fake items of the list.
+    let describe = |offer: &Offer| {
+        let named = Offer {
+            name: archive::sanitize_file_name(&offer.name),
+            ..offer.clone()
+        };
+        match offer.kind {
+            Kind::File => description_file(&named),
+            Kind::Folder => description_folder(&named),
+        }
+    };
+    let (headline, description, items) = match pending.as_slice() {
+        [one] => {
+            let headline = match one.offer.kind {
+                Kind::File => ui().wants_file,
+                Kind::Folder => ui().wants_folder,
+            };
+            (headline.replace("{name}", name), describe(&one.offer), Vec::new())
+        }
+        several => {
+            let count = several.len() as u64;
+            let headline = i18n::pick_plural(i18n::lang(), &ui().wants_items, count)
+                .replace("{n}", &count.to_string())
+                .replace("{name}", name);
+            let total = several
+                .iter()
+                .map(|pending| match pending.offer.kind {
+                    Kind::File => pending.offer.size,
+                    Kind::Folder => pending.offer.content_size,
+                })
+                .fold(0u64, u64::saturating_add);
+            let total = ui()
+                .items_total
+                .replace("{size}", &dodavo_core::format::format_size(total));
+            let items = several.iter().map(|pending| describe(&pending.offer)).collect();
+            (headline, total, items)
+        }
+    };
+    let offers: Vec<&Offer> = pending.iter().map(|pending| &pending.offer).collect();
+    Some(OffersOut {
+        headline,
+        description,
+        items,
+        over_limit: limit::notice(&offers, state.cfg.limit_for(&first.from_id)),
+        space: SpaceOut::of(state.space_for(ids, dir)?, &state.cfg),
+    })
+}
+
 fn description_file(offer: &Offer) -> String {
     ui()
         .file_description
@@ -2061,6 +2624,9 @@ impl Settings {
             received_folder: cfg.received_folder,
             temp_dir: cfg.temp_dir.clone(),
             warn_fat_temp: cfg.warn_fat_temp,
+            chat_from: cfg.chat_from,
+            send_typing: cfg.send_typing,
+            announce_typing: cfg.announce_typing,
             limit: LimitSettings::of(cfg),
         }
     }
@@ -2069,6 +2635,9 @@ impl Settings {
         self.limit.apply_to(cfg);
         cfg.set_temp_dir(self.temp_dir.clone());
         cfg.warn_fat_temp = self.warn_fat_temp;
+        cfg.chat_from = self.chat_from;
+        cfg.send_typing = self.send_typing;
+        cfg.announce_typing = self.announce_typing;
         cfg.my_name = self.my_name.trim().to_string();
         cfg.start_with_windows = self.open_at_login;
         cfg.start_minimized = self.hide_at_login;
@@ -2151,7 +2720,7 @@ mod tests {
     use super::*;
 
     /// An empty folder of the test's own.
-    fn test_dir(name: &str) -> PathBuf {
+    pub(in crate::core) fn test_dir(name: &str) -> PathBuf {
         let dir = std::env::temp_dir().join(format!("dodavo-ffi-{name}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
@@ -2235,7 +2804,7 @@ mod tests {
     }
 
     /// A `Core` without a network, with one offer waiting.
-    fn core_with_offer(id: u64, dir: &Path) -> Core {
+    pub(in crate::core) fn core_with_offer(id: u64, dir: &Path) -> Core {
         let offer = Offer {
             kind: Kind::File,
             name: "file.txt".into(),
@@ -2264,6 +2833,7 @@ mod tests {
                 net_problem: None,
                 transfers: BTreeMap::new(),
                 offers: HashMap::from([(id, pending)]),
+                receiving: HashMap::new(),
                 shown: HashMap::new(),
                 busy: false,
                 documents: HashMap::new(),
@@ -2273,6 +2843,8 @@ mod tests {
                 update: None,
                 #[cfg(target_os = "macos")]
                 next_update_look: Instant::now(),
+                #[cfg(target_os = "macos")]
+                chats: chat::Chats::new(dir, true),
             }),
             my_id: Mutex::new(String::new()),
             outbox: Box::leak(Box::new(Outbox {
@@ -2322,7 +2894,7 @@ mod tests {
         std::fs::write(&in_the_way, b"").unwrap();
         let chosen = in_the_way.join("received");
 
-        let answer = core_with_offer(1, &dir).check_accept(1, &chosen, false);
+        let answer = core_with_offer(1, &dir).check_accept(&[1], &chosen, false);
 
         let problem = answer["problem"].as_str().unwrap();
         let reason = ui()
@@ -2355,6 +2927,15 @@ mod tests {
 
         core.on_offer(2, from.clone(), offer.clone());
 
+        // An offer has its sound, before what tells of it.
+        #[cfg(target_os = "macos")]
+        {
+            let sound = lock(&core.outbox.queue).pop_front();
+            assert!(
+                matches!(&sound, Some(Out::Sound(sound)) if sound.event == "incoming"),
+                "{sound:?}"
+            );
+        }
         let shown = lock(&core.outbox.queue).pop_front();
         let Some(Out::Offer { offer: shown, .. }) = shown else {
             panic!("the offer was not shown: {shown:?}");
@@ -2368,6 +2949,179 @@ mod tests {
         lock(&core.state).cfg.size_limit = 5;
         core.on_offer(3, from, offer);
         assert!(lock(&core.state).transfers.contains_key(&3));
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /// The sounds that the user interface is told to play, in the order
+    /// they were asked for.
+    #[cfg(target_os = "macos")]
+    fn sounds(core: &Core) -> Vec<SoundOut> {
+        lock(&core.outbox.queue)
+            .drain(..)
+            .filter_map(|out| match out {
+                Out::Sound(sound) => Some(sound),
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// Another offer of the same sender as the one that waits, of a file
+    /// `name` of `size` bytes.
+    fn another_offer(core: &Core, id: u64, name: &str, size: u64) {
+        let mut state = lock(&core.state);
+        let first = &state.offers[&1];
+        let pending = PendingOffer {
+            from_id: first.from_id.clone(),
+            from_name: "Ana".into(),
+            offer: Offer {
+                name: name.into(),
+                size,
+                token: [id as u8; 16],
+                ..first.offer.clone()
+            },
+        };
+        state.offers.insert(id, pending);
+    }
+
+    /// The offers of one sender that wait for one answer are told of
+    /// together: how many there are, what they come to and each of them,
+    /// under a name that cannot fake a line of the list.
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn several_offers_are_told_of_together() {
+        let dir = test_dir("offers");
+        let core = core_with_offer(1, &dir);
+        another_offer(&core, 2, "photo.jpg\r\n.exe", 2048);
+        let state = lock(&core.state);
+        let both = offers_out(&state, &[1, 2], &dir).expect("two offers");
+        assert!(both.headline.contains('2'), "{}", both.headline);
+        assert!(both.description.contains("2.0 KB"), "{}", both.description);
+        assert_eq!(both.items.len(), 2);
+        assert!(both.items[0].contains("file.txt"), "{:?}", both.items);
+        assert!(!both.items[1].contains(['\r', '\n']), "{:?}", both.items);
+        assert!(both.space.fits);
+        // One offer is told of as it is when its window opens, without a
+        // list, and offers that wait no more are not told of at all.
+        let one = offers_out(&state, &[1, 7], &dir).expect("one offer");
+        assert_eq!(one.headline, ui().wants_file.replace("{name}", ""));
+        assert!(one.items.is_empty());
+        assert!(offers_out(&state, &[7], &dir).is_none());
+        drop(state);
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /// Offers that are accepted together start together, with one sound, and
+    /// what they still have to write counts for the next one until they end.
+    #[test]
+    fn offers_accepted_together_take_their_room() {
+        let dir = test_dir("offers-accepted");
+        let core = core_with_offer(1, &dir);
+        another_offer(&core, 2, "b.bin", 4096);
+        assert_eq!(core.check_accept(&[1, 2], &dir, false), serde_json::json!({}));
+        core.accept(&[1, 2, 7], dir.clone());
+        #[cfg(target_os = "macos")]
+        assert_eq!(sounds(&core).len(), 1);
+        let needed = |core: &Core| -> Vec<(u64, u64)> {
+            let mut arriving: Vec<_> = lock(&core.state)
+                .arriving()
+                .iter()
+                .map(|a| (a.offer.size, a.done))
+                .collect();
+            arriving.sort();
+            arriving
+        };
+        assert_eq!(needed(&core), [(1, 0), (4096, 0)]);
+        assert!(lock(&core.state).offers.is_empty());
+        core.on_event(Event::Progress {
+            id: 2,
+            done: 1024,
+            total: 4096,
+        });
+        assert_eq!(needed(&core), [(1, 0), (4096, 1024)]);
+        core.on_event(Event::Finished {
+            id: 2,
+            outcome: Outcome::Completed(None),
+        });
+        assert_eq!(needed(&core), [(1, 0)]);
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /// A transfer has a sound when it starts, loses its connection, goes on
+    /// and ends, each once, and as the settings say.
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn a_transfer_has_its_sounds() {
+        use dodavo_core::net::Phase;
+        let dir = test_dir("sounds");
+        let core = core_with_offer(1, &dir);
+        let keys = |core: &Core| -> Vec<&'static str> {
+            sounds(core).into_iter().map(|sound| sound.event).collect()
+        };
+        let lost = Phase::WaitingForConnection { lost: true };
+
+        // The user's answer starts it.
+        core.accept(&[1], dir.clone());
+        assert_eq!(keys(&core), ["started"]);
+        for phase in [Phase::Connecting, Phase::Transferring] {
+            core.on_event(Event::Phase { id: 1, phase });
+        }
+        assert!(keys(&core).is_empty());
+        core.on_event(Event::Phase { id: 1, phase: lost });
+        core.on_event(Event::Phase { id: 1, phase: lost });
+        assert_eq!(keys(&core), ["connection_lost"]);
+        core.on_event(Event::Phase {
+            id: 1,
+            phase: Phase::Transferring,
+        });
+        assert_eq!(keys(&core), ["continues"]);
+        let end = || Event::Finished {
+            id: 1,
+            outcome: Outcome::Completed(None),
+        };
+        core.on_event(end());
+        core.on_event(end());
+        assert_eq!(keys(&core), ["completed"]);
+
+        // A file of the user's goes in the place of the built-in sound, an
+        // event that is off plays nothing, and nothing does while sounds
+        // are off, except what the settings try.
+        let file = dir.join("done.aiff");
+        let answer = |call: serde_json::Value| -> serde_json::Value {
+            serde_json::from_str(&core.call(&call.to_string())).unwrap()
+        };
+        answer(serde_json::json!({ "call": "set_sound", "event": "failed", "kind": "file", "file": file }));
+        answer(serde_json::json!({ "call": "set_sound", "event": "cancelled", "kind": "off" }));
+        let listed = answer(serde_json::json!({ "call": "sounds" }));
+        assert_eq!(listed["on"], true);
+        assert_eq!(listed["events"].as_array().unwrap().len(), SoundEvent::ALL.len());
+        let failed = &listed["events"][7];
+        assert_eq!(
+            (&failed["event"], &failed["kind"], &failed["shown"]),
+            (&"failed".into(), &"file".into(), &"done.aiff".into())
+        );
+        assert_eq!(listed["events"][8]["kind"], "off");
+        {
+            let state = lock(&core.state);
+            assert_eq!(
+                sound_out(&state.cfg, SoundEvent::Failed),
+                Some(SoundOut {
+                    event: "failed",
+                    file: Some(file.clone())
+                })
+            );
+            assert_eq!(sound_out(&state.cfg, SoundEvent::Cancelled), None);
+        }
+        answer(serde_json::json!({ "call": "set_sounds_on", "on": false }));
+        assert_eq!(sound_out(&lock(&core.state).cfg, SoundEvent::Failed), None);
+        answer(serde_json::json!({ "call": "try_sound", "event": "failed" }));
+        answer(serde_json::json!({ "call": "try_sound", "event": "cancelled" }));
+        let tried = sounds(&core);
+        assert_eq!(tried.len(), 1);
+        assert_eq!(tried[0].file, Some(file));
+        answer(serde_json::json!({ "call": "reset_sounds" }));
+        answer(serde_json::json!({ "call": "try_sound", "event": "cancelled" }));
+        assert_eq!(keys(&core), ["cancelled"]);
+        assert!(!lock(&core.state).cfg.sounds.on);
         std::fs::remove_dir_all(&dir).unwrap();
     }
 

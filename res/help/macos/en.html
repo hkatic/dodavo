@@ -26,6 +26,7 @@
 <li><a href="#sending">Sending files and folders</a></li>
 <li><a href="#receiving">Receiving files and folders</a></li>
 <li><a href="#progress">Following a transfer</a></li>
+<li><a href="#chat">Chatting with a person</a></li>
 <li><a href="#background">Running in the background</a></li>
 <li><a href="#settings">Settings</a></li>
 <li><a href="#shortcuts">Keyboard shortcuts</a></li>
@@ -81,8 +82,8 @@
 <section aria-labelledby="main-window">
 <h2 id="main-window">The main window</h2>
 <p>The main window lists your recipients in a table with the columns Name, Contact ID and Transfer. The last one says what is going on with that person. Below the table, a status line says whether Dodavo is online; VoiceOver announces when that changes.</p>
-<p>The toolbar has the commands Send, Add Recipient, Copy My Contact ID and Transfers. Send is unavailable until a recipient is selected.</p>
-<p>With VoiceOver, move to the table and press <kbd>VO</kbd>-<kbd>⇧</kbd>-<kbd>↓</kbd> to interact with it, then use the arrow keys to move between recipients. Press <kbd>Return</kbd> to send to the selected recipient, or <kbd>VO</kbd>-<kbd>⇧</kbd>-<kbd>M</kbd> to open its menu, with Send…, Show Transfer, Edit Recipient…, Remove Recipient and Block Recipient.</p>
+<p>The toolbar has the commands Send, Chat, Add Recipient, Copy My Contact ID and Transfers. Send and Chat are unavailable until a recipient is selected.</p>
+<p>With VoiceOver, move to the table and press <kbd>VO</kbd>-<kbd>⇧</kbd>-<kbd>↓</kbd> to interact with it, then use the arrow keys to move between recipients. Press <kbd>Return</kbd> to send to the selected recipient, or <kbd>VO</kbd>-<kbd>⇧</kbd>-<kbd>M</kbd> to open its menu, with Send…, Chat, Show Transfer, Edit Recipient…, Remove Recipient and Block Recipient.</p>
 <p>Without VoiceOver, turn on Keyboard navigation in System Settings > Keyboard to move between all controls with <kbd>Tab</kbd>; macOS has it off by default, and <kbd>Tab</kbd> then reaches only text fields and lists.</p>
 </section>
 
@@ -113,7 +114,9 @@
 <section aria-labelledby="receiving">
 <h2 id="receiving">Receiving files and folders</h2>
 <p>When someone sends you something, the Incoming Transfer window appears, a notification says so, and Dodavo's icon bounces in the Dock. It does not take the focus from what you are doing: click the notification, or the icon, to go to it.</p>
-<p>The window says who sends what, and whether there is enough free space. Save to: shows where it goes, and Choose… changes that. Accept takes it (<kbd>Return</kbd>), Decline refuses it (<kbd>Esc</kbd>). VoiceOver reads the window when you go to it.</p>
+<p>The window says who sends what, and whether there is enough free space. What the transfers that you are still receiving have left to arrive is counted too. Save to: shows where it goes, and Choose… changes that. Accept takes it (<kbd>Return</kbd>), Decline refuses it (<kbd>Esc</kbd>). VoiceOver reads the window when you go to it.</p>
+<p>When one person sends several items at once, they share one window, and your answer applies to all of them. The first line says how many there are, the next line gives their total size, and the Items table lists them. Items that arrive while the window is open are added to it, and those that arrived within the last second are not covered by your answer yet: they stay in the window.</p>
+<p>Chat opens a chat with the sender, for example to ask what the item is before you answer: see <a href="#chat">Chatting with a person</a>.</p>
 <p>Block Sender (<kbd>⌘B</kbd>) declines the offer and blocks the sender, after asking: from now on, Dodavo declines everything they send you, without asking, and they see only that their offer was declined. The Blocked page of <a href="#settings">Settings</a> lists the people you blocked, and Unblock lets them send to you again. Adding a blocked person as a recipient also unblocks them.</p>
 <p>From people in your recipients, a transfer can start by itself: see Start transfers automatically, without asking in <a href="#settings">Settings</a>. From anyone else, Dodavo always asks first, and says that the sender is not one of your recipients.</p>
 <p>You can limit the size of an item that someone can send you: see Limit the size of an item that someone can send me in <a href="#settings">Settings</a>.</p>
@@ -124,11 +127,55 @@
 <section aria-labelledby="progress">
 <h2 id="progress">Following a transfer</h2>
 <p>Transfers (<kbd>⌘T</kbd>) lists all transfers. Each row shows the item, the other person, what it is doing, how much is done, the speed and the time remaining. Closing this window does nothing to them.</p>
-<p>With VoiceOver, each row reads as one sentence. Press <kbd>VO</kbd>-<kbd>⇧</kbd>-<kbd>M</kbd> on a row for a menu of what can be done with it, or <kbd>VO</kbd>-<kbd>⇧</kbd>-<kbd>↓</kbd> to reach its buttons: Pause and Resume, Cancel Transfer, and when it has finished Open, Show in Finder and Remove from List. Changes in what a transfer is doing are announced while Dodavo is in front, and otherwise come as notifications.</p>
+<p>With VoiceOver, each row reads as one sentence. Press <kbd>VO</kbd>-<kbd>⇧</kbd>-<kbd>M</kbd> on a row for a menu of what can be done with it, or <kbd>VO</kbd>-<kbd>⇧</kbd>-<kbd>↓</kbd> to reach its buttons: Pause and Resume, Cancel Transfer, Chat, and when it has finished Open, Show in Finder and Remove from List. Changes in what a transfer is doing are announced while Dodavo is in front, and otherwise come as notifications.</p>
 <p>On the keyboard alone, select a row with the arrow keys: <kbd>Space</kbd> pauses or resumes it, <kbd>Delete</kbd> cancels it, or removes a finished one from the list, and <kbd>Return</kbd> opens what was saved.</p>
 <p>If the connection is lost, or a computer goes to sleep or restarts, the transfer waits and continues where it stopped once both are running and online. After 30 days without progress, the transfer ends. At the end, the whole item is checked.</p>
 <p>While data moves, Dodavo keeps the Mac from going to sleep by itself. Closing a laptop's lid still puts it to sleep; the transfer goes on after it wakes.</p>
 <p>Once all of an item has arrived, it is the receiver's, so the sender can no longer cancel the transfer. Clear Finished removes the rows of transfers that have ended.</p>
+</section>
+
+<section aria-labelledby="chat">
+<h2 id="chat">Chatting with a person</h2>
+<p>You can exchange short text messages with a person, for example to say what you are about to send or to ask about something you were offered. Messages go directly from one computer to the other, encrypted, over the same kind of connection as files. Both of you have to be running Dodavo and be online at the same moment, and the Dodavo on the other side has to have chat too.</p>
+<h3 id="chat-open">Opening a chat</h3>
+<ul>
+<li>In the main window, select the person and choose File > Chat (<kbd>⇧⌘M</kbd>), or Chat in the toolbar or in the person's menu.</li>
+<li>In the Incoming Transfer window, choose Chat to write to the sender before you answer. In Transfers, each row has a Chat button for the person the transfer is with; File > Chat does the same for the selected row.</li>
+<li>When someone writes to you, the chat window with that person opens by itself. It does not take the focus from what you are doing.</li>
+</ul>
+<p>There is one chat window for each person. Its title is Chat with followed by the person's name, and the focus starts in the Message field.</p>
+<h3 id="chat-several">Writing to several people at once</h3>
+<p>To send the same message to several people, select them in the list of recipients and choose File > Chat (<kbd>⇧⌘M</kbd>). Instead of a chat, Dodavo asks for the message: Message to Several People names the recipients and has a field for the message, with Send (<kbd>Return</kbd>) and Cancel (<kbd>Esc</kbd>). Each person gets the message as a private message from you. They do not see who else got it, and each answer arrives in the chat with that person. The message is added to your conversation with each of them. If it cannot be delivered to one of them, a notification says so, and that conversation marks it as not sent.</p>
+<h3 id="chat-window">The chat window</h3>
+<ul>
+<li>Conversation: a table with one message in each row, the newest last. Each row says who wrote the message, when, and the text, for example “Ana, 14:32: The photos are on their way.” or “You, 14:33: Thanks!”. A message from another day also has its date. Read the messages with the arrow keys, and copy the selected ones with <kbd>⌘C</kbd>. With VoiceOver, press <kbd>VO</kbd>-<kbd>⇧</kbd>-<kbd>↓</kbd> on the table to interact with it; each row reads as one sentence.</li>
+<li>The status line, below the conversation: the message that arrived last, that the other person is typing, or why a message was not sent.</li>
+<li>Message: where you write. A message can have up to 4000 characters.</li>
+<li>Send (<kbd>Return</kbd>): sends the message and adds it to the conversation. The focus stays in the field.</li>
+<li>Add to My Recipients…: only for a person who is not in your recipients; it opens Add Recipient with their name and Contact ID filled in.</li>
+<li>Block: blocks the person, after asking, and closes the chat. A blocked person can neither write to you nor send you anything.</li>
+<li>Delete Conversation…: deletes the messages with this person from this Mac, after asking.</li>
+</ul>
+<p>Closing the window (<kbd>⌘W</kbd>) keeps the conversation: it is there again when you open the chat.</p>
+<h3 id="chat-receiving">When a message arrives</h3>
+<ul>
+<li>While the chat window is in front, the message is added to the conversation and shown in the status line, and VoiceOver announces it, with the name of the person first.</li>
+<li>While you are elsewhere, the chat window opens or stays where it is without taking the focus, Dodavo's icon bounces in the Dock, and a notification, Message from with the person's name, shows the message. VoiceOver reads notifications as they appear. Click the notification to go to the chat.</li>
+<li>A sound plays in both cases, unless you turned it off.</li>
+</ul>
+<p>When the other person starts writing, the status line says so, for example “Ana is typing…”. While the chat window is in front, VoiceOver announces this once, with a short sound; it is not repeated while they go on writing. The other person is told in the same way when you write. Both can be turned off in <a href="#settings">Settings</a>.</p>
+<h3 id="chat-failed">When a message cannot be sent</h3>
+<p>A message that cannot be delivered is marked in the conversation, for example “You, 14:35 (not sent): Are you there?”, the status line says why, and a sound plays. Dodavo does not try again by itself. The text is put back into the Message field if that is empty, so that you can press <kbd>Return</kbd> to send it again. The reasons you may see:</p>
+<ul>
+<li>“The other computer could not be found on the network” or “Connection attempt timed out”: Dodavo is not running on the other computer, or one of you is offline.</li>
+<li>“This person does not accept messages from you”: the other person takes messages only from their recipients, or has blocked you.</li>
+<li>“Dodavo on the other side does not have chat”: the other person has a Dodavo without chat.</li>
+<li>“The connection was lost” or “The other side did not confirm the message”: the connection ended before the message was confirmed.</li>
+</ul>
+<h3 id="chat-who">Who can write to you</h3>
+<p>Unless you change it, anyone who has your Contact ID and is not blocked can write to you, as anyone can offer you a file. A chat with a person who is not in your recipients shows a warning with their Contact ID above the conversation. On the Chat page of <a href="#settings">Settings</a> you can choose Only my recipients: messages from anyone else are then refused without you seeing them, and their sender is told that you do not accept messages from them. If you write to a person who is not in your recipients yourself, their answers reach you all the same, for a day after your last message to them.</p>
+<h3 id="chat-history">Where conversations are kept</h3>
+<p>Conversations are kept on your Mac, with your settings, until you delete them: the newest 2000 messages with each person. They are not sent anywhere else. Delete Conversation… in a chat window deletes one, and Delete All Conversations… on the Chat page of Settings deletes all of them. Deleting removes the messages from your Mac only; the other person keeps their copy.</p>
 </section>
 
 <section aria-labelledby="background">
@@ -160,6 +207,21 @@
 <li>Limit the size of an item that someone can send me. Largest size: a whole number of MB or GB. The limit applies to each item by itself, from anyone; a folder counts by its size packed or unpacked, whichever is larger.</li>
 <li>When an item is over the limit: Ask me before it starts (the item never starts by itself, and the Incoming Transfer window says that it is larger than the limit you set), Decline it without telling me, or Decline it and tell me (a notification says who offered what). The sender sees only that the offer was declined.</li>
 </ul>
+<p>Chat:</p>
+<ul>
+<li>Who can send me messages: Anyone who is not blocked, or Only my recipients. With the second, a message from someone who is not in your recipients is refused without you seeing it.</li>
+<li>Tell the other person when I am typing: when selected, the other person's chat window says that you are typing while you write a message. It is on unless you turn it off.</li>
+<li>Announce when the other person is typing: when selected, VoiceOver announces in the chat window in front, with a sound, that the other person has started typing. When it is off, the status line still shows it. It is on unless you turn it off.</li>
+<li>Delete All Conversations…: deletes every conversation from this Mac, after asking.</li>
+</ul>
+<p>Sounds:</p>
+<ul>
+<li>Play sounds: Dodavo plays a short sound of its own for the events in the list. A notification about the same event then has no sound of its own. When it is off, no sound plays, and what each event is set to is kept. It is on unless you turn it off.</li>
+<li>Events: a table of the events, each with what it plays: Message received, Message sent, The other person is typing, Message not sent, Incoming item, Transfer started, Transfer completed, Transfer failed, Transfer declined or cancelled, Connection lost and Transfer continues. Select an event with the arrow keys; the controls below apply to it.</li>
+<li>Sound: Default (the built-in sound), None, or Choose… to pick a sound file of yours, such as a WAV or AIFF file. A file that cannot be played later, for example because it was moved, gives the built-in sound.</li>
+<li>Play: plays what the selected event is set to, also while Play sounds is off.</li>
+<li>Reset All: sets every event back to its built-in sound.</li>
+</ul>
 <p>Blocked: the senders you blocked, with Unblock.</p>
 </section>
 
@@ -169,6 +231,7 @@
 <thead><tr><th scope="col">Keys</th><th scope="col">Command</th></tr></thead>
 <tbody>
 <tr><td><kbd>⌘O</kbd></td><td>Send…</td></tr>
+<tr><td><kbd>⇧⌘M</kbd></td><td>Chat</td></tr>
 <tr><td><kbd>⌘N</kbd></td><td>Add Recipient…</td></tr>
 <tr><td><kbd>⌘I</kbd></td><td>Edit Recipient…</td></tr>
 <tr><td><kbd>⌘⌫</kbd></td><td>Remove Recipient</td></tr>

@@ -144,7 +144,10 @@ pub struct UpdateInfo {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Error {
-    Network(String),
+    /// The update server could not be reached.
+    Network,
+    /// It did not answer in time.
+    Timeout,
     Http(u16),
     TooLarge,
     Manifest(String),
@@ -163,10 +166,18 @@ pub enum Error {
 }
 
 impl Error {
+    /// A file of the update could not be written, read or made: `error` in
+    /// the system's words, as a failed transfer has them (see
+    /// `net::io_error_text`).
+    pub fn io(error: &std::io::Error) -> Error {
+        Error::Io(crate::net::io_error_text(error))
+    }
+
     /// The error as a sentence for the user.
     pub fn text(&self) -> String {
         match self {
-            Error::Network(detail) => crate::i18n::tr!(update_err_network, detail = detail),
+            Error::Network => crate::i18n::tr!(update_err_network).to_string(),
+            Error::Timeout => crate::i18n::tr!(update_err_timeout).to_string(),
             Error::Http(status) => crate::i18n::tr!(update_err_http, status = status),
             Error::TooLarge => crate::i18n::tr!(update_err_too_large).to_string(),
             Error::Manifest(detail) => crate::i18n::tr!(update_err_manifest, detail = detail),
@@ -250,7 +261,7 @@ where
                 Ok(rt) => rt.block_on(work()),
                 Err(e) => Event::Checked {
                     job,
-                    result: Err(Error::Io(e.to_string())),
+                    result: Err(Error::io(&e)),
                 },
             };
             sink(event);
@@ -258,7 +269,7 @@ where
     if let Err(e) = spawned {
         sink(Event::Checked {
             job,
-            result: Err(Error::Io(e.to_string())),
+            result: Err(Error::io(&e)),
         });
     }
 }

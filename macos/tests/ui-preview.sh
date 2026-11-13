@@ -4,6 +4,9 @@
 # name for. Works with the screen locked. For looking at layouts, not behaviour.
 #
 #   macos/tests/ui-preview.sh <folder> [language]
+#
+# DODAVO_SETTINGS_PAGE=<n> shows another page of the settings than the first
+# (0 General, 1 Receiving, 2 Chat, 3 Sounds, 4 Blocked).
 set -euo pipefail
 
 root="$(cd "$(dirname "$0")/../.." && pwd)"

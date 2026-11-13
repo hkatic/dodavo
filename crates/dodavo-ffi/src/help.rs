@@ -195,8 +195,62 @@ fn pages_use_the_program_texts() {
             ("move_button", table.move_button),
             ("service_send", table.service_send),
             ("system_settings", table.system_settings),
+            // Chat and sounds.
+            ("menu_chat", table.menu_chat),
+            ("chat_history_label", table.chat_history_label),
+            ("chat_message_label", table.chat_message_label),
+            ("chat_add", table.chat_add),
+            ("block", table.block),
+            ("chat_delete", table.chat_delete),
+            ("several_title", table.several_title),
+            ("chat_error_cannot_chat", table.chat_error_cannot_chat),
+            ("settings_chat", table.settings_chat),
+            ("chat_from_label", table.chat_from_label),
+            ("chat_from_anyone", table.chat_from_anyone),
+            ("chat_from_recipients", table.chat_from_recipients),
+            ("send_typing", table.send_typing),
+            ("announce_typing", table.announce_typing),
+            ("chat_delete_all", table.chat_delete_all),
+            ("settings_sounds", table.settings_sounds),
+            ("sounds_on", table.sounds_on),
+            ("sounds_events_label", table.sounds_events_label),
+            ("sound_choice_label", table.sound_choice_label),
+            ("sound_choice_default", table.sound_choice_default),
+            ("sound_choice_off", table.sound_choice_off),
+            ("sound_play", table.sound_play),
+            ("sounds_reset", table.sounds_reset),
+            ("sound_message_received", table.sound_message_received),
+            ("sound_message_sent", table.sound_message_sent),
+            ("sound_typing", table.sound_typing),
+            ("sound_message_failed", table.sound_message_failed),
+            ("sound_incoming", table.sound_incoming),
+            ("sound_started", table.sound_started),
+            ("sound_completed", table.sound_completed),
+            ("sound_failed", table.sound_failed),
+            ("sound_cancelled", table.sound_cancelled),
+            ("sound_connection_lost", table.sound_connection_lost),
+            ("sound_continues", table.sound_continues),
         ] {
             assert!(page.contains(text), "{lang:?}: {key}: {text}");
+        }
+        // What the library itself says of a message that was not sent.
+        let core = lang.strings();
+        for (key, text) in [
+            ("error_peer_not_found", core.error_peer_not_found),
+            ("error_timeout", core.error_timeout),
+            ("chat_error_refused", core.chat_error_refused),
+            ("error_connection_lost", core.error_connection_lost),
+            ("chat_error_no_answer", core.chat_error_no_answer),
+        ] {
+            assert!(page.contains(text), "{lang:?}: {key}: {text}");
+        }
+        // The examples are written as the chat window writes a message.
+        for (key, text) in [
+            ("chat_head_failed", table.chat_head_failed.replace("{time}", "14:35")),
+            ("chat_head_mine", table.chat_head_mine.replace("{time}", "14:33")),
+            ("chat_typing", table.chat_typing.replace("{name}", "Ana")),
+        ] {
+            assert!(page.contains(&text), "{lang:?}: {key}: {text}");
         }
         assert!(
             page.contains(dodavo_core::DONATE_URL) || visible(self::page(lang)).contains("PayPal")

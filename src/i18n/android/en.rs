@@ -14,6 +14,7 @@ pub const EN: Strings = Strings {
     part_in_use_balloon: "“{item}”: another app is using the partly received file, or Android has not allowed access to it. The transfer continues as soon as that changes.",
     peer_part_in_use_balloon: "“{item}”: on the other side ({name}), another app is using the partly received file. The transfer continues as soon as that app closes it.",
     notify_saved: "“{item}” from {name} has been saved. Tap to show it.",
+    chat_error_cannot_chat: "Dodavo on the other side does not have chat",
     error_no_access: "Dodavo may not use this item.",
     error_name_too_long: "The name or path of an item is too long for this device.",
     error_read_only: "The storage is read-only.",

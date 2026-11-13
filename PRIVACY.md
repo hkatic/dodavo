@@ -14,7 +14,7 @@ Dodavo sends files directly from one device to another, end-to-end encrypted. Th
 - Your name as you entered it, your recipients (their names and Contact IDs), the senders you blocked and your settings.
 - The records of transfers that are under way, so that they can continue after a restart. Each one is deleted when its transfer ends, and what is left of an ended transfer after 30 days at most.
 - What you receive, in the folder where Dodavo saves received items, and temporary copies of what you send, until the transfer no longer needs them.
-- On Windows, your chat conversations: the messages you wrote and received, with their times, until you delete a conversation or all of them.
+- On Windows and on a Mac, your chat conversations: the messages you wrote and received, with their times, until you delete a conversation or all of them.
 
 Where this is kept: in Dodavo's own storage on Android, in `%APPDATA%\Dodavo` on Windows, and in `~/Library/Application Support/Dodavo` on a Mac. Nobody else receives any of it from Dodavo.
 
@@ -24,7 +24,7 @@ On Android, Android's own backup, if you have turned it on, includes your recipi
 
 **The person you send to** receives, besides the item itself: your Contact ID, your name as you entered it, the item's name, size and dates, and the IP addresses of your device, which a direct connection needs. **The person who sends to you** receives your Contact ID, your device's IP addresses, and whether you accepted, declined or cancelled. A sender you blocked learns only that the offer was declined.
 
-**The person you chat with** (on Windows) receives your messages, your Contact ID, your name as you entered it, the IP addresses of your device and, unless you turn that off in Settings, that you are writing a message. Messages go directly to that person's device, end-to-end encrypted like files, and are kept there as they are on yours. Someone whose messages you do not accept learns only that.
+**The person you chat with** (on Windows and on a Mac) receives your messages, your Contact ID, your name as you entered it, the IP addresses of your device and, unless you turn that off in Settings, that you are writing a message. Messages go directly to that person's device, end-to-end encrypted like files, and are kept there as they are on yours. Someone whose messages you do not accept learns only that.
 
 **Devices on your local network** can see your Contact ID and the addresses of your device on that network, which Dodavo announces there (mDNS) so that devices nearby find each other.
 

@@ -92,6 +92,13 @@ pub fn wait(timeout: std::time::Duration) -> Option<String> {
     }
 }
 
+/// The built-in sound of the event that the settings call `event` (see
+/// `dodavo_core::sound::SoundEvent::key`): a WAV file, in memory for as long
+/// as the program runs.
+pub fn sound(event: &str) -> Option<&'static [u8]> {
+    dodavo_core::sound::SoundEvent::from_key(event).map(dodavo_core::sound::SoundEvent::wav)
+}
+
 fn to_c(text: String) -> *mut c_char {
     // No NUL in JSON, which escapes it.
     CString::new(text).unwrap_or_default().into_raw()
@@ -144,6 +151,23 @@ pub unsafe extern "C" fn dodavo_call(call: *const c_char) -> *mut c_char {
     to_c(self::call(text_of(call)))
 }
 
+/// The built-in sound of `event` (see [`sound`]): its bytes, whose number is
+/// written to `len`. They are not to be freed. Null for an event that has
+/// no sound.
+///
+/// # Safety
+///
+/// `event` is a NUL-terminated string, and `len` points to a `usize`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn dodavo_sound(event: *const c_char, len: *mut usize) -> *const u8 {
+    let wav = sound(text_of(event));
+    if !len.is_null() {
+        // SAFETY: as the caller says.
+        unsafe { *len = wav.map_or(0, <[u8]>::len) };
+    }
+    wav.map_or(std::ptr::null(), <[u8]>::as_ptr)
+}
+
 /// Frees a string that one of these functions returned.
 ///
 /// # Safety
@@ -179,6 +203,15 @@ pub fn swift_keys() -> String {
 
 #[cfg(all(test, target_os = "macos"))]
 mod tests {
+    #[test]
+    fn every_event_gives_its_built_in_sound() {
+        for event in dodavo_core::sound::SoundEvent::ALL {
+            let wav = super::sound(event.key()).expect(event.key());
+            assert_eq!((&wav[..4], &wav[8..12]), (&b"RIFF"[..], &b"WAVE"[..]));
+        }
+        assert!(super::sound("something_new").is_none());
+    }
+
     #[test]
     fn the_swift_keys_are_current() {
         let file = include_str!("../../../macos/Sources/Dodavo/Keys.generated.swift");

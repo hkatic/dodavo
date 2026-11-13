@@ -17,8 +17,11 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSToolba
     /// The announcement of a status that waits for that, if one does.
     private var unsaid: DispatchWorkItem?
     private var openSheet: RecipientSheet?
+    /// Watches the field of the message to several people while it is asked for.
+    private var severalLimiter: MessageLimiter?
 
     private let sendID = NSToolbarItem.Identifier("send")
+    private let chatID = NSToolbarItem.Identifier("chat")
     private let addID = NSToolbarItem.Identifier("add")
     private let copyID = NSToolbarItem.Identifier("copy")
     private let transfersID = NSToolbarItem.Identifier("transfers")
@@ -276,6 +279,60 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSToolba
         }
     }
 
+    /// Opens the chat with the recipient a send would go to. With several
+    /// selected there is no one chat: a message is asked for, which each of
+    /// them gets as their own.
+    @objc func chat(_: Any?) {
+        let contacts = targetContacts
+        guard !contacts.isEmpty else { return }
+        if contacts.count == 1 {
+            (NSApp.delegate as? AppDelegate)?.openChat(
+                peer: contacts[0].id, name: "", activate: true)
+        } else {
+            messageSeveral(contacts)
+        }
+    }
+
+    /// Asks for one message to `contacts`, and sends it to each of them as a
+    /// private message, which is kept in the chat with that person, where
+    /// the answer arrives too.
+    private func messageSeveral(_ contacts: [Contact]) {
+        guard let window = window else { return }
+        let alert = NSAlert()
+        alert.messageText = L[.several_title]
+        // Every name: this is who the message goes to.
+        let names = contacts.map { $0.name }.joined(separator: ", ")
+        alert.informativeText = "\(L.f(.several_to, ["names": names]))\n\n\(L[.several_note])"
+        let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 300, height: 22))
+        var label = L[.chat_message_label]
+        if label.hasSuffix(":") { label.removeLast() }
+        field.placeholderString = label
+        field.setAccessibilityLabel(label)
+        alert.accessoryView = field
+        let send = alert.addButton(withTitle: L[.send_action])
+        alert.addButton(withTitle: L[.cancel])
+        alert.buttons[1].keyEquivalent = "\u{1b}"
+        // Nothing to send yet.
+        send.isEnabled = false
+        let limit = (NSApp.delegate as? AppDelegate)?.chatMaxChars ?? 0
+        let limiter = MessageLimiter(limit: limit) { text in
+            send.isEnabled = !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
+        severalLimiter = limiter
+        field.delegate = limiter
+        alert.window.initialFirstResponder = field
+        let ids = contacts.map { $0.id }
+        alert.beginSheetModal(for: window) { [weak self] response in
+            self?.severalLimiter = nil
+            guard response == .alertFirstButtonReturn else { return }
+            let arguments: [String: Any] = ["peer_ids": ids, "text": field.stringValue]
+            // One who is no longer a recipient: nothing was sent, and this says so.
+            if let error = Core.errorOf("chat_send_several", arguments) {
+                showAlert(error, on: window)
+            }
+        }
+    }
+
     @objc func addRecipient(_: Any?) {
         presentSheet(RecipientSheet(editing: nil) { [weak self] in self?.reload() })
     }
@@ -312,7 +369,8 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSToolba
         guard let contact = targetContact, let window = window else { return }
         confirmBlocking(contact.name, isRecipient: true, on: window) {
             let (error, declined) = Core.block(name: contact.name, id: contact.id)
-            (NSApp.delegate as? AppDelegate)?.senderBlocked(declined: declined, error: error)
+            (NSApp.delegate as? AppDelegate)?.senderBlocked(
+                contact.id, declined: declined, error: error)
         }
     }
 
@@ -354,7 +412,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSToolba
     /// for a single recipient while several are selected.
     @objc func validateMenuItem(_ item: NSMenuItem) -> Bool {
         switch item.action {
-        case #selector(send(_:)):
+        case #selector(send(_:)), #selector(chat(_:)):
             return !targetContacts.isEmpty && window?.attachedSheet == nil
         case #selector(editRecipient(_:)), #selector(removeRecipient(_:)),
             #selector(blockRecipient(_:)):
@@ -377,11 +435,11 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSToolba
     // MARK: The toolbar
 
     func toolbarAllowedItemIdentifiers(_: NSToolbar) -> [NSToolbarItem.Identifier] {
-        [sendID, addID, copyID, .flexibleSpace, transfersID]
+        [sendID, chatID, addID, copyID, .flexibleSpace, transfersID]
     }
 
     func toolbarDefaultItemIdentifiers(_: NSToolbar) -> [NSToolbarItem.Identifier] {
-        [sendID, addID, copyID, .flexibleSpace, transfersID]
+        [sendID, chatID, addID, copyID, .flexibleSpace, transfersID]
     }
 
     func toolbar(
@@ -401,6 +459,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSToolba
         let app = NSApp.delegate as AnyObject
         switch id {
         case sendID: set(L[.toolbar_send], "paperplane", self, #selector(send(_:)))
+        case chatID: set(L[.menu_chat], "bubble.left", self, #selector(chat(_:)))
         case addID: set(L[.toolbar_add], "person.badge.plus", self, #selector(addRecipient(_:)))
         case copyID:
             set(L[.toolbar_copy_id], "doc.on.doc", app, #selector(AppDelegate.copyMyContactID(_:)))
@@ -414,7 +473,8 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSToolba
     }
 
     @objc func validateToolbarItem(_ item: NSToolbarItem) -> Bool {
-        item.itemIdentifier == sendID ? !targetContacts.isEmpty : true
+        let id = item.itemIdentifier
+        return id == sendID || id == chatID ? !targetContacts.isEmpty : true
     }
 
     // MARK: The table
@@ -456,6 +516,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSToolba
             return
         }
         add(L[.menu_send], #selector(send(_:)))
+        add(L[.menu_chat], #selector(chat(_:)))
         // The rest is for one recipient.
         guard targets.count == 1 else { return }
         let contact = targets[0]
@@ -526,7 +587,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSToolba
 }
 
 /// A cell that shows one line of text.
-private func makeTextCell(_ id: NSUserInterfaceItemIdentifier) -> NSTableCellView {
+func makeTextCell(_ id: NSUserInterfaceItemIdentifier) -> NSTableCellView {
     let cell = NSTableCellView()
     cell.identifier = id
     let text = NSTextField(labelWithString: "")
@@ -610,6 +671,8 @@ final class RecipientsTable: NSTableView {
 /// Add Recipient and Edit Recipient, as a sheet.
 final class RecipientSheet: NSWindowController {
     private let editing: Contact?
+    /// For a new recipient: who the fields say at first (see `ChatWindowController`).
+    private let proposing: Contact?
     private let done: () -> Void
     private let nameField = NSTextField()
     private let idField = NSTextField()
@@ -618,8 +681,9 @@ final class RecipientSheet: NSWindowController {
     private let limitNumber = NSTextField()
     private let limitUnit = NSPopUpButton()
 
-    init(editing: Contact?, done: @escaping () -> Void) {
+    init(editing: Contact?, proposing: Contact? = nil, done: @escaping () -> Void) {
         self.editing = editing
+        self.proposing = proposing
         self.done = done
         let panel = NSPanel(
             contentRect: NSRect(x: 0, y: 0, width: 460, height: 200),
@@ -635,8 +699,8 @@ final class RecipientSheet: NSWindowController {
         let heading = makeLabel(panel.title, bold: true)
         let nameLabel = NSTextField(labelWithString: L[.recipient_name_label])
         let idLabel = NSTextField(labelWithString: L[.contact_id_label])
-        nameField.stringValue = editing?.name ?? ""
-        idField.stringValue = editing?.id ?? ""
+        nameField.stringValue = (editing ?? proposing)?.name ?? ""
+        idField.stringValue = (editing ?? proposing)?.id ?? ""
         nameField.placeholderString = L[.recipient_name_help]
         name(nameField, by: nameLabel)
         name(idField, by: idLabel)

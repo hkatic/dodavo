@@ -633,18 +633,26 @@ pub fn unzip(
     cancel: &AtomicBool,
     progress: &mut dyn FnMut(u64, u64),
 ) -> anyhow::Result<()> {
-    unzip_within(zip, dest, mark, None, cancel, progress)
+    unzip_within(zip, dest, mark, None, None, cancel, progress)
 }
 
 /// [`unzip`], which fails rather than write more than `max` bytes of files
 /// (`None`: any amount): before anything is written when the sizes that the
 /// zip states come to more, and otherwise at the byte that is one too many,
 /// since a zip can hold more than it states.
+///
+/// `offered` is how many bytes of files the zip's receiver was told of,
+/// which is what the free space was looked at for. A zip can state more (a
+/// file that grew while it was packed, or a sender whose program says less
+/// than it packs): then it is unpacked only where there is room for what
+/// it states, and without a `max` never past that, so that nothing gets
+/// onto the disk that neither the offer nor the zip spoke of.
 pub fn unzip_within(
     zip: File,
     dest: &Path,
     mark: bool,
     max: Option<u64>,
+    offered: Option<u64>,
     cancel: &AtomicBool,
     progress: &mut dyn FnMut(u64, u64),
 ) -> anyhow::Result<()> {
@@ -653,10 +661,14 @@ pub fn unzip_within(
     for i in 0..archive.len() {
         total = total.saturating_add(archive.by_index(i)?.size());
     }
-    let too_large = |size: u64| max.is_some_and(|max| size > max);
-    if too_large(total) {
+    if max.is_some_and(|max| total > max) {
         bail!(tr!(error_folder_too_large));
     }
+    if offered.is_some_and(|offered| total > offered) && !has_room(dest, total) {
+        bail!(io::Error::from(io::ErrorKind::StorageFull));
+    }
+    let most = max.or(offered.map(|offered| offered.max(total)));
+    let too_large = |size: u64| most.is_some_and(|most| size > most);
     std::fs::create_dir_all(dest)?;
     if mark {
         os::mark_folder(dest);
@@ -746,6 +758,14 @@ pub fn unzip_within(
         }
     }
     Ok(())
+}
+
+/// Whether the volume of `dest`, a folder that may not be there yet, has
+/// `needed` bytes free; also when that cannot be told.
+fn has_room(dest: &Path, needed: u64) -> bool {
+    dest.ancestors()
+        .find_map(crate::platform::disk_free)
+        .is_none_or(|(_, free)| free >= needed)
 }
 
 /// What the private field of a zip entry says (see [`names`]).
@@ -2491,25 +2511,60 @@ mod tests {
         let zip = base.join("x.zip");
         let cancel = AtomicBool::new(false);
         zip_folder(&src, &zip, &cancel, &mut |_, _| {}).unwrap();
-        let unpack = |out: &Path, max| {
+        let unpack = |out: &Path, max, offered| {
             unzip_within(
                 File::open(&zip).unwrap(),
                 out,
                 false,
                 max,
+                offered,
                 &cancel,
                 &mut |_, _| {},
             )
         };
         let out = base.join("over");
-        let error = unpack(&out, Some(999)).unwrap_err();
+        let error = unpack(&out, Some(999), None).unwrap_err();
         assert_eq!(error.to_string(), tr!(error_folder_too_large));
         assert!(!is_cancelled(&error));
         assert!(!out.exists(), "nothing was written");
+        // What the receiver was told of does not raise what it may have.
+        let error = unpack(&out, Some(999), Some(1000)).unwrap_err();
+        assert_eq!(error.to_string(), tr!(error_folder_too_large));
         let out = base.join("fits");
-        unpack(&out, Some(1000)).unwrap();
+        unpack(&out, Some(1000), None).unwrap();
         assert_eq!(std::fs::read(out.join("b.bin")).unwrap(), vec![2u8; 400]);
-        unpack(&base.join("any"), None).unwrap();
+        unpack(&base.join("any"), None, None).unwrap();
+        std::fs::remove_dir_all(&base).ok();
+    }
+
+    /// A zip that states more than its receiver was told of (a file grew
+    /// while it was packed) is unpacked where there is room for all of it,
+    /// and not at all where there is none.
+    #[test]
+    fn unzip_of_more_than_was_offered_needs_the_room() {
+        let base = scratch("unzip-offered");
+        let src = base.join("src");
+        std::fs::create_dir_all(&src).unwrap();
+        std::fs::write(src.join("a.bin"), vec![1u8; 1000]).unwrap();
+        let zip = base.join("x.zip");
+        let cancel = AtomicBool::new(false);
+        zip_folder(&src, &zip, &cancel, &mut |_, _| {}).unwrap();
+        let out = base.join("grown");
+        unzip_within(
+            File::open(&zip).unwrap(),
+            &out,
+            false,
+            None,
+            Some(900),
+            &cancel,
+            &mut |_, _| {},
+        )
+        .unwrap();
+        assert_eq!(std::fs::read(out.join("a.bin")).unwrap(), vec![1u8; 1000]);
+        // The same question, of a volume that has the room and of one that
+        // cannot have it.
+        assert!(has_room(&base.join("not").join("there"), 1000));
+        assert!(!has_room(&base, u64::MAX));
         std::fs::remove_dir_all(&base).ok();
     }
 

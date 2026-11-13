@@ -390,6 +390,8 @@ fn main() {
         Some(cfg.chat_policy()),
         app::event_sink,
     );
+    // Before a chat can be shown, or a message arrive.
+    ui::chat::start(&data_dir);
     app::install(app::App {
         cfg,
         data_dir,

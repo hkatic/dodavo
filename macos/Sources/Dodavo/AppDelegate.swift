@@ -19,7 +19,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var updateWindow: UpdateWindowController?
     private var statusItem: StatusItem?
     private var notifier: Notifier?
+    /// The Incoming Transfer windows by the offers that wait in them: several
+    /// offers of one sender share a window.
     private var incoming: [UInt64: IncomingWindowController] = [:]
+    /// Where the next Incoming Transfer window goes, so that it does not
+    /// cover the one before it.
+    private var incomingCascade = NSPoint.zero
+    /// The open chat windows, by the other person's Contact ID as the
+    /// library writes it.
+    private var chats: [String: ChatWindowController] = [:]
     private var rows: [UInt64: Row] = [:]
     /// Kept from throttling while Dodavo runs hidden, so that it can receive.
     private var running: NSObjectProtocol?
@@ -34,6 +42,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var pendingPaths: [String] = []
 
     var isReady: Bool { started != nil }
+
+    /// The longest chat message that can be written, in characters.
+    var chatMaxChars: Int { started?.chatMaxChars ?? 0 }
 
     // MARK: Starting
 
@@ -199,17 +210,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         case .notice(let id, let notice, let path):
             notifier?.post(notice, action: .transfer(id, path: path))
         case .offer(let offer, let notice):
-            let window = IncomingWindowController(offer: offer) { [weak self] in
-                self?.incoming[offer.id] = nil
-                self?.notifier?.forgetOffer(offer.id)
-            }
-            incoming[offer.id] = window
-            window.present()
-            NSApp.requestUserAttention(.informationalRequest)
-            notifier?.post(notice, action: .offer(offer.id))
+            showOffer(offer, notice: notice)
         case .offerGone(let id, let notice):
-            incoming[id]?.closeWithoutAnswer()
-            incoming[id] = nil
+            forgetOffers([id])
             notifier?.post(notice, action: .none)
         case .declined(let notice):
             notifier?.post(notice, action: .none)
@@ -230,7 +233,67 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             updateWindow?.install(from: path)
         case .updateFailed(let text):
             updateWindow?.fail(text)
+        case .chatMessage(let peer, let name, let seq, let entry, let gone, let said, let problem, let notice):
+            // Its window opens for it, without taking the focus. One that is
+            // there stays as it is, also where the user minimized it.
+            guard let chat = chats[peer] ?? openChat(peer: peer, name: name, activate: false)
+            else { return }
+            chat.received(seq: seq, entry: entry, gone: gone, said: said, problem: problem)
+            // In front, the window says it; otherwise the notification does,
+            // which VoiceOver reads, and never both.
+            if !chat.isFront {
+                NSApp.requestUserAttention(.informationalRequest)
+                notifier?.post(notice, action: .chat(peer: peer, name: name))
+            }
+        case .chatAdded(let peer, let seq, let entry, let gone, let problem):
+            chats[peer]?.added(seq: seq, entry: entry, gone: gone, problem: problem)
+        case .chatFailed(let peer, let name, let seq, let index, let text, let said, let notice):
+            if let chat = chats[peer] {
+                chat.failed(seq: seq, index: index, text: text, said: said)
+                if !chat.isFront { NSApp.requestUserAttention(.informationalRequest) }
+            } else {
+                // Its window was closed meanwhile: the conversation says that
+                // the message was not sent, and this tells the user.
+                notifier?.post(notice, action: .chat(peer: peer, name: name))
+            }
+        case .chatTyping(let peer, let text, let announce, let sound):
+            chats[peer]?.typing(text, announce: announce, sound: sound)
+        case .sound(let sound):
+            Sounds.play(sound)
         }
+    }
+
+    // MARK: Chats
+
+    /// Opens the chat with the person whose Contact ID is `peer`, or shows
+    /// the one that is open. `name` is what they call themselves, for someone
+    /// who is not a recipient. With `activate` the window takes the focus,
+    /// which goes to the message field; otherwise it only shows.
+    @discardableResult
+    func openChat(peer: String, name: String, activate: Bool) -> ChatWindowController? {
+        var chat = chats[peer.lowercased()]
+        if chat == nil {
+            var key = ""
+            chat = ChatWindowController.open(
+                peer: peer, name: name,
+                cameToFront: { [weak self] in self?.notifier?.forgetChat(key) },
+                closed: { [weak self] in self?.chats[key] = nil })
+            guard let made = chat else { return nil }
+            key = made.peer
+            chats[key] = made
+        }
+        if activate {
+            chat?.bringToFront()
+        } else {
+            chat?.present()
+        }
+        return chat
+    }
+
+    /// Every conversation was deleted (see `SettingsWindowController`): the
+    /// open chats show none either.
+    func chatsDeleted() {
+        for chat in chats.values { chat.reload() }
     }
 
     private func showUpdate(headline: String, notes: String, manual: Bool) {
@@ -272,6 +335,46 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         statusItem?.update(running: runningRows)
     }
 
+    // MARK: Offers
+
+    /// Shows an offer: in the window of the same sender's waiting offers, or
+    /// in a new one, which does not cover another one that is open.
+    private func showOffer(_ offer: OfferInfo, notice: Notice) {
+        if let window = incoming.values.first(where: { $0.takes(offer) }) {
+            incoming[offer.id] = window
+            window.add(offer, notice: notice)
+            return
+        }
+        let window = IncomingWindowController(
+            offer: offer,
+            left: { [weak self] id in
+                self?.incoming[id] = nil
+                self?.notifier?.forgetOffer(id)
+            },
+            tell: { [weak self] notice, id in
+                self?.notifier?.post(notice, action: .offer(id))
+            })
+        if incoming.isEmpty { incomingCascade = .zero }
+        incoming[offer.id] = window
+        if let frame = window.window {
+            incomingCascade = frame.cascadeTopLeft(from: incomingCascade)
+        }
+        window.present()
+        NSApp.requestUserAttention(.informationalRequest)
+        notifier?.post(notice, action: .offer(offer.id))
+    }
+
+    /// The offers `ids` wait for an answer no more (their sender gave up, or
+    /// they were declined for the user): their windows let them go, and
+    /// close when nothing is left in them.
+    private func forgetOffers(_ ids: [UInt64]) {
+        for id in ids {
+            incoming[id]?.remove(id)
+            incoming[id] = nil
+            notifier?.forgetOffer(id)
+        }
+    }
+
     // MARK: What notifications lead to
 
     private func perform(_ action: Notifier.Action) {
@@ -284,6 +387,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             transfersWindow?.reveal(id)
         case .offer(let id):
             incoming[id]?.bringToFront()
+        case .chat(let peer, let name):
+            openChat(peer: peer, name: name, activate: true)
         case .open(let path):
             NSWorkspace.shared.open(URL(fileURLWithPath: path))
         case .reveal(let path):
@@ -436,11 +541,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private func changeContactID(on window: NSWindow) {
         let (error, id, declined) = Core.changeContactID()
-        for offer in declined {
-            incoming[offer]?.closeWithoutAnswer()
-            incoming[offer] = nil
-            notifier?.forgetOffer(offer)
-        }
+        forgetOffers(declined)
         if let id = id { myId = id }
         settingsWindow?.contactIDChanged(myId)
         if let error = error {
@@ -577,6 +678,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let file = NSMenu()
         file.autoenablesItems = true
         add(file, L[.menu_send], #selector(MainWindowController.send(_:)), "o", target: nil)
+        // With the person that the window in front is about: the selected
+        // recipient, the other side of the selected transfer, or the sender
+        // of an offer. Command-M alone minimizes.
+        let chat = add(file, L[.menu_chat], #selector(MainWindowController.chat(_:)), "m", target: nil)
+        chat.keyEquivalentModifierMask = [.command, .shift]
         file.addItem(.separator())
         add(
             file, L[.menu_add_recipient], #selector(MainWindowController.addRecipient(_:)), "n",
@@ -684,14 +790,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         mainWindow?.recipientsChanged()
     }
 
-    /// A sender was blocked (see `Core.block`): the windows of the offers of
-    /// theirs that were declined close, and the lists show it.
-    func senderBlocked(declined: [UInt64], error: String?) {
-        for id in declined {
-            incoming[id]?.closeWithoutAnswer()
-            incoming[id] = nil
-            notifier?.forgetOffer(id)
-        }
+    /// The sender with the Contact ID `peer` was blocked (see `Core.block`):
+    /// the windows of the offers of theirs that were declined close, and so
+    /// does the chat with them, and the lists show it.
+    func senderBlocked(_ peer: String, declined: [UInt64], error: String?) {
+        forgetOffers(declined)
+        chats[peer.lowercased()]?.close()
         mainWindow?.recipientsChanged()
         settingsWindow?.blockedChanged()
         if let error = error { showAlert(error, on: mainWindow?.window) }
@@ -747,6 +851,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             for row in samples { handle(.row(row, announce: nil)) }
             showTransfers(nil)
             showSettings(nil)
+            // DODAVO_SETTINGS_PAGE: which page of the settings to look at.
+            if let page = ProcessInfo.processInfo.environment["DODAVO_SETTINGS_PAGE"],
+                let index = Int(page)
+            {
+                settingsWindow?.selectPage(index)
+            }
             showLicense(nil)
             showAbout(nil)
             updateWindow = UpdateWindowController(
@@ -761,10 +871,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 addLabel: "Add “Marko” to my recipients", dir: NSHomeDirectory() + "/Downloads",
                 space: SpaceInfo(
                     text: "There is enough free space: 2 GB needed, 90 GB available on “Macintosh HD”.",
-                    fits: true, enough: true))
-            let incomingWindow = IncomingWindowController(offer: offer) {}
+                    fits: true, enough: true),
+                overLimit: "This item is larger than the limit you set (1 GB).")
+            let incomingWindow = IncomingWindowController(
+                offer: offer, left: { _ in }, tell: { _, _ in })
             incoming[9] = incomingWindow
             incomingWindow.present()
+            // A chat with someone who is no recipient, with a few messages.
+            let stranger = String(repeating: "ab", count: 32)
+            if let chat = openChat(peer: stranger, name: "Marko", activate: false) {
+                let now = UInt64(Date().timeIntervalSince1970)
+                let samples = [
+                    ChatEntry(time: now - 90_000, mine: false, failed: false, text: "Šaljem ti slike s ljetovanja."),
+                    ChatEntry(
+                        time: now - 120, mine: true, failed: false,
+                        text: "Hvala! A long message wraps over several lines, so that all of it can be read without scrolling sideways in the conversation."),
+                    ChatEntry(time: now - 60, mine: true, failed: true, text: "Are you there?"),
+                ]
+                for (index, entry) in samples.enumerated() {
+                    chat.added(seq: UInt64.max - 10 + UInt64(index), entry: entry, gone: 0, problem: nil)
+                }
+                chat.typing("Marko is typing…", announce: false, sound: nil)
+            }
             mainWindow?.setRows(samples)
             DispatchQueue.main.asyncAfter(deadline: .now() + 1) { self.auditForTesting() }
         }
@@ -783,6 +911,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 // A field being edited, and the About panel, are the system's.
                 if let text = view as? NSTextView, !text.isFieldEditor, window?.title != "" {
                     isControl = true
+                }
+                // A progress bar that its row speaks for is left out on purpose.
+                if view is NSProgressIndicator, !view.isAccessibilityElement() {
+                    isControl = false
                 }
                 if isControl {
                     controls += 1

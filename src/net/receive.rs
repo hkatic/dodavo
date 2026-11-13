@@ -31,8 +31,8 @@ use super::{
     protocol::{self, CHUNK, Ended, Kind, Msg, Offer, Token},
     send::AbortOnDrop,
     session::{
-        self, Control, Ending, KeptPart, Lost, Owned, PeerClose, ReceiveFiles, Role, Session, Side,
-        Streams, TransferRecord, lost, off_runtime, peer_close,
+        self, Control, Ending, HEAD_LEN, Head, KeptPart, Lost, Owned, PeerClose, ReceiveFiles,
+        Role, Session, Side, Streams, TransferRecord, lost, off_runtime, peer_close,
     },
     spawn_path_watch,
 };
@@ -140,6 +140,13 @@ impl Syncing {
     fn new(session: Arc<Session>) -> Self {
         session.syncing.store(true, Ordering::Relaxed);
         Syncing(session)
+    }
+
+    /// What arrived is on disk and in the record already: shutdown need not
+    /// wait for what the connection still does.
+    #[cfg(windows)]
+    fn over(&self) {
+        self.0.syncing.store(false, Ordering::Relaxed);
     }
 }
 
@@ -453,6 +460,11 @@ struct Receiver<'a> {
     hashed_from_disk: bool,
     /// The sender's hash of the whole item, once `Done` arrived.
     done_hash: Option<[u8; 32]>,
+    /// The first bytes of the part, at most `HEAD_LEN` of them, while they
+    /// arrive in this run: what the record notes of how the part begins
+    /// (see `session::Head`). `None` for a receive that was picked up with
+    /// data from an earlier run, and once all of them are noted.
+    head: Option<Vec<u8>>,
     status: Arc<Status>,
     /// The last connection was closed by the sender on purpose (it is
     /// exiting): the wait for the next one is not a network problem.
@@ -569,6 +581,7 @@ async fn accept(
         #[cfg(unix)]
         hashed_from_disk: false,
         done_hash: None,
+        head: Some(Vec::new()),
         status: Status::new(shared, id, ctl.paused.subscribe()),
         peer_suspended: false,
         cut: false,
@@ -629,6 +642,7 @@ fn new_receive(
             part_id: Some(part_id),
             synced: Some(0),
             folder,
+            head: None,
         },
         offer,
         done_hash: None,
@@ -900,6 +914,8 @@ impl<'a> Receiver<'a> {
             #[cfg(unix)]
             hashed_from_disk: false,
             done_hash: record.done_hash,
+            // What is on the disk from an earlier run is not known here.
+            head: (record.have() == 0).then(Vec::new),
             status: Status::new(shared, id, ctl.paused.subscribe()),
             peer_suspended: false,
             cut,
@@ -1300,6 +1316,12 @@ impl<'a> Receiver<'a> {
                 .await?;
         self.cut = false;
         let mut out = tokio::fs::File::from_std(out);
+        // The hash so far is of what arrived on earlier connections of this
+        // run, and nothing kept other programs from writing to the part
+        // while none of them had it open: what counts at the end is what is
+        // on disk (see below).
+        #[cfg(windows)]
+        let carried = self.hasher.is_some() && self.have > 0;
         self.rehash().await?;
         self.status.connected();
         self.shared.emit(Event::Progress {
@@ -1314,11 +1336,30 @@ impl<'a> Receiver<'a> {
         // is trusted, also after a power cut.
         out.flush().await?;
         sync_part(&out).await?;
+        // On Windows a connection's handle keeps other programs from writing
+        // to the part, but between two connections nothing does: a part that
+        // was written to before this connection is hashed again from the
+        // disk, while this handle still holds it, so that what is checked
+        // against the sender's hash is what the last step gets. (After a
+        // restart the hash is of the disk anyway, see `rehash`.)
+        #[cfg(windows)]
+        let on_disk = if carried && received.is_ok() {
+            // What arrived is noted first: the check can take a while, and
+            // the program may be closed meanwhile.
+            self.save_synced().await;
+            syncing.over();
+            self.hasher = None;
+            self.rehash().await
+        } else {
+            Ok(())
+        };
         drop(out);
         drop(kept);
         self.save_synced().await;
         drop(syncing);
         let hash = received?;
+        #[cfg(windows)]
+        on_disk?;
         #[cfg(test)]
         while held_before_verifying(&self.name) {
             tokio::time::sleep(Duration::from_millis(50)).await;
@@ -1359,11 +1400,21 @@ impl<'a> Receiver<'a> {
         Ok(placed)
     }
 
-    /// Notes in the record how much of the part file is on disk.
-    async fn save_synced(&self) {
+    /// Notes in the record how much of the part file is on disk, and what
+    /// the part begins with as far as that is on disk now (see
+    /// `session::Head`).
+    async fn save_synced(&mut self) {
         let have = self.have;
+        let begins = self.head.as_ref().filter(|head| !head.is_empty()).map(|head| {
+            let on_disk = head.len().min(usize::try_from(have).unwrap_or(usize::MAX));
+            Head::of(&head[..on_disk])
+        });
+        // All that counts of it is noted: the bytes are not needed again.
+        if self.head.as_ref().is_some_and(|head| head.len() >= HEAD_LEN) {
+            self.head = None;
+        }
         self.session
-            .update(&self.shared.data_dir, move |s, d| s.save_synced(d, have))
+            .update(&self.shared.data_dir, move |s, d| s.save_synced(d, have, begins))
             .await;
     }
 
@@ -1387,6 +1438,10 @@ impl<'a> Receiver<'a> {
                     recv.read_exact(&mut buf[..len]).await.map_err(lost)?;
                     out.write_all(&buf[..len]).await?;
                     self.hasher.as_mut().unwrap().update(&buf[..len]);
+                    if let Some(head) = self.head.as_mut().filter(|head| head.len() < HEAD_LEN) {
+                        let more = len.min(HEAD_LEN - head.len());
+                        head.extend_from_slice(&buf[..more]);
+                    }
                     #[cfg(unix)]
                     {
                         self.hashed_from_disk = false;
@@ -1420,19 +1475,24 @@ impl<'a> Receiver<'a> {
         }
     }
 
+    /// The size of the item as its offer stated it (see `limit::size_of`).
+    fn offered(&self) -> u64 {
+        self.session
+            .with_record(|r| crate::limit::size_of(&r.offer))
+            .unwrap_or(0)
+    }
+
     /// The most that the folder may unpack to: what the offer said or the
     /// sender's limit as it is now, whichever is more, so that a sender whose
     /// program states less than it packs gets nothing past the limit. A
     /// folder can be a little larger than its offer said (a file that grew
     /// while it was packed), which a limit leaves room for unless the item
-    /// was accepted over it. `None` without a limit.
+    /// was accepted over it. `None` without a limit: then the folder is
+    /// held to what its zip states, which has to fit on the disk where it
+    /// is more than the offer said (see `archive::unzip_within`).
     fn unpack_max(&self) -> Option<u64> {
         let limit = self.shared.limits.lock().unwrap().limit_for(&self.peer)?;
-        let offered = self
-            .session
-            .with_record(|r| crate::limit::size_of(&r.offer))
-            .unwrap_or(0);
-        Some(limit.max(offered))
+        Some(limit.max(self.offered()))
     }
 
     /// Moves the file into place, or unpacks the folder and keeps its zip
@@ -1466,6 +1526,7 @@ impl<'a> Receiver<'a> {
             session: self.session.clone(),
             data_dir: shared.data_dir.clone(),
             unpack_max: self.unpack_max(),
+            offered: self.offered(),
             waits: Box::new(move |in_use| {
                 if in_use {
                     status.set(Phase::PartInUse { finishing: true });
@@ -1582,6 +1643,8 @@ struct Transfer {
     data_dir: PathBuf,
     /// The most that a folder may unpack to (see `unpack_max`).
     unpack_max: Option<u64>,
+    /// The size of the item as its offer stated it (see `Receiver::offered`).
+    offered: u64,
     waits: Box<dyn Fn(bool) + Send>,
 }
 
@@ -1829,7 +1892,15 @@ fn finish_folder(
     };
     let mut partial = Cleanup(Some(target.clone()));
     // From the part that was checked, which is closed after it.
-    archive::unzip_within(part, &target, true, transfer.unpack_max, cancel, progress)?;
+    archive::unzip_within(
+        part,
+        &target,
+        true,
+        transfer.unpack_max,
+        Some(transfer.offered),
+        cancel,
+        progress,
+    )?;
     // As for a file (see `finish_file`), by the folder's identity.
     let folder_id = files.unpacking.as_ref().map(|folder| folder.id);
     let (now, later) = times.split(folder_id.as_ref());
@@ -2562,6 +2633,7 @@ mod tests {
                 part_id: archive::file_id(part).ok(),
                 synced: None,
                 folder,
+                head: None,
             },
             done_hash: None,
             done_sent: false,
@@ -2577,6 +2649,8 @@ mod tests {
             session,
             data_dir,
             unpack_max: None,
+            // As the offer above states it.
+            offered: 5,
             waits: Box::new(|_| {}),
         }
     }

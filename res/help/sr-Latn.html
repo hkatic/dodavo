@@ -223,7 +223,7 @@
 <dt><span class="ui">Sačuvaj u:</span> (<kbd>Alt</kbd>+<kbd>S</kbd>)</dt>
 <dd>Fascikla u kojoj će se stavka sačuvati. Ako je u postavkama uključena opcija <span class="ui">Uvek čuvaj primljene datoteke u ovoj fascikli</span>, to je fascikla iz te opcije, a to je vaša fascikla Preuzimanja ako niste izabrali drugu. Ako ta opcija nije uključena, to je fascikla koju ste koristili prošli put ili vaša fascikla Preuzimanja. Možete da upišete drugu fasciklu ili da je izaberete dugmetom <span class="ui">Pregledaj…</span> (<kbd>Alt</kbd>+<kbd>P</kbd>).</dd>
 <dt>Slobodan prostor na disku</dt>
-<dd>Rečenica ispod fascikle kaže da li na tom disku ima dovoljno slobodnog prostora, koliko je potrebno i koliko je dostupno. Fascikli koja se raspakuje potreban je prostor i za preuzimanje i za raspakivanje; fascikli koju zadržavate samo kao ZIP datoteku potreban je prostor za ZIP datoteku (pogledajte <span class="ui">Posle prijema fascikle</span> u <a href="#settings-receiving">postavkama</a>). Rečenica se ažurira kada fasciklu izaberete dugmetom Pregledaj ili napustite polje sa fasciklom. Na disku sa sistemom datoteka FAT32, kakav imaju mnogi USB fleš diskovi i memorijske kartice, nijedna datoteka ne može biti od 4 GB ili veća: ako bi prenos tamo sačuvao takvu datoteku, rečenica to kaže i treba da izaberete fasciklu na drugom disku.</dd>
+<dd>Rečenica ispod fascikle kaže da li na tom disku ima dovoljno slobodnog prostora, koliko je potrebno i koliko je dostupno. Fascikli koja se raspakuje potreban je prostor i za preuzimanje i za raspakivanje; fascikli koju zadržavate samo kao ZIP datoteku potreban je prostor za ZIP datoteku (pogledajte <span class="ui">Posle prijema fascikle</span> u <a href="#settings-receiving">postavkama</a>). Računa se i ono što prenosima koje još primate tek treba da stigne: ako zbog toga nema dovoljno mesta, rečenica kaže koliko će oni zauzeti. Rečenica se ažurira kada fasciklu izaberete dugmetom Pregledaj ili napustite polje sa fasciklom. Na disku sa sistemom datoteka FAT32, kakav imaju mnogi USB fleš diskovi i memorijske kartice, nijedna datoteka ne može biti od 4 GB ili veća: ako bi prenos tamo sačuvao takvu datoteku, rečenica to kaže i treba da izaberete fasciklu na drugom disku.</dd>
 <dt><span class="ui">Prihvati</span> (<kbd>Alt</kbd>+<kbd>I</kbd>) i <span class="ui">Odbij</span> (<kbd>Alt</kbd>+<kbd>O</kbd>)</dt>
 <dd>Kada se prozor otvori, fokus je na dugmetu <span class="ui">Prihvati</span>, pa pritiskom tastera <kbd>Enter</kbd> prihvatate prenos; čitači ekrana obično najpre pročitaju tekst prozora, od podebljanog reda do rečenice o slobodnom prostoru na disku. Pritiskom tastera <kbd>Esc</kbd> ili zatvaranjem prozora odbijate ga.</dd>
 <dt><span class="ui">Blokiraj pošiljaoca</span> (<kbd>Alt</kbd>+<kbd>B</kbd>)</dt>
@@ -332,6 +332,8 @@
 <dl>
 <dt><span class="ui">Istorija</span> (<kbd>Alt</kbd>+<kbd>I</kbd>)</dt>
 <dd>Lista u kojoj je svaka poruka jedna stavka, a najnovija je poslednja. Svaka stavka kaže ko je napisao poruku, kada, i njen tekst, na primer <span class="ui">Ana, 14:32: Slike stižu.</span> ili <span class="ui">Vi, 14:33: Hvala!</span>. Poruka od nekog drugog dana ima i datum. Poruke čitate tasterima <kbd>Strelica nagore</kbd> i <kbd>Strelica nadole</kbd>, tasterima <kbd>Home</kbd> i <kbd>End</kbd> idete na prvu i poslednju, a tasterima <kbd>Ctrl</kbd>+<kbd>C</kbd> kopirate izabranu poruku. Kada pređete na listu, izabrana je najnovija poruka.</dd>
+<dt><span class="ui">Izabrana poruka</span> (<kbd>Alt</kbd>+<kbd>A</kbd>)</dt>
+<dd>Tekstualno polje samo za čitanje sa celim tekstom poruke koja je izabrana u istoriji. Stavka liste ima mesta za desetak redova, pa duža poruka tamo prikazuje samo svoj početak; ovde možete da je pročitate celu tasterima sa strelicama, izaberete njen deo i kopirate ga.</dd>
 <dt>Red statusa</dt>
 <dd>Jedan red ispod istorije koji prikazuje poruku koja je stigla poslednja, da druga osoba piše, ili zašto poruka nije poslata. Ne može da dobije fokus tastature; čitači ekrana ga čitaju kada se promeni i kada prozor dođe u prvi plan.</dd>
 <dt><span class="ui">Poruka</span> (<kbd>Alt</kbd>+<kbd>O</kbd>)</dt>
@@ -363,7 +365,7 @@
 <li><span class="ui">Veza je prekinuta</span> ili <span class="ui">Druga strana nije potvrdila poruku</span>: veza se završila pre nego što je poruka potvrđena.</li>
 </ul>
 <h3 id="chat-who">Ko može da vam piše</h3>
-<p>Ako to ne promenite, može da vam piše svako ko ima vaš ID kontakta i nije blokiran, kao što svako može da vam ponudi datoteku. Ćaskanje sa osobom koja nije na vašoj listi primalaca iznad istorije prikazuje upozorenje sa njenim ID-om kontakta. U postavkama, na kartici <span class="ui">Ćaskanje</span>, možete da izaberete <span class="ui">Samo moji primaoci</span>: poruke svih ostalih se tada odbijaju, a da ih vi ne vidite, i njihov pošiljalac saznaje da ne primate njegove poruke.</p>
+<p>Ako to ne promenite, može da vam piše svako ko ima vaš ID kontakta i nije blokiran, kao što svako može da vam ponudi datoteku. Ćaskanje sa osobom koja nije na vašoj listi primalaca iznad istorije prikazuje upozorenje sa njenim ID-om kontakta. U postavkama, na kartici <span class="ui">Ćaskanje</span>, možete da izaberete <span class="ui">Samo moji primaoci</span>: poruke svih ostalih se tada odbijaju, a da ih vi ne vidite, i njihov pošiljalac saznaje da ne primate njegove poruke. Ako sami pišete osobi koja nije na vašoj listi primalaca, njeni odgovori ipak stižu do vas, još dan nakon vaše poslednje poruke toj osobi.</p>
 <h3 id="chat-history">Gde se čuvaju razgovori</h3>
 <p>Razgovori se čuvaju na vašem računaru, uz vaše postavke, dok ih ne izbrišete: najnovijih 2000 poruka sa svakom osobom. Ne šalju se nikuda drugde. <span class="ui">Izbriši razgovor…</span> u prozoru ćaskanja briše jedan, a <span class="ui">Izbriši sve razgovore…</span> u postavkama, na kartici <span class="ui">Ćaskanje</span>, briše sve. Brisanjem se poruke uklanjaju samo sa vašeg računara; druga osoba zadržava svoj primerak.</p>
 </section>
@@ -582,6 +584,7 @@
 <tr><td><kbd>Alt</kbd>+<kbd>I</kbd></td><td>Prelazak na istoriju</td></tr>
 <tr><td><kbd>Strelica nagore</kbd> i <kbd>Strelica nadole</kbd> u istoriji</td><td>Čitanje prethodne ili sledeće poruke</td></tr>
 <tr><td><kbd>Ctrl</kbd>+<kbd>C</kbd> u istoriji</td><td>Kopiranje izabrane poruke</td></tr>
+<tr><td><kbd>Alt</kbd>+<kbd>A</kbd></td><td>Prelazak na ceo tekst izabrane poruke</td></tr>
 <tr><td><kbd>Alt</kbd>+<kbd>D</kbd></td><td>Dodavanje osobe u moje primaoce, kada nije među njima</td></tr>
 <tr><td><kbd>Alt</kbd>+<kbd>B</kbd></td><td>Blokiranje osobe</td></tr>
 <tr><td><kbd>Alt</kbd>+<kbd>R</kbd></td><td>Brisanje razgovora</td></tr>

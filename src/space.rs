@@ -1,7 +1,7 @@
 //! Whether an offer fits on the disk when saved into a folder: what the
 //! Incoming Transfer window says, and what automatic acceptance goes by.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use crate::{
     format::format_size,
@@ -139,6 +139,63 @@ fn space_needed(
     }
 }
 
+/// A receive that is under way, as far as the room that it still takes goes:
+/// what has not arrived yet is not on the disk, so the free space does not
+/// show it, while a new item needs room beside it (see [`check_space_of`]).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Arriving {
+    pub offer: Offer,
+    /// The folder that it is saved into.
+    pub dir: PathBuf,
+    /// What is kept of a folder.
+    pub folder: ReceivedFolder,
+    /// How far it has got: the bytes of its data that arrived, or once it is
+    /// `unpacking`, the bytes that were unpacked.
+    pub done: u64,
+    pub unpacking: bool,
+}
+
+impl Arriving {
+    /// How many bytes it still writes to the volume at `root`, with `temp`
+    /// as the folder of the temporary archives. Rather too many than too
+    /// few: while a part is checked after a restart, `done` counts what was
+    /// checked.
+    fn still_needs(&self, root: &Path, temp: &Path) -> u64 {
+        let same = |a: &Path, b: &Path| a.as_os_str().eq_ignore_ascii_case(b.as_os_str());
+        let Some((dest_root, _)) = disk_free(&self.dir) else {
+            return 0;
+        };
+        let offer = &self.offer;
+        // The data: the file, or the zip of a folder, which is in the
+        // temporary folder where the destination cannot hold it.
+        let in_temp = session::part_in_temp(offer.kind, self.folder, offer.size, &self.dir);
+        let data_root = in_temp
+            .then(|| disk_free(temp))
+            .flatten()
+            .map_or_else(|| dest_root.clone(), |(root, _)| root);
+        let data = if self.unpacking {
+            0
+        } else {
+            offer.size.saturating_sub(self.done)
+        };
+        // What a folder unpacks to, next to its zip.
+        let unpacks = offer.kind == Kind::Folder && self.folder != ReceivedFolder::KeepZip;
+        let files = match (unpacks, self.unpacking) {
+            (false, _) => 0,
+            (true, false) => offer.content_size,
+            (true, true) => offer.content_size.saturating_sub(self.done),
+        };
+        let mut needed = 0u64;
+        if same(&data_root, root) {
+            needed = needed.saturating_add(data);
+        }
+        if same(&dest_root, root) {
+            needed = needed.saturating_add(files);
+        }
+        needed
+    }
+}
+
 /// The name the Finder shows.
 #[cfg(target_os = "macos")]
 fn drive_name(root: &Path) -> String {
@@ -156,14 +213,28 @@ fn drive_name(root: &Path) -> String {
 }
 
 /// Whether `offer` fits into `dir`, with `folder` deciding what is kept of a
-/// folder and `temp` being the folder of the temporary archives.
-pub fn check_space(offer: &Offer, dir: &Path, temp: &Path, folder: ReceivedFolder) -> Space {
-    check_space_of(&[offer], dir, temp, folder)
+/// folder and `temp` being the folder of the temporary archives, beside
+/// what the receives that are under way (`arriving`) still have to write.
+pub fn check_space(
+    offer: &Offer,
+    dir: &Path,
+    temp: &Path,
+    folder: ReceivedFolder,
+    arriving: &[Arriving],
+) -> Space {
+    check_space_of(&[offer], dir, temp, folder, arriving)
 }
 
 /// The same for several offers that are answered together: all of them have
-/// to fit at the same time.
-pub fn check_space_of(offers: &[&Offer], dir: &Path, temp: &Path, folder: ReceivedFolder) -> Space {
+/// to fit at the same time, together with the rest of the receives that are
+/// under way, whose room the free space still counts as free.
+pub fn check_space_of(
+    offers: &[&Offer],
+    dir: &Path,
+    temp: &Path,
+    folder: ReceivedFolder,
+    arriving: &[Arriving],
+) -> Space {
     let unknown = || Space {
         enough: None,
         fits: true,
@@ -229,7 +300,17 @@ pub fn check_space_of(offers: &[&Offer], dir: &Path, temp: &Path, folder: Receiv
     if !same_volume {
         checks.push((&volumes[1], temp_need));
     }
-    let short = checks.iter().find(|((_, free), need)| need > free);
+    // What the receives under way still write to a volume is not free for
+    // these.
+    let taken = |root: &Path| {
+        arriving
+            .iter()
+            .map(|receive| receive.still_needs(root, temp))
+            .fold(0u64, u64::saturating_add)
+    };
+    let short = checks
+        .iter()
+        .find(|((root, free), need)| *need > free.saturating_sub(taken(root)));
     let ((root, free), needed) = short.copied().unwrap_or(checks[0]);
     let args = (format_size(needed), format_size(*free), drive_name(root));
     let mut text = if short.is_some() {
@@ -237,6 +318,11 @@ pub fn check_space_of(offers: &[&Offer], dir: &Path, temp: &Path, folder: Receiv
     } else {
         os_tr!(space_ok, needed = args.0, free = args.1, drive = args.2)
     };
+    // The numbers are the system's, so what makes them too little is said.
+    if short.is_some() && taken(root) > 0 {
+        let size = format_size(taken(root));
+        text = format!("{text} {}", tr!(space_arriving_note, size = size));
+    }
     if any_folder && folder != ReceivedFolder::KeepZip {
         text = format!("{text} {}", tr!(space_folder_note));
     }
@@ -334,13 +420,13 @@ mod tests {
         let mut big = offer(Kind::File);
         big.size = FAT32_MAX_FILE;
         crate::archive::PRETEND_FAT.set(true);
-        assert!(check_space(&big, &dir, &dir, ReceivedFolder::Extract).fits);
+        assert!(check_space(&big, &dir, &dir, ReceivedFolder::Extract, &[]).fits);
         big.size += 1;
-        let space = check_space(&big, &dir, &dir, ReceivedFolder::Extract);
+        let space = check_space(&big, &dir, &dir, ReceivedFolder::Extract, &[]);
         crate::archive::PRETEND_FAT.set(false);
         assert!(!space.fits);
         assert!(space.text.contains("FAT"), "{}", space.text);
-        assert!(check_space(&big, &dir, &dir, ReceivedFolder::Extract).fits);
+        assert!(check_space(&big, &dir, &dir, ReceivedFolder::Extract, &[]).fits);
     }
 
     /// Offers answered together have to fit together, and the largest file of
@@ -352,18 +438,87 @@ mod tests {
         let mut half = offer(Kind::File);
         // With a margin, as other programs change the free space meanwhile.
         half.size = free / 2 + free / 50;
-        let one = check_space_of(&[&half], &dir, &dir, ReceivedFolder::Extract);
+        let one = check_space_of(&[&half], &dir, &dir, ReceivedFolder::Extract, &[]);
         assert_eq!(one.enough, Some(true), "{}", one.text);
-        let two = check_space_of(&[&half, &half], &dir, &dir, ReceivedFolder::Extract);
+        let two = check_space_of(&[&half, &half], &dir, &dir, ReceivedFolder::Extract, &[]);
         assert_eq!(two.enough, Some(false), "{}", two.text);
 
         let small = offer(Kind::File);
         let mut big = offer(Kind::File);
         big.size = FAT32_MAX_FILE + 1;
         crate::archive::PRETEND_FAT.set(true);
-        let together = check_space_of(&[&small, &big], &dir, &dir, ReceivedFolder::Extract);
+        let together = check_space_of(&[&small, &big], &dir, &dir, ReceivedFolder::Extract, &[]);
         crate::archive::PRETEND_FAT.set(false);
         assert!(!together.fits);
+    }
+
+    /// An item has to fit beside what the receives under way still have to
+    /// write, which the free space does not show yet: the text then says
+    /// what takes the room. What has arrived already is not counted twice.
+    #[test]
+    fn receives_under_way_take_their_room() {
+        let dir = std::env::temp_dir();
+        let free = disk_free(&dir).expect("free space").1;
+        let mut half = offer(Kind::File);
+        // With a margin, as other programs change the free space meanwhile.
+        half.size = free / 2 + free / 50;
+        let under_way = |done| Arriving {
+            offer: half.clone(),
+            dir: dir.clone(),
+            folder: ReceivedFolder::Extract,
+            done,
+            unpacking: false,
+        };
+        let check = |arriving: &[Arriving]| {
+            check_space(&half, &dir, &dir, ReceivedFolder::Extract, arriving)
+        };
+        assert_eq!(check(&[]).enough, Some(true));
+        let beside = check(&[under_way(0)]);
+        assert_eq!(beside.enough, Some(false), "{}", beside.text);
+        let note = tr!(space_arriving_note, size = format_size(half.size));
+        assert!(beside.text.ends_with(&note), "{}", beside.text);
+        // All of it is on the disk: the free space has counted it.
+        let arrived = check(&[under_way(half.size)]);
+        assert_eq!(arrived.enough, Some(true), "{}", arrived.text);
+        assert!(!arrived.text.contains(&note), "{}", arrived.text);
+    }
+
+    /// What a receive under way still writes: the rest of its data, and for
+    /// a folder that is unpacked all of its files, until they are unpacked.
+    #[test]
+    fn what_a_receive_still_writes() {
+        let dir = std::env::temp_dir();
+        let root = disk_free(&dir).expect("free space").0;
+        let needs = |kind, folder, done, unpacking| {
+            Arriving {
+                offer: offer(kind),
+                dir: dir.clone(),
+                folder,
+                done,
+                unpacking,
+            }
+            .still_needs(&root, &dir)
+        };
+        use ReceivedFolder::*;
+        assert_eq!(needs(Kind::File, Extract, 0, false), 100);
+        assert_eq!(needs(Kind::File, Extract, 40, false), 60);
+        assert_eq!(needs(Kind::File, Extract, 500, false), 0);
+        assert_eq!(needs(Kind::Folder, KeepZip, 40, false), 60);
+        for mode in [Extract, Both] {
+            assert_eq!(needs(Kind::Folder, mode, 40, false), 60 + 150);
+            assert_eq!(needs(Kind::Folder, mode, 100, false), 150);
+            assert_eq!(needs(Kind::Folder, mode, 50, true), 100);
+            assert_eq!(needs(Kind::Folder, mode, 150, true), 0);
+        }
+        // Another volume has nothing to do with it.
+        let elsewhere = Arriving {
+            offer: offer(Kind::File),
+            dir: dir.clone(),
+            folder: Extract,
+            done: 0,
+            unpacking: false,
+        };
+        assert_eq!(elsewhere.still_needs(Path::new("/no/such/volume"), &dir), 0);
     }
 
     /// A zip that a FAT32 destination cannot hold arrives in the folder for
@@ -375,14 +530,14 @@ mod tests {
         let mut big = offer(Kind::Folder);
         big.size = FAT32_MAX_FILE + 1;
         big.largest_file = 10;
-        let plain = check_space(&big, &dir, &dir, ReceivedFolder::Extract);
+        let plain = check_space(&big, &dir, &dir, ReceivedFolder::Extract, &[]);
         assert!(plain.fits && plain.temp_warning.is_none());
         crate::archive::PRETEND_FAT.set(true);
-        let unpacked = check_space(&big, &dir, &dir, ReceivedFolder::Extract);
+        let unpacked = check_space(&big, &dir, &dir, ReceivedFolder::Extract, &[]);
         // Kept as a zip, it does not fit in the destination at all.
-        let kept = check_space(&big, &dir, &dir, ReceivedFolder::KeepZip);
+        let kept = check_space(&big, &dir, &dir, ReceivedFolder::KeepZip, &[]);
         big.size = FAT32_MAX_FILE;
-        let small = check_space(&big, &dir, &dir, ReceivedFolder::Extract);
+        let small = check_space(&big, &dir, &dir, ReceivedFolder::Extract, &[]);
         crate::archive::PRETEND_FAT.set(false);
         assert!(unpacked.fits);
         let warning = unpacked.temp_warning.expect("a warning");

@@ -26,6 +26,8 @@ enum K: String {
     case wants_file
     case wants_folder
     case file_description
+    case items_total
+    case incoming_items_label
     case unknown_sender_warning
     case add_to_recipients
     case space_folder_note
@@ -268,11 +270,69 @@ enum K: String {
     case update_latest
     case update_manual
     case cancelled_text
+    case menu_chat
+    case chat_title
+    case chat_unknown_warning
+    case chat_history_label
+    case chat_message_label
+    case chat_add
+    case chat_delete
+    case chat_head
+    case chat_head_mine
+    case chat_head_failed
+    case chat_entry
+    case chat_said
+    case chat_typing
+    case chat_not_sent
+    case chat_not_saved
+    case chat_delete_confirm
+    case chat_delete_text
+    case chat_deleted
+    case chat_balloon_title
+    case chat_error_cannot_chat
+    case several_title
+    case several_to
+    case several_note
+    case delete
+    case settings_chat
+    case chat_from_label
+    case chat_from_anyone
+    case chat_from_recipients
+    case send_typing
+    case announce_typing
+    case chat_delete_all
+    case chat_delete_all_confirm
+    case chat_delete_failed
+    case chat_deleted_all
+    case settings_sounds
+    case sounds_on
+    case sounds_events_label
+    case col_event
+    case col_sound
+    case sound_choice_label
+    case sound_choice_default
+    case sound_choice_off
+    case sound_play
+    case sounds_reset
+    case sound_pick_title
+    case sound_not_playable
+    case sound_message_received
+    case sound_message_sent
+    case sound_typing
+    case sound_message_failed
+    case sound_incoming
+    case sound_started
+    case sound_completed
+    case sound_failed
+    case sound_cancelled
+    case sound_connection_lost
+    case sound_continues
 }
 
 /// The texts that depend on a number.
 enum PluralK: String {
     case folder_description
+    case wants_items
     case quit_instruction
     case change_id_transfers
     case drop_confirm_many

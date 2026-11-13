@@ -12,7 +12,6 @@
 
 use std::{
     cell::RefCell,
-    collections::HashMap,
     sync::atomic::{AtomicU64, Ordering},
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
@@ -34,7 +33,7 @@ use windows_sys::Win32::{
             FlashWindow, GetForegroundWindow, GetParent, PostMessageW, WM_CLOSE, IDCANCEL, KillTimer, LB_ADDSTRING,
             LB_DELETESTRING, LB_ERR, LB_GETCOUNT, LB_GETCURSEL, LB_GETTEXT, LB_GETTEXTLEN,
             LB_INSERTSTRING, LB_RESETCONTENT, LB_SETCURSEL, LB_SETITEMHEIGHT, LB_SETTOPINDEX,
-            LBS_HASSTRINGS, LBS_NOINTEGRALHEIGHT, LBS_NOTIFY, LBS_OWNERDRAWVARIABLE,
+            LBN_SELCHANGE, LBS_HASSTRINGS, LBS_NOINTEGRALHEIGHT, LBS_NOTIFY, LBS_OWNERDRAWVARIABLE,
             SW_SHOWNOACTIVATE, SetTimer, ShowWindow, WA_INACTIVE, WM_ACTIVATE, WM_DRAWITEM,
             WM_KEYDOWN, WM_NCDESTROY, WM_TIMER, WS_EX_APPWINDOW, WS_EX_CLIENTEDGE,
             WS_EX_CONTROLPARENT, WS_CAPTION, WS_CLIPCHILDREN, WS_MINIMIZEBOX, WS_OVERLAPPED,
@@ -44,14 +43,15 @@ use windows_sys::Win32::{
 };
 
 use super::{
-    accessibility, confirm, confirm_no, get_text, send, set_text, shell, short_id, sound, theme,
+    accessibility, confirm, confirm_no, crlf, get_text, send, set_text, shell, short_id, sound,
+    theme,
     tray::{self, BalloonAction},
     wide,
     window::{self, CreateOptions, Handler, Window},
 };
 use crate::{
     app,
-    chat::{Entry, History, MAX_CHARS},
+    chat::{Entry, History, MAX_CHARS, Sending},
     config::Contact,
     i18n::tr,
     identity,
@@ -65,6 +65,7 @@ const ID_SEND: u16 = 12;
 const ID_ADD: u16 = 13;
 const ID_BLOCK: u16 = 14;
 const ID_DELETE: u16 = 15;
+const ID_SELECTED: u16 = 16;
 
 const EN_CHANGE: u16 = 0x0300;
 const EM_LIMITTEXT: u32 = 0x00C5;
@@ -76,9 +77,13 @@ const WIDTH: i32 = 500;
 const MARGIN: i32 = 14;
 const CONTENT_W: i32 = WIDTH - 2 * MARGIN;
 const HISTORY_H: i32 = 230;
+/// The height of the box with the whole text of the selected message.
+const SELECTED_H: i32 = 64;
 /// Room around the text of a message in the history.
 const ITEM_PAD: i32 = 4;
-/// Windows allows no higher item in a list.
+/// Windows allows no higher item in a list: a message that wraps over more
+/// lines than fit shows its beginning there, and all of it in the box below
+/// the history once it is selected.
 const MAX_ITEM_PX: i32 = 255;
 
 /// The messages that arrived are announced once no more has come for this
@@ -99,18 +104,24 @@ const BALLOON_CHARS: usize = 200;
 
 static NEXT_MESSAGE: AtomicU64 = AtomicU64::new(1);
 
-/// A message that the other side has not confirmed yet.
-struct Unconfirmed {
-    peer: String,
-    /// As in its `Entry`, by which it is found in the chat.
-    time: u64,
-    text: String,
+thread_local! {
+    /// The messages on their way, by their numbers, noted on the disk too,
+    /// so that one that the program ends on is not kept as sent (see
+    /// `Sending`). Not in the windows: a window may be closed before its
+    /// message has arrived or failed. `None` until [`start`].
+    static UNCONFIRMED: RefCell<Option<Sending>> = const { RefCell::new(None) };
 }
 
-thread_local! {
-    /// The messages on their way, by their numbers. Not in the windows: a
-    /// window may be closed before its message has arrived or failed.
-    static UNCONFIRMED: RefCell<HashMap<u64, Unconfirmed>> = RefCell::new(HashMap::new());
+/// At the start of the program, before any chat is shown: the messages
+/// that the last run left on their way are marked as not sent in their
+/// chats, since nobody will say any more whether they arrived.
+pub fn start(data_dir: &std::path::Path) {
+    UNCONFIRMED.with(|u| *u.borrow_mut() = Some(Sending::start(data_dir)));
+}
+
+/// The message `id` is on its way no more: what it was, if it was.
+fn confirmed(id: u64) -> Option<crate::chat::OnItsWay> {
+    UNCONFIRMED.with(|u| u.borrow_mut().as_mut().and_then(|sending| sending.remove(id)))
 }
 
 struct Chat {
@@ -121,6 +132,9 @@ struct Chat {
     known: bool,
     history: History,
     list: HWND,
+    /// The whole text of the message that is selected in the history, to
+    /// read at leisure: a list item cannot show all of a very long one.
+    selected: HWND,
     status: HWND,
     input: HWND,
     warning: HWND,
@@ -177,6 +191,7 @@ fn create(peer: &str, name: &str) -> HWND {
         name: name.clone(),
         known,
         list: null,
+        selected: null,
         status: null,
         input: null,
         warning: null,
@@ -241,7 +256,7 @@ pub fn received(from: &str, name: &str, text: &str) -> bool {
 
 /// The message `id` arrived at the other side.
 pub fn sent(id: u64) {
-    if UNCONFIRMED.with(|u| u.borrow_mut().remove(&id)).is_some() {
+    if confirmed(id).is_some() {
         sound::play(SoundEvent::MessageSent);
     }
 }
@@ -251,7 +266,8 @@ pub fn sent(id: u64) {
 pub fn failed(id: u64, error: &str) -> bool {
     let Some((peer, time, text)) = UNCONFIRMED.with(|u| {
         let u = u.borrow();
-        u.get(&id).map(|m| (m.peer.clone(), m.time, m.text.clone()))
+        let message = u.as_ref().and_then(|sending| sending.get(id));
+        message.map(|m| (m.peer.clone(), m.time, m.text.clone()))
     }) else {
         return true;
     };
@@ -287,7 +303,7 @@ pub fn failed(id: u64, error: &str) -> bool {
             );
         }
     }
-    UNCONFIRMED.with(|u| u.borrow_mut().remove(&id));
+    confirmed(id);
     sound::play(SoundEvent::MessageFailed);
     true
 }
@@ -330,14 +346,9 @@ pub fn delete_all() -> std::io::Result<Option<HWND>> {
 fn on_its_way(peer: &str, entry: &Entry) -> u64 {
     let id = NEXT_MESSAGE.fetch_add(1, Ordering::Relaxed);
     UNCONFIRMED.with(|u| {
-        u.borrow_mut().insert(
-            id,
-            Unconfirmed {
-                peer: peer.to_string(),
-                time: entry.time,
-                text: entry.text.clone(),
-            },
-        )
+        if let Some(sending) = u.borrow_mut().as_mut() {
+            sending.add(id, peer, entry);
+        }
     });
     id
 }
@@ -492,10 +503,7 @@ pub fn close(peer: &str) {
 /// marked as failed, from the end: of two that are the same, each failure
 /// marks one.
 fn find(history: &History, time: u64, text: &str) -> Option<usize> {
-    history
-        .entries()
-        .iter()
-        .rposition(|e| e.mine && !e.failed && e.time == time && e.text == text)
+    history.find_sent(time, text)
 }
 
 /// `time` (Unix seconds) as the user's Windows writes it: the time of day
@@ -678,6 +686,29 @@ impl Chat {
             send(self.list, LB_SETCURSEL, count as usize - 1, 0);
             send(self.list, LB_SETTOPINDEX, count as usize - 1, 0);
         }
+        self.show_selected();
+    }
+
+    /// Shows the whole text of the message that is selected in the history
+    /// in the box below it; nothing when none is.
+    fn show_selected(&self) {
+        let index = send(self.list, LB_GETCURSEL, 0, 0);
+        let text = usize::try_from(index)
+            .ok()
+            .and_then(|index| self.history.entries().get(index))
+            .map_or("", |entry| entry.text.as_str());
+        // Only a change: setting the text puts a reader back at its start.
+        let text = crlf(text);
+        if get_text(self.selected) != text {
+            set_text(self.selected, &text);
+        }
+    }
+
+    /// Whether the user is at the history or at the text of its selected
+    /// message, and stays there when something arrives.
+    fn reading(&self) -> bool {
+        let focused = window::focused();
+        focused == self.list || focused == self.selected
     }
 
     /// Adds a message to the chat and to the list. A user who is reading
@@ -693,8 +724,11 @@ impl Chat {
         if index >= 0 {
             self.size_item(w, index as usize, &line);
         }
-        if window::focused() != self.list {
+        if !self.reading() {
             self.to_last();
+        } else if gone > 0 {
+            // Another message has the selected place now.
+            self.show_selected();
         }
         window::enable(self.delete, true);
         if let Err(e) = saved {
@@ -889,6 +923,7 @@ impl Chat {
         // The file is gone already when all chats were deleted at once.
         let _ = self.history.clear();
         send(self.list, LB_RESETCONTENT, 0, 0);
+        self.show_selected();
         self.unspoken.clear();
         if window::focused() == self.delete {
             window::focus(self.input);
@@ -928,6 +963,11 @@ impl Handler for Chat {
         );
         unsafe { SetWindowSubclass(self.list, Some(history_proc), 0, 0) };
         y += HISTORY_H + 8;
+        // The caption gives the box its accessible name.
+        w.caption(tr!(chat_selected_label), (x, y, CONTENT_W, 18));
+        y += 20;
+        self.selected = w.read_only_text("", ID_SELECTED, (x, y, CONTENT_W, SELECTED_H));
+        y += SELECTED_H + 8;
         // One line: what arrived last, that the other person is typing, or
         // why a message was not sent.
         self.status = w.add(
@@ -986,6 +1026,7 @@ impl Handler for Chat {
                 let writing = !get_text(self.input).is_empty();
                 self.tell_typing(w, writing);
             }
+            ID_HISTORY if code == LBN_SELCHANGE as u16 => self.show_selected(),
             ID_ADD => self.add_recipient(w),
             ID_BLOCK => self.block_peer(w),
             ID_DELETE => self.delete_conversation(w),

@@ -7,6 +7,9 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
         case none
         case transfer(UInt64, path: String?)
         case offer(UInt64)
+        /// The chat with the person who has the Contact ID `peer`, shown as
+        /// `name` unless they are a recipient.
+        case chat(peer: String, name: String)
         case open(String)
         case reveal(String)
     }
@@ -19,6 +22,9 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
     private var asked = false
     /// Whether macOS shows them, as far as is known.
     private var allowed = false
+    /// The notifications that tell of the messages of each chat, until the
+    /// user comes to it.
+    private var chatNotices: [String: [String]] = [:]
 
     init(open: @escaping (Action) -> Void) {
         self.open = open
@@ -77,7 +83,8 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
         let content = UNMutableNotificationContent()
         content.title = notice.title
         content.body = notice.text
-        content.sound = .default
+        // The event has just had Dodavo's own sound: the system's is left out.
+        content.sound = Sounds.justPlayed ? nil : .default
         var info: [String: Any] = [:]
         switch action {
         case .transfer(let id, let path):
@@ -88,12 +95,17 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
             }
         case .offer(let id):
             info["offer"] = String(id)
+        case .chat(let peer, let name):
+            info["chat"] = peer
+            info["name"] = name
+            content.threadIdentifier = "chat-\(peer)"
         default:
             break
         }
         content.userInfo = info
         var identifier = UUID().uuidString
         if case .offer(let id) = action { identifier = offerIdentifier(id) }
+        if case .chat(let peer, _) = action { chatNotices[peer, default: []].append(identifier) }
         center.add(
             UNNotificationRequest(identifier: identifier, content: content, trigger: nil))
     }
@@ -105,6 +117,13 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
     /// An offer that was answered, or withdrawn, has nothing left to be clicked for.
     func forgetOffer(_ id: UInt64) {
         center?.removeDeliveredNotifications(withIdentifiers: [offerIdentifier(id)])
+    }
+
+    /// The user came to the chat with `peer`: what told of its messages has
+    /// nothing left to be clicked for.
+    func forgetChat(_ peer: String) {
+        guard let identifiers = chatNotices.removeValue(forKey: peer) else { return }
+        center?.removeDeliveredNotifications(withIdentifiers: identifiers)
     }
 
     // With the Transfers window in front, its rows and VoiceOver say how transfers
@@ -138,6 +157,8 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
                 open(.transfer(id, path: nil))
             } else if let text = info["offer"] as? String, let id = UInt64(text) {
                 open(.offer(id))
+            } else if let peer = info["chat"] as? String {
+                open(.chat(peer: peer, name: info["name"] as? String ?? ""))
             } else {
                 open(.none)
             }

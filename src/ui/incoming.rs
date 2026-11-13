@@ -114,9 +114,9 @@ struct Incoming {
 }
 
 /// Whether `offer` fits into `dir`, with `folder` deciding what is kept of a
-/// folder.
+/// folder, beside what the receives under way still have to write.
 pub fn check_space(offer: &Offer, dir: &Path, folder: ReceivedFolder) -> Space {
-    space::check_space(offer, dir, &app::temp_dir(), folder)
+    space::check_space(offer, dir, &app::temp_dir(), folder, &app::arriving())
 }
 
 /// Shows an offer: in the window of the same sender's waiting offers, or in a
@@ -287,6 +287,7 @@ impl Incoming {
             Path::new(get_text(self.dir).trim()),
             &app::temp_dir(),
             app::cfg().received_folder,
+            &app::arriving(),
         );
         // The window says why it asks about an offer that would otherwise
         // have started by itself.

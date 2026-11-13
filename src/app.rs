@@ -83,6 +83,10 @@ pub struct Transfer {
     pub total: u64,
     /// False once the transfer has ended; its window may still be open.
     pub active: bool,
+    /// For a receive: its offer, the folder it is saved into and what is
+    /// kept of a folder, by which the room that it still takes is counted
+    /// (see [`arriving`]).
+    receiving: Option<(net::Offer, PathBuf, net::ReceivedFolder)>,
     /// The speed, from the progress reports, as the progress window has it.
     speed: progress::Speed,
     /// When the recipient list last showed this transfer's state.
@@ -108,6 +112,7 @@ impl Transfer {
             done: 0,
             total,
             active: true,
+            receiving: None,
             speed: progress::Speed::default(),
             list_shown: None,
         }
@@ -579,6 +584,8 @@ pub fn accept_offer(
         &offer.name,
         offer.size,
     );
+    let mut transfer = transfer;
+    transfer.receiving = Some((offer.clone(), dir.clone(), folder));
     with(|a| a.transfers.insert(id, transfer));
     refresh_transfer_views(id, true);
     // The user's answer; one that starts by itself has the sound of an
@@ -590,6 +597,28 @@ pub fn accept_offer(
         id,
         accept: Some(net::Accept { dir, folder }),
     });
+}
+
+/// The receives that are under way, for the room that they still take on
+/// the disk, which a new item has to fit beside (see
+/// `space::check_space_of`).
+pub fn arriving() -> Vec<crate::space::Arriving> {
+    with(|a| {
+        a.transfers
+            .values()
+            .filter(|t| t.active)
+            .filter_map(|t| {
+                let (offer, dir, folder) = t.receiving.clone()?;
+                Some(crate::space::Arriving {
+                    offer,
+                    dir,
+                    folder,
+                    done: t.done,
+                    unpacking: t.phase == Some(Phase::Unpacking),
+                })
+            })
+            .collect()
+    })
 }
 
 fn active_transfers() -> Vec<(u64, HWND)> {
@@ -923,10 +952,10 @@ fn handle_net_event(event: Event) -> Option<Event> {
             let from = from.to_string();
             let (name, known) = peer_name(&from, &offer.sender_name);
             let cfg = cfg();
-            // Without enough disk space, on a drive that cannot hold a file
-            // this large, with a temporary archive that its drive cannot
-            // hold, or for an item over the sender's limit, ask instead (the
-            // window explains why).
+            // Without enough disk space beside what is still arriving, on a
+            // drive that cannot hold a file this large, with a temporary
+            // archive that its drive cannot hold, or for an item over the
+            // sender's limit, ask instead (the window explains why).
             let auto_dir = cfg.auto_save_dir_for(&from, &offer).filter(|d| {
                 std::fs::create_dir_all(d).is_ok() && {
                     let space = incoming::check_space(&offer, d, cfg.received_folder);
@@ -995,6 +1024,12 @@ fn handle_net_event(event: Event) -> Option<Event> {
                 record.offer.size,
             );
             transfer.done = have;
+            if let net::session::Side::Receive {
+                dest_dir, folder, ..
+            } = &record.side
+            {
+                transfer.receiving = Some((record.offer.clone(), dest_dir.clone(), *folder));
+            }
             with(|a| a.transfers.insert(id, transfer));
             refresh_transfer_views(id, true);
             // One that does not go on is reported as it ends, right after this.
@@ -1022,7 +1057,8 @@ fn handle_net_event(event: Event) -> Option<Event> {
             // Here, and not once the window has taken the phase: an event
             // that finds its window busy comes again, and by then the
             // transfer has the phase, so the sound plays once.
-            if let Some(event) = before.and_then(|before| phase_sound(before, phase)) {
+            if let Some(event) = before.and_then(|before| crate::sound::phase_sound(before, phase))
+            {
                 sound::play(event);
             }
             refresh_transfer_views(id, true);
@@ -1086,17 +1122,14 @@ fn handle_net_event(event: Event) -> Option<Event> {
                     .is_some_and(|t| std::mem::replace(&mut t.active, false))
             });
             if ended {
-                sound::play(match &outcome {
-                    Outcome::Completed(_) => SoundEvent::Completed,
-                    Outcome::Declined | Outcome::Cancelled | Outcome::CancelledByPeer => {
-                        SoundEvent::Cancelled
-                    }
-                    Outcome::Unreachable(_) | Outcome::Failed(_) => SoundEvent::Failed,
-                });
+                sound::play(crate::sound::outcome_sound(&outcome));
             }
             refresh_transfer_views(id, true);
             if let Some(h) = transfer_window(id) {
-                let Some(done) = progress::finish(h, &outcome) else {
+                // The size as the reports had it, also those that the window
+                // was too busy to take.
+                let total = with(|a| a.transfers.get(&id).map_or(0, |t| t.total));
+                let Some(done) = progress::finish(h, &outcome, total) else {
                     return Some(Event::Finished { id, outcome });
                 };
                 let main_visible = unsafe { IsWindowVisible(main_window()) } != 0;
@@ -1131,21 +1164,6 @@ fn handle_net_event(event: Event) -> Option<Event> {
         Event::Typing { from, on } => ui::chat::typing(&from.to_string(), on),
     }
     None
-}
-
-/// The sound of a transfer that goes from the phase `before` to `phase`:
-/// when it loses its connection, and when it goes on after that.
-fn phase_sound(before: Option<Phase>, phase: Phase) -> Option<SoundEvent> {
-    let lost = |phase| matches!(phase, Phase::WaitingForConnection { lost: true });
-    // The first phase of a transfer is no change: one that is picked up
-    // after a restart begins as waiting for its connection.
-    let before = before?;
-    match phase {
-        _ if lost(before) == lost(phase) => None,
-        _ if lost(phase) => Some(SoundEvent::ConnectionLost),
-        Phase::Transferring | Phase::Verifying => Some(SoundEvent::Continues),
-        _ => None,
-    }
 }
 
 /// Gives the notification that a change in the progress window of transfer
@@ -1199,32 +1217,6 @@ pub fn chat_window_closed(peer: &str, hwnd: HWND) {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn a_lost_connection_and_its_return_have_sounds() {
-        let lost = Phase::WaitingForConnection { lost: true };
-        let waiting = Phase::WaitingForConnection { lost: false };
-        assert_eq!(
-            phase_sound(Some(Phase::Transferring), lost),
-            Some(SoundEvent::ConnectionLost)
-        );
-        assert_eq!(phase_sound(Some(lost), lost), None);
-        assert_eq!(
-            phase_sound(Some(lost), Phase::Transferring),
-            Some(SoundEvent::Continues)
-        );
-        assert_eq!(
-            phase_sound(Some(lost), Phase::Verifying),
-            Some(SoundEvent::Continues)
-        );
-        // Paused meanwhile, or picked up after a restart: nothing went on.
-        assert_eq!(phase_sound(Some(lost), Phase::Paused), None);
-        assert_eq!(phase_sound(Some(waiting), Phase::Transferring), None);
-        assert_eq!(phase_sound(None, Phase::Connecting), None);
-        // A transfer of the last run begins like this, with nothing lost.
-        assert_eq!(phase_sound(None, lost), None);
-        assert_eq!(phase_sound(Some(Phase::Connecting), Phase::Transferring), None);
-    }
 
     /// A transfer that may wait for days must not keep dialogs away.
     #[test]

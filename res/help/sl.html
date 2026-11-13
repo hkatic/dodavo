@@ -223,7 +223,7 @@
 <dt><span class="ui">Shrani v:</span> (<kbd>Alt</kbd>+<kbd>S</kbd>)</dt>
 <dd>Mapa, v katero se bo element shranil. Če je v nastavitvah vklopljena možnost <span class="ui">Vedno shrani prejete datoteke v to mapo</span>, je to mapa iz te možnosti, to pa je vaša mapa Prenosi, če niste izbrali druge. Če ta možnost ni vklopljena, je to mapa, ki ste jo uporabili zadnjič, ali vaša mapa Prenosi. Lahko vnesete drugo mapo ali jo izberete z gumbom <span class="ui">Prebrskaj…</span> (<kbd>Alt</kbd>+<kbd>P</kbd>).</dd>
 <dt>Prosti prostor na disku</dt>
-<dd>Stavek pod mapo pove, ali je na tem pogonu dovolj prostora, koliko ga je potrebno in koliko ga je na voljo. Mapa, ki se razpakira, potrebuje prostor za prenos in za razpakiranje; mapa, ki jo obdržite le kot datoteko ZIP, potrebuje prostor za datoteko ZIP (glejte <span class="ui">Po prejemu mape</span> v <a href="#settings-receiving">nastavitvah</a>). Stavek se posodobi, ko mapo izberete z gumbom Prebrskaj ali zapustite polje z mapo. Na pogonu z datotečnim sistemom FAT32, ki ga ima veliko pogonov USB in pomnilniških kartic, nobena datoteka ne more biti velika 4 GB ali več: če bi prenos tja shranil takšno datoteko, stavek to pove in izbrati morate mapo na drugem pogonu.</dd>
+<dd>Stavek pod mapo pove, ali je na tem pogonu dovolj prostora, koliko ga je potrebno in koliko ga je na voljo. Mapa, ki se razpakira, potrebuje prostor za prenos in za razpakiranje; mapa, ki jo obdržite le kot datoteko ZIP, potrebuje prostor za datoteko ZIP (glejte <span class="ui">Po prejemu mape</span> v <a href="#settings-receiving">nastavitvah</a>). Upošteva se tudi to, kar mora pri prenosih, ki jih še prejemate, šele prispeti: če zaradi tega ni dovolj prostora, stavek pove, koliko bodo zasedli. Stavek se posodobi, ko mapo izberete z gumbom Prebrskaj ali zapustite polje z mapo. Na pogonu z datotečnim sistemom FAT32, ki ga ima veliko pogonov USB in pomnilniških kartic, nobena datoteka ne more biti velika 4 GB ali več: če bi prenos tja shranil takšno datoteko, stavek to pove in izbrati morate mapo na drugem pogonu.</dd>
 <dt><span class="ui">Sprejmi</span> (<kbd>Alt</kbd>+<kbd>J</kbd>) in <span class="ui">Zavrni</span> (<kbd>Alt</kbd>+<kbd>Z</kbd>)</dt>
 <dd>Ko se okno odpre, je fokus na gumbu <span class="ui">Sprejmi</span>, zato s tipko <kbd>Enter</kbd> prenos sprejmete; bralniki zaslona običajno najprej preberejo besedilo okna, od krepke vrstice do stavka o prostem prostoru na disku. S tipko <kbd>Esc</kbd> ali z zaprtjem okna ga zavrnete.</dd>
 <dt><span class="ui">Blokiraj pošiljatelja</span> (<kbd>Alt</kbd>+<kbd>B</kbd>)</dt>
@@ -332,6 +332,8 @@
 <dl>
 <dt><span class="ui">Zgodovina</span> (<kbd>Alt</kbd>+<kbd>Z</kbd>)</dt>
 <dd>Seznam, v katerem je vsako sporočilo en element, najnovejše pa je zadnje. Vsak element pove, kdo je napisal sporočilo, kdaj, in njegovo besedilo, na primer <span class="ui">Ana, 14:32: Slike so na poti.</span> ali <span class="ui">Vi, 14:33: Hvala!</span>. Sporočilo z drugega dne ima tudi datum. Sporočila berete s tipkama <kbd>Puščica gor</kbd> in <kbd>Puščica dol</kbd>, s tipkama <kbd>Home</kbd> in <kbd>End</kbd> greste na prvo in zadnje, s tipkama <kbd>Ctrl</kbd>+<kbd>C</kbd> pa kopirate izbrano sporočilo. Ko se premaknete na seznam, je izbrano najnovejše sporočilo.</dd>
+<dt><span class="ui">Izbrano sporočilo</span> (<kbd>Alt</kbd>+<kbd>I</kbd>)</dt>
+<dd>Besedilno polje samo za branje s celotnim besedilom sporočila, ki je izbrano v zgodovini. Element seznama ima prostora za približno ducat vrstic, zato daljše sporočilo tam pokaže le svoj začetek; tukaj ga lahko v celoti preberete s puščičnimi tipkami, izberete njegov del in ga kopirate.</dd>
 <dt>Vrstica stanja</dt>
 <dd>Ena vrstica pod zgodovino, ki prikazuje sporočilo, ki je prispelo zadnje, da druga oseba piše, ali zakaj sporočilo ni bilo poslano. Ne more dobiti fokusa tipkovnice; bralniki zaslona jo preberejo, ko se spremeni in ko okno pride v ospredje.</dd>
 <dt><span class="ui">Sporočilo</span> (<kbd>Alt</kbd>+<kbd>S</kbd>)</dt>
@@ -363,7 +365,7 @@
 <li><span class="ui">Povezava je bila prekinjena</span> ali <span class="ui">Druga stran ni potrdila sporočila</span>: povezava se je končala, preden je bilo sporočilo potrjeno.</li>
 </ul>
 <h3 id="chat-who">Kdo vam lahko piše</h3>
-<p>Če tega ne spremenite, vam lahko piše vsak, ki ima vaš ID stika in ni blokiran, tako kot vam lahko vsak ponudi datoteko. Klepet z osebo, ki je ni na vašem seznamu prejemnikov, nad zgodovino prikazuje opozorilo z njenim ID-jem stika. V nastavitvah lahko na zavihku <span class="ui">Klepet</span> izberete <span class="ui">Samo moji prejemniki</span>: sporočila vseh drugih se tedaj zavrnejo, ne da bi jih videli, njihov pošiljatelj pa izve, da ne sprejemate njegovih sporočil.</p>
+<p>Če tega ne spremenite, vam lahko piše vsak, ki ima vaš ID stika in ni blokiran, tako kot vam lahko vsak ponudi datoteko. Klepet z osebo, ki je ni na vašem seznamu prejemnikov, nad zgodovino prikazuje opozorilo z njenim ID-jem stika. V nastavitvah lahko na zavihku <span class="ui">Klepet</span> izberete <span class="ui">Samo moji prejemniki</span>: sporočila vseh drugih se tedaj zavrnejo, ne da bi jih videli, njihov pošiljatelj pa izve, da ne sprejemate njegovih sporočil. Če sami pišete osebi, ki je ni na vašem seznamu prejemnikov, njeni odgovori vseeno prispejo do vas, še en dan po vašem zadnjem sporočilu tej osebi.</p>
 <h3 id="chat-history">Kje so shranjeni pogovori</h3>
 <p>Pogovori so shranjeni v vašem računalniku, skupaj z vašimi nastavitvami, dokler jih ne izbrišete: najnovejših 2000 sporočil z vsako osebo. Ne pošiljajo se nikamor drugam. <span class="ui">Izbriši pogovor…</span> v oknu klepeta izbriše enega, <span class="ui">Izbriši vse pogovore…</span> v nastavitvah na zavihku <span class="ui">Klepet</span> pa vse. Z brisanjem se sporočila odstranijo samo iz vašega računalnika; druga oseba obdrži svojo kopijo.</p>
 </section>
@@ -582,6 +584,7 @@
 <tr><td><kbd>Alt</kbd>+<kbd>Z</kbd></td><td>Premik v zgodovino</td></tr>
 <tr><td><kbd>Puščica gor</kbd> in <kbd>Puščica dol</kbd> v zgodovini</td><td>Branje prejšnjega ali naslednjega sporočila</td></tr>
 <tr><td><kbd>Ctrl</kbd>+<kbd>C</kbd> v zgodovini</td><td>Kopiranje izbranega sporočila</td></tr>
+<tr><td><kbd>Alt</kbd>+<kbd>I</kbd></td><td>Premik na celotno besedilo izbranega sporočila</td></tr>
 <tr><td><kbd>Alt</kbd>+<kbd>D</kbd></td><td>Dodajanje osebe med moje prejemnike, kadar je ni med njimi</td></tr>
 <tr><td><kbd>Alt</kbd>+<kbd>B</kbd></td><td>Blokiranje osebe</td></tr>
 <tr><td><kbd>Alt</kbd>+<kbd>G</kbd></td><td>Brisanje pogovora</td></tr>

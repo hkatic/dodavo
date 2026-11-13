@@ -93,7 +93,54 @@ pub enum Side {
         /// transfer was accepted. Records of earlier versions only unpack.
         #[serde(default)]
         folder: ReceivedFolder,
+        /// What the part file begins with, once that has reached the disk
+        /// (see [`Head`]). `None` in records of earlier versions, and until
+        /// then.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        head: Option<Head>,
     },
+}
+
+/// How many bytes at the start of a part file its record knows the hash of
+/// (see [`Head`]).
+pub const HEAD_LEN: usize = 64 * 1024;
+
+/// What a part file begins with: the hash of its first `len` bytes, at most
+/// [`HEAD_LEN`] of them, noted as they reach the disk. Where a file's
+/// identity is only its creation time, or a number that a new file may get
+/// again (see `FileId::same_item`, `FileId::weak`), another file that took
+/// the part's name can pass for the part by its identity. It is told from the
+/// part by how it begins, whatever its length: a part only ever gets longer,
+/// and no other file begins with the same data unless it is that data.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Head {
+    pub len: u32,
+    pub hash: [u8; 32],
+}
+
+impl Head {
+    /// Of a part that begins with `bytes`, of which the first [`HEAD_LEN`]
+    /// count.
+    pub fn of(bytes: &[u8]) -> Head {
+        let bytes = &bytes[..bytes.len().min(HEAD_LEN)];
+        Head {
+            len: bytes.len() as u32,
+            hash: *blake3::hash(bytes).as_bytes(),
+        }
+    }
+
+    /// Whether the file at `path` begins as this says. Also when that cannot
+    /// be told (another program keeps it out, or it may not be read): the
+    /// identity decides then, as it does without this.
+    fn begins(&self, path: &Path) -> bool {
+        let mut bytes = Vec::with_capacity(self.len as usize);
+        let read = fs::File::open(path)
+            .and_then(|file| file.take(u64::from(self.len)).read_to_end(&mut bytes));
+        match read {
+            Ok(_) => *self == Head::of(&bytes),
+            Err(_) => true,
+        }
+    }
 }
 
 /// The files of a receive that its last step changes, which it works on as
@@ -514,8 +561,37 @@ impl TransferRecord {
             Some(id) if !FileId::of(&part).is_ok_and(|now| id.same_item(&now)) => {
                 Err(part_missing())
             }
-            _ if self.part_shorter() => Err(part_missing()),
+            _ if self.another_file() => Err(part_missing()),
             _ => Ok(part),
+        }
+    }
+
+    /// Where the identity of the part is only its creation time, or weak
+    /// (see `FileId::weak`): whether what has the part's name is another
+    /// file all the same, because it is shorter than what reached the disk
+    /// (see [`part_shorter`](Self::part_shorter)) or begins with other data
+    /// (see [`Head`]). Such a file is neither written to nor deleted.
+    fn another_file(&self) -> bool {
+        self.part_shorter() || self.part_begins_otherwise()
+    }
+
+    /// See [`another_file`](Self::another_file). (By the part's name, as in
+    /// [`part_shorter`](Self::part_shorter).)
+    fn part_begins_otherwise(&self) -> bool {
+        if !self
+            .part_identity()
+            .is_some_and(|id| id.by_creation_time() || id.weak())
+        {
+            return false;
+        }
+        match (&self.side, self.receive_files()) {
+            (
+                Side::Receive {
+                    head: Some(head), ..
+                },
+                Some(files),
+            ) => !head.begins(&files.part),
+            _ => false,
         }
     }
 
@@ -622,11 +698,11 @@ impl TransferRecord {
 
     /// Whether the part file of a receive is there: the same file as when it
     /// was created (see [`Owned`]), or (in records of earlier versions)
-    /// anything of its name, and not shorter than what reached the disk (see
-    /// [`part_shorter`](Self::part_shorter)).
+    /// anything of its name, and not another file by its length or by how it
+    /// begins (see [`another_file`](Self::another_file)).
     pub fn part_is_there(&self) -> bool {
         match (self.receive_files(), self.owned_part()) {
-            (Some(files), _) if files.part_gone || self.part_shorter() => false,
+            (Some(files), _) if files.part_gone || self.another_file() => false,
             (Some(_), Some(part)) => part.is_there(),
             (Some(files), None) => files.part.exists(),
             (None, _) => false,
@@ -638,8 +714,8 @@ impl TransferRecord {
     /// [`remove_file`].
     fn remove_part(&self, patient: bool) -> bool {
         match (self.receive_files(), self.owned_part()) {
-            // Not the part (see `part_shorter`): there is none to delete.
-            (Some(files), _) if files.part_gone || self.part_shorter() => true,
+            // Not the part (see `another_file`): there is none to delete.
+            (Some(files), _) if files.part_gone || self.another_file() => true,
             (Some(_), Some(part)) => part.remove_file(patient),
             (Some(files), None) => remove_file(&files.part, patient),
             (None, _) => true,
@@ -1801,11 +1877,18 @@ impl Session {
         });
     }
 
-    /// Remembers how much of the part file is on disk.
-    pub fn save_synced(&self, data_dir: &Path, on_disk: u64) {
+    /// Remembers how much of the part file is on disk, and with `begins`
+    /// what it begins with, when that is more of it than was known (see
+    /// [`Head`]).
+    pub fn save_synced(&self, data_dir: &Path, on_disk: u64, begins: Option<Head>) {
         self.save_with(data_dir, |record| {
-            if let Side::Receive { synced, .. } = &mut record.side {
+            if let Side::Receive { synced, head, .. } = &mut record.side {
                 *synced = Some(on_disk);
+                if let Some(begins) = begins
+                    && head.is_none_or(|known| begins.len > known.len)
+                {
+                    *head = Some(begins);
+                }
             }
         });
     }
@@ -2299,6 +2382,7 @@ mod tests {
             synced,
             part_id: None,
             folder: ReceivedFolder::Extract,
+            head: None,
         }
     }
 
@@ -4002,6 +4086,112 @@ mod tests {
         }
         assert!(r.part_is_there());
         assert_eq!(r.have(), 3);
+        fs::remove_dir_all(&dir).ok();
+    }
+
+    /// Where the identity of a file is only its creation time, a file made
+    /// under the part's name is not the part when it begins with other data,
+    /// however long it is: it is not opened, cut or deleted. The part itself
+    /// is, also once it has grown.
+    #[test]
+    #[cfg(any(windows, target_os = "macos"))]
+    fn a_file_that_begins_otherwise_under_the_parts_name_is_not_the_part() {
+        #[cfg(target_os = "macos")]
+        use std::os::macos::fs::FileTimesExt;
+        #[cfg(windows)]
+        use std::os::windows::fs::FileTimesExt;
+        let dir = scratch("begins-otherwise");
+        let part = dir.join("d.bin.part");
+        archive::PRETEND_FAT.set(true);
+        fs::write(&part, b"0123456789").unwrap();
+        let mut r = record(33, receive_side(&dir, &part, Some(8)));
+        if let Side::Receive { part_id, head, .. } = &mut r.side {
+            *part_id = Some(archive::file_id(&part).unwrap());
+            *head = Some(Head::of(b"01234567"));
+        }
+        assert!(r.part_is_there());
+        // The part grows, and stays the part.
+        fs::write(&part, b"0123456789 and more").unwrap();
+        let created = fs::metadata(&part).unwrap().created().unwrap();
+        let again = |path: &Path| {
+            let times = fs::FileTimes::new().set_created(created);
+            let file = fs::File::options().write(true).open(path).unwrap();
+            file.set_times(times).unwrap();
+        };
+        again(&part);
+        assert!(r.part_is_there());
+        assert!(r.open_part(fs::OpenOptions::new().read(true)).is_ok());
+
+        // Another program's file takes the name within the moments in which
+        // it gets the part's creation time, and is longer than the part was.
+        fs::remove_file(&part).unwrap();
+        fs::write(&part, b"something else, and longer").unwrap();
+        again(&part);
+        let same = r
+            .part_identity()
+            .unwrap()
+            .same_item(&archive::file_id(&part).unwrap());
+        let there = r.part_is_there();
+        let opened = r.open_part(fs::OpenOptions::new().read(true));
+        let cut = r.truncate_to_synced();
+        r.discard(&dir);
+        archive::PRETEND_FAT.set(false);
+        assert!(same, "by its creation time it is the part");
+        assert!(!there);
+        assert_eq!(
+            opened.err().unwrap().to_string(),
+            crate::i18n::tr!(error_part_missing)
+        );
+        assert!(cut.is_err());
+        assert_eq!(
+            fs::read(&part).unwrap(),
+            b"something else, and longer",
+            "neither cut nor deleted"
+        );
+        fs::remove_dir_all(&dir).ok();
+    }
+
+    /// What a part begins with is the hash of its first bytes, of which no
+    /// more than `HEAD_LEN` count, and a record takes it only when it says
+    /// more than the record knew.
+    #[test]
+    fn the_head_of_a_part() {
+        let long = vec![7u8; HEAD_LEN + 10];
+        assert_eq!(Head::of(&long), Head::of(&long[..HEAD_LEN]));
+        assert_eq!(Head::of(&long).len as usize, HEAD_LEN);
+        assert_ne!(Head::of(b"abc"), Head::of(b"abd"));
+        let dir = scratch("head");
+        let part = dir.join("h.part");
+        fs::write(&part, b"abcdef").unwrap();
+        assert!(Head::of(b"abc").begins(&part));
+        assert!(!Head::of(b"abd").begins(&part));
+        // A file shorter than what is known of the part does not begin so.
+        assert!(!Head::of(b"abcdefg").begins(&part));
+        // What cannot be read is not told apart.
+        assert!(Head::of(b"abc").begins(&dir.join("missing")));
+
+        let (session, _) = Session::new(
+            1,
+            [34; 16],
+            iroh::SecretKey::generate().public(),
+            Role::Receive,
+        );
+        session.set_record(record(34, receive_side(&dir, &part, Some(0))));
+        let head = |session: &Session| {
+            session
+                .with_record(|r| match &r.side {
+                    Side::Receive { head, .. } => *head,
+                    Side::Send { .. } => None,
+                })
+                .flatten()
+        };
+        session.save_synced(&dir, 3, Some(Head::of(b"abc")));
+        assert_eq!(head(&session), Some(Head::of(b"abc")));
+        session.save_synced(&dir, 6, None);
+        session.save_synced(&dir, 6, Some(Head::of(b"ab")));
+        assert_eq!(head(&session), Some(Head::of(b"abc")));
+        session.save_synced(&dir, 6, Some(Head::of(b"abcdef")));
+        assert_eq!(head(&session), Some(Head::of(b"abcdef")));
         fs::remove_dir_all(&dir).ok();
     }
 

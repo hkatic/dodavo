@@ -251,35 +251,79 @@ fn ends_connection(error: &(dyn std::error::Error + 'static)) -> bool {
     false
 }
 
-/// The text of a dial that failed (see `send::dial`): ours where the other
-/// computer cannot be found or does not answer, which is what users meet
-/// (Dodavo is not running there, or one of them is offline), and the
-/// library's, in English, for anything else.
-pub(crate) fn connect_error_text(error: &iroh::endpoint::ConnectError) -> String {
-    use iroh::endpoint::{ConnectError, ConnectWithOptsError, ConnectingError, ConnectionError};
-    match error {
-        ConnectError::Connect {
-            source: ConnectWithOptsError::NoAddress { .. },
+/// Whether a dial failed because the other side does not take the protocol
+/// that was asked for: its TLS answers with the alert "no application
+/// protocol" (120), which QUIC carries as a crypto error. For a transfer
+/// that is a Dodavo of another version (see `protocol::ALPN`), and for a
+/// chat one that has none (see `chat::dial`).
+pub(crate) fn no_such_protocol(error: &iroh::endpoint::ConnectError) -> bool {
+    use iroh::endpoint::{ConnectError, ConnectingError, ConnectionError, TransportErrorCode};
+    let source = match error {
+        ConnectError::Connection { source, .. } => source,
+        ConnectError::Connecting {
+            source: ConnectingError::ConnectionError { source, .. },
             ..
-        } => crate::i18n::tr!(error_peer_not_found).into(),
-        ConnectError::Connection {
-            source: ConnectionError::TimedOut,
-            ..
-        }
-        | ConnectError::Connecting {
-            source:
-                ConnectingError::ConnectionError {
-                    source: ConnectionError::TimedOut,
-                    ..
-                },
-            ..
-        } => crate::i18n::tr!(error_timeout).into(),
-        _ => error.to_string(),
+        } => source,
+        _ => return false,
+    };
+    let code = TransportErrorCode::crypto(120);
+    match source {
+        ConnectionError::ConnectionClosed(close) => close.error_code == code,
+        ConnectionError::TransportError(error) => error.code == code,
+        _ => false,
     }
 }
 
-/// See [`failure_text`].
-fn io_error_text(error: &std::io::Error) -> String {
+/// The text of a dial that failed (see `send::dial`), in the user's
+/// language whatever failed: that the other computer cannot be found or does
+/// not answer, which is what users meet (Dodavo is not running there, or
+/// one of them is offline); that its Dodavo does not take this version's
+/// transfers (see [`no_such_protocol`]); that the connection ended while it
+/// was being made; and for anything else only that no connection was made,
+/// the library's own words for it being in English.
+pub(crate) fn connect_error_text(error: &iroh::endpoint::ConnectError) -> String {
+    use crate::i18n::tr;
+    use iroh::endpoint::{ConnectError, ConnectWithOptsError, ConnectingError, ConnectionError};
+    if no_such_protocol(error) {
+        return tr!(error_other_version).into();
+    }
+    let ended = match error {
+        ConnectError::Connect {
+            source: ConnectWithOptsError::NoAddress { .. },
+            ..
+        } => return tr!(error_peer_not_found).into(),
+        ConnectError::Connection { source, .. } => source,
+        ConnectError::Connecting {
+            source: ConnectingError::ConnectionError { source, .. },
+            ..
+        } => source,
+        _ => return tr!(error_connect_failed).into(),
+    };
+    match ended {
+        ConnectionError::TimedOut => tr!(error_timeout),
+        ConnectionError::Reset
+        | ConnectionError::ConnectionClosed(_)
+        | ConnectionError::ApplicationClosed(_)
+        | ConnectionError::LocallyClosed => tr!(error_connection_lost),
+        _ => tr!(error_connect_failed),
+    }
+    .into()
+}
+
+/// Why no endpoint could be bound, for the status line: the system's own
+/// words where it refused something (no network, a port that may not be
+/// used), and otherwise only that the network could not be started, the
+/// library's own words for it being in English.
+fn bind_error_text(error: &anyhow::Error) -> String {
+    error
+        .chain()
+        .find_map(|cause| cause.downcast_ref::<std::io::Error>())
+        .map(io_error_text)
+        .unwrap_or_else(|| crate::i18n::tr!(error_network_start).into())
+}
+
+/// The text of an I/O error for the user (see [`failure_text`]).
+pub(crate) fn io_error_text(error: &std::io::Error) -> String {
     // The system's own texts are in English here, whatever the user's language.
     #[cfg(unix)]
     if let Some(text) = error.raw_os_error().and_then(crate::platform::error_text) {
@@ -301,7 +345,8 @@ fn io_error_text(error: &std::io::Error) -> String {
 
 #[derive(Debug)]
 pub enum Event {
-    /// No endpoint could be bound, with the reason; it is tried again.
+    /// No endpoint could be bound, with the reason for the user; it is
+    /// tried again.
     BindFailed(String),
     /// An endpoint is bound after `BindFailed`: that problem is over, and
     /// whether the endpoint is online is not known yet, as at a start.
@@ -1236,7 +1281,7 @@ async fn bind_patiently(secret: &SecretKey, shared: &Shared) -> Endpoint {
             }
             Err(e) => {
                 failed = true;
-                shared.emit(Event::BindFailed(e.to_string()));
+                shared.emit(Event::BindFailed(bind_error_text(&e)));
                 tokio::time::sleep(Duration::from_secs(5)).await;
             }
         }
@@ -2309,6 +2354,146 @@ mod tests {
         std::fs::remove_dir_all(&base).ok();
     }
 
+    /// Another program changes the part while no connection has it open:
+    /// the transfer goes on, and fails at the end, since what is on the disk
+    /// is not what the sender sent. Nothing of the item is kept.
+    #[test]
+    fn a_part_changed_between_connections_fails_the_transfer() {
+        let base = scratch("part-changed");
+        let (tx_a, rx_a) = mpsc::channel();
+        let (tx_b, rx_b) = mpsc::channel();
+        let key_b = SecretKey::generate();
+        let id_b = key_b.public();
+        let a = start(
+            SecretKey::generate(),
+            base.join("a"),
+            base.join("temp"),
+            [],
+            Limits::default(),
+            sink(tx_a),
+        );
+        let b = Arc::new(start(
+            key_b,
+            base.join("b"),
+            base.join("temp"),
+            [],
+            Limits::default(),
+            sink(tx_b),
+        ));
+        wait_for(&rx_a, |e| matches!(e, Event::Online(true)));
+        wait_for(&rx_b, |e| matches!(e, Event::Online(true)));
+        reach(&a, &rx_a, &b, &rx_b, id_b, &base);
+        let recv_dir = base.join("received");
+        // Set once the receiver waits for the next connection.
+        let waiting = Arc::new(AtomicBool::new(false));
+        let b_thread = {
+            let (recv_dir, b, waiting) = (recv_dir.clone(), b.clone(), waiting.clone());
+            std::thread::spawn(move || {
+                loop {
+                    match rx_b
+                        .recv_timeout(Duration::from_secs(120))
+                        .expect("timed out")
+                    {
+                        Event::Offer { id, .. } => b.send(Command::Respond {
+                            id,
+                            accept: Some(Accept {
+                                dir: recv_dir.clone(),
+                                folder: ReceivedFolder::Extract,
+                            }),
+                        }),
+                        Event::Phase {
+                            phase: Phase::WaitingForConnection { .. },
+                            ..
+                        } => waiting.store(true, Ordering::SeqCst),
+                        Event::Finished { outcome, .. } => return outcome,
+                        _ => {}
+                    }
+                }
+            })
+        };
+        let file = base.join("big.bin");
+        let data = pattern(40_000_000);
+        std::fs::write(&file, &data).unwrap();
+        let id = next_transfer_id();
+        a.send(Command::Send {
+            id,
+            to: id_b,
+            path: file,
+            kind: Kind::File,
+            my_name: "A".into(),
+            peer_name: "B".into(),
+        });
+        wait_for(
+            &rx_a,
+            |e| matches!(e, Event::Progress { done, .. } if *done > 4_000_000),
+        );
+        // A paused sender does not dial again by itself, so the part stays
+        // closed for as long as the test needs.
+        a.send(Command::Pause { id });
+        wait_for(&rx_a, |e| {
+            matches!(
+                e,
+                Event::Phase {
+                    phase: Phase::Paused,
+                    ..
+                }
+            )
+        });
+        a.send(Command::DropConnection { id });
+        let deadline = Instant::now() + Duration::from_secs(60);
+        while !waiting.load(Ordering::SeqCst) {
+            assert!(Instant::now() < deadline, "the receiver never waited");
+            std::thread::sleep(Duration::from_millis(50));
+        }
+        // What reached the disk is in the record, with how the part begins
+        // (see `session::Head`).
+        let records = session::records(&base.join("b"));
+        let begins = session::Head::of(&data[..session::HEAD_LEN]);
+        assert!(
+            matches!(
+                &records[..],
+                [r] if matches!(
+                    &r.side,
+                    session::Side::Receive { head: Some(head), synced: Some(synced), .. }
+                        if *head == begins && *synced > 0
+                )
+            ),
+            "{records:?}"
+        );
+        // One byte of what arrived becomes another, as a program that
+        // writes to the file would leave it. Its length stays.
+        let part = recv_dir.join("big.bin.part");
+        {
+            use std::io::{Read, Seek, SeekFrom, Write};
+            let mut file = std::fs::OpenOptions::new()
+                .read(true)
+                .write(true)
+                .open(&part)
+                .expect("the part, which no connection has open");
+            let mut byte = [0u8];
+            file.seek(SeekFrom::Start(1000)).unwrap();
+            file.read_exact(&mut byte).unwrap();
+            byte[0] ^= 0xff;
+            file.seek(SeekFrom::Start(1000)).unwrap();
+            file.write_all(&byte).unwrap();
+            file.sync_all().unwrap();
+        }
+        a.send(Command::Resume { id });
+        let outcome_a = wait_finished(&rx_a, id);
+        assert!(matches!(outcome_a, Outcome::Failed(_)), "{outcome_a:?}");
+        let outcome_b = b_thread.join().unwrap();
+        let damaged = crate::i18n::tr!(error_damaged);
+        assert!(
+            matches!(&outcome_b, Outcome::Failed(text) if text == damaged),
+            "{outcome_b:?}"
+        );
+        assert!(!part.exists());
+        assert!(!recv_dir.join("big.bin").exists());
+        a.shutdown(Duration::from_secs(5));
+        b.shutdown(Duration::from_secs(5));
+        std::fs::remove_dir_all(&base).ok();
+    }
+
     /// The sender's connection is dropped in the middle; the transfer
     /// continues on a new one and the file is still intact.
     #[test]
@@ -2702,6 +2887,7 @@ mod tests {
                 part_id: Some(crate::archive::file_id(&part).unwrap()),
                 synced: Some(3),
                 folder: ReceivedFolder::Both,
+                head: None,
             },
             done_hash: Some([0; 32]),
             done_sent: false,
@@ -2748,6 +2934,7 @@ mod tests {
                 part_id: Some(crate::archive::file_id(&part).unwrap()),
                 synced: Some(3),
                 folder: ReceivedFolder::Extract,
+                head: None,
             };
             (file_record(token, &peer, 3, side), part)
         };
@@ -3194,6 +3381,7 @@ mod tests {
                 part_id: None,
                 synced: Some(3),
                 folder: ReceivedFolder::Extract,
+                head: None,
             },
         );
         let (receive, _rx) = Session::new(2, record.token, peer, Role::Receive);
@@ -3414,6 +3602,7 @@ mod tests {
                 part_id: Some(id),
                 synced: Some(10),
                 folder: ReceivedFolder::Extract,
+                head: None,
             },
         );
         record.done_hash = Some([1; 32]);
@@ -3812,6 +4001,127 @@ mod tests {
         std::fs::remove_dir_all(&base).ok();
     }
 
+    /// Where only recipients may write, a person whom the user wrote to may
+    /// answer, on the connection of that message and on one of their own;
+    /// not once the user has blocked them.
+    #[test]
+    fn an_answer_is_taken_from_someone_the_user_wrote_to() {
+        let base = scratch("chat-answer");
+        let (tx_a, rx_a) = mpsc::channel();
+        let (tx_b, rx_b) = mpsc::channel();
+        let (key_a, key_b) = (SecretKey::generate(), SecretKey::generate());
+        let (id_a, id_b) = (key_a.public(), key_b.public());
+        let a = start_chatting(key_a.clone(), base.join("a"), [], named("Ana"), tx_a);
+        let only_recipients = ChatPolicy {
+            from: crate::config::ChatFrom::Recipients,
+            ..named("Bo")
+        };
+        let b = start_chatting(key_b, base.join("b"), [], only_recipients, tx_b);
+        wait_for(&rx_a, |e| matches!(e, Event::Online(true)));
+        wait_for(&rx_b, |e| matches!(e, Event::Online(true)));
+        reach(&a, &rx_a, &b, &rx_b, id_b, &base);
+        let say = |from: &NetHandle, rx: &mpsc::Receiver<Event>, to, id| {
+            from.send(Command::Chat {
+                to,
+                id,
+                text: "Halo?".into(),
+            });
+            chat_result(rx, id)
+        };
+        let refused = Err(crate::i18n::tr!(chat_error_refused).to_string());
+
+        // Ana is no recipient of Bo's, who has not written to her.
+        assert_eq!(say(&a, &rx_a, id_b, 1), refused);
+        assert_eq!(say(&b, &rx_b, id_a, 2), Ok(()));
+        wait_for(&rx_a, |e| matches!(e, Event::Chat { .. }));
+        // Her answer, on the connection that his message came on.
+        assert_eq!(say(&a, &rx_a, id_b, 3), Ok(()));
+        wait_for(&rx_b, |e| matches!(e, Event::Chat { .. }));
+        // And on a connection of her own, as after a restart of hers.
+        a.shutdown(Duration::from_secs(5));
+        let (tx_a, rx_a) = mpsc::channel();
+        let a = start_chatting(key_a, base.join("a"), [], named("Ana"), tx_a);
+        wait_for(&rx_a, |e| matches!(e, Event::Online(true)));
+        assert_eq!(say(&a, &rx_a, id_b, 4), Ok(()));
+        wait_for(&rx_b, |e| matches!(e, Event::Chat { .. }));
+        // Blocking her ends that.
+        b.set_blocked([id_a]);
+        assert_eq!(say(&a, &rx_a, id_b, 5), refused);
+        a.shutdown(Duration::from_secs(5));
+        b.shutdown(Duration::from_secs(5));
+        std::fs::remove_dir_all(&base).ok();
+    }
+
+    /// A send to a Dodavo that does not take this version's transfers ends
+    /// with word of that, in the user's language, and not as a recipient
+    /// that cannot be reached.
+    #[test]
+    fn a_send_to_another_version_says_so() {
+        let base = scratch("other-version");
+        let (tx_a, rx_a) = mpsc::channel();
+        let a = start(
+            SecretKey::generate(),
+            base.join("a"),
+            base.join("a").join("temp"),
+            [],
+            Limits::default(),
+            sink(tx_a),
+        );
+        wait_for(&rx_a, |e| matches!(e, Event::Online(true)));
+        // What a version with another protocol is to this one: an endpoint
+        // that takes connections, but none of `protocol::ALPN`.
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let other = rt.block_on(async {
+            Endpoint::builder(presets::N0)
+                .alpns(vec![b"dodavo/other-version".to_vec()])
+                .address_lookup(MdnsAddressLookup::builder())
+                .bind()
+                .await
+                .unwrap()
+        });
+        let to = other.id();
+        let serving = {
+            let other = other.clone();
+            rt.spawn(async move {
+                while let Some(incoming) = other.accept().await {
+                    if let Ok(accepting) = incoming.accept() {
+                        let _ = accepting.await;
+                    }
+                }
+            })
+        };
+        let file = base.join("x.txt");
+        std::fs::write(&file, b"x").unwrap();
+        // Until the new endpoint is found (see `reach`).
+        let deadline = Instant::now() + Duration::from_secs(120);
+        let outcome = loop {
+            let id = next_transfer_id();
+            a.send(Command::Send {
+                id,
+                to,
+                path: file.clone(),
+                kind: Kind::File,
+                my_name: "A".into(),
+                peer_name: "B".into(),
+            });
+            match wait_finished(&rx_a, id) {
+                Outcome::Unreachable(_) if Instant::now() < deadline => {
+                    std::thread::sleep(Duration::from_millis(250));
+                }
+                outcome => break outcome,
+            }
+        };
+        let expected = crate::i18n::tr!(error_other_version);
+        assert!(
+            matches!(&outcome, Outcome::Failed(text) if text == expected),
+            "{outcome:?}"
+        );
+        serving.abort();
+        rt.block_on(other.close());
+        a.shutdown(Duration::from_secs(5));
+        std::fs::remove_dir_all(&base).ok();
+    }
+
     /// A side whose user interface shows no chats takes no chat connection,
     /// and who writes to it is told that it cannot chat, as is one that
     /// shows no chats itself.
@@ -3834,7 +4144,7 @@ mod tests {
         wait_for(&rx_a, |e| matches!(e, Event::Online(true)));
         wait_for(&rx_b, |e| matches!(e, Event::Online(true)));
         reach(&a, &rx_a, &b, &rx_b, id_b, &base);
-        let cannot = Err(crate::i18n::tr!(chat_error_cannot_chat).to_string());
+        let cannot = Err(crate::i18n::os_tr!(chat_error_cannot_chat).to_string());
 
         a.send(Command::Chat {
             to: id_b,

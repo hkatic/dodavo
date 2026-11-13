@@ -26,7 +26,7 @@ pub fn client() -> Result<Client, Error> {
     let provider = Arc::new(rustls::crypto::ring::default_provider());
     let tls = rustls::ClientConfig::builder_with_provider(provider)
         .with_safe_default_protocol_versions()
-        .map_err(|e| Error::Network(e.to_string()))?
+        .map_err(|_| Error::Network)?
         .with_root_certificates(roots)
         .with_no_client_auth();
     Client::builder()
@@ -35,30 +35,23 @@ pub fn client() -> Result<Client, Error> {
         .connect_timeout(CONNECT_TIMEOUT)
         .read_timeout(READ_TIMEOUT)
         .build()
-        .map_err(|e| Error::Network(describe(&e)))
+        .map_err(|_| Error::Network)
 }
 
-/// The messages of an error and its causes, which is where reqwest keeps the
-/// useful part ("connection refused", "certificate …").
-pub fn describe(error: &dyn std::error::Error) -> String {
-    let mut parts: Vec<String> = Vec::new();
-    let mut current: Option<&dyn std::error::Error> = Some(error);
-    while let Some(e) = current {
-        let text = e.to_string();
-        if !parts.iter().any(|p| p.contains(&text)) {
-            parts.push(text);
-        }
-        current = e.source();
-    }
-    parts.join(": ")
-}
-
+/// What a request that failed is to the user: a server that did not answer
+/// in time, or one that could not be reached at all. The library's own
+/// words for it ("error sending request", "dns error") are in English and
+/// say no more to who reads them.
 fn network(e: reqwest::Error) -> Error {
-    Error::Network(describe(&e.without_url()))
+    if e.is_timeout() {
+        Error::Timeout
+    } else {
+        Error::Network
+    }
 }
 
 fn io(e: std::io::Error) -> Error {
-    Error::Io(e.to_string())
+    Error::io(&e)
 }
 
 /// Reads the manifest (at most `MAX_MANIFEST_BYTES`).

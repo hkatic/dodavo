@@ -25,6 +25,7 @@ super::strings! {
         part_in_use_balloon,
         peer_part_in_use_balloon,
         notify_saved,
+        chat_error_cannot_chat,
         // The system's errors.
         error_no_access,
         error_name_too_long,

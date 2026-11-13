@@ -26,6 +26,7 @@
 <li><a href="#sending">Slanje datoteka i fascikli</a></li>
 <li><a href="#receiving">Primanje datoteka i fascikli</a></li>
 <li><a href="#progress">Praćenje prenosa</a></li>
+<li><a href="#chat">Ćaskanje sa osobom</a></li>
 <li><a href="#background">Rad u pozadini</a></li>
 <li><a href="#settings">Podešavanja</a></li>
 <li><a href="#shortcuts">Tasterske prečice</a></li>
@@ -81,8 +82,8 @@
 <section aria-labelledby="main-window">
 <h2 id="main-window">Glavni prozor</h2>
 <p>Glavni prozor prikazuje vaše primaoce u tabeli sa kolonama Ime, ID kontakta i Prenos. Poslednja govori šta se dešava sa tom osobom. Ispod tabele red stanja govori da li je Dodavo na mreži; VoiceOver najavljuje kada se to promeni.</p>
-<p>Traka sa alatkama ima komande Pošalji, Dodaj primaoca, Kopiraj moj ID kontakta i Prenosi. Komanda Pošalji nije dostupna dok nije izabran primalac.</p>
-<p>Sa VoiceOverom pređite na tabelu i pritisnite <kbd>VO</kbd>-<kbd>⇧</kbd>-<kbd>↓</kbd> za rad sa njom, a zatim se tasterima sa strelicama krećite među primaocima. Pritisnite <kbd>Return</kbd> za slanje izabranom primaocu ili <kbd>VO</kbd>-<kbd>⇧</kbd>-<kbd>M</kbd> za otvaranje menija sa komandama Pošalji…, Prikaži prenos, Uredi primaoca…, Ukloni primaoca i Blokiraj primaoca.</p>
+<p>Traka sa alatkama ima komande Pošalji, Ćaskanje, Dodaj primaoca, Kopiraj moj ID kontakta i Prenosi. Komande Pošalji i Ćaskanje nisu dostupne dok nije izabran primalac.</p>
+<p>Sa VoiceOverom pređite na tabelu i pritisnite <kbd>VO</kbd>-<kbd>⇧</kbd>-<kbd>↓</kbd> za rad sa njom, a zatim se tasterima sa strelicama krećite među primaocima. Pritisnite <kbd>Return</kbd> za slanje izabranom primaocu ili <kbd>VO</kbd>-<kbd>⇧</kbd>-<kbd>M</kbd> za otvaranje menija sa komandama Pošalji…, Ćaskanje, Prikaži prenos, Uredi primaoca…, Ukloni primaoca i Blokiraj primaoca.</p>
 <p>Bez VoiceOvera uključite navigaciju tastaturom u: Sistemska podešavanja > Tastatura, da biste se tasterom <kbd>Tab</kbd> kretali među svim kontrolama; macOS je podrazumevano ima isključenu, pa <kbd>Tab</kbd> dolazi samo do tekstualnih polja i lista.</p>
 </section>
 
@@ -113,7 +114,9 @@
 <section aria-labelledby="receiving">
 <h2 id="receiving">Primanje datoteka i fascikli</h2>
 <p>Kada vam neko nešto šalje, pojavljuje se prozor Dolazni prenos, obaveštenje to javlja, a ikona Dodava poskakuje u Docku. Ne oduzima fokus onome što radite: kliknite na obaveštenje ili ikonu da biste došli do njega.</p>
-<p>Prozor govori ko šalje šta i da li ima dovoljno slobodnog prostora. Sačuvaj u: prikazuje kuda ide, a Izaberi… to menja. Prihvati prihvata (<kbd>Return</kbd>), Odbij odbija (<kbd>Esc</kbd>). VoiceOver čita prozor kada dođete do njega.</p>
+<p>Prozor govori ko šalje šta i da li ima dovoljno slobodnog prostora. Računa se i ono što prenosima koje još primate tek treba da stigne. Sačuvaj u: prikazuje kuda ide, a Izaberi… to menja. Prihvati prihvata (<kbd>Return</kbd>), Odbij odbija (<kbd>Esc</kbd>). VoiceOver čita prozor kada dođete do njega.</p>
+<p>Kada vam ista osoba šalje više stavki odjednom, one dele jedan prozor, a vaš odgovor se odnosi na sve. Prvi red kaže koliko ih je, sledeći red navodi njihovu ukupnu veličinu, a tabela Stavke ih navodi. Stavke koje stignu dok je prozor otvoren dodaju se u njega, a one koje su stigle u poslednjoj sekundi vaš odgovor još ne obuhvata: ostaju u prozoru.</p>
+<p>Ćaskanje otvara ćaskanje sa pošiljaocem, na primer da ga pre odgovora pitate šta je stavka: pogledajte <a href="#chat">Ćaskanje sa osobom</a>.</p>
 <p>Blokiraj pošiljaoca (<kbd>⌘B</kbd>) odbija ponudu i blokira pošiljaoca, posle pitanja: Dodavo od sada bez pitanja odbija sve što vam ta osoba pošalje, a ona vidi samo da je njena ponuda odbijena. Stranica Blokirani u odeljku <a href="#settings">Podešavanja</a> navodi osobe koje ste blokirali, a Deblokiraj im ponovo dozvoljava da vam šalju. Kada blokiranu osobu dodate u primaoce, ona se takođe deblokira.</p>
 <p>Od osoba među vašim primaocima prenos može da počne sam: pogledajte Prenose pokreći automatski, bez pitanja u odeljku <a href="#settings">Podešavanja</a>. Od svih ostalih Dodavo uvek najpre pita i kaže da pošiljalac nije među vašim primaocima.</p>
 <p>Možete da ograničite veličinu stavke koju neko može da vam pošalje: pogledajte Ograniči veličinu stavke koju neko može da mi pošalje u odeljku <a href="#settings">Podešavanja</a>.</p>
@@ -124,11 +127,55 @@
 <section aria-labelledby="progress">
 <h2 id="progress">Praćenje prenosa</h2>
 <p>Prenosi (<kbd>⌘T</kbd>) prikazuje sve prenose. Svaki red prikazuje stavku, drugu osobu, šta se radi, koliko je gotovo, brzinu i preostalo vreme. Zatvaranje ovog prozora ne utiče na njih.</p>
-<p>Sa VoiceOverom se svaki red čita kao jedna rečenica. Pritisnite <kbd>VO</kbd>-<kbd>⇧</kbd>-<kbd>M</kbd> na redu za meni sa onim što se s njim može uraditi ili <kbd>VO</kbd>-<kbd>⇧</kbd>-<kbd>↓</kbd> da biste došli do njegove dugmadi: Pauziraj i Nastavi, Otkaži prenos, a kada se završi Otvori, Prikaži u Finderu i Ukloni sa liste. Promene se najavljuju dok je Dodavo u prvom planu, a inače stižu kao obaveštenja.</p>
+<p>Sa VoiceOverom se svaki red čita kao jedna rečenica. Pritisnite <kbd>VO</kbd>-<kbd>⇧</kbd>-<kbd>M</kbd> na redu za meni sa onim što se s njim može uraditi ili <kbd>VO</kbd>-<kbd>⇧</kbd>-<kbd>↓</kbd> da biste došli do njegove dugmadi: Pauziraj i Nastavi, Otkaži prenos, Ćaskanje, a kada se završi Otvori, Prikaži u Finderu i Ukloni sa liste. Promene se najavljuju dok je Dodavo u prvom planu, a inače stižu kao obaveštenja.</p>
 <p>Samo pomoću tastature izaberite red tasterima sa strelicama: <kbd>Space</kbd> ga pauzira ili nastavlja, <kbd>Delete</kbd> ga otkazuje, a završeni uklanja sa liste, dok <kbd>Return</kbd> otvara ono što je sačuvano.</p>
 <p>Ako se veza izgubi ili računar ode u stanje mirovanja ili se ponovo pokrene, prenos čeka i nastavlja se gde je stao čim su oba računara pokrenuta i na mreži. Posle 30 dana bez napretka prenos se prekida. Na kraju se cela stavka proverava.</p>
 <p>Dok se podaci prenose, Dodavo sprečava da Mac sam ode u stanje mirovanja. Zatvaranje poklopca prenosnog računara i dalje ga uspavljuje; prenos se nastavlja posle buđenja.</p>
 <p>Kada cela stavka stigne, ona je primaočeva, pa pošiljalac više ne može da otkaže prenos. Ukloni završene uklanja redove završenih prenosa.</p>
+</section>
+
+<section aria-labelledby="chat">
+<h2 id="chat">Ćaskanje sa osobom</h2>
+<p>Sa osobom možete da razmenjujete kratke tekstualne poruke, na primer da kažete šta nameravate da pošaljete ili da pitate o nečemu što vam je ponuđeno. Poruke idu direktno sa jednog računara na drugi, šifrovane, istom vrstom veze kao i datoteke. Oboje morate da imate pokrenut Dodavo i da budete na mreži u istom trenutku, a i Dodavo na drugoj strani mora da ima ćaskanje.</p>
+<h3 id="chat-open">Otvaranje ćaskanja</h3>
+<ul>
+<li>U glavnom prozoru izaberite osobu pa izaberite Datoteka > Ćaskanje (<kbd>⇧⌘M</kbd>) ili Ćaskanje na traci sa alatkama ili u meniju te osobe.</li>
+<li>U prozoru Dolazni prenos izaberite Ćaskanje da biste pisali pošiljaocu pre nego što odgovorite. U prozoru Prenosi svaki red ima dugme Ćaskanje za osobu sa kojom je prenos; Datoteka > Ćaskanje radi isto za izabrani red.</li>
+<li>Kada vam neko piše, prozor ćaskanja sa tom osobom otvara se sam. Ne oduzima fokus onome što radite.</li>
+</ul>
+<p>Za svaku osobu postoji jedan prozor ćaskanja. Njegov naslov je Ćaskanje i ime osobe, a fokus je na početku u polju Poruka.</p>
+<h3 id="chat-several">Pisanje većem broju osoba odjednom</h3>
+<p>Da biste istu poruku poslali većem broju osoba, izaberite ih na listi primalaca pa izaberite Datoteka > Ćaskanje (<kbd>⇧⌘M</kbd>). Umesto ćaskanja Dodavo traži poruku: Poruka za više osoba navodi primaoce i ima polje za poruku i dugmad Pošalji (<kbd>Return</kbd>) i Otkaži (<kbd>Esc</kbd>). Svaka osoba dobija poruku kao privatnu poruku od vas. Ne vidi ko ju je još dobio, a svaki odgovor stiže u ćaskanje sa tom osobom. Poruka se dodaje u vaš razgovor sa svakom od njih. Ako nekoj od njih ne može da se dostavi, obaveštenje to javlja, a u tom razgovoru je označena kao neposlata.</p>
+<h3 id="chat-window">Prozor ćaskanja</h3>
+<ul>
+<li>Razgovor: tabela sa jednom porukom u svakom redu, najnovija je poslednja. Svaki red govori ko je napisao poruku, kada i njen tekst, na primer „Ana, 14:32: Slike su na putu.“ ili „Vi, 14:33: Hvala!“. Poruka od nekog drugog dana ima i datum. Poruke čitajte tasterima sa strelicama, a izabrane kopirajte tasterima <kbd>⌘C</kbd>. Sa VoiceOverom na tabeli pritisnite <kbd>VO</kbd>-<kbd>⇧</kbd>-<kbd>↓</kbd> za rad sa njom; svaki red se čita kao jedna rečenica.</li>
+<li>Red stanja, ispod razgovora: poruka koja je stigla poslednja, da druga osoba piše ili zašto poruka nije poslata.</li>
+<li>Poruka: ovde pišete. Poruka može da ima do 4000 znakova.</li>
+<li>Pošalji (<kbd>Return</kbd>): šalje poruku i dodaje je u razgovor. Fokus ostaje u polju.</li>
+<li>Dodaj u moje primaoce…: samo za osobu koja nije među vašim primaocima; otvara Dodaj primaoca sa upisanim imenom i ID-om kontakta te osobe.</li>
+<li>Blokiraj: blokira osobu, posle pitanja, i zatvara ćaskanje. Blokirana osoba ne može ni da vam piše ni da vam išta šalje.</li>
+<li>Obriši razgovor…: briše poruke sa tom osobom sa ovog Maca, posle pitanja.</li>
+</ul>
+<p>Zatvaranje prozora (<kbd>⌘W</kbd>) čuva razgovor: opet je tu kada otvorite ćaskanje.</p>
+<h3 id="chat-receiving">Kada stigne poruka</h3>
+<ul>
+<li>Dok je prozor ćaskanja u prvom planu, poruka se dodaje u razgovor i prikazuje u redu stanja, a VoiceOver je najavljuje, sa imenom osobe na početku.</li>
+<li>Dok ste negde drugde, prozor ćaskanja se otvara ili ostaje gde jeste, ne oduzimajući fokus, ikona Dodava poskakuje u Docku, a obaveštenje Poruka – pošiljalac: sa imenom osobe prikazuje poruku. VoiceOver čita obaveštenja kada se pojave. Kliknite na obaveštenje da biste došli do ćaskanja.</li>
+<li>U oba slučaja reprodukuje se zvuk, osim ako ste ga isključili.</li>
+</ul>
+<p>Kada druga osoba počne da piše, red stanja to kaže, na primer „Ana piše…“. Dok je prozor ćaskanja u prvom planu, VoiceOver to najavljuje jednom, uz kratak zvuk; ne ponavlja se dok osoba nastavlja da piše. Druga osoba na isti način saznaje kada vi pišete. Oboje može da se isključi u odeljku <a href="#settings">Podešavanja</a>.</p>
+<h3 id="chat-failed">Kada poruka ne može da se pošalje</h3>
+<p>Poruka koja ne može da se dostavi označava se u razgovoru, na primer „Vi, 14:35 (nije poslato): Jesi li tu?“, red stanja kaže zašto i reprodukuje se zvuk. Dodavo ne pokušava ponovo sam. Tekst se vraća u polje Poruka ako je ono prazno, pa možete da pritisnete <kbd>Return</kbd> da biste ga ponovo poslali. Razlozi koje možete da vidite:</p>
+<ul>
+<li>„Drugi računar nije pronađen na mreži“ ili „Isteklo je vreme za povezivanje“: Dodavo nije pokrenut na drugom računaru ili neko od vas nije na mreži.</li>
+<li>„Ova osoba ne prima vaše poruke“: druga osoba prima poruke samo od svojih primalaca ili vas je blokirala.</li>
+<li>„Dodavo na drugoj strani nema ćaskanje“: druga osoba ima Dodavo bez ćaskanja.</li>
+<li>„Veza je prekinuta“ ili „Druga strana nije potvrdila poruku“: veza se završila pre nego što je poruka potvrđena.</li>
+</ul>
+<h3 id="chat-who">Ko može da vam piše</h3>
+<p>Dok to ne promenite, može da vam piše svako ko ima vaš ID kontakta i nije blokiran, kao što svako može da vam ponudi datoteku. Ćaskanje sa osobom koja nije među vašim primaocima iznad razgovora prikazuje upozorenje sa njenim ID-om kontakta. Na stranici Ćaskanje u odeljku <a href="#settings">Podešavanja</a> možete da izaberete Samo moji primaoci: poruke svih ostalih tada se odbijaju, a da ih vi ne vidite, a njihov pošiljalac saznaje da ne primate njegove poruke. Ako sami pišete osobi koja nije među vašim primaocima, njeni odgovori ipak stižu do vas, još dan nakon vaše poslednje poruke toj osobi.</p>
+<h3 id="chat-history">Gde se čuvaju razgovori</h3>
+<p>Razgovori se čuvaju na vašem Macu, uz vaša podešavanja, dok ih ne obrišete: 2000 najnovijih poruka sa svakom osobom. Ne šalju se nikuda drugde. Obriši razgovor… u prozoru ćaskanja briše jedan, a Obriši sve razgovore… na stranici Ćaskanje u podešavanjima briše ih sve. Brisanjem se poruke uklanjaju samo sa vašeg Maca; druga osoba zadržava svoj primerak.</p>
 </section>
 
 <section aria-labelledby="background">
@@ -160,6 +207,21 @@
 <li>Ograniči veličinu stavke koju neko može da mi pošalje. Najveća veličina: ceo broj MB ili GB. Ograničenje važi za svaku stavku zasebno, od bilo koga; fascikla se računa po veličini, zapakovana ili raspakovana, u zavisnosti od toga koja je veća.</li>
 <li>Kada je stavka veća od ograničenja: Pitaj me pre nego što počne (stavka se nikada ne pokreće sama, a u prozoru Dolazni prenos piše da je veća od ograničenja koje ste postavili), Odbij je i nemoj da me obavestiš ili Odbij je i obavesti me (obaveštenje kaže ko je šta ponudio). Pošiljalac vidi samo da je ponuda odbijena.</li>
 </ul>
+<p>Ćaskanje:</p>
+<ul>
+<li>Ko može da mi šalje poruke: Svi koji nisu blokirani ili Samo moji primaoci. Uz drugi izbor poruka od nekoga ko nije među vašim primaocima odbija se, a da je vi ne vidite.</li>
+<li>Pokaži drugoj osobi kada pišem: kada je uključeno, prozor ćaskanja druge osobe kaže da pišete dok pišete poruku. Uključeno je dok ga ne isključite.</li>
+<li>Najavi kada druga osoba piše: kada je uključeno, VoiceOver u prozoru ćaskanja u prvom planu najavljuje, uz zvuk, da je druga osoba počela da piše. Kada je isključeno, red stanja to i dalje prikazuje. Uključeno je dok ga ne isključite.</li>
+<li>Obriši sve razgovore…: briše sve razgovore sa ovog Maca, posle pitanja.</li>
+</ul>
+<p>Zvukovi:</p>
+<ul>
+<li>Reprodukuj zvukove: Dodavo reprodukuje sopstveni kratak zvuk za događaje sa liste. Obaveštenje o istom događaju tada nema svoj zvuk. Kada je isključeno, ne reprodukuje se nijedan zvuk, a ono što je postavljeno za svaki događaj ostaje zapamćeno. Uključeno je dok ga ne isključite.</li>
+<li>Događaji: tabela događaja, svaki sa onim što reprodukuje: Primljena poruka, Poslata poruka, Druga osoba piše, Poruka nije poslata, Dolazna stavka, Prenos je započeo, Prenos je završen, Prenos nije uspeo, Prenos je odbijen ili otkazan, Veza je prekinuta i Prenos se nastavlja. Događaj izaberite tasterima sa strelicama; kontrole ispod odnose se na njega.</li>
+<li>Zvuk: Podrazumevani (ugrađeni zvuk), Bez zvuka ili Izaberi… za izbor sopstvene zvučne datoteke, na primer WAV ili AIFF. Datoteka koja kasnije ne može da se reprodukuje, na primer zato što je premeštena, daje ugrađeni zvuk.</li>
+<li>Reprodukuj: reprodukuje ono što je postavljeno za izabrani događaj, i dok je Reprodukuj zvukove isključeno.</li>
+<li>Resetuj sve: svakom događaju vraća ugrađeni zvuk.</li>
+</ul>
 <p>Blokirani: pošiljaoci koje ste blokirali, uz Deblokiraj.</p>
 </section>
 
@@ -169,6 +231,7 @@
 <thead><tr><th scope="col">Tasteri</th><th scope="col">Komanda</th></tr></thead>
 <tbody>
 <tr><td><kbd>⌘O</kbd></td><td>Pošalji…</td></tr>
+<tr><td><kbd>⇧⌘M</kbd></td><td>Ćaskanje</td></tr>
 <tr><td><kbd>⌘N</kbd></td><td>Dodaj primaoca…</td></tr>
 <tr><td><kbd>⌘I</kbd></td><td>Uredi primaoca…</td></tr>
 <tr><td><kbd>⌘⌫</kbd></td><td>Ukloni primaoca</td></tr>

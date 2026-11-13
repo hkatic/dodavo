@@ -29,7 +29,10 @@ use super::{
     CLOSE_OK, Event, Shared,
     protocol::{self, ChatMsg},
 };
-use crate::{config::ChatFrom, i18n::tr};
+use crate::{
+    config::ChatFrom,
+    i18n::{os_tr, tr},
+};
 
 /// Who may send chat messages, and the name this side gives of itself (see
 /// `config::Config::chat_policy`).
@@ -51,6 +54,11 @@ const IDLE: Duration = Duration::from_secs(300);
 /// After a dial that failed, the user's typing does not dial that person
 /// again for this long (a message does).
 const QUIET: Duration = Duration::from_secs(60);
+/// How long the answers of a person whom a message of the user's reached are
+/// taken where only recipients may write (see [`takes`]): long enough for an
+/// answer that comes the next morning. Kept in memory, so that it ends with
+/// the program at the latest.
+const ANSWERS: Duration = Duration::from_secs(24 * 60 * 60);
 /// The longest name that a peer may give of itself, in characters.
 const MAX_NAME: usize = 100;
 
@@ -72,6 +80,9 @@ pub(crate) struct Chats {
     pub(crate) policy: Arc<Mutex<ChatPolicy>>,
     links: Mutex<HashMap<EndpointId, Link>>,
     quiet: Mutex<HashMap<EndpointId, Instant>>,
+    /// The people whom a message of the user's reached, each with the time
+    /// until which their answers are taken (see [`ANSWERS`]).
+    answers: Mutex<HashMap<EndpointId, Instant>>,
     serial: AtomicU64,
 }
 
@@ -81,6 +92,7 @@ impl Chats {
             policy,
             links: Mutex::default(),
             quiet: Mutex::default(),
+            answers: Mutex::default(),
             serial: AtomicU64::new(1),
         }
     }
@@ -93,6 +105,21 @@ impl Chats {
         (serial, rx)
     }
 
+    /// A message of the user's reached `peer` just now: who is written to
+    /// may answer for a while, whoever may write otherwise.
+    fn wrote_to(&self, peer: EndpointId) {
+        let now = Instant::now();
+        let mut answers = self.answers.lock().unwrap();
+        answers.retain(|_, until| now < *until);
+        answers.insert(peer, now + ANSWERS);
+    }
+
+    /// Whether `peer` may answer a message of the user's (see `wrote_to`).
+    fn may_answer(&self, peer: &EndpointId) -> bool {
+        let answers = self.answers.lock().unwrap();
+        answers.get(peer).is_some_and(|until| Instant::now() < *until)
+    }
+
     /// The link `serial` to `peer` is over. Another one that took its place
     /// meanwhile stays.
     fn unlink(&self, peer: &EndpointId, serial: u64) {
@@ -103,13 +130,19 @@ impl Chats {
     }
 }
 
-/// Whether messages from `peer` are taken now.
+/// Whether messages from `peer` are taken now: never from a blocked sender,
+/// and where only recipients may write, from them and from a person whom
+/// the user wrote to not long ago (see `Chats::wrote_to`), whose answer
+/// would otherwise be refused like any message of theirs.
 fn takes(shared: &Shared, chats: &Chats, peer: &EndpointId) -> bool {
     if shared.blocked.lock().unwrap().contains(peer) {
         return false;
     }
-    let policy = chats.policy.lock().unwrap();
-    policy.from == ChatFrom::Anyone || policy.recipients.contains(peer)
+    let by_policy = {
+        let policy = chats.policy.lock().unwrap();
+        policy.from == ChatFrom::Anyone || policy.recipients.contains(peer)
+    };
+    by_policy || chats.may_answer(peer)
 }
 
 /// The name a peer gave of itself, as far as it is shown.
@@ -145,7 +178,7 @@ pub(crate) fn send(shared: &Arc<Shared>, endpoint: &Endpoint, to: EndpointId, ou
         }
     };
     let Some(chats) = shared.chat.clone() else {
-        return fail(out, tr!(chat_error_cannot_chat));
+        return fail(out, os_tr!(chat_error_cannot_chat));
     };
     let (serial, rx) = {
         let mut links = chats.links.lock().unwrap();
@@ -216,27 +249,6 @@ pub(crate) fn send(shared: &Arc<Shared>, endpoint: &Endpoint, to: EndpointId, ou
     });
 }
 
-/// Whether a dial failed because the other side does not take the protocol
-/// that was asked for: its TLS answers with the alert "no application
-/// protocol" (120), which QUIC carries as a crypto error.
-fn no_such_protocol(error: &iroh::endpoint::ConnectError) -> bool {
-    use iroh::endpoint::{ConnectError, ConnectingError, ConnectionError, TransportErrorCode};
-    let source = match error {
-        ConnectError::Connection { source, .. } => source,
-        ConnectError::Connecting {
-            source: ConnectingError::ConnectionError { source, .. },
-            ..
-        } => source,
-        _ => return false,
-    };
-    let code = TransportErrorCode::crypto(120);
-    match source {
-        ConnectionError::ConnectionClosed(close) => close.error_code == code,
-        ConnectionError::TransportError(error) => error.code == code,
-        _ => false,
-    }
-}
-
 /// Connects to `to` and greets it. The streams, and the name the other side
 /// gave of itself; or why not, for the user.
 async fn dial(
@@ -248,7 +260,11 @@ async fn dial(
     let connecting = endpoint.connect(to, protocol::CHAT_ALPN);
     let conn = match tokio::time::timeout(CONNECT_TIMEOUT, connecting).await {
         Ok(Ok(conn)) => conn,
-        Ok(Err(e)) if no_such_protocol(&e) => return Err(tr!(chat_error_cannot_chat).into()),
+        // Before anything else: for a transfer the same answer means
+        // another version (see `net::connect_error_text`).
+        Ok(Err(e)) if super::no_such_protocol(&e) => {
+            return Err(os_tr!(chat_error_cannot_chat).into());
+        }
         Ok(Err(e)) => return Err(super::connect_error_text(&e)),
         Err(_) => return Err(tr!(error_timeout).into()),
     };
@@ -371,7 +387,8 @@ async fn converse(
                         if !takes(&shared, &chats, &peer) =>
                     {
                         // The user blocked this person meanwhile, or takes
-                        // messages from recipients only now.
+                        // messages from recipients only now, and has not
+                        // written to this one.
                         let _ = protocol::write_as(&mut send, &ChatMsg::Refused).await;
                         let _ = send.finish();
                         let _ = tokio::time::timeout(Duration::from_secs(5), conn.closed()).await;
@@ -399,6 +416,7 @@ async fn converse(
                     }
                     ChatMsg::Received { id } => {
                         if waiting.remove(&id).is_some() {
+                            chats.wrote_to(peer);
                             shared.emit(Event::ChatSent { to: peer, id });
                         }
                     }

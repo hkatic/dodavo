@@ -234,11 +234,22 @@ pub(super) async fn resume(
     }
 }
 
-async fn dial(endpoint: &Endpoint, to: EndpointId) -> Result<Connection, String> {
+/// Why a dial did not get a connection.
+enum Undialed {
+    /// The other side could not be reached, with the reason for the user.
+    Unreachable(String),
+    /// Its Dodavo does not take the transfers of this version (see
+    /// `net::no_such_protocol`): trying again changes nothing until one of
+    /// the two is updated.
+    OtherVersion,
+}
+
+async fn dial(endpoint: &Endpoint, to: EndpointId) -> Result<Connection, Undialed> {
     match tokio::time::timeout(CONNECT_TIMEOUT, endpoint.connect(to, protocol::ALPN)).await {
         Ok(Ok(conn)) => Ok(conn),
-        Ok(Err(e)) => Err(super::connect_error_text(&e)),
-        Err(_) => Err(tr!(error_timeout).into()),
+        Ok(Err(e)) if super::no_such_protocol(&e) => Err(Undialed::OtherVersion),
+        Ok(Err(e)) => Err(Undialed::Unreachable(super::connect_error_text(&e))),
+        Err(_) => Err(Undialed::Unreachable(tr!(error_timeout).into())),
     }
 }
 
@@ -393,7 +404,12 @@ async fn start(
     });
     let conn = match dial(endpoint, to).await {
         Ok(conn) => conn,
-        Err(e) => return Outcome::Unreachable(e),
+        Err(Undialed::Unreachable(e)) => return Outcome::Unreachable(e),
+        // Not something that being online or starting Dodavo there helps
+        // with, which is what an unreachable recipient is told.
+        Err(Undialed::OtherVersion) => {
+            return Outcome::Failed(tr!(error_other_version).into());
+        }
     };
     session.set_current(Some(conn.clone()));
     let path_watch = AbortOnDrop(spawn_path_watch(shared.clone(), id, conn.clone()));

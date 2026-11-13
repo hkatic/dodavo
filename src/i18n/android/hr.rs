@@ -14,6 +14,7 @@ pub const HR: Strings = Strings {
     part_in_use_balloon: "„{item}”: djelomično primljenu datoteku koristi druga aplikacija ili Android nije dopustio pristup njoj. Prijenos se nastavlja čim se to promijeni.",
     peer_part_in_use_balloon: "„{item}”: na drugoj strani ({name}) djelomično primljenu datoteku koristi druga aplikacija. Prijenos se nastavlja čim je ta aplikacija zatvori.",
     notify_saved: "Spremljeno: „{item}” (pošiljatelj: {name}). Dodirnite za prikaz.",
+    chat_error_cannot_chat: "Dodavo na drugoj strani nema chat",
     error_no_access: "Dodavo ne smije koristiti ovu stavku.",
     error_name_too_long: "Naziv ili putanja stavke predugi su za ovaj uređaj.",
     error_read_only: "Pohrana se može samo čitati.",

@@ -6,14 +6,19 @@ Spremembe v različici 1.1.0
 - Novo: Blokiranje pošiljateljev. Nekoga lahko blokirate z gumbom »Blokiraj pošiljatelja«, ko prispe njegova ponudba, prejemnika s seznama pa s tipkama Ctrl+B (v Macu Command-B). Dodavo nato zavrne vse, kar ta oseba pošlje, in ji tega ne sporoči. Blokiranje lahko odpravite v nastavitvah.
 - Novo: Mapa za začasne datoteke. Izberete jo lahko v nastavitvah, Dodavo pa vas vnaprej opozori, če bi bila začasna datoteka prevelika za pogon FAT32.
 - Novo: Windows: okno napredka se lahko samo zapre, ko se prenos konča. To vklopite v nastavitvah.
-- Novo: Klepet (Windows). Osebi s seznama prejemnikov lahko napišete sporočilo: izberite jo in pritisnite Ctrl+M. Eno sporočilo lahko pošljete tudi več osebam hkrati, v nastavitvah na zavihku »Klepet« pa izberete, kdo vam sme pisati. Tudi druga stran mora imeti Dodavo 1.1.0.
-- Novo: Zvoki (Windows). Dodavo z zvokom sporoči, ko kaj prispe, ko se prenos začne, konča ali ne uspe in ko se povezava prekine. V nastavitvah na zavihku »Zvoki« lahko vsak zvok zamenjate s svojo datoteko WAV ali ga izklopite.
+- Novo: Klepet. Osebi s seznama prejemnikov lahko napišete sporočilo: izberite jo in pritisnite Ctrl+M (v Macu Shift-Command-M). Eno sporočilo lahko pošljete tudi več osebam hkrati, v nastavitvah pod »Klepet« pa izberete, kdo vam sme pisati. Tudi druga stran mora imeti Dodavo 1.1.0.
+- Novo: Zvoki. Dodavo z zvokom sporoči, ko kaj prispe, ko se prenos začne, konča ali ne uspe in ko se povezava prekine. V nastavitvah pod »Zvoki« lahko vsak zvok zamenjate s svojo zvočno datoteko (v sistemu Windows z datoteko WAV) ali ga izklopite.
 - Sprememba: Prejeta mapa se razpakira na pogonu, kamor jo shranite, zato zanjo ni več potreben prostor na sistemskem pogonu.
 - Sprememba: Windows: nastavitve so razporejene po zavihkih.
 - Popravek: Dodavo ob zagonu ne sporoča več, da ni povezan, medtem ko se še povezuje.
 - Popravek: Vprašanje, odprto v oknu enega prenosa, ne zadržuje več drugih prenosov.
+- Popravek: Pri elementu, ki se začne sam, se prosti prostor preveri skupaj s prenosi, ki še prihajajo, prej pa je lahko več velikih elementov napolnilo disk.
+- Popravek: Sporočila o napakah pri povezovanju, preverjanju posodobitev in omrežju se v drugih jezikih ne prikazujejo več v angleščini.
 - Popravek: Windows: element z zelo dolgim imenom se prejme s skrajšanim imenom, prej pa prenos ni uspel.
 - Popravek: Windows: ko prejeta mapa vsebuje dve datoteki, katerih imeni se razlikujeta samo po velikih in malih črkah, ostaneta obe, prej pa je ena zamenjala drugo.
 - Popravek: Windows: opis orodja ikone v območju za obvestila ne prikazuje več hitrosti 0 B/s, ko so vsi podatki poslani.
 - Popravek: Windows: preverjanje posodobitev ne odpre več drugega sporočila, medtem ko preverjanje že poteka.
+- Popravek: Windows: prejeta datoteka, ki jo je drug program spremenil, medtem ko je bil prenos prekinjen, se ne ohrani več kot dokončana; prenos namesto tega ne uspe.
+- Popravek: Windows: okno napredka dokončanega prenosa prikaže celotno velikost, prej pa je lahko obdržalo tisto, kar je prikazovalo na začetku.
 - Popravek: Mac: Dodavo sporoči, ko prejemnika, ki mu pošiljate, ni več na seznamu.
+- Popravek: Mac: več elementov iste osebe je ponujenih v enem oknu z enim odgovorom, prej pa je vsak odprl svoje okno čez druga.

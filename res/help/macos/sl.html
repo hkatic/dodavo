@@ -26,6 +26,7 @@
 <li><a href="#sending">Pošiljanje datotek in map</a></li>
 <li><a href="#receiving">Prejemanje datotek in map</a></li>
 <li><a href="#progress">Spremljanje prenosa</a></li>
+<li><a href="#chat">Klepet z osebo</a></li>
 <li><a href="#background">Delovanje v ozadju</a></li>
 <li><a href="#settings">Nastavitve</a></li>
 <li><a href="#shortcuts">Bližnjice na tipkovnici</a></li>
@@ -81,8 +82,8 @@
 <section aria-labelledby="main-window">
 <h2 id="main-window">Glavno okno</h2>
 <p>Glavno okno prikazuje vaše prejemnike v tabeli s stolpci Ime, ID stika in Prenos. Zadnji pove, kaj se dogaja s to osebo. Pod tabelo vrstica stanja pove, ali je Dodavo povezan; VoiceOver sporoči, ko se to spremeni.</p>
-<p>Orodna vrstica ima ukaze Pošlji, Dodaj prejemnika, Kopiraj moj ID stika in Prenosi. Ukaz Pošlji ni na voljo, dokler ni izbran prejemnik.</p>
-<p>Z VoiceOverjem pojdite na tabelo in pritisnite <kbd>VO</kbd>-<kbd>⇧</kbd>-<kbd>↓</kbd> za delo z njo, nato se s puščičnimi tipkami premikajte med prejemniki. Pritisnite <kbd>Return</kbd> za pošiljanje izbranemu prejemniku ali <kbd>VO</kbd>-<kbd>⇧</kbd>-<kbd>M</kbd> za meni z ukazi Pošlji …, Prikaži prenos, Uredi prejemnika …, Odstrani prejemnika in Blokiraj prejemnika.</p>
+<p>Orodna vrstica ima ukaze Pošlji, Klepet, Dodaj prejemnika, Kopiraj moj ID stika in Prenosi. Ukaza Pošlji in Klepet nista na voljo, dokler ni izbran prejemnik.</p>
+<p>Z VoiceOverjem pojdite na tabelo in pritisnite <kbd>VO</kbd>-<kbd>⇧</kbd>-<kbd>↓</kbd> za delo z njo, nato se s puščičnimi tipkami premikajte med prejemniki. Pritisnite <kbd>Return</kbd> za pošiljanje izbranemu prejemniku ali <kbd>VO</kbd>-<kbd>⇧</kbd>-<kbd>M</kbd> za meni z ukazi Pošlji …, Klepet, Prikaži prenos, Uredi prejemnika …, Odstrani prejemnika in Blokiraj prejemnika.</p>
 <p>Brez VoiceOverja vklopite krmarjenje s tipkovnico v: Sistemske nastavitve > Tipkovnica, da se s tipko <kbd>Tab</kbd> premikate med vsemi kontrolniki; macOS ga ima privzeto izklopljenega in <kbd>Tab</kbd> doseže le besedilna polja in sezname.</p>
 </section>
 
@@ -113,7 +114,9 @@
 <section aria-labelledby="receiving">
 <h2 id="receiving">Prejemanje datotek in map</h2>
 <p>Ko vam nekdo nekaj pošilja, se prikaže okno Dohodni prenos, obvestilo to sporoči, ikona Dodava pa poskakuje v Docku. Ne vzame fokusa temu, kar počnete: kliknite obvestilo ali ikono, da pridete do njega.</p>
-<p>Okno pove, kdo pošilja kaj in ali je dovolj prostega prostora. Shrani v: pokaže, kam gre, Izberi … pa to spremeni. Sprejmi sprejme (<kbd>Return</kbd>), Zavrni zavrne (<kbd>Esc</kbd>). VoiceOver prebere okno, ko pridete do njega.</p>
+<p>Okno pove, kdo pošilja kaj in ali je dovolj prostega prostora. Upošteva se tudi to, kar mora pri prenosih, ki jih še prejemate, šele prispeti. Shrani v: pokaže, kam gre, Izberi … pa to spremeni. Sprejmi sprejme (<kbd>Return</kbd>), Zavrni zavrne (<kbd>Esc</kbd>). VoiceOver prebere okno, ko pridete do njega.</p>
+<p>Ko vam ista oseba pošlje več elementov hkrati, si delijo eno okno, vaš odgovor pa velja za vse. Prva vrstica pove, koliko jih je, naslednja vrstica navede njihovo skupno velikost, tabela Elementi pa jih našteje. Elementi, ki prispejo, medtem ko je okno odprto, se dodajo vanj, tistih, ki so prispeli v zadnji sekundi, pa vaš odgovor še ne zajame: ostanejo v oknu.</p>
+<p>Klepet odpre klepet s pošiljateljem, na primer da ga pred odgovorom vprašate, kaj je element: glejte <a href="#chat">Klepet z osebo</a>.</p>
 <p>Blokiraj pošiljatelja (<kbd>⌘B</kbd>) po vprašanju zavrne ponudbo in blokira pošiljatelja: Dodavo odslej brez vprašanja zavrne vse, kar vam pošlje ta oseba, ona pa vidi le, da je bila njena ponudba zavrnjena. Stran Blokirani v razdelku <a href="#settings">Nastavitve</a> navaja osebe, ki ste jih blokirali, z gumbom Odblokiraj pa vam lahko spet pošiljajo. Če blokirano osebo dodate med prejemnike, se tudi odblokira.</p>
 <p>Od oseb med vašimi prejemniki se lahko prenos začne sam: glejte Prenose začni samodejno, brez vprašanja v razdelku <a href="#settings">Nastavitve</a>. Pri vseh drugih Dodavo vedno najprej vpraša in pove, da pošiljatelj ni med vašimi prejemniki.</p>
 <p>Velikost elementa, ki vam ga lahko kdo pošlje, lahko omejite: glejte Omeji velikost elementa, ki mi ga lahko kdo pošlje v razdelku <a href="#settings">Nastavitve</a>.</p>
@@ -124,11 +127,55 @@
 <section aria-labelledby="progress">
 <h2 id="progress">Spremljanje prenosa</h2>
 <p>Prenosi (<kbd>⌘T</kbd>) prikaže vse prenose. Vsaka vrstica prikaže element, drugo osebo, kaj se dogaja, koliko je končano, hitrost in preostali čas. Zapiranje tega okna nanje ne vpliva.</p>
-<p>Z VoiceOverjem se vsaka vrstica prebere kot en stavek. Pritisnite <kbd>VO</kbd>-<kbd>⇧</kbd>-<kbd>M</kbd> na vrstici za meni s tem, kar je mogoče narediti z njo, ali <kbd>VO</kbd>-<kbd>⇧</kbd>-<kbd>↓</kbd> za njene gumbe: Začasno ustavi in Nadaljuj, Prekliči prenos, po koncu pa Odpri, Prikaži v Finderju in Odstrani s seznama. Spremembe so sporočene, dokler je Dodavo v ospredju, sicer pa pridejo kot obvestila.</p>
+<p>Z VoiceOverjem se vsaka vrstica prebere kot en stavek. Pritisnite <kbd>VO</kbd>-<kbd>⇧</kbd>-<kbd>M</kbd> na vrstici za meni s tem, kar je mogoče narediti z njo, ali <kbd>VO</kbd>-<kbd>⇧</kbd>-<kbd>↓</kbd> za njene gumbe: Začasno ustavi in Nadaljuj, Prekliči prenos, Klepet, po koncu pa Odpri, Prikaži v Finderju in Odstrani s seznama. Spremembe so sporočene, dokler je Dodavo v ospredju, sicer pa pridejo kot obvestila.</p>
 <p>Samo s tipkovnico izberite vrstico s puščičnimi tipkami: <kbd>Space</kbd> jo začasno ustavi ali nadaljuje, <kbd>Delete</kbd> jo prekliče, končano pa odstrani s seznama, <kbd>Return</kbd> pa odpre, kar je bilo shranjeno.</p>
 <p>Če se povezava izgubi ali računalnik preide v stanje spanja ali se znova zažene, prenos počaka in se nadaljuje, kjer se je ustavil, takoj ko sta oba računalnika zagnana in povezana. Po 30 dneh brez napredka se prenos konča. Na koncu se preveri celoten element.</p>
 <p>Medtem ko se podatki prenašajo, Dodavo preprečuje, da bi Mac sam prešel v stanje spanja. Zapiranje pokrova prenosnika ga še vedno uspava; prenos se nadaljuje po bujenju.</p>
 <p>Ko prispe celoten element, je prejemnikov, zato pošiljatelj prenosa ne more več preklicati. Počisti končane odstrani vrstice končanih prenosov.</p>
+</section>
+
+<section aria-labelledby="chat">
+<h2 id="chat">Klepet z osebo</h2>
+<p>Z osebo si lahko izmenjujete kratka besedilna sporočila, na primer da poveste, kaj nameravate poslati, ali da vprašate o nečem, kar vam je bilo ponujeno. Sporočila gredo neposredno iz enega računalnika v drugega, šifrirana, po enaki vrsti povezave kot datoteke. Oba morata imeti zagnan Dodavo in biti hkrati povezana, tudi Dodavo na drugi strani pa mora imeti klepet.</p>
+<h3 id="chat-open">Odpiranje klepeta</h3>
+<ul>
+<li>V glavnem oknu izberite osebo in izberite Datoteka > Klepet (<kbd>⇧⌘M</kbd>) ali Klepet v orodni vrstici ali v meniju te osebe.</li>
+<li>V oknu Dohodni prenos izberite Klepet, da pišete pošiljatelju, preden odgovorite. V oknu Prenosi ima vsaka vrstica gumb Klepet za osebo, s katero poteka prenos; Datoteka > Klepet stori enako za izbrano vrstico.</li>
+<li>Ko vam nekdo piše, se okno klepeta s to osebo odpre samo. Ne vzame fokusa temu, kar počnete.</li>
+</ul>
+<p>Za vsako osebo obstaja eno okno klepeta. Njegov naslov je Klepet in ime osebe, fokus pa je na začetku v polju Sporočilo.</p>
+<h3 id="chat-several">Pisanje več osebam hkrati</h3>
+<p>Če želite isto sporočilo poslati več osebam, jih izberite na seznamu prejemnikov in izberite Datoteka > Klepet (<kbd>⇧⌘M</kbd>). Namesto klepeta Dodavo vpraša za sporočilo: Sporočilo več osebam navede prejemnike in ima polje za sporočilo ter gumba Pošlji (<kbd>Return</kbd>) in Prekliči (<kbd>Esc</kbd>). Vsaka oseba dobi sporočilo kot zasebno sporočilo od vas. Ne vidi, kdo ga je še dobil, vsak odgovor pa prispe v klepet s to osebo. Sporočilo se doda v vaš pogovor z vsako od njih. Če ga kateri od njih ni mogoče dostaviti, to sporoči obvestilo, v tistem pogovoru pa je označeno kot neposlano.</p>
+<h3 id="chat-window">Okno klepeta</h3>
+<ul>
+<li>Pogovor: tabela z enim sporočilom v vsaki vrstici, najnovejše je zadnje. Vsaka vrstica pove, kdo je napisal sporočilo, kdaj in njegovo besedilo, na primer »Ana, 14:32: Slike so na poti.« ali »Vi, 14:33: Hvala!«. Sporočilo z drugega dne ima tudi datum. Sporočila berite s puščičnimi tipkami, izbrana pa kopirajte s tipkama <kbd>⌘C</kbd>. Z VoiceOverjem na tabeli pritisnite <kbd>VO</kbd>-<kbd>⇧</kbd>-<kbd>↓</kbd> za delo z njo; vsaka vrstica se prebere kot en stavek.</li>
+<li>Vrstica stanja, pod pogovorom: sporočilo, ki je prispelo zadnje, da druga oseba piše ali zakaj sporočilo ni bilo poslano.</li>
+<li>Sporočilo: tu pišete. Sporočilo ima lahko do 4000 znakov.</li>
+<li>Pošlji (<kbd>Return</kbd>): pošlje sporočilo in ga doda v pogovor. Fokus ostane v polju.</li>
+<li>Dodaj med moje prejemnike …: samo za osebo, ki ni med vašimi prejemniki; odpre Dodaj prejemnika z vpisanim imenom in ID-jem stika te osebe.</li>
+<li>Blokiraj: po vprašanju blokira osebo in zapre klepet. Blokirana oseba vam ne more ne pisati ne ničesar poslati.</li>
+<li>Izbriši pogovor …: po vprašanju izbriše sporočila s to osebo iz tega Maca.</li>
+</ul>
+<p>Zapiranje okna (<kbd>⌘W</kbd>) ohrani pogovor: spet je tu, ko odprete klepet.</p>
+<h3 id="chat-receiving">Ko prispe sporočilo</h3>
+<ul>
+<li>Dokler je okno klepeta v ospredju, se sporočilo doda v pogovor in pokaže v vrstici stanja, VoiceOver pa ga sporoči, z imenom osebe na začetku.</li>
+<li>Dokler ste drugje, se okno klepeta odpre ali ostane, kjer je, ne da bi vzelo fokus, ikona Dodava poskakuje v Docku, obvestilo Sporočilo – pošiljatelj: z imenom osebe pa pokaže sporočilo. VoiceOver prebere obvestila, ko se prikažejo. Kliknite obvestilo, da pridete do klepeta.</li>
+<li>V obeh primerih se predvaja zvok, razen če ste ga izklopili.</li>
+</ul>
+<p>Ko druga oseba začne pisati, vrstica stanja to pove, na primer »Ana piše …«. Dokler je okno klepeta v ospredju, VoiceOver to sporoči enkrat, s kratkim zvokom; ne ponavlja se, dokler oseba piše naprej. Druga oseba na enak način izve, ko pišete vi. Oboje je mogoče izklopiti v razdelku <a href="#settings">Nastavitve</a>.</p>
+<h3 id="chat-failed">Ko sporočila ni mogoče poslati</h3>
+<p>Sporočilo, ki ga ni mogoče dostaviti, je označeno v pogovoru, na primer »Vi, 14:35 (ni poslano): Si tam?«, vrstica stanja pove, zakaj, in predvaja se zvok. Dodavo ne poskuša znova sam. Besedilo se vrne v polje Sporočilo, če je to prazno, da lahko pritisnete <kbd>Return</kbd> in ga pošljete znova. Razlogi, ki jih lahko vidite:</p>
+<ul>
+<li>»Drugega računalnika ni bilo mogoče najti v omrežju« ali »Časovna omejitev poskusa povezave je potekla«: Dodavo na drugem računalniku ni zagnan ali eden od vaju ni povezan.</li>
+<li>»Ta oseba ne sprejema vaših sporočil«: druga oseba sprejema sporočila samo od svojih prejemnikov ali vas je blokirala.</li>
+<li>»Dodavo na drugi strani nima klepeta«: druga oseba ima Dodavo brez klepeta.</li>
+<li>»Povezava je bila prekinjena« ali »Druga stran ni potrdila sporočila«: povezava se je končala, preden je bilo sporočilo potrjeno.</li>
+</ul>
+<h3 id="chat-who">Kdo vam lahko piše</h3>
+<p>Dokler tega ne spremenite, vam lahko piše vsak, ki ima vaš ID stika in ni blokiran, tako kot vam lahko vsak ponudi datoteko. Klepet z osebo, ki ni med vašimi prejemniki, nad pogovorom pokaže opozorilo z njenim ID-jem stika. Na strani Klepet v razdelku <a href="#settings">Nastavitve</a> lahko izberete Samo moji prejemniki: sporočila vseh drugih se takrat zavrnejo, ne da bi jih videli, njihov pošiljatelj pa izve, da ne sprejemate njegovih sporočil. Če sami pišete osebi, ki je ni med vašimi prejemniki, njeni odgovori vseeno prispejo do vas, še en dan po vašem zadnjem sporočilu tej osebi.</p>
+<h3 id="chat-history">Kje se hranijo pogovori</h3>
+<p>Pogovori se hranijo v vašem Macu, z vašimi nastavitvami, dokler jih ne izbrišete: 2000 najnovejših sporočil z vsako osebo. Ne pošiljajo se nikamor drugam. Izbriši pogovor … v oknu klepeta izbriše enega, Izbriši vse pogovore … na strani Klepet v nastavitvah pa vse. Z brisanjem se sporočila odstranijo samo iz vašega Maca; druga oseba obdrži svoj izvod.</p>
 </section>
 
 <section aria-labelledby="background">
@@ -160,6 +207,21 @@
 <li>Omeji velikost elementa, ki mi ga lahko kdo pošlje. Največja velikost: celo število MB ali GB. Omejitev velja za vsak element posebej, od kogar koli; pri mapi šteje njena velikost, zapakirana ali razpakirana, katera koli je večja.</li>
 <li>Ko je element večji od omejitve: Vprašaj me, preden se začne (element se nikoli ne začne sam, v oknu Dohodni prenos pa piše, da je večji od omejitve, ki ste jo nastavili), Zavrni ga in me ne obvesti ali Zavrni ga in me obvesti (obvestilo pove, kdo je kaj ponudil). Pošiljatelj vidi le, da je bila ponudba zavrnjena.</li>
 </ul>
+<p>Klepet:</p>
+<ul>
+<li>Kdo mi lahko pošilja sporočila: Vsi, ki niso blokirani ali Samo moji prejemniki. Pri drugi izbiri se sporočilo nekoga, ki ni med vašimi prejemniki, zavrne, ne da bi ga videli.</li>
+<li>Drugi osebi pokaži, kdaj pišem: ko je vklopljeno, okno klepeta druge osebe pove, da pišete, medtem ko pišete sporočilo. Vklopljeno je, dokler ga ne izklopite.</li>
+<li>Napovej, kdaj druga oseba piše: ko je vklopljeno, VoiceOver v oknu klepeta v ospredju z zvokom sporoči, da je druga oseba začela pisati. Ko je izklopljeno, vrstica stanja to še vedno pokaže. Vklopljeno je, dokler ga ne izklopite.</li>
+<li>Izbriši vse pogovore …: po vprašanju izbriše vse pogovore iz tega Maca.</li>
+</ul>
+<p>Zvoki:</p>
+<ul>
+<li>Predvajaj zvoke: Dodavo za dogodke s seznama predvaja svoj kratek zvok. Obvestilo o istem dogodku takrat nima svojega zvoka. Ko je izklopljeno, se ne predvaja noben zvok, nastavitev vsakega dogodka pa se ohrani. Vklopljeno je, dokler ga ne izklopite.</li>
+<li>Dogodki: tabela dogodkov, vsak s tem, kar predvaja: Prejeto sporočilo, Poslano sporočilo, Druga oseba piše, Sporočilo ni poslano, Dohodni element, Prenos se je začel, Prenos je končan, Prenos ni uspel, Prenos je zavrnjen ali preklican, Povezava je prekinjena in Prenos se nadaljuje. Dogodek izberite s puščičnimi tipkami; kontrolniki pod tabelo veljajo zanj.</li>
+<li>Zvok: Privzeti (vgrajeni zvok), Brez zvoka ali Izberi … za izbiro svoje zvočne datoteke, na primer WAV ali AIFF. Datoteka, ki je pozneje ni mogoče predvajati, na primer ker je bila premaknjena, da vgrajeni zvok.</li>
+<li>Predvajaj: predvaja, kar je nastavljeno za izbrani dogodek, tudi ko je Predvajaj zvoke izklopljeno.</li>
+<li>Ponastavi vse: vsakemu dogodku vrne vgrajeni zvok.</li>
+</ul>
 <p>Blokirani: pošiljatelji, ki ste jih blokirali, z gumbom Odblokiraj.</p>
 </section>
 
@@ -169,6 +231,7 @@
 <thead><tr><th scope="col">Tipke</th><th scope="col">Ukaz</th></tr></thead>
 <tbody>
 <tr><td><kbd>⌘O</kbd></td><td>Pošlji …</td></tr>
+<tr><td><kbd>⇧⌘M</kbd></td><td>Klepet</td></tr>
 <tr><td><kbd>⌘N</kbd></td><td>Dodaj prejemnika …</td></tr>
 <tr><td><kbd>⌘I</kbd></td><td>Uredi prejemnika …</td></tr>
 <tr><td><kbd>⌘⌫</kbd></td><td>Odstrani prejemnika</td></tr>

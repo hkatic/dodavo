@@ -32,6 +32,12 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSTe
     private let unblock = NSButton()
     /// What the table of blocked senders shows.
     private var blocked: [Contact] = []
+    private let chatFrom = NSPopUpButton()
+    private let sendTyping = NSButton(checkboxWithTitle: L[.send_typing], target: nil, action: nil)
+    private let announceTyping = NSButton(
+        checkboxWithTitle: L[.announce_typing], target: nil, action: nil)
+    private let deleteChats = NSButton()
+    private let sounds = SoundsPane()
 
     init(started: Started, applied: @escaping () -> Void) {
         self.started = started
@@ -42,7 +48,8 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSTe
                 myName: "", openAtLogin: false, hideAtLogin: false, showInMenuBar: true,
                 checkUpdates: true, language: nil, alwaysSave: true, alwaysSaveDir: nil,
                 autoAccept: true, receivedFolder: "extract", tempDir: nil, warnFatTemp: true, limitSize: false,
-                limitNumber: "1", limitUnit: "gb", overLimit: "ask")
+                limitNumber: "1", limitUnit: "gb", overLimit: "ask", chatFrom: "anyone",
+                sendTyping: true, announceTyping: true)
         settings.openAtLogin = LoginItem.isEnabled ?? settings.openAtLogin
         let tabs = NSTabViewController()
         tabs.tabStyle = .toolbar
@@ -54,9 +61,13 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSTe
         window.delegate = self
         let general = page(L[.settings_general], "gearshape", generalPage())
         let receiving = page(L[.settings_receiving], "square.and.arrow.down", receivingPage())
+        let chat = page(L[.settings_chat], "bubble.left.and.bubble.right", chatPage())
+        let soundsTab = page(L[.settings_sounds], "speaker.wave.2", sounds.view)
         let blockedTab = page(L[.settings_blocked], "hand.raised", blockedPage())
         tabs.addTabViewItem(general)
         tabs.addTabViewItem(receiving)
+        tabs.addTabViewItem(chat)
+        tabs.addTabViewItem(soundsTab)
         tabs.addTabViewItem(blockedTab)
         show()
         window.setContentSize(tabs.view.fittingSize)
@@ -229,6 +240,67 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSTe
         return grid
     }
 
+    /// Who may write, and what is said about typing.
+    private func chatPage() -> NSView {
+        let fromLabel = NSTextField(labelWithString: L[.chat_from_label])
+        for (title, value) in [
+            (L[.chat_from_anyone], "anyone"), (L[.chat_from_recipients], "recipients"),
+        ] {
+            chatFrom.addItem(withTitle: title)
+            chatFrom.lastItem?.representedObject = value
+        }
+        chatFrom.target = self
+        chatFrom.action = #selector(changed)
+        name(chatFrom, by: fromLabel)
+        for box in [sendTyping, announceTyping] {
+            box.target = self
+            box.action = #selector(changed)
+        }
+        // Applies at once, like blocking: it is not one of the settings.
+        deleteChats.title = L[.chat_delete_all]
+        deleteChats.bezelStyle = .rounded
+        deleteChats.target = self
+        deleteChats.action = #selector(deleteAllChats)
+        deleteChats.isEnabled = Core.call("any_chats") ?? true
+        let grid = NSGridView(views: [
+            [fromLabel, chatFrom],
+            [NSGridCell.emptyContentView, sendTyping],
+            [NSGridCell.emptyContentView, announceTyping],
+            [NSGridCell.emptyContentView, deleteChats],
+        ])
+        grid.column(at: 0).xPlacement = .trailing
+        grid.rowAlignment = .firstBaseline
+        grid.rowSpacing = 8
+        return grid
+    }
+
+    /// Deletes every conversation from this Mac, if the user confirms it.
+    @objc private func deleteAllChats() {
+        guard let window = window else { return }
+        let alert = NSAlert()
+        alert.messageText = L[.chat_delete_all_confirm]
+        alert.informativeText = L[.chat_delete_text]
+        alert.addButton(withTitle: L[.delete])
+        alert.addButton(withTitle: L[.cancel])
+        alert.buttons[1].keyEquivalent = "\u{1b}"
+        alert.beginSheetModal(for: window) { [weak self] response in
+            guard response == .alertFirstButtonReturn, let self = self else { return }
+            if let error = Core.errorOf("chat_delete_all", [:]) {
+                // Once the sheet is gone: the next one says how it went.
+                DispatchQueue.main.async { showAlert(error, on: window) }
+                return
+            }
+            (NSApp.delegate as? AppDelegate)?.chatsDeleted()
+            // The button is unavailable now, and the focus must not stay on it.
+            window.makeFirstResponder(self.chatFrom)
+            self.deleteChats.isEnabled = false
+            // After VoiceOver has told where the focus went, waiting its turn.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                announce(L[.chat_deleted_all], urgent: false)
+            }
+        }
+    }
+
     private func blockedPage() -> NSView {
         let label = NSTextField(labelWithString: L[.blocked_senders_label])
         let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("sender"))
@@ -254,6 +326,14 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSTe
         blockedNone.preferredMaxLayoutWidth = 440
         reloadBlocked()
         return makeColumn([label, scroll, blockedNone, unblock])
+    }
+
+    /// Shows the page at `index`, in the order of the toolbar.
+    func selectPage(_ index: Int) {
+        guard let tabs = window?.contentViewController as? NSTabViewController,
+            tabs.tabViewItems.indices.contains(index)
+        else { return }
+        tabs.selectedTabViewItemIndex = index
     }
 
     /// Someone was blocked elsewhere (see `AppDelegate.senderBlocked`).
@@ -376,6 +456,12 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSTe
             ($0.representedObject as? String) == settings.overLimit
         }
         overLimit.selectItem(at: overIndex ?? 0)
+        let fromIndex = chatFrom.itemArray.firstIndex {
+            ($0.representedObject as? String) == settings.chatFrom
+        }
+        chatFrom.selectItem(at: fromIndex ?? 0)
+        sendTyping.state = settings.sendTyping ? .on : .off
+        announceTyping.state = settings.announceTyping ? .on : .off
     }
 
     /// Takes what the window says, and saves it where it can be used.
@@ -395,6 +481,9 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSTe
         next.limitNumber = limitNumber.stringValue
         next.limitUnit = limitUnit.selectedItem?.representedObject as? String ?? "mb"
         next.overLimit = overLimit.selectedItem?.representedObject as? String ?? "ask"
+        next.chatFrom = chatFrom.selectedItem?.representedObject as? String ?? "anyone"
+        next.sendTyping = sendTyping.state == .on
+        next.announceTyping = announceTyping.state == .on
         if next.alwaysSave, next.alwaysSaveDir == nil {
             // Nothing to save to yet: the panel comes first.
             alwaysSave.state = .off
@@ -436,6 +525,8 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSTe
     /// `warnAboutTempFolder`). Only those two: a field may be half typed.
     func windowDidBecomeKey(_: Notification) {
         reloadBlocked()
+        // A conversation may have begun, or the last one been deleted.
+        deleteChats.isEnabled = Core.call("any_chats") ?? true
         if let saved = Core.settings() {
             settings.tempDir = saved.tempDir
             settings.warnFatTemp = saved.warnFatTemp

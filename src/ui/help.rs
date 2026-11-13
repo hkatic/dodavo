@@ -297,6 +297,7 @@ mod tests {
                 s.ctx_chat,
                 s.chat_button,
                 s.chat_history_label,
+                s.chat_selected_label,
                 s.chat_message_label,
                 s.chat_send,
                 s.chat_add,

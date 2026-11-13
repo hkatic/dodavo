@@ -6,14 +6,19 @@ Changes in 1.1.0
 - New: Block senders. Block someone with "Block Sender" when their offer arrives, or a recipient in your list with Ctrl+B (Command-B on a Mac). Dodavo then declines everything that person sends, and they are not told. You can unblock them in Settings.
 - New: Folder for temporary files. You can choose it in Settings, and Dodavo warns you in advance if a temporary file would be too large for a FAT32 drive.
 - New: Windows: the progress window can close by itself when a transfer ends. Turn this on in Settings.
-- New: Chat (Windows). You can write a message to a person in your recipient list: select them and press Ctrl+M. One message can go to several people at once, and on the Chat tab in Settings you choose who can write to you. The other side needs Dodavo 1.1.0 too.
-- New: Sounds (Windows). Dodavo plays a sound when something arrives, when a transfer starts, completes or fails, and when the connection is lost. On the Sounds tab in Settings you can replace each sound with a WAV file of your own, or turn it off.
+- New: Chat. You can write a message to a person in your recipient list: select them and press Ctrl+M (Shift-Command-M on a Mac). One message can go to several people at once, and in Settings, under Chat, you choose who can write to you. The other side needs Dodavo 1.1.0 too.
+- New: Sounds. Dodavo plays a sound when something arrives, when a transfer starts, completes or fails, and when the connection is lost. In Settings, under Sounds, you can replace each sound with a sound file of your own (a WAV file on Windows), or turn it off.
 - Changed: A received folder is unpacked on the drive you save it to, so it no longer needs room on the system drive.
 - Changed: Windows: Settings are arranged on tabs.
 - Bugfix: At startup, Dodavo no longer says that it is offline while it is still connecting.
 - Bugfix: A question that is open in one transfer's window no longer holds up the other transfers.
+- Bugfix: An item that starts by itself is checked for free space together with the transfers that are still arriving, where several large items could fill the disk before.
+- Bugfix: Error messages about a connection, a check for updates and the network no longer appear in English in the other languages.
 - Bugfix: Windows: an item with a very long name is received with a shortened name, where it failed before.
 - Bugfix: Windows: when a received folder has two files whose names differ only in upper and lower case, both are kept, where one replaced the other before.
 - Bugfix: Windows: the tooltip of the icon in the notification area no longer shows a speed of 0 B/s once all data has been sent.
 - Bugfix: Windows: Check for Updates no longer opens a second message while a check is already running.
+- Bugfix: Windows: a received file that another program changed while its transfer was interrupted is no longer kept as complete; the transfer fails instead.
+- Bugfix: Windows: the progress window of a completed transfer shows the whole size, where it could keep what it showed at the start.
 - Bugfix: Mac: Dodavo says so when the recipient of a send is no longer in the list.
+- Bugfix: Mac: several items from one person are offered in one window with one answer, where each opened a window of its own on top of the others.

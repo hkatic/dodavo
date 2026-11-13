@@ -282,9 +282,11 @@ pub fn set_path(hwnd: HWND, direct: Option<bool>) -> bool {
     .is_some()
 }
 
-/// Shows the final result. Returns `None` if the window is busy.
-pub fn finish(hwnd: HWND, outcome: &Outcome) -> Option<Finished> {
-    window::with_handler::<Progress, _>(hwnd, |p, w| p.finish(w, outcome))
+/// Shows the final result. `total` is the size of the transfer as its last
+/// report had it (0 if none came), which the window may not know: it drops
+/// the reports that find it busy. Returns `None` if the window is busy.
+pub fn finish(hwnd: HWND, outcome: &Outcome, total: u64) -> Option<Finished> {
+    window::with_handler::<Progress, _>(hwnd, |p, w| p.finish(w, outcome, total))
 }
 
 /// What the speed and remaining time rows show (see `Progress::rate`).
@@ -716,7 +718,7 @@ impl Progress {
         self.show_rate(now);
     }
 
-    fn finish(&mut self, w: &Window, outcome: &Outcome) -> Finished {
+    fn finish(&mut self, w: &Window, outcome: &Outcome, total: u64) -> Finished {
         self.active = false;
         self.marquee(false);
         unsafe {
@@ -765,8 +767,9 @@ impl Progress {
             send(self.bar, PBM_SETSTATE, PBST_NORMAL as usize, 0);
             send(self.bar, PBM_SETPOS, RANGE, 0);
             // The last reports may have found the window busy (a question
-            // was open), and the text would stay at what it was.
-            let total = self.progress.1;
+            // was open), or all of them from the first one on, and the text
+            // would stay at what it was: the size is the caller's then.
+            let total = if total > 0 { total } else { self.progress.1 };
             if total > 0 {
                 set_text(
                     self.done,

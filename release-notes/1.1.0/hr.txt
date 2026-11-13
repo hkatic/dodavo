@@ -6,14 +6,19 @@ Promjene u inačici 1.1.0
 - Novo: Blokiranje pošiljatelja. Nekoga možete blokirati gumbom „Blokiraj pošiljatelja” kad stigne njegova ponuda, a primatelja s popisa tipkama Ctrl+B (na Macu Command-B). Dodavo tada odbija sve što ta osoba pošalje, a ona o tome ne dobiva obavijest. Blokadu možete ukloniti u postavkama.
 - Novo: Mapa za privremene datoteke. Možete je odabrati u postavkama, a Dodavo vas unaprijed upozorava ako bi privremena datoteka bila prevelika za pogon FAT32.
 - Novo: Windows: prozor napretka može se sam zatvoriti kad prijenos završi. To se uključuje u postavkama.
-- Novo: Čavrljanje (Windows). Osobi s popisa primatelja možete napisati poruku: odaberite je i pritisnite Ctrl+M. Jedna poruka može ići i većem broju osoba odjednom, a u postavkama na kartici „Čavrljanje” birate tko vam smije pisati. I druga strana treba imati Dodavo 1.1.0.
-- Novo: Zvukovi (Windows). Dodavo zvukom javlja kad nešto stigne, kad prijenos počne, završi ili ne uspije i kad se veza prekine. U postavkama na kartici „Zvukovi” svaki zvuk možete zamijeniti svojom WAV datotekom ili ga isključiti.
+- Novo: Čavrljanje (na Macu: Dopisivanje). Osobi s popisa primatelja možete napisati poruku: odaberite je i pritisnite Ctrl+M (na Macu Shift-Command-M). Jedna poruka može ići i većem broju osoba odjednom, a u postavkama pod „Čavrljanje” (na Macu „Dopisivanje”) birate tko vam smije pisati. I druga strana treba imati Dodavo 1.1.0.
+- Novo: Zvukovi. Dodavo zvukom javlja kad nešto stigne, kad prijenos počne, završi ili ne uspije i kad se veza prekine. U postavkama pod „Zvukovi” svaki zvuk možete zamijeniti svojom zvučnom datotekom (u Windowsu WAV datotekom) ili ga isključiti.
 - Promjena: Primljena mapa raspakira se na disku na koji je spremate, pa za nju više ne treba mjesta na sistemskom disku.
 - Promjena: Windows: postavke su raspoređene po karticama.
 - Ispravak: Dodavo pri pokretanju više ne javlja da nije povezan dok se još povezuje.
 - Ispravak: Pitanje otvoreno u prozoru jednog prijenosa više ne zadržava ostale prijenose.
+- Ispravak: Za stavku koja počinje sama slobodan se prostor provjerava zajedno s prijenosima koji još stižu, dok je prije više velikih stavki moglo napuniti disk.
+- Ispravak: Poruke o pogreškama pri povezivanju, provjeri ažuriranja i mreži više se ne prikazuju na engleskom u ostalim jezicima.
 - Ispravak: Windows: stavka s vrlo dugim nazivom prima se pod skraćenim nazivom, dok prije nije uspijevala.
 - Ispravak: Windows: kad primljena mapa sadrži dvije datoteke čiji se nazivi razlikuju samo po velikim i malim slovima, ostaju obje, dok je prije jedna zamijenila drugu.
 - Ispravak: Windows: opis alata ikone u području obavijesti više ne prikazuje brzinu 0 B/s nakon što su svi podaci poslani.
 - Ispravak: Windows: provjera ažuriranja više ne otvara drugu poruku dok provjera već traje.
+- Ispravak: Windows: primljena datoteka koju je drugi program promijenio dok je prijenos bio prekinut više se ne zadržava kao dovršena; prijenos umjesto toga ne uspijeva.
+- Ispravak: Windows: prozor napretka dovršenog prijenosa prikazuje cijelu veličinu, dok je prije mogao zadržati ono što je prikazivao na početku.
 - Ispravak: Mac: Dodavo javlja kad primatelja kojem se šalje više nema na popisu.
+- Ispravak: Mac: više stavki od iste osobe nudi se u jednom prozoru s jednim odgovorom, dok je prije svaka otvarala svoj prozor preko ostalih.

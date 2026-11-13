@@ -14,6 +14,7 @@ pub const SL: Strings = Strings {
     part_in_use_balloon: "»{item}«: delno prejeto datoteko uporablja druga aplikacija ali pa Android ni dovolil dostopa do nje. Prenos se nadaljuje, takoj ko se to spremeni.",
     peer_part_in_use_balloon: "»{item}«: na drugi strani ({name}) delno prejeto datoteko uporablja druga aplikacija. Prenos se nadaljuje, takoj ko jo ta aplikacija zapre.",
     notify_saved: "Shranjeno: »{item}« (pošiljatelj: {name}). Dotaknite se za prikaz.",
+    chat_error_cannot_chat: "Dodavo na drugi strani nima klepeta",
     error_no_access: "Dodavo te postavke ne sme uporabljati.",
     error_name_too_long: "Ime ali pot elementa je predolga za to napravo.",
     error_read_only: "Shramba je samo za branje.",

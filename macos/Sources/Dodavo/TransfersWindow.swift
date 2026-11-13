@@ -115,6 +115,18 @@ final class TransfersWindowController: NSWindowController, NSTableViewDataSource
         Core.perform("clear_finished")
     }
 
+    /// Chat in the File menu: with the other side of the selected transfer.
+    @objc func chat(_: Any?) {
+        selectedCell?.chat()
+    }
+
+    @objc func validateMenuItem(_ item: NSMenuItem) -> Bool {
+        if item.action == #selector(chat(_:)) {
+            return selectedCell?.canChat == true && window?.attachedSheet == nil
+        }
+        return true
+    }
+
     /// Selects a transfer, so that VoiceOver and the eye find it.
     func reveal(_ id: UInt64) {
         guard let row = rows.firstIndex(where: { $0.id == id }) else { return }
@@ -218,6 +230,7 @@ final class TransferCell: NSTableCellView {
     private let openButton = NSButton()
     private let showButton = NSButton()
     private let removeButton = NSButton()
+    private let chatButton = NSButton()
     private let mark = NSImageView()
 
     init(table: NSTableView) {
@@ -236,6 +249,7 @@ final class TransferCell: NSTableCellView {
             (openButton, L[.open], #selector(openItem)),
             (showButton, L[.show_in_finder], #selector(showItem)),
             (removeButton, L[.remove_from_list], #selector(removeItem)),
+            (chatButton, L[.menu_chat], #selector(chat)),
         ] as [(NSButton, String, Selector)] {
             button.title = name
             button.bezelStyle = .rounded
@@ -246,7 +260,8 @@ final class TransferCell: NSTableCellView {
         }
         let heading = NSStackView(views: [mark, title])
         heading.spacing = 4
-        let buttons = NSStackView(views: [pauseButton, cancelButton, openButton, showButton, removeButton])
+        let buttons = NSStackView(
+            views: [pauseButton, cancelButton, openButton, showButton, removeButton, chatButton])
         buttons.spacing = 6
         let column = makeColumn([heading, party, statusLine, bar, details, buttons], spacing: 3)
         addSubview(column)
@@ -307,6 +322,7 @@ final class TransferCell: NSTableCellView {
         arrange(openButton, visible: saved, enabled: true)
         arrange(showButton, visible: saved, enabled: true)
         arrange(removeButton, visible: !row.active, enabled: true)
+        arrange(chatButton, visible: !row.peerId.isEmpty, enabled: true)
         setAccessibilityLabel(spoken(row))
         setAccessibilityHelp(row.path)
     }
@@ -337,7 +353,13 @@ final class TransferCell: NSTableCellView {
             commands.append((L[.show_in_finder], #selector(showItem)))
         }
         if !row.active { commands.append((L[.remove_from_list], #selector(removeItem))) }
+        if canChat { commands.append((L[.menu_chat], #selector(chat))) }
         return commands
+    }
+
+    /// Whether the other side of this transfer is known well enough to write to.
+    var canChat: Bool {
+        row?.peerId.isEmpty == false
     }
 
     /// Whether this row does anything with the key.
@@ -400,5 +422,12 @@ final class TransferCell: NSTableCellView {
     @objc private func removeItem() {
         guard let row = row else { return }
         Core.perform("remove_row", ["id": row.id])
+    }
+
+    /// Opens the chat with the other side of this transfer.
+    @objc func chat() {
+        guard let row = row, !row.peerId.isEmpty else { return }
+        (NSApp.delegate as? AppDelegate)?.openChat(
+            peer: row.peerId, name: row.peer, activate: true)
     }
 }

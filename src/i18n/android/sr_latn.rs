@@ -14,6 +14,7 @@ pub const SR_LATN: Strings = Strings {
     part_in_use_balloon: "„{item}“: delimično primljenu datoteku koristi druga aplikacija ili Android nije dozvolio pristup njoj. Prenos se nastavlja čim se to promeni.",
     peer_part_in_use_balloon: "„{item}“: na drugoj strani ({name}) delimično primljenu datoteku koristi druga aplikacija. Prenos se nastavlja čim je ta aplikacija zatvori.",
     notify_saved: "Sačuvano: „{item}“ (pošiljalac: {name}). Dodirnite za prikaz.",
+    chat_error_cannot_chat: "Dodavo na drugoj strani nema ćaskanje",
     error_no_access: "Dodavo ne sme da koristi ovu stavku.",
     error_name_too_long: "Naziv ili putanja stavke su predugi za ovaj uređaj.",
     error_read_only: "Memorija može samo da se čita.",

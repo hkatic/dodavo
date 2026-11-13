@@ -223,7 +223,7 @@
 <dt><span class="ui">Spremi u:</span> (<kbd>Alt</kbd>+<kbd>S</kbd>)</dt>
 <dd>Mapa u koju će se stavka spremiti. Ako je u postavkama uključena mogućnost <span class="ui">Uvijek spremaj primljene datoteke u ovu mapu</span>, to je mapa iz te mogućnosti, a to je vaša mapa Preuzimanja ako niste odabrali drugu. Ako ta mogućnost nije uključena, to je mapa koju ste koristili prošli put ili vaša mapa Preuzimanja. Možete upisati drugu mapu ili je odabrati gumbom <span class="ui">Pregledaj…</span> (<kbd>Alt</kbd>+<kbd>P</kbd>).</dd>
 <dt>Slobodan prostor na disku</dt>
-<dd>Rečenica ispod mape kaže ima li na tom pogonu dovoljno slobodnog prostora, koliko je potrebno i koliko je dostupno. Mapa koja se raspakirava treba prostor i za preuzimanje i za raspakiravanje; mapa koju zadržavate samo kao ZIP datoteku treba prostor za ZIP datoteku (pogledajte <span class="ui">Nakon primanja mape</span> u <a href="#settings-receiving">postavkama</a>). Rečenica se ažurira kada mapu odaberete gumbom Pregledaj ili napustite polje s mapom. Na pogonu s datotečnim sustavom FAT32, kakav imaju mnogi USB izbrisivi memorijski pogoni i memorijske kartice, nijedna datoteka ne može biti od 4 GB ili veća: ako bi prijenos ondje spremio takvu datoteku, rečenica to kaže i trebate odabrati mapu na drugom pogonu.</dd>
+<dd>Rečenica ispod mape kaže ima li na tom pogonu dovoljno slobodnog prostora, koliko je potrebno i koliko je dostupno. Mapa koja se raspakirava treba prostor i za preuzimanje i za raspakiravanje; mapa koju zadržavate samo kao ZIP datoteku treba prostor za ZIP datoteku (pogledajte <span class="ui">Nakon primanja mape</span> u <a href="#settings-receiving">postavkama</a>). Računa se i ono što prijenosima koje još primate tek treba stići: ako zbog toga nema dovoljno mjesta, rečenica kaže koliko će oni zauzeti. Rečenica se ažurira kada mapu odaberete gumbom Pregledaj ili napustite polje s mapom. Na pogonu s datotečnim sustavom FAT32, kakav imaju mnogi USB izbrisivi memorijski pogoni i memorijske kartice, nijedna datoteka ne može biti od 4 GB ili veća: ako bi prijenos ondje spremio takvu datoteku, rečenica to kaže i trebate odabrati mapu na drugom pogonu.</dd>
 <dt><span class="ui">Prihvati</span> (<kbd>Alt</kbd>+<kbd>I</kbd>) i <span class="ui">Odbij</span> (<kbd>Alt</kbd>+<kbd>O</kbd>)</dt>
 <dd>Kada se prozor otvori, fokus je na gumbu <span class="ui">Prihvati</span>, pa pritiskom tipke <kbd>Enter</kbd> prihvaćate prijenos; čitači zaslona obično najprije pročitaju tekst prozora, od podebljanog retka do rečenice o slobodnom prostoru na disku. Pritiskom tipke <kbd>Esc</kbd> ili zatvaranjem prozora odbijate ga.</dd>
 <dt><span class="ui">Blokiraj pošiljatelja</span> (<kbd>Alt</kbd>+<kbd>B</kbd>)</dt>
@@ -332,6 +332,8 @@
 <dl>
 <dt><span class="ui">Povijest</span> (<kbd>Alt</kbd>+<kbd>P</kbd>)</dt>
 <dd>Popis u kojem je svaka poruka jedna stavka, a najnovija je posljednja. Svaka stavka kaže tko je napisao poruku, kada, i njezin tekst, primjerice <span class="ui">Ana, 14:32: Slike stižu.</span> ili <span class="ui">Vi, 14:33: Hvala!</span>. Poruka od nekog drugog dana ima i datum. Poruke čitate tipkama <kbd>Strelica gore</kbd> i <kbd>Strelica dolje</kbd>, tipkama <kbd>Home</kbd> i <kbd>End</kbd> idete na prvu i posljednju, a tipkama <kbd>Ctrl</kbd>+<kbd>C</kbd> kopirate odabranu poruku. Kada prijeđete na popis, odabrana je najnovija poruka.</dd>
+<dt><span class="ui">Odabrana poruka</span> (<kbd>Alt</kbd>+<kbd>A</kbd>)</dt>
+<dd>Tekstno polje samo za čitanje s cijelim tekstom poruke koja je odabrana u povijesti. Stavka popisa ima mjesta za desetak redaka, pa dulja poruka ondje pokazuje samo svoj početak; ovdje je možete pročitati cijelu tipkama sa strelicama, odabrati njezin dio i kopirati ga.</dd>
 <dt>Redak stanja</dt>
 <dd>Jedan redak ispod povijesti koji prikazuje poruku koja je stigla posljednja, da druga osoba piše, ili zašto poruka nije poslana. Ne može dobiti fokus tipkovnice; čitači zaslona čitaju ga kada se promijeni i kada prozor dođe u prvi plan.</dd>
 <dt><span class="ui">Poruka</span> (<kbd>Alt</kbd>+<kbd>O</kbd>)</dt>
@@ -363,7 +365,7 @@
 <li><span class="ui">Veza je prekinuta</span> ili <span class="ui">Druga strana nije potvrdila poruku</span>: veza je završila prije nego što je poruka potvrđena.</li>
 </ul>
 <h3 id="chat-who">Tko vam može pisati</h3>
-<p>Ako to ne promijenite, pisati vam može svatko tko ima vaš ID kontakta i nije blokiran, kao što vam svatko može ponuditi datoteku. Čavrljanje s osobom koja nije na vašem popisu primatelja iznad povijesti prikazuje upozorenje s njezinim ID-om kontakta. U postavkama, na kartici <span class="ui">Čavrljanje</span>, možete odabrati <span class="ui">Samo moji primatelji</span>: poruke svih ostalih tada se odbijaju, a da ih vi ne vidite, i njihov pošiljatelj doznaje da ne primate njegove poruke.</p>
+<p>Ako to ne promijenite, pisati vam može svatko tko ima vaš ID kontakta i nije blokiran, kao što vam svatko može ponuditi datoteku. Čavrljanje s osobom koja nije na vašem popisu primatelja iznad povijesti prikazuje upozorenje s njezinim ID-om kontakta. U postavkama, na kartici <span class="ui">Čavrljanje</span>, možete odabrati <span class="ui">Samo moji primatelji</span>: poruke svih ostalih tada se odbijaju, a da ih vi ne vidite, i njihov pošiljatelj doznaje da ne primate njegove poruke. Ako sami pišete osobi koja nije na vašem popisu primatelja, njezini odgovori ipak stižu do vas, još dan nakon vaše posljednje poruke toj osobi.</p>
 <h3 id="chat-history">Gdje se čuvaju razgovori</h3>
 <p>Razgovori se čuvaju na vašem računalu, uz vaše postavke, dok ih ne izbrišete: najnovijih 2000 poruka sa svakom osobom. Ne šalju se nikamo drugamo. <span class="ui">Izbriši razgovor…</span> u prozoru čavrljanja briše jedan, a <span class="ui">Izbriši sve razgovore…</span> u postavkama, na kartici <span class="ui">Čavrljanje</span>, briše sve. Brisanjem se poruke uklanjaju samo s vašeg računala; druga osoba zadržava svoj primjerak.</p>
 </section>
@@ -582,6 +584,7 @@
 <tr><td><kbd>Alt</kbd>+<kbd>P</kbd></td><td>Prelazak na povijest</td></tr>
 <tr><td><kbd>Strelica gore</kbd> i <kbd>Strelica dolje</kbd> u povijesti</td><td>Čitanje prethodne ili sljedeće poruke</td></tr>
 <tr><td><kbd>Ctrl</kbd>+<kbd>C</kbd> u povijesti</td><td>Kopiranje odabrane poruke</td></tr>
+<tr><td><kbd>Alt</kbd>+<kbd>A</kbd></td><td>Prelazak na cijeli tekst odabrane poruke</td></tr>
 <tr><td><kbd>Alt</kbd>+<kbd>D</kbd></td><td>Dodavanje osobe u moje primatelje, kada nije među njima</td></tr>
 <tr><td><kbd>Alt</kbd>+<kbd>B</kbd></td><td>Blokiranje osobe</td></tr>
 <tr><td><kbd>Alt</kbd>+<kbd>R</kbd></td><td>Brisanje razgovora</td></tr>

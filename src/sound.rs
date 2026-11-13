@@ -1,6 +1,9 @@
-//! The sounds of the program: which events have one, and the built-in sound
-//! of each. Playing them is each user interface's (`ui::sound` on Windows),
-//! and what the user chose for an event is in `config::Sounds`.
+//! The sounds of the program: which events have one, the built-in sound of
+//! each, and which one a transfer's change calls for. Playing them is each
+//! user interface's (`ui::sound` on Windows, `Sounds.swift` on a Mac), and
+//! what the user chose for an event is in `config::Sounds`.
+
+use crate::net::{Outcome, Phase};
 
 /// An event that has a sound.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -62,6 +65,11 @@ impl SoundEvent {
         }
     }
 
+    /// The event that the settings file calls `key`.
+    pub fn from_key(key: &str) -> Option<SoundEvent> {
+        SoundEvent::ALL.into_iter().find(|event| event.key() == key)
+    }
+
     /// The built-in sound: a WAV file (see `sound_synth`).
     pub fn wav(self) -> &'static [u8] {
         macro_rules! built_in {
@@ -85,10 +93,78 @@ impl SoundEvent {
     }
 }
 
+/// The sound of a transfer that goes from the phase `before` to `phase`:
+/// when it loses its connection, and when it goes on after that.
+pub fn phase_sound(before: Option<Phase>, phase: Phase) -> Option<SoundEvent> {
+    let lost = |phase| matches!(phase, Phase::WaitingForConnection { lost: true });
+    // The first phase of a transfer is no change: one that is picked up
+    // after a restart begins as waiting for its connection.
+    let before = before?;
+    match phase {
+        _ if lost(before) == lost(phase) => None,
+        _ if lost(phase) => Some(SoundEvent::ConnectionLost),
+        Phase::Transferring | Phase::Verifying => Some(SoundEvent::Continues),
+        _ => None,
+    }
+}
+
+/// The sound of a transfer that ended with `outcome`.
+pub fn outcome_sound(outcome: &Outcome) -> SoundEvent {
+    match outcome {
+        Outcome::Completed(_) => SoundEvent::Completed,
+        Outcome::Declined | Outcome::Cancelled | Outcome::CancelledByPeer => SoundEvent::Cancelled,
+        Outcome::Unreachable(_) | Outcome::Failed(_) => SoundEvent::Failed,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::sound_synth as synth;
+
+    #[test]
+    fn a_lost_connection_and_its_return_have_sounds() {
+        let lost = Phase::WaitingForConnection { lost: true };
+        let waiting = Phase::WaitingForConnection { lost: false };
+        assert_eq!(
+            phase_sound(Some(Phase::Transferring), lost),
+            Some(SoundEvent::ConnectionLost)
+        );
+        assert_eq!(phase_sound(Some(lost), lost), None);
+        assert_eq!(
+            phase_sound(Some(lost), Phase::Transferring),
+            Some(SoundEvent::Continues)
+        );
+        assert_eq!(
+            phase_sound(Some(lost), Phase::Verifying),
+            Some(SoundEvent::Continues)
+        );
+        // Paused meanwhile, or picked up after a restart: nothing went on.
+        assert_eq!(phase_sound(Some(lost), Phase::Paused), None);
+        assert_eq!(phase_sound(Some(waiting), Phase::Transferring), None);
+        assert_eq!(phase_sound(None, Phase::Connecting), None);
+        // A transfer of the last run begins like this, with nothing lost.
+        assert_eq!(phase_sound(None, lost), None);
+        assert_eq!(phase_sound(Some(Phase::Connecting), Phase::Transferring), None);
+    }
+
+    #[test]
+    fn every_end_of_a_transfer_has_its_sound() {
+        assert_eq!(outcome_sound(&Outcome::Completed(None)), SoundEvent::Completed);
+        for outcome in [Outcome::Declined, Outcome::Cancelled, Outcome::CancelledByPeer] {
+            assert_eq!(outcome_sound(&outcome), SoundEvent::Cancelled);
+        }
+        assert_eq!(outcome_sound(&Outcome::Failed("x".into())), SoundEvent::Failed);
+        assert_eq!(outcome_sound(&Outcome::Unreachable("x".into())), SoundEvent::Failed);
+    }
+
+    #[test]
+    fn an_event_is_found_by_its_key() {
+        for event in SoundEvent::ALL {
+            assert_eq!(SoundEvent::from_key(event.key()), Some(event));
+        }
+        assert_eq!(SoundEvent::from_key("something_new"), None);
+    }
 
     #[test]
     fn every_event_has_its_file() {

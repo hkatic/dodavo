@@ -296,7 +296,7 @@ impl UpdateWindow {
         let dir = match update::update_dir() {
             Ok(dir) => dir,
             Err(e) => {
-                self.fail(w, Error::Io(e.to_string()));
+                self.fail(w, Error::io(&e));
                 return;
             }
         };

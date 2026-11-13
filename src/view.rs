@@ -326,12 +326,23 @@ impl TransferView {
         &self.peer_id
     }
 
+    /// The phase it is in, once the network has said one.
+    pub fn phase(&self) -> Option<Phase> {
+        self.phase
+    }
+
     pub fn set_received_folder(&mut self, folder: ReceivedFolder) {
         self.received_folder = Some(folder);
     }
 
     pub fn set_progress(&mut self, done: u64, total: u64) {
         self.progress = (done, total);
+    }
+
+    /// The amount done, as last reported: of the data, or in the phase
+    /// `Unpacking` of what is unpacked.
+    pub fn done(&self) -> u64 {
+        self.progress.0
     }
 
     /// The status line in `phase`.
