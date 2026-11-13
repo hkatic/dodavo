@@ -8,6 +8,7 @@ pub mod help;
 pub mod incoming;
 pub mod license;
 pub mod main_window;
+pub mod menu;
 pub mod progress;
 pub mod recipient;
 pub mod send_to;

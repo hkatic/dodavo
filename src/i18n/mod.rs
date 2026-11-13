@@ -340,12 +340,9 @@ strings! {
         continue_background,
         cancel_transfer,
         dont_ask_again,
-        dont_show_again,
         background_balloon_title,
         background_balloon,
         // Finished transfer.
-        finished_question,
-        sent_item,
         open_file,
         open_containing_folder,
         open_received_folder,
@@ -400,8 +397,8 @@ strings! {
         settings_tab_transfers,
         settings_tab_receiving,
         my_name_label,
-        show_after_send,
         close_when_ended,
+        close_this_window,
         always_save,
         always_save_folder_label,
         auto_accept,
@@ -414,7 +411,6 @@ strings! {
         start_minimized,
         keep_in_tray,
         check_updates,
-        ask_after_receive,
         close_running_label,
         close_ask,
         close_background,
@@ -575,6 +571,10 @@ strings! {
         chat_add,
         chat_block,
         chat_delete,
+        chat_recipient_button,
+        chat_copy,
+        chat_select_all,
+        chat_delete_message,
         chat_entry,
         chat_entry_mine,
         chat_entry_failed,
@@ -644,6 +644,10 @@ strings! {
         folder_description,
         bytes,
         seconds,
+        chat_copied,
+        chat_all_selected,
+        chat_delete_messages_confirm,
+        chat_messages_deleted,
     }
 }
 
@@ -1016,7 +1020,6 @@ mod tests {
                         s.close_running_label,
                         s.connection_lost_label,
                         s.close_when_ended,
-                        s.show_after_send,
                         s.temp_folder_label,
                         s.browse,
                         s.warn_fat_temp,
@@ -1035,7 +1038,6 @@ mod tests {
                         s.browse,
                         s.auto_accept,
                         s.received_folder_label,
-                        s.ask_after_receive,
                         s.limit_size,
                         s.limit_size_label,
                         s.over_limit_label,
@@ -1051,9 +1053,32 @@ mod tests {
                         s.send_to_send,
                     ],
                 ),
+                // Its Cancel button, which becomes Close, has no access key
+                // (Escape).
                 (
                     "progress window",
-                    vec![s.chat_button, s.pause, s.resume, s.minimize_background],
+                    vec![
+                        s.chat_button,
+                        s.close_this_window,
+                        s.pause,
+                        s.resume,
+                        s.minimize_background,
+                    ],
+                ),
+                // The Open buttons take the place of Pause and Minimize to
+                // background once a receive has completed.
+                (
+                    "progress window: received file",
+                    vec![
+                        s.chat_button,
+                        s.close_this_window,
+                        s.open_file,
+                        s.open_containing_folder,
+                    ],
+                ),
+                (
+                    "progress window: received folder",
+                    vec![s.chat_button, s.close_this_window, s.open_received_folder],
                 ),
                 (
                     "close running transfer",
@@ -1067,16 +1092,6 @@ mod tests {
                     "exit",
                     vec![s.exit_stay, s.exit_keep, s.exit_cancel_transfers],
                 ),
-                (
-                    "received file",
-                    vec![s.open_file, s.open_containing_folder, s.dont_ask_again],
-                ),
-                (
-                    "received folder",
-                    vec![s.open_received_folder, s.dont_ask_again],
-                ),
-                // Its Close button is Windows' own (task dialog).
-                ("sent", vec![s.dont_show_again]),
                 (
                     "recipient",
                     vec![
@@ -1110,6 +1125,10 @@ mod tests {
                         s.chat_block,
                         s.chat_delete,
                     ],
+                ),
+                (
+                    "chat history menu",
+                    vec![s.chat_copy, s.chat_select_all, s.chat_delete_message],
                 ),
                 // Its Cancel button has no access key (Escape).
                 (
@@ -1167,7 +1186,13 @@ mod tests {
                 }
             }
             // The main window's buttons would take Alt+letter from the menu bar.
-            for text in [s.send_file, s.send_folder, s.add_recipient, s.copy_my_id] {
+            for text in [
+                s.send_file,
+                s.send_folder,
+                s.chat_recipient_button,
+                s.add_recipient,
+                s.copy_my_id,
+            ] {
                 assert_eq!(
                     key(text),
                     None,

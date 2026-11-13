@@ -2,9 +2,14 @@
 //! the dialog role, so screen readers read all its lines whenever it comes
 //! to the front; later changes of a line are not announced (see
 //! `PhaseNotice` and `Finished` for what is).
+//!
+//! When the transfer ends, the window stays and shows the result, with
+//! buttons that open what was received, unless "Close this window when the
+//! transfer ends" is checked (`Config::close_when_ended`, which the check
+//! box of every progress window and the settings share): see `at_end`.
 
 use std::{
-    path::{Path, PathBuf},
+    path::PathBuf,
     time::{Duration, Instant},
 };
 
@@ -21,7 +26,7 @@ use windows_sys::Win32::{
 };
 
 use super::{
-    ask, confirm, format_duration, format_size, send, set_text, shell, tray,
+    accessibility, ask, confirm, format_duration, format_size, send, set_text, shell, tray,
     window::{self, CreateOptions, Handler, Window},
 };
 pub use crate::view::{Direction, Speed};
@@ -37,8 +42,11 @@ const ID_CANCEL: u16 = 11;
 const ID_PAUSE: u16 = 12;
 const ID_BACKGROUND: u16 = 13;
 const ID_CHAT: u16 = 14;
+const ID_OPEN: u16 = 15;
+const ID_OPEN_FOLDER: u16 = 16;
+const ID_CLOSE_AT_END: u16 = 17;
 const RANGE: usize = 1000;
-/// Posted to itself after the transfer ended, to ask or close outside of event handling.
+/// Posted to itself after the transfer ended, to close outside of event handling.
 const WM_APP_FINISHED: u32 = WM_APP + 10;
 /// Fires a few seconds after the connection was lost, if it is still lost:
 /// short interruptions should not bother the user with a question.
@@ -53,8 +61,6 @@ const STATUS_HEIGHT: i32 = 36;
 /// Command links of the questions.
 const CHOICE_BACKGROUND: i32 = 100;
 const CHOICE_CANCEL: i32 = 101;
-const CHOICE_OPEN_FILE: i32 = 102;
-const CHOICE_OPEN_FOLDER: i32 = 103;
 const CHOICE_WAIT: i32 = 104;
 /// How often the speed and the remaining time change, so they can be read.
 const RATE_INTERVAL: Duration = Duration::from_secs(1);
@@ -62,7 +68,7 @@ const RATE_INTERVAL: Duration = Duration::from_secs(1);
 /// (see `Progress::show_rate`).
 const TIMER_RATE: usize = 3;
 const MIN_WIDTH: i32 = 460;
-const HEIGHT: i32 = 238;
+const HEIGHT: i32 = 270;
 
 struct Progress {
     id: u64,
@@ -127,8 +133,9 @@ struct Progress {
     route: Option<bool>,
     /// For a completed receive: where the item was saved.
     result_path: Option<PathBuf>,
-    /// What to do once the transfer has ended.
-    after: AfterFinish,
+    /// Where the first Open button goes when it is the only one (a received
+    /// folder), in 96-DPI units.
+    open_alone: (i32, i32, i32, i32),
     title: HWND,
     status: HWND,
     bar: HWND,
@@ -137,8 +144,14 @@ struct Progress {
     speed: HWND,
     remaining: HWND,
     connection: HWND,
+    close_at_end: HWND,
     pause: HWND,
     background_button: HWND,
+    /// Shown in a window that stays after a completed receive: opens the
+    /// file or the folder that arrived.
+    open: HWND,
+    /// Beside it for a file: opens the folder that the file is in.
+    open_folder: HWND,
     cancel: HWND,
 }
 
@@ -148,24 +161,53 @@ pub struct Finished {
     pub text: String,
     /// Revealed when the notification is clicked.
     pub path: Option<PathBuf>,
-    /// Report the result with a notification as well. Either the window closes
-    /// by itself, or only its text changes, which screen readers do not
-    /// announce; the notification is what makes the outcome perceivable.
+    /// Report the result with a notification: the window closes by itself,
+    /// or it is not the one in front, where its status line would tell
+    /// screen readers of it (see `at_end`).
     pub notify: bool,
 }
 
-/// What the window does after the transfer ended. Decided once, in `finish`,
-/// together with whether to notify, and carried out on `WM_APP_FINISHED`:
-/// deciding again then could disagree with the notification (the window may
-/// have been minimized or restored in between).
-enum AfterFinish {
-    /// Stays open to show what happened.
-    Stay,
-    Close,
-    /// Asks whether to open what arrived at this path, then closes.
-    AskOpen(PathBuf),
-    /// Tells that the item arrived (the message's main text), then closes.
-    TellSent(String),
+/// What `at_end` goes by.
+#[derive(Debug, Clone, Copy)]
+struct Ending {
+    /// "Close this window when the transfer ends" (`Config::close_when_ended`).
+    close_when_ended: bool,
+    completed: bool,
+    /// The window was hidden (see `Progress::background`).
+    background: bool,
+    minimized: bool,
+    /// The window is the one in front.
+    front: bool,
+    /// The user closed the window to cancel, and cancelled it was.
+    expected_cancel: bool,
+}
+
+/// What the window does when its transfer ends, and how the end is told.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct End {
+    /// The window stays and shows the result.
+    stay: bool,
+    /// The status line tells screen readers of the result.
+    announce: bool,
+    /// A notification tells of it.
+    notify: bool,
+}
+
+/// A window stays to show how its transfer ended, unless the user wants
+/// every window closed at the end, or hid this one. A minimized window of a
+/// transfer that completed closes too: there is nothing in it that the
+/// notification does not say, while a failure waits for the user to see it.
+/// The end is told once: by the status line of a window that stays in front,
+/// which screen readers read then, and by a notification otherwise; a cancel
+/// that the user closed the window for needs no word.
+fn at_end(e: Ending) -> End {
+    let stay = !e.close_when_ended && !e.background && !(e.completed && e.minimized);
+    let announce = stay && e.front && !e.minimized;
+    End {
+        stay,
+        announce,
+        notify: !announce && !e.expected_cancel,
+    }
 }
 
 /// What to tell the user about a change of phase.
@@ -224,8 +266,8 @@ pub fn set_received_folder(hwnd: HWND, folder: ReceivedFolder) {
 }
 
 /// Brings a transfer's window back, also from the background or after it
-/// was closed while being cancelled: the user asked for it, so it takes part
-/// in the finishing questions again and stays to show how the transfer ended.
+/// was closed while being cancelled: the user asked for it, so it stays to
+/// show how the transfer ended, as any other does.
 pub fn show(hwnd: HWND) {
     window::with_handler::<Progress, _>(hwnd, |p, _| {
         p.background = false;
@@ -289,6 +331,18 @@ pub fn finish(hwnd: HWND, outcome: &Outcome, total: u64) -> Option<Finished> {
     window::with_handler::<Progress, _>(hwnd, |p, w| p.finish(w, outcome, total))
 }
 
+/// Shows the choice "Close this window when the transfer ends" in every
+/// progress window, after it changed in one of them or in the settings.
+/// Windows that are busy take it too: only the check box is set.
+pub fn set_close_at_end(checked: bool) {
+    for hwnd in app::all_transfer_windows() {
+        let ctl = unsafe { GetDlgItem(hwnd, ID_CLOSE_AT_END as i32) };
+        if !ctl.is_null() {
+            window::set_checked(ctl, checked);
+        }
+    }
+}
+
 /// What the speed and remaining time rows show (see `Progress::rate`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Rate {
@@ -332,7 +386,7 @@ impl Progress {
             progress: (0, 0),
             route: None,
             result_path: None,
-            after: AfterFinish::Stay,
+            open_alone: (0, 0, 0, 0),
             title: std::ptr::null_mut(),
             status: std::ptr::null_mut(),
             bar: std::ptr::null_mut(),
@@ -341,8 +395,11 @@ impl Progress {
             speed: std::ptr::null_mut(),
             remaining: std::ptr::null_mut(),
             connection: std::ptr::null_mut(),
+            close_at_end: std::ptr::null_mut(),
             pause: std::ptr::null_mut(),
             background_button: std::ptr::null_mut(),
+            open: std::ptr::null_mut(),
+            open_folder: std::ptr::null_mut(),
             cancel: std::ptr::null_mut(),
         }
     }
@@ -784,54 +841,39 @@ impl Progress {
         } else {
             send(self.bar, PBM_SETSTATE, PBST_ERROR as usize, 0);
         }
-        // Only Close is left. If the focus was on a button that goes away,
-        // it moves to Close (the window is active then, so this takes nothing
-        // away from another window).
-        let focus = unsafe { GetFocus() };
-        if focus == self.pause || focus == self.background_button {
-            window::focus(self.cancel);
-        }
-        window::show(self.pause, false);
-        window::show(self.background_button, false);
+        // Only Close is left of the buttons of a running transfer. It gets
+        // the focus if that was on a button that goes away, and never one
+        // of the Open buttons: a key meant for Pause must not open what
+        // arrived.
         set_text(self.cancel, tr!(close));
         window::enable(self.cancel, true);
+        w.move_focus_from(&[self.pause, self.background_button], self.cancel);
+        window::show(self.pause, false);
+        window::show(self.background_button, false);
 
         let received = completed && self.dir == Direction::Receive;
-        let sent = completed && self.dir == Direction::Send;
-        let (ask_after_receive, show_after_send, close_when_ended) = app::with(|a| {
-            (
-                a.cfg.ask_after_receive,
-                a.cfg.show_after_send,
-                a.cfg.close_when_ended,
-            )
+        let end = at_end(Ending {
+            close_when_ended: app::with(|a| a.cfg.close_when_ended),
+            completed,
+            background: self.background,
+            minimized: window::is_minimized(w.hwnd),
+            front: unsafe { GetForegroundWindow() } == w.hwnd,
+            expected_cancel: self.closing && matches!(outcome, Outcome::Cancelled),
         });
-        // A completed transfer's window closes by itself, after the question
-        // or the message, if any; a failed one stays to show what happened,
-        // unless the user wants every window closed at the end: then none
-        // asks or stays, and the notification says how the transfer ended.
-        // A hidden or minimized window asks nothing: a question needs a
-        // window that is seen, and the notification reports instead. Nor does
-        // one while others with the same person are under way: several items
-        // of a selection would pile up a dialog each. The last to finish asks.
-        let hidden = self.background || window::is_minimized(w.hwnd);
-        self.after = if close_when_ended {
-            AfterFinish::Close
-        } else if !completed && !self.background {
-            AfterFinish::Stay
-        } else if hidden || app::others_under_way(self.id) {
-            AfterFinish::Close
-        } else if received
-            && ask_after_receive
-            && let Some(path) = &self.result_path
-        {
-            AfterFinish::AskOpen(path.clone())
-        } else if sent && show_after_send {
-            AfterFinish::TellSent(status.clone())
-        } else {
-            AfterFinish::Close
-        };
-        if matches!(self.after, AfterFinish::Stay) {
-            unsafe { FlashWindow(w.hwnd, 1) };
+        if end.stay {
+            if received && self.result_path.is_some() {
+                self.offer_to_open(w);
+            }
+            if end.announce {
+                // After the focus has moved, which would interrupt it. The
+                // second line says where the item is, or what failed.
+                accessibility::announce(self.status);
+                if !detail.is_empty() {
+                    accessibility::announce(self.connection);
+                }
+            } else {
+                unsafe { FlashWindow(w.hwnd, 1) };
+            }
         } else {
             unsafe { PostMessageW(w.hwnd, WM_APP_FINISHED, 0, 0) };
         }
@@ -850,21 +892,41 @@ impl Progress {
         } else {
             tr!(notify_status, item = self.item, status = status)
         };
-        // The question asked after a receive and the message after a send
-        // are announced by themselves, and a cancel that the user closed the
-        // window for needs no word; every other outcome is reported with a
-        // notification too.
-        let announced = matches!(
-            self.after,
-            AfterFinish::AskOpen(_) | AfterFinish::TellSent(_)
-        );
-        let expected = self.closing && matches!(outcome, Outcome::Cancelled);
         Finished {
             title,
             text,
             path: self.result_path.clone(),
-            notify: !announced && !expected,
+            notify: end.notify,
         }
+    }
+
+    /// A window that stays after a completed receive offers to open what
+    /// arrived: a file (also a folder kept as its ZIP file) or the folder
+    /// that it is in, or the received folder.
+    fn offer_to_open(&self, w: &Window) {
+        if self.received_file() {
+            set_text(self.open, tr!(open_file));
+            window::show(self.open_folder, true);
+        } else {
+            set_text(self.open, tr!(open_received_folder));
+            w.place(self.open, self.open_alone);
+        }
+        window::show(self.open, true);
+    }
+
+    /// Opens what arrived, or the folder that a received file is in
+    /// (`folder`), and closes the window, which has nothing more to offer.
+    fn open_result(&self, w: &Window, folder: bool) {
+        let Some(path) = &self.result_path else {
+            return;
+        };
+        if folder {
+            shell::reveal_in_explorer(path);
+        } else if !shell::open_path(path) {
+            // The window stays for the other button.
+            return;
+        }
+        w.close();
     }
 
     /// Sending side: all of the item has arrived, and it is the receiver's
@@ -1076,64 +1138,6 @@ impl Progress {
             (Kind::Folder, _) => tr!(done_saved_folder),
         }
     }
-
-    /// After a completed send: tells the user that the item arrived.
-    fn tell_sent(&self, w: &Window, instruction: &str) {
-        let item = tr!(sent_item, item = self.item);
-        let (_, dont_show) = ask(
-            w.hwnd,
-            instruction,
-            &item,
-            &[],
-            true,
-            Some(tr!(dont_show_again)),
-        );
-        if dont_show {
-            app::update_cfg(|c| c.show_after_send = false);
-        }
-    }
-
-    /// After a completed receive: offers to open what arrived.
-    fn ask_open(&self, w: &Window, path: &Path) {
-        let file = self.received_file();
-        let name = path
-            .file_name()
-            .map(|n| n.to_string_lossy().into_owned())
-            .unwrap_or_else(|| self.item.clone());
-        let folder = path
-            .parent()
-            .map(|p| p.display().to_string())
-            .unwrap_or_default();
-        let choices: &[(i32, &str)] = if file {
-            &[
-                (CHOICE_OPEN_FILE, tr!(open_file)),
-                (CHOICE_OPEN_FOLDER, tr!(open_containing_folder)),
-            ]
-        } else {
-            &[(CHOICE_OPEN_FOLDER, tr!(open_received_folder))]
-        };
-        let (choice, dont_ask) = ask(
-            w.hwnd,
-            self.saved_text(),
-            &tr!(finished_question, item = name, folder = folder),
-            choices,
-            true,
-            Some(tr!(dont_ask_again)),
-        );
-        if dont_ask {
-            app::update_cfg(|c| c.ask_after_receive = false);
-        }
-        match choice {
-            CHOICE_OPEN_FILE => {
-                shell::open_path(path);
-            }
-            CHOICE_OPEN_FOLDER if file => shell::reveal_in_explorer(path),
-            CHOICE_OPEN_FOLDER => {
-                shell::open_path(path);
-            }
-            _ => {}
-        }
-    }
 }
 
 impl Handler for Progress {
@@ -1149,7 +1153,20 @@ impl Handler for Progress {
             .button_width(tr!(cancel), 92)
             .max(w.button_width(tr!(close), 92));
         let chat_w = w.button_width(tr!(chat_button), 0);
-        let width = MIN_WIDTH.max(chat_w + pause_w + background_w + cancel_w + 2 * 6 + 16 + 28);
+        // The buttons of a window that stays after a receive take the place
+        // of Pause and Minimize to background.
+        let open_w = w
+            .button_width(tr!(open_file), 92)
+            .max(w.button_width(tr!(open_received_folder), 92));
+        let open_folder_w = w.button_width(tr!(open_containing_folder), 92);
+        let middle_w = match self.dir {
+            Direction::Send => pause_w + background_w,
+            Direction::Receive => (pause_w + background_w).max(open_w + open_folder_w),
+        };
+        let close_at_end_w = w.text_width(tr!(close_this_window)) + 28;
+        let width = MIN_WIDTH
+            .max(chat_w + middle_w + cancel_w + 2 * 6 + 16 + 28)
+            .max(close_at_end_w + 28);
         let cw = width - 28;
         // The status line holds two lines at the usual text size. The
         // longest texts (with the other side's name, which can be long) may
@@ -1214,13 +1231,26 @@ impl Handler for Progress {
         self.remaining = row(tr!(row_remaining), 144).1;
 
         self.connection = w.label("", (14, 168 + dy, cw, 34));
+        // Screen readers read both when the transfer ends in the window in
+        // front (see `finish`); their other changes are not announced.
+        w.live_region(self.status);
+        w.live_region(self.connection);
+        // The choice is the same in every progress window and in the
+        // settings (`set_close_at_end`). It comes before the buttons in the
+        // tab order, as on the screen.
+        self.close_at_end = w.checkbox(
+            tr!(close_this_window),
+            ID_CLOSE_AT_END,
+            app::with(|a| a.cfg.close_when_ended),
+            (14, 204 + dy, close_at_end_w, 20),
+        );
         // Right-aligned buttons: Pause, Minimize to background, Cancel.
         let cancel_x = width - 14 - cancel_w;
         let background_x = cancel_x - 6 - background_w;
         let pause_x = background_x - 6 - pause_w;
-        let button_y = 200 + dy;
+        let button_y = 232 + dy;
         // Chat with the other side stands apart on the left, and comes
-        // first in the tab order, as on the screen.
+        // first of the buttons in the tab order, as on the screen.
         w.button(tr!(chat_button), ID_CHAT, (14, button_y, chat_w, 28));
         self.pause = w.button(tr!(pause), ID_PAUSE, (pause_x, button_y, pause_w, 28));
         window::enable(self.pause, false);
@@ -1229,6 +1259,22 @@ impl Handler for Progress {
             ID_BACKGROUND,
             (background_x, button_y, background_w, 28),
         );
+        // Hidden until a receive has completed in a window that stays
+        // (`offer_to_open`).
+        let open_folder_x = cancel_x - 6 - open_folder_w;
+        self.open_alone = (cancel_x - 6 - open_w, button_y, open_w, 28);
+        self.open = w.button(
+            tr!(open_file),
+            ID_OPEN,
+            (open_folder_x - 6 - open_w, button_y, open_w, 28),
+        );
+        self.open_folder = w.button(
+            tr!(open_containing_folder),
+            ID_OPEN_FOLDER,
+            (open_folder_x, button_y, open_folder_w, 28),
+        );
+        window::show(self.open, false);
+        window::show(self.open_folder, false);
         self.cancel = w.button(tr!(cancel), ID_CANCEL, (cancel_x, button_y, cancel_w, 28));
         w.default_id.set(ID_CANCEL);
         // Pause is enabled only once data flows, so the focus starts on the
@@ -1244,6 +1290,15 @@ impl Handler for Progress {
                     super::chat::open(&peer, &name, true);
                 }
             }
+            ID_CLOSE_AT_END => {
+                // For the transfers that end from now on, in this window
+                // and in the others; one that has ended stays as it is.
+                let checked = window::is_checked(self.close_at_end);
+                app::update_cfg(|c| c.close_when_ended = checked);
+                set_close_at_end(checked);
+            }
+            ID_OPEN if !self.active => self.open_result(w, false),
+            ID_OPEN_FOLDER if !self.active => self.open_result(w, true),
             ID_PAUSE if self.active => self.toggle_pause(),
             ID_BACKGROUND if self.active => self.go_background(w),
             ID_CANCEL if self.active => {
@@ -1262,20 +1317,6 @@ impl Handler for Progress {
     fn on_message(&mut self, w: &Window, msg: u32, wp: WPARAM, _lp: LPARAM) -> Option<LRESULT> {
         match msg {
             WM_APP_FINISHED => {
-                let after = std::mem::replace(&mut self.after, AfterFinish::Stay);
-                if matches!(after, AfterFinish::AskOpen(_) | AfterFinish::TellSent(_))
-                    && window::is_minimized(w.hwnd)
-                {
-                    // Minimized since `finish`: no notification went out,
-                    // so the question has to be seen.
-                    window::bring_to_front(w.hwnd);
-                }
-                match after {
-                    AfterFinish::Stay => return Some(0),
-                    AfterFinish::Close => {}
-                    AfterFinish::AskOpen(path) => self.ask_open(w, &path),
-                    AfterFinish::TellSent(text) => self.tell_sent(w, &text),
-                }
                 w.close();
                 Some(0)
             }
@@ -1318,6 +1359,95 @@ impl Handler for Progress {
 mod tests {
     use super::*;
     use crate::view::STALLED_AFTER;
+
+    /// A window stays with its result unless the user wants it closed or
+    /// hid it, and the end is told once: by the window in front, or by a
+    /// notification.
+    #[test]
+    fn a_window_stays_with_its_result_and_the_end_is_told_once() {
+        let seen = Ending {
+            close_when_ended: false,
+            completed: true,
+            background: false,
+            minimized: false,
+            front: true,
+            expected_cancel: false,
+        };
+        let stays_and_says = End {
+            stay: true,
+            announce: true,
+            notify: false,
+        };
+        let stays_notified = End {
+            stay: true,
+            announce: false,
+            notify: true,
+        };
+        let closes_notified = End {
+            stay: false,
+            announce: false,
+            notify: true,
+        };
+        assert_eq!(at_end(seen), stays_and_says);
+        let failed = Ending {
+            completed: false,
+            ..seen
+        };
+        assert_eq!(at_end(failed), stays_and_says);
+        // Behind another window: the notification tells it, not both.
+        let behind = Ending {
+            front: false,
+            ..seen
+        };
+        assert_eq!(at_end(behind), stays_notified);
+        // The choice closes every window, also one whose transfer failed.
+        for completed in [true, false] {
+            let closing = Ending {
+                close_when_ended: true,
+                completed,
+                ..seen
+            };
+            assert_eq!(at_end(closing), closes_notified);
+        }
+        // Hidden by the user: it closes however the transfer ended.
+        for completed in [true, false] {
+            let hidden = Ending {
+                background: true,
+                front: false,
+                completed,
+                ..seen
+            };
+            assert_eq!(at_end(hidden), closes_notified);
+        }
+        // Minimized: a completed one closes, a failed one waits to be seen.
+        let minimized = Ending {
+            minimized: true,
+            front: false,
+            ..seen
+        };
+        assert_eq!(at_end(minimized), closes_notified);
+        let minimized_failed = Ending {
+            completed: false,
+            ..minimized
+        };
+        assert_eq!(at_end(minimized_failed), stays_notified);
+        // Closed by the user to cancel, and cancelled: not a word.
+        let cancelled = Ending {
+            completed: false,
+            background: true,
+            front: false,
+            expected_cancel: true,
+            ..seen
+        };
+        assert_eq!(
+            at_end(cancelled),
+            End {
+                stay: false,
+                announce: false,
+                notify: false
+            }
+        );
+    }
 
     /// Goes to `phase` as `set_phase` does; the title of the notification
     /// that it gives, if any.

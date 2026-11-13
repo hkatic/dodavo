@@ -592,6 +592,15 @@ impl Shared {
             .cloned()
     }
 
+    /// Whether a transfer with `peer` has a connection now, which shows
+    /// that the person is there (see `chat::tries_again`).
+    pub(crate) fn connected_to(&self, peer: &EndpointId) -> bool {
+        self.sessions.lock().unwrap().iter().any(|s| {
+            let current = s.current.lock().unwrap();
+            s.peer == *peer && current.as_ref().is_some_and(|c| c.close_reason().is_none())
+        })
+    }
+
     pub(crate) fn finish(&self, id: u64, outcome: Outcome) {
         self.controls.lock().unwrap().remove(&id);
         self.pending.lock().unwrap().remove(&id);
@@ -945,6 +954,16 @@ fn start_send(
     });
 }
 
+/// For testing: endpoints bound from now on reach each other only through
+/// a relay server, as two computers do that find no direct path. Also set
+/// by `DODAVO_RELAY_ONLY=1`.
+pub static RELAY_ONLY: AtomicBool = AtomicBool::new(false);
+
+fn relay_only() -> bool {
+    RELAY_ONLY.load(Ordering::SeqCst)
+        || std::env::var_os("DODAVO_RELAY_ONLY").is_some_and(|v| v == "1")
+}
+
 /// Binds an endpoint that takes transfers and, with `chat`, chat
 /// connections.
 async fn bind(secret: SecretKey, chat: bool) -> anyhow::Result<Endpoint> {
@@ -952,13 +971,14 @@ async fn bind(secret: SecretKey, chat: bool) -> anyhow::Result<Endpoint> {
     if chat {
         alpns.push(protocol::CHAT_ALPN.to_vec());
     }
-    let endpoint = Endpoint::builder(presets::N0)
+    let mut builder = Endpoint::builder(presets::N0)
         .secret_key(secret)
         .alpns(alpns)
-        .address_lookup(MdnsAddressLookup::builder())
-        .bind()
-        .await?;
-    Ok(endpoint)
+        .address_lookup(MdnsAddressLookup::builder());
+    if relay_only() {
+        builder = builder.clear_ip_transports();
+    }
+    Ok(builder.bind().await?)
 }
 
 /// Runs the task of the transfer `id` to its outcome. A panic in it (a
@@ -4188,5 +4208,202 @@ mod tests {
         a.shutdown(Duration::from_secs(5));
         b.shutdown(Duration::from_secs(5));
         std::fs::remove_dir_all(&base).ok();
+    }
+
+    /// What one side saw while it sent, received and chatted.
+    #[derive(Default)]
+    struct Seen {
+        /// The transfers that ended, in the order they did.
+        finished: Vec<(u64, Outcome)>,
+        /// The messages that arrived, in their order.
+        chats: Vec<String>,
+        /// How each message of this side ended.
+        results: Vec<(u64, Result<(), String>)>,
+        /// Whether data of a transfer has moved.
+        moving: bool,
+    }
+
+    /// Takes the events of one side until `stop`: accepts every offer into
+    /// `dir` and notes the rest in `seen`.
+    fn watch(
+        net: &NetHandle,
+        rx: mpsc::Receiver<Event>,
+        dir: PathBuf,
+        seen: &Mutex<Seen>,
+        stop: &AtomicBool,
+    ) {
+        while !stop.load(Ordering::SeqCst) {
+            let Ok(event) = rx.recv_timeout(Duration::from_millis(50)) else {
+                continue;
+            };
+            let mut seen = seen.lock().unwrap();
+            match event {
+                Event::Offer { id, .. } => net.send(Command::Respond {
+                    id,
+                    accept: Some(Accept {
+                        dir: dir.clone(),
+                        folder: ReceivedFolder::Extract,
+                    }),
+                }),
+                Event::Progress { done, .. } if done > 0 => seen.moving = true,
+                Event::Finished { id, outcome } => seen.finished.push((id, outcome)),
+                Event::Chat { text, .. } => seen.chats.push(text),
+                Event::ChatSent { id, .. } => seen.results.push((id, Ok(()))),
+                Event::ChatFailed { id, error, .. } => seen.results.push((id, Err(error))),
+                _ => {}
+            }
+        }
+    }
+
+    /// Waits until `ready` says so of what the two sides saw.
+    #[track_caller]
+    fn until(
+        within: Duration,
+        a: &Mutex<Seen>,
+        b: &Mutex<Seen>,
+        ready: impl Fn(&Seen, &Seen) -> bool,
+    ) {
+        let deadline = Instant::now() + within;
+        while !ready(&a.lock().unwrap(), &b.lock().unwrap()) {
+            assert!(Instant::now() < deadline, "timed out");
+            std::thread::sleep(Duration::from_millis(20));
+        }
+    }
+
+    /// `files` files of about `size` bytes go from A to B and as many from B
+    /// to A, all at once, and both write to each other meanwhile: every
+    /// message is confirmed and arrives once, in its order, and every
+    /// transfer completes with the bytes that were sent.
+    fn chat_during_transfers(name: &str, files: usize, size: usize, within: Duration) {
+        const MESSAGES: u64 = 5;
+        let base = scratch(name);
+        let (tx_a, rx_a) = mpsc::channel();
+        let (tx_b, rx_b) = mpsc::channel();
+        let (key_a, key_b) = (SecretKey::generate(), SecretKey::generate());
+        let (id_a, id_b) = (key_a.public(), key_b.public());
+        let a = start_chatting(key_a, base.join("a"), [], named("Ana"), tx_a);
+        let b = start_chatting(key_b, base.join("b"), [], named("Bo"), tx_b);
+        wait_for(&rx_a, |e| matches!(e, Event::Online(true)));
+        wait_for(&rx_b, |e| matches!(e, Event::Online(true)));
+        reach(&a, &rx_a, &b, &rx_b, id_b, &base);
+        reach(&b, &rx_b, &a, &rx_a, id_a, &base);
+
+        let (got_a, got_b) = (base.join("got-a"), base.join("got-b"));
+        let item = |side: &str, i: usize| {
+            let name = format!("{side}-{i}.bin");
+            let path = base.join(&name);
+            std::fs::write(&path, pattern(size + i)).unwrap();
+            (name, path)
+        };
+        let from_a: Vec<_> = (0..files).map(|i| item("a", i)).collect();
+        let from_b: Vec<_> = (0..files).map(|i| item("b", i)).collect();
+        let (seen_a, seen_b) = (Mutex::new(Seen::default()), Mutex::new(Seen::default()));
+        let stop = AtomicBool::new(false);
+        // Whether a transfer had ended when the last message went out.
+        let mut ended_early = false;
+
+        std::thread::scope(|scope| {
+            scope.spawn(|| watch(&a, rx_a, got_a.clone(), &seen_a, &stop));
+            scope.spawn(|| watch(&b, rx_b, got_b.clone(), &seen_b, &stop));
+            let send = |net: &NetHandle, to, path: &PathBuf| {
+                net.send(Command::Send {
+                    id: next_transfer_id(),
+                    to,
+                    path: path.clone(),
+                    kind: Kind::File,
+                    my_name: "A".into(),
+                    peer_name: "B".into(),
+                })
+            };
+            for ((_, of_a), (_, of_b)) in from_a.iter().zip(&from_b) {
+                send(&a, id_b, of_a);
+                send(&b, id_a, of_b);
+            }
+            let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                until(within, &seen_a, &seen_b, |a, b| a.moving && b.moving);
+                for n in 0..MESSAGES {
+                    let say = |net: &NetHandle, to, id| {
+                        net.send(Command::Typing { to, on: true });
+                        net.send(Command::Chat {
+                            to,
+                            id,
+                            text: id.to_string(),
+                        })
+                    };
+                    say(&a, id_b, 100 + n);
+                    say(&b, id_a, 200 + n);
+                    std::thread::sleep(Duration::from_millis(100));
+                }
+                ended_early = !seen_a.lock().unwrap().finished.is_empty()
+                    || !seen_b.lock().unwrap().finished.is_empty();
+                let all = |seen: &Seen| {
+                    seen.results.len() == MESSAGES as usize && seen.finished.len() == 2 * files
+                };
+                until(within, &seen_a, &seen_b, |a, b| all(a) && all(b));
+            }));
+            stop.store(true, Ordering::SeqCst);
+            if let Err(panic) = outcome {
+                let (a, b) = (seen_a.lock().unwrap(), seen_b.lock().unwrap());
+                eprintln!(
+                    "A: {:?} {:?} {:?}\nB: {:?} {:?} {:?}",
+                    a.results, a.chats, a.finished, b.results, b.chats, b.finished
+                );
+                std::panic::resume_unwind(panic);
+            }
+        });
+
+        let (seen_a, seen_b) = (seen_a.into_inner().unwrap(), seen_b.into_inner().unwrap());
+        assert!(
+            !ended_early,
+            "the transfers were too short to say anything of a chat during them"
+        );
+        let texts = |first: u64| -> Vec<String> {
+            (first..first + MESSAGES).map(|id| id.to_string()).collect()
+        };
+        for (seen, mine, theirs) in [(&seen_a, 100, 200), (&seen_b, 200, 100)] {
+            let mut results = seen.results.clone();
+            results.sort_by_key(|(id, _)| *id);
+            let sent: Vec<_> = (mine..mine + MESSAGES).map(|id| (id, Ok(()))).collect();
+            assert_eq!(results, sent);
+            assert_eq!(seen.chats, texts(theirs));
+            assert!(
+                seen.finished
+                    .iter()
+                    .all(|(_, outcome)| matches!(outcome, Outcome::Completed(_))),
+                "{:?}",
+                seen.finished
+            );
+        }
+        for (dir, sent) in [(&got_b, &from_a), (&got_a, &from_b)] {
+            for (name, path) in sent {
+                assert!(
+                    std::fs::read(dir.join(name)).unwrap() == std::fs::read(path).unwrap(),
+                    "{name} arrived with other bytes"
+                );
+            }
+            assert_eq!(leftovers(dir).len(), files, "{:?}", leftovers(dir));
+        }
+        a.shutdown(Duration::from_secs(5));
+        b.shutdown(Duration::from_secs(5));
+        std::fs::remove_dir_all(&base).ok();
+    }
+
+    /// Several transfers in each direction at once, with a chat both ways
+    /// while they run.
+    #[test]
+    fn a_chat_goes_while_transfers_run_both_ways() {
+        chat_during_transfers("chat-busy", 3, 40_000_000, Duration::from_secs(240));
+    }
+
+    /// The same where the two sides find no direct path, so that everything
+    /// goes through a relay server, which is slow: run it by hand
+    /// (`--ignored`), and alone, since it changes how every endpoint of the
+    /// process is bound.
+    #[test]
+    #[ignore = "sends megabytes through the public relay servers"]
+    fn a_chat_goes_through_a_busy_relay() {
+        RELAY_ONLY.store(true, Ordering::SeqCst);
+        chat_during_transfers("chat-relay", 3, 4_000_000, Duration::from_secs(600));
+        RELAY_ONLY.store(false, Ordering::SeqCst);
     }
 }

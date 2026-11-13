@@ -5,9 +5,10 @@ Spremembe v različici 1.1.0
 - Novo: Pošiljanje več prejemnikom hkrati. V sistemu Windows potrdite polja ob prejemnikih, v Macu pa jih izberite več na seznamu.
 - Novo: Blokiranje pošiljateljev. Nekoga lahko blokirate z gumbom »Blokiraj pošiljatelja«, ko prispe njegova ponudba, prejemnika s seznama pa s tipkama Ctrl+B (v Macu Command-B). Dodavo nato zavrne vse, kar ta oseba pošlje, in ji tega ne sporoči. Blokiranje lahko odpravite v nastavitvah.
 - Novo: Mapa za začasne datoteke. Izberete jo lahko v nastavitvah, Dodavo pa vas vnaprej opozori, če bi bila začasna datoteka prevelika za pogon FAT32.
-- Novo: Windows: okno napredka se lahko samo zapre, ko se prenos konča. To vklopite v nastavitvah.
-- Novo: Klepet. Osebi s seznama prejemnikov lahko napišete sporočilo: izberite jo in pritisnite Ctrl+M (v Macu Shift-Command-M). Eno sporočilo lahko pošljete tudi več osebam hkrati, v nastavitvah pod »Klepet« pa izberete, kdo vam sme pisati. Tudi druga stran mora imeti Dodavo 1.1.0.
+- Novo: Windows: okno napredka se lahko samo zapre, ko se prenos konča. Potrdite »Zapri to okno, ko se prenos konča« v katerem koli oknu napredka ali to vklopite v nastavitvah.
+- Novo: Klepet. Osebi s seznama prejemnikov lahko napišete sporočilo: izberite jo in pritisnite Ctrl+M (v Macu Shift-Command-M). Eno sporočilo lahko pošljete tudi več osebam hkrati, v nastavitvah pod »Klepet« pa izberete, kdo vam sme pisati. V sistemu Windows lahko sporočila v oknu klepeta izberete, kopirate in izbrišete, glavno okno pa ima gumb za klepet. Tudi druga stran mora imeti Dodavo 1.1.0.
 - Novo: Zvoki. Dodavo z zvokom sporoči, ko kaj prispe, ko se prenos začne, konča ali ne uspe in ko se povezava prekine. V nastavitvah pod »Zvoki« lahko vsak zvok zamenjate s svojo zvočno datoteko (v sistemu Windows z datoteko WAV) ali ga izklopite.
+- Sprememba: Windows: ko se prenos konča, njegovo okno napredka ostane odprto in prikaže rezultat, z gumbi, ki odprejo prejeto datoteko ali mapo, namesto sporočila po pošiljanju in vprašanja po prejemu.
 - Sprememba: Prejeta mapa se razpakira na pogonu, kamor jo shranite, zato zanjo ni več potreben prostor na sistemskem pogonu.
 - Sprememba: Windows: nastavitve so razporejene po zavihkih.
 - Popravek: Dodavo ob zagonu ne sporoča več, da ni povezan, medtem ko se še povezuje.

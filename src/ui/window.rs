@@ -856,6 +856,19 @@ impl Window {
         }
     }
 
+    /// Moves the focus to `to` if it is on one of the controls in `from`,
+    /// which are about to be hidden or disabled. In a window that is not
+    /// the active one, only the control that gets the focus at the next
+    /// activation changes, so that nothing is taken from the window the
+    /// user is in.
+    pub fn move_focus_from(&self, from: &[HWND], to: HWND) {
+        if from.contains(&unsafe { GetFocus() }) {
+            focus(to);
+        } else if from.contains(&self.last_focus.get()) {
+            self.last_focus.set(to);
+        }
+    }
+
     pub fn client_size_dip(&self) -> (i32, i32) {
         let mut rc: RECT = unsafe { std::mem::zeroed() };
         unsafe { GetClientRect(self.hwnd, &mut rc) };

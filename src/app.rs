@@ -15,14 +15,14 @@ use std::{
 use windows_sys::Win32::{
     Foundation::HWND,
     System::Power::{ES_CONTINUOUS, ES_SYSTEM_REQUIRED, SetThreadExecutionState},
-    UI::WindowsAndMessaging::{IsWindowVisible, KillTimer, PostMessageW, SetTimer, WM_APP},
+    UI::WindowsAndMessaging::{KillTimer, PostMessageW, SetTimer, WM_APP},
 };
 
 use crate::{
     config::{Config, Contact},
     i18n::{tr, trn},
     identity,
-    net::{self, Command, Event, Kind, NetHandle, Outcome, Phase, Role},
+    net::{self, Command, Event, Kind, NetHandle, Phase, Role},
     sound::SoundEvent,
     ui::{
         self, APP_NAME, format_size, incoming, progress, sound,
@@ -722,28 +722,6 @@ fn refresh_tray(force: bool) {
     keep_awake(busy);
 }
 
-/// Whether a transfer in this phase is getting somewhere by itself. A paused
-/// one and one waiting for a connection may stay that way for days.
-fn under_way(phase: Option<Phase>) -> bool {
-    !matches!(
-        phase,
-        Some(Phase::Paused | Phase::PausedByPeer | Phase::WaitingForConnection { .. })
-    )
-}
-
-/// Whether another transfer with the same person as `id` is under way: the
-/// items of one selection, which should not pile up a dialog each.
-pub fn others_under_way(id: u64) -> bool {
-    with(|a| {
-        let Some(peer) = a.transfers.get(&id).map(|t| t.peer_id.clone()) else {
-            return false;
-        };
-        a.transfers.iter().any(|(other, t)| {
-            *other != id && t.active && t.peer_id.eq_ignore_ascii_case(&peer) && under_way(t.phase)
-        })
-    })
-}
-
 pub fn active_transfer_count() -> usize {
     active_transfers().len()
 }
@@ -1132,10 +1110,9 @@ fn handle_net_event(event: Event) -> Option<Event> {
                 let Some(done) = progress::finish(h, &outcome, total) else {
                     return Some(Event::Finished { id, outcome });
                 };
-                let main_visible = unsafe { IsWindowVisible(main_window()) } != 0;
-                if done.notify || (!main_visible && matches!(outcome, Outcome::Completed(_))) {
-                    // A completed transfer's window closes by itself; by
-                    // then a click brings up the main window.
+                if done.notify {
+                    // A click shows what arrived, or the transfer's window,
+                    // or the main window once that has closed.
                     let action = match done.path {
                         Some(path) => BalloonAction::Reveal(path),
                         None => BalloonAction::Transfer(id),
@@ -1192,6 +1169,11 @@ pub fn transfer_window(id: u64) -> Option<HWND> {
     with(|a| a.transfers.get(&id).map(|t| t.hwnd))
 }
 
+/// The progress windows that are open, also those of transfers that ended.
+pub fn all_transfer_windows() -> Vec<HWND> {
+    with(|a| a.transfers.values().map(|t| t.hwnd).collect())
+}
+
 /// Forgets a closed progress window.
 pub fn transfer_window_closed(id: u64) {
     let peer = with(|a| a.transfers.remove(&id).map(|t| t.peer_id));
@@ -1217,18 +1199,6 @@ pub fn chat_window_closed(peer: &str, hwnd: HWND) {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    /// A transfer that may wait for days must not keep dialogs away.
-    #[test]
-    fn waiting_transfers_are_not_under_way() {
-        assert!(under_way(None));
-        assert!(under_way(Some(Phase::Connecting)));
-        assert!(under_way(Some(Phase::WaitingForAccept)));
-        assert!(under_way(Some(Phase::Transferring)));
-        assert!(!under_way(Some(Phase::Paused)));
-        assert!(!under_way(Some(Phase::PausedByPeer)));
-        assert!(!under_way(Some(Phase::WaitingForConnection { lost: true })));
-    }
 
     /// Delivers `events` through `backlog`, with the transfers in `busy`
     /// busy, and returns what was delivered. An event is its transfer and a

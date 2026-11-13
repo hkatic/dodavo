@@ -20,8 +20,8 @@ use windows_sys::Win32::{
 };
 
 use super::{
-    APP_NAME, DONATE_URL, ask, confirm, info, progress, send, send_to, set_text, shell, short_id,
-    tray, wide,
+    APP_NAME, DONATE_URL, ask, confirm, info, menu, progress, send, send_to, set_text, shell,
+    short_id, tray, wide,
     window::{self, CreateOptions, Handler, Window},
     without_shortcut,
 };
@@ -107,61 +107,16 @@ struct MainWindow {
     status: HWND,
     send_file: HWND,
     send_folder: HWND,
+    /// Opens the chat with the selected recipient, as Ctrl+M does.
+    chat: HWND,
     add: HWND,
     copy: HWND,
-    /// Widths of the four buttons above, in 96-DPI units.
-    widths: [i32; 4],
+    /// Widths of the five buttons above, in 96-DPI units.
+    widths: [i32; 5],
     /// The Transfers menu of the menu bar; filled when it opens.
     transfers_menu: HMENU,
     /// The transfer ids behind `ID_TRANSFER_FIRST + index`.
     menu_transfers: Vec<u64>,
-}
-
-/// Appends a command to a menu.
-fn menu_item(menu: HMENU, id: u16, text: &str) {
-    let text = wide(text);
-    unsafe { AppendMenuW(menu, MF_STRING, id as usize, text.as_ptr()) };
-}
-
-/// Appends a text that cannot be chosen (an explanation).
-fn menu_note(menu: HMENU, text: &str) {
-    let text = wide(text);
-    unsafe { AppendMenuW(menu, MF_STRING | MF_GRAYED, 0, text.as_ptr()) };
-}
-
-fn clear_menu(menu: HMENU) {
-    unsafe {
-        while GetMenuItemCount(menu) > 0 {
-            DeleteMenu(menu, 0, MF_BYPOSITION);
-        }
-    }
-}
-
-fn menu_separator(menu: HMENU) {
-    unsafe { AppendMenuW(menu, MF_SEPARATOR, 0, std::ptr::null()) };
-}
-
-/// Appends a drop-down menu to a menu bar.
-fn menu_popup(bar: HMENU, popup: HMENU, text: &str) {
-    let text = wide(text);
-    unsafe { AppendMenuW(bar, MF_POPUP, popup as usize, text.as_ptr()) };
-}
-
-/// Shows a context menu at a screen position and returns the chosen command.
-fn track_popup(menu: HMENU, owner: HWND, pt: POINT) -> Option<u16> {
-    let cmd = unsafe {
-        TrackPopupMenu(
-            menu,
-            TPM_RETURNCMD | TPM_RIGHTBUTTON,
-            pt.x,
-            pt.y,
-            0,
-            owner,
-            std::ptr::null(),
-        )
-    };
-    unsafe { DestroyMenu(menu) };
-    (cmd != 0).then_some(cmd as u16)
 }
 
 /// Builds the menu bar; also returns its Transfers menu, which is filled
@@ -169,35 +124,35 @@ fn track_popup(menu: HMENU, owner: HWND, pt: POINT) -> Option<u16> {
 fn build_menu() -> (HMENU, HMENU) {
     let bar = unsafe { CreateMenu() };
     let file = unsafe { CreatePopupMenu() };
-    menu_item(file, ID_SEND_FILE, tr!(menu_send_file));
-    menu_item(file, ID_SEND_FOLDER, tr!(menu_send_folder));
-    menu_item(file, ID_CHAT, tr!(menu_chat));
-    menu_separator(file);
-    menu_item(file, ID_ADD, tr!(menu_add));
-    menu_item(file, ID_EDIT, tr!(menu_edit));
-    menu_item(file, ID_REMOVE, tr!(menu_remove));
-    menu_item(file, ID_BLOCK, tr!(menu_block));
-    menu_separator(file);
-    menu_item(file, ID_COPY_ID, tr!(menu_copy_id));
-    menu_item(file, ID_CHANGE_ID, tr!(menu_change_id));
-    menu_item(file, ID_SETTINGS, tr!(menu_settings));
-    menu_separator(file);
-    menu_item(file, ID_EXIT, tr!(menu_exit));
-    menu_popup(bar, file, tr!(menu_file));
+    menu::item(file, ID_SEND_FILE, tr!(menu_send_file));
+    menu::item(file, ID_SEND_FOLDER, tr!(menu_send_folder));
+    menu::item(file, ID_CHAT, tr!(menu_chat));
+    menu::separator(file);
+    menu::item(file, ID_ADD, tr!(menu_add));
+    menu::item(file, ID_EDIT, tr!(menu_edit));
+    menu::item(file, ID_REMOVE, tr!(menu_remove));
+    menu::item(file, ID_BLOCK, tr!(menu_block));
+    menu::separator(file);
+    menu::item(file, ID_COPY_ID, tr!(menu_copy_id));
+    menu::item(file, ID_CHANGE_ID, tr!(menu_change_id));
+    menu::item(file, ID_SETTINGS, tr!(menu_settings));
+    menu::separator(file);
+    menu::item(file, ID_EXIT, tr!(menu_exit));
+    menu::popup(bar, file, tr!(menu_file));
 
     let transfers = unsafe { CreatePopupMenu() };
-    menu_popup(bar, transfers, tr!(menu_transfers));
+    menu::popup(bar, transfers, tr!(menu_transfers));
 
     let help = unsafe { CreatePopupMenu() };
-    menu_item(help, ID_VIEW_HELP, tr!(menu_view_help));
-    menu_item(help, ID_HELP, tr!(menu_how));
-    menu_separator(help);
-    menu_item(help, ID_LICENSE, tr!(menu_license));
-    menu_item(help, ID_DONATE, tr!(menu_donate));
-    menu_separator(help);
-    menu_item(help, ID_CHECK_UPDATES, tr!(menu_check_updates));
-    menu_item(help, ID_ABOUT, tr!(menu_about));
-    menu_popup(bar, help, tr!(menu_help));
+    menu::item(help, ID_VIEW_HELP, tr!(menu_view_help));
+    menu::item(help, ID_HELP, tr!(menu_how));
+    menu::separator(help);
+    menu::item(help, ID_LICENSE, tr!(menu_license));
+    menu::item(help, ID_DONATE, tr!(menu_donate));
+    menu::separator(help);
+    menu::item(help, ID_CHECK_UPDATES, tr!(menu_check_updates));
+    menu::item(help, ID_ABOUT, tr!(menu_about));
+    menu::popup(bar, help, tr!(menu_help));
     (bar, transfers)
 }
 
@@ -277,9 +232,10 @@ pub fn create(profile: Option<&str>, start_hidden: bool) -> HWND {
         status: std::ptr::null_mut(),
         send_file: std::ptr::null_mut(),
         send_folder: std::ptr::null_mut(),
+        chat: std::ptr::null_mut(),
         add: std::ptr::null_mut(),
         copy: std::ptr::null_mut(),
-        widths: [110, 110, 120, 144],
+        widths: [110, 110, 90, 120, 144],
         transfers_menu,
         menu_transfers: Vec::new(),
     };
@@ -585,7 +541,7 @@ pub fn update_transfer_status(peer_id: &str) {
 impl MainWindow {
     /// Room for all buttons, with a gap between the left and the right pair.
     fn min_client_width(&self) -> i32 {
-        self.widths.iter().sum::<i32>() + 2 * 6 + 2 * 12 + 24
+        self.widths.iter().sum::<i32>() + 3 * 6 + 2 * 12 + 24
     }
 
     fn selected(&self) -> Option<usize> {
@@ -763,27 +719,27 @@ impl MainWindow {
     /// Fills a menu with the running transfers and the "Show All" command,
     /// with its shortcut if `shortcuts` (they work in the menu bar only).
     fn fill_transfers_menu(&mut self, menu: HMENU, shortcuts: bool) {
-        clear_menu(menu);
+        menu::clear(menu);
         self.menu_transfers.clear();
         let transfers = app::active_transfer_list();
         if transfers.is_empty() {
-            menu_note(menu, tr!(menu_no_transfers));
+            menu::note(menu, tr!(menu_no_transfers));
         }
         let room = (ID_TRANSFER_LAST - ID_TRANSFER_FIRST + 1) as usize;
         for (i, (id, _, text)) in transfers.into_iter().take(room).enumerate() {
             self.menu_transfers.push(id);
             // Names and file names are not access keys.
             let text = text.replace('&', "&&");
-            menu_item(menu, ID_TRANSFER_FIRST + i as u16, &text);
+            menu::item(menu, ID_TRANSFER_FIRST + i as u16, &text);
         }
-        menu_separator(menu);
+        menu::separator(menu);
         let show_all = tr!(menu_show_transfers);
         let show_all = if shortcuts {
             show_all
         } else {
             without_shortcut(show_all)
         };
-        menu_item(menu, ID_SHOW_TRANSFERS, show_all);
+        menu::item(menu, ID_SHOW_TRANSFERS, show_all);
     }
 
     /// Enter in the list: `IsDialogMessageW` turns it into `IDOK` because the
@@ -850,22 +806,22 @@ impl MainWindow {
         });
         let menu = unsafe { CreatePopupMenu() };
         if let Some(contact) = contact {
-            menu_item(menu, ID_SEND_FILE, tr!(ctx_send_file));
-            menu_item(menu, ID_SEND_FOLDER, tr!(ctx_send_folder));
-            menu_item(menu, ID_CHAT, tr!(ctx_chat));
+            menu::item(menu, ID_SEND_FILE, tr!(ctx_send_file));
+            menu::item(menu, ID_SEND_FOLDER, tr!(ctx_send_folder));
+            menu::item(menu, ID_CHAT, tr!(ctx_chat));
             match app::transfer_windows_of(&contact.id).len() {
                 0 => {}
-                1 => menu_item(menu, ID_SHOW_CONTACT_TRANSFERS, tr!(ctx_show_transfer)),
-                _ => menu_item(menu, ID_SHOW_CONTACT_TRANSFERS, tr!(ctx_show_transfers)),
+                1 => menu::item(menu, ID_SHOW_CONTACT_TRANSFERS, tr!(ctx_show_transfer)),
+                _ => menu::item(menu, ID_SHOW_CONTACT_TRANSFERS, tr!(ctx_show_transfers)),
             }
-            menu_separator(menu);
-            menu_item(menu, ID_EDIT, tr!(ctx_edit));
-            menu_item(menu, ID_REMOVE, tr!(ctx_remove));
-            menu_item(menu, ID_BLOCK, tr!(ctx_block));
+            menu::separator(menu);
+            menu::item(menu, ID_EDIT, tr!(ctx_edit));
+            menu::item(menu, ID_REMOVE, tr!(ctx_remove));
+            menu::item(menu, ID_BLOCK, tr!(ctx_block));
         } else {
-            menu_item(menu, ID_ADD, tr!(ctx_add));
+            menu::item(menu, ID_ADD, tr!(ctx_add));
         }
-        if let Some(cmd) = track_popup(menu, w.hwnd, pt) {
+        if let Some(cmd) = menu::track(menu, w.hwnd, pt) {
             self.command(w, cmd);
         }
     }
@@ -873,22 +829,22 @@ impl MainWindow {
     /// The menu of the notification-area icon. The accelerators only work in
     /// the main window, not from here, so no item shows a shortcut.
     fn tray_menu(&mut self, w: &Window) {
-        let item = |menu, id, text| menu_item(menu, id, without_shortcut(text));
+        let item = |menu, id, text| menu::item(menu, id, without_shortcut(text));
         let menu = unsafe { CreatePopupMenu() };
         item(menu, ID_TRAY_OPEN, tr!(tray_open));
         // Destroyed together with its parent by `track_popup`.
         let transfers = unsafe { CreatePopupMenu() };
         self.fill_transfers_menu(transfers, false);
-        menu_popup(menu, transfers, tr!(menu_transfers));
+        menu::popup(menu, transfers, tr!(menu_transfers));
         item(menu, ID_COPY_ID, tr!(menu_copy_id));
-        menu_separator(menu);
+        menu::separator(menu);
         item(menu, ID_EXIT, tr!(menu_exit));
         unsafe { SetMenuDefaultItem(menu, ID_TRAY_OPEN as u32, 0) };
         let mut pt = POINT { x: 0, y: 0 };
         unsafe { GetCursorPos(&mut pt) };
         // Required so the menu closes when clicking elsewhere.
         unsafe { SetForegroundWindow(w.hwnd) };
-        let cmd = track_popup(menu, w.hwnd, pt);
+        let cmd = menu::track(menu, w.hwnd, pt);
         unsafe { PostMessageW(w.hwnd, WM_NULL, 0, 0) };
         if let Some(cmd) = cmd {
             self.command(w, cmd);
@@ -1019,12 +975,15 @@ impl Handler for MainWindow {
         self.widths = [
             w.button_width(tr!(send_file), 110),
             w.button_width(tr!(send_folder), 110),
+            w.button_width(tr!(chat_recipient_button), 90),
             w.button_width(tr!(add_recipient), 120),
             w.button_width(tr!(copy_my_id), 144),
         ];
         self.label = w.caption(tr!(recipients_label), (12, 10, 300, 18));
         self.send_file = w.button(tr!(send_file), ID_SEND_FILE, (12, 320, 110, 30));
         self.send_folder = w.button(tr!(send_folder), ID_SEND_FOLDER, (128, 320, 110, 30));
+        // What is done with a recipient comes first, in the Tab order too.
+        self.chat = w.button(tr!(chat_recipient_button), ID_CHAT, (244, 320, 90, 30));
         self.add = w.button(tr!(add_recipient), ID_ADD, (318, 320, 120, 30));
         self.copy = w.button(tr!(copy_my_id), ID_COPY_ID, (444, 320, 144, 30));
         self.status = w.label(status_text(None), (12, 360, 576, 18));
@@ -1034,7 +993,7 @@ impl Handler for MainWindow {
     fn on_size(&mut self, w: &Window, cx: i32, cy: i32) {
         let margin = 12;
         let button_y = cy - 30 - 34;
-        let [file_w, folder_w, add_w, copy_w] = self.widths;
+        let [file_w, folder_w, chat_w, add_w, copy_w] = self.widths;
         w.place(self.label, (margin, 10, cx - 2 * margin, 18));
         w.place(
             self.list,
@@ -1044,6 +1003,10 @@ impl Handler for MainWindow {
         w.place(
             self.send_folder,
             (margin + file_w + 6, button_y, folder_w, 30),
+        );
+        w.place(
+            self.chat,
+            (margin + file_w + 6 + folder_w + 6, button_y, chat_w, 30),
         );
         w.place(self.copy, (cx - margin - copy_w, button_y, copy_w, 30));
         w.place(

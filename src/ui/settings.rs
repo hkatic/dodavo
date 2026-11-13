@@ -36,12 +36,10 @@ const ID_AUTOSTART: u16 = 15;
 const ID_TRAY: u16 = 16;
 const ID_COPY: u16 = 17;
 const ID_LANGUAGE: u16 = 18;
-const ID_ASK_AFTER: u16 = 19;
 const ID_MINIMIZED: u16 = 20;
 const ID_CLOSE_RUNNING: u16 = 21;
 const ID_CONNECTION_LOST: u16 = 22;
 const ID_CHECK_UPDATES: u16 = 23;
-const ID_SHOW_AFTER_SEND: u16 = 24;
 const ID_RECEIVED_FOLDER: u16 = 25;
 const ID_EXPLORER_MENU: u16 = 26;
 const ID_BLOCKED: u16 = 27;
@@ -93,7 +91,6 @@ struct SettingsDialog {
     browse: HWND,
     auto: HWND,
     received_folder: HWND,
-    ask_after: HWND,
     /// The general limit on the size of an item: whether there is one, its
     /// size with the label and the unit, and what happens to a larger item.
     limit: HWND,
@@ -101,9 +98,12 @@ struct SettingsDialog {
     limit_size: HWND,
     limit_unit: HWND,
     over_limit: HWND,
-    show_after_send: HWND,
-    /// Whether a progress window closes as soon as its transfer ends.
+    /// Whether a progress window closes as soon as its transfer ends, and
+    /// what the box showed when the settings opened: every progress window
+    /// has the box too, and a change there meanwhile must stand unless the
+    /// user changed it here as well.
     close_when_ended: HWND,
+    close_when_ended_shown: bool,
     autostart: HWND,
     minimized: HWND,
     tray: HWND,
@@ -182,14 +182,13 @@ pub fn show(owner: HWND) {
         browse: std::ptr::null_mut(),
         auto: std::ptr::null_mut(),
         received_folder: std::ptr::null_mut(),
-        ask_after: std::ptr::null_mut(),
         limit: std::ptr::null_mut(),
         limit_label: std::ptr::null_mut(),
         limit_size: std::ptr::null_mut(),
         limit_unit: std::ptr::null_mut(),
         over_limit: std::ptr::null_mut(),
-        show_after_send: std::ptr::null_mut(),
         close_when_ended: std::ptr::null_mut(),
+        close_when_ended_shown: false,
         autostart: std::ptr::null_mut(),
         minimized: std::ptr::null_mut(),
         tray: std::ptr::null_mut(),
@@ -297,11 +296,6 @@ impl SettingsDialog {
         window::enable(self.limit_label, limited);
         window::enable(self.limit_size, limited);
         window::enable(self.limit_unit, limited);
-        // A window that closes at the end shows no message and asks nothing.
-        // Both settings keep their values for when it stays open again.
-        let stays = !window::is_checked(self.close_when_ended);
-        window::enable(self.show_after_send, stays);
-        window::enable(self.ask_after, stays);
     }
 
     /// The event that is selected in the list of events.
@@ -435,7 +429,6 @@ impl SettingsDialog {
         let received_folder = window::combo_selection(self.received_folder)
             .and_then(|i| ReceivedFolder::ALL.get(i).copied())
             .unwrap_or_default();
-        let ask_after = window::is_checked(self.ask_after);
         let limited = window::is_checked(self.limit);
         let unit = window::combo_selection(self.limit_unit)
             .and_then(|i| Unit::ALL.get(i).copied())
@@ -452,8 +445,8 @@ impl SettingsDialog {
         let over_limit = window::combo_selection(self.over_limit)
             .and_then(|i| OverLimit::ALL.get(i).copied())
             .unwrap_or_default();
-        let show_after_send = window::is_checked(self.show_after_send);
-        let close_when_ended = window::is_checked(self.close_when_ended);
+        let close_when_ended = Some(window::is_checked(self.close_when_ended))
+            .filter(|&on| on != self.close_when_ended_shown);
         let autostart = window::is_checked(self.autostart);
         let minimized = window::is_checked(self.minimized);
         let tray = window::is_checked(self.tray);
@@ -495,14 +488,14 @@ impl SettingsDialog {
             c.always_save_dir = dir;
             c.auto_accept = auto;
             c.received_folder = received_folder;
-            c.ask_after_receive = ask_after;
             c.limit_size = limited;
             if let Some(bytes) = size_limit {
                 c.size_limit = bytes;
             }
             c.over_limit = over_limit;
-            c.show_after_send = show_after_send;
-            c.close_when_ended = close_when_ended;
+            if let Some(on) = close_when_ended {
+                c.close_when_ended = on;
+            }
             c.start_with_windows = autostart;
             c.start_minimized = minimized;
             c.minimize_to_tray = tray;
@@ -526,6 +519,9 @@ impl SettingsDialog {
         shell::set_start_with_windows(autostart);
         if let Some(on) = explorer_menu {
             shell::set_explorer_menu(on);
+        }
+        if let Some(on) = close_when_ended {
+            super::progress::set_close_at_end(on);
         }
         if language_changed {
             info(w.hwnd, tr!(language_restart));
@@ -664,13 +660,7 @@ impl Handler for SettingsDialog {
             cfg.close_when_ended,
             (x, y, width, 20),
         );
-        y += 24;
-        self.show_after_send = w.checkbox(
-            tr!(show_after_send),
-            ID_SHOW_AFTER_SEND,
-            cfg.show_after_send,
-            (x, y, width, 20),
-        );
+        self.close_when_ended_shown = cfg.close_when_ended;
         y += 32;
         // The folder in which Dodavo keeps its own folder of temporary
         // files: the user's choice, or what Windows gives.
@@ -752,14 +742,7 @@ impl Handler for SettingsDialog {
             ID_RECEIVED_FOLDER,
             (x, y + 20, combo_w, 24),
         );
-        y += 56;
-        self.ask_after = w.checkbox(
-            tr!(ask_after_receive),
-            ID_ASK_AFTER,
-            cfg.ask_after_receive,
-            (x, y, width, 20),
-        );
-        y += 30;
+        y += 58;
         self.limit = w.checkbox(tr!(limit_size), ID_LIMIT, cfg.limit_size, (x, y, width, 20));
         y += 26;
         // The size and its unit follow their label on one line.
@@ -900,7 +883,7 @@ impl Handler for SettingsDialog {
 
     fn on_command(&mut self, w: &Window, id: u16, code: u16) -> bool {
         match id {
-            ID_ALWAYS | ID_LIMIT | ID_CLOSE_WHEN_ENDED if code == BN_CLICKED as u16 => self.update_enabled(),
+            ID_ALWAYS | ID_LIMIT if code == BN_CLICKED as u16 => self.update_enabled(),
             ID_BROWSE => {
                 let current = PathBuf::from(get_text(self.dir).trim());
                 if let Some(dir) = shell::pick_folder(w.hwnd, tr!(pick_save_folder), Some(&current))

@@ -38,7 +38,19 @@ Seen once on 2026-11-01: after a 500 MB transfer failed on a 200 MB NTFS volume,
 
 The labels of check boxes are drawn in grey on the dark background, with less contrast than the other texts of the same window (Settings, the Incoming Transfer window), as seen on Windows 11 build 26300. `theme::theme_child` gives them the classic look so that they take the text color of `WM_CTLCOLORSTATIC`, which they do not there. Light mode and high contrast are not affected.
 
+### While a message box or task dialog is open, keys do not work in Dodavo's other windows
+
+A message box or a task dialog runs a message loop of Windows' own, which does not call `main_window::translate`, so until it is closed Tab, Enter, Escape and the access keys do nothing in the other Dodavo windows: in a chat window while a progress window asks whether to wait for a lost connection, say, Enter does not send. The windows of `window::run_modal` are not affected. A message hook (`SetWindowsHookExW` with `WH_MSGFILTER`) that passes those windows' messages to `translate` would fix it.
+
 ## Low
+
+### A transfer's notification takes the place of a chat's
+
+The notification area icon shows one notification at a time, and a click does what the last one was for (`App.balloon_action`), so a notification about a transfer that comes right after one about a chat message replaces it, and a click on it leads to the transfer. The message is in its chat window, whose taskbar button flashes.
+
+### OK in Settings undoes some choices made meanwhile in other windows
+
+Settings saves its fields with OK as they show them, so what was chosen in another window while Settings was open is undone: "Don't ask me again" in the questions of a progress window (`close_running_transfer`, `connection_lost`), and "Don't warn me again" and another folder in the warning about a temporary file (`warn_fat_temp`, `temp_dir`). `close_when_ended`, which every progress window has a check box for, is written only when its box was changed in Settings; the others could do the same.
 
 - **A transfer cancelled by a change of the Contact ID stays waiting on a side that was not connected.** Change My Contact ID cancels every transfer, which the other side learns only if it is connected at that moment. One that is not goes on asking the old Contact ID, which nobody answers any more, and shows its transfer as waiting for the connection until the user cancels it or it expires after 30 days. A tombstone cannot answer either, since the old identity is gone.
 

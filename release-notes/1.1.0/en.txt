@@ -5,9 +5,10 @@ Changes in 1.1.0
 - New: Send to several recipients at once. On Windows, check the boxes next to the recipients; on a Mac, select several of them in the list.
 - New: Block senders. Block someone with "Block Sender" when their offer arrives, or a recipient in your list with Ctrl+B (Command-B on a Mac). Dodavo then declines everything that person sends, and they are not told. You can unblock them in Settings.
 - New: Folder for temporary files. You can choose it in Settings, and Dodavo warns you in advance if a temporary file would be too large for a FAT32 drive.
-- New: Windows: the progress window can close by itself when a transfer ends. Turn this on in Settings.
-- New: Chat. You can write a message to a person in your recipient list: select them and press Ctrl+M (Shift-Command-M on a Mac). One message can go to several people at once, and in Settings, under Chat, you choose who can write to you. The other side needs Dodavo 1.1.0 too.
+- New: Windows: the progress window can close by itself when a transfer ends. Check "Close this window when the transfer ends" in any progress window, or turn it on in Settings.
+- New: Chat. You can write a message to a person in your recipient list: select them and press Ctrl+M (Shift-Command-M on a Mac). One message can go to several people at once, and in Settings, under Chat, you choose who can write to you. On Windows you can select, copy and delete messages in the chat window, and the main window has a Chat button. The other side needs Dodavo 1.1.0 too.
 - New: Sounds. Dodavo plays a sound when something arrives, when a transfer starts, completes or fails, and when the connection is lost. In Settings, under Sounds, you can replace each sound with a sound file of your own (a WAV file on Windows), or turn it off.
+- Changed: Windows: when a transfer ends, its progress window stays and shows the result, with buttons that open a received file or folder, in place of the message after a send and the question after a receive.
 - Changed: A received folder is unpacked on the drive you save it to, so it no longer needs room on the system drive.
 - Changed: Windows: Settings are arranged on tabs.
 - Bugfix: At startup, Dodavo no longer says that it is offline while it is still connecting.

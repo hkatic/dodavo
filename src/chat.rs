@@ -122,6 +122,27 @@ impl History {
         }
     }
 
+    /// Forgets the messages at `indices` (others than those it has are
+    /// passed over, and one named twice goes once) and saves the chat, or
+    /// deletes its file when nothing is left. The messages are gone from the
+    /// chat also when saving failed.
+    pub fn remove(&mut self, indices: &[usize]) -> io::Result<()> {
+        let before = self.entries.len();
+        let mut index = 0;
+        self.entries.retain(|_| {
+            let keep = !indices.contains(&index);
+            index += 1;
+            keep
+        });
+        if self.entries.len() == before {
+            Ok(())
+        } else if self.entries.is_empty() {
+            self.clear()
+        } else {
+            self.save()
+        }
+    }
+
     /// Forgets every message, and deletes the file.
     pub fn clear(&mut self) -> io::Result<()> {
         self.entries.clear();
@@ -320,6 +341,29 @@ mod tests {
         chat.clear().unwrap();
         chat.clear().unwrap();
         assert!(History::load(&dir, "abc123").entries().is_empty());
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn chosen_messages_are_deleted() {
+        let dir = scratch("remove");
+        let mut chat = History::load(&dir, "abc");
+        for text in ["a", "b", "c", "d"] {
+            chat.push(Entry::now(true, text)).1.unwrap();
+        }
+        // Twice, and one that is not there.
+        chat.remove(&[3, 1, 1, 9]).unwrap();
+        let texts = |chat: &History| -> Vec<String> {
+            chat.entries().iter().map(|e| e.text.clone()).collect()
+        };
+        assert_eq!(texts(&chat), ["a", "c"]);
+        assert_eq!(texts(&History::load(&dir, "abc")), ["a", "c"]);
+        chat.remove(&[]).unwrap();
+        assert_eq!(texts(&chat), ["a", "c"]);
+        // The last ones: no chat is left on the disk.
+        chat.remove(&[0, 1]).unwrap();
+        assert!(chat.entries().is_empty());
+        assert!(!any(&dir));
         std::fs::remove_dir_all(&dir).ok();
     }
 

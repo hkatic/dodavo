@@ -7,8 +7,15 @@
 //! the arrow keys read; a message that arrives while the window is in front
 //! is put into the status line, a live region, and announced there, and one
 //! that arrives while it is not is told by a notification, which screen
-//! readers read. The status line also says that the other person is typing
+//! readers read. A message of the user's that has arrived at the other
+//! side is put there too, while the window is in front, with the user's
+//! name as the other person's messages have theirs, so that both are read
+//! the same way. The status line also says that the other person is typing
 //! and why a message could not be sent.
+//!
+//! Several messages can be selected in the history (Shift and Ctrl with the
+//! arrow keys or the mouse, Ctrl+A for all), and copied (Ctrl+C) or deleted
+//! from this computer (Delete), also from its context menu.
 
 use std::{
     cell::RefCell,
@@ -17,33 +24,37 @@ use std::{
 };
 
 use windows_sys::Win32::{
-    Foundation::{FILETIME, HWND, LPARAM, LRESULT, SYSTEMTIME, WPARAM},
+    Foundation::{FILETIME, HWND, LPARAM, LRESULT, POINT, RECT, SYSTEMTIME, WPARAM},
     Globalization::{GetDateFormatW, GetTimeFormatW},
     Graphics::Gdi::{
         COLOR_HIGHLIGHT, COLOR_HIGHLIGHTTEXT, CreateSolidBrush, DT_EXPANDTABS, DT_NOPREFIX,
-        DT_WORDBREAK, DeleteObject, DrawFocusRect, DrawTextW, FillRect, GetSysColor, SetBkMode,
-        SetTextColor, TRANSPARENT,
+        DT_WORDBREAK, DeleteObject, DrawFocusRect, DrawTextW, FillRect, GetSysColor,
+        MapWindowPoints, ScreenToClient, SetBkMode, SetTextColor, TRANSPARENT,
     },
     System::Time::{FileTimeToSystemTime, SystemTimeToTzSpecificLocalTime},
     UI::{
         Controls::{DRAWITEMSTRUCT, ODS_FOCUS, ODS_NOFOCUSRECT, ODS_SELECTED, ODT_LISTBOX},
-        Input::KeyboardAndMouse::{GetKeyState, VK_CONTROL},
+        Input::KeyboardAndMouse::{GetKeyState, VK_CONTROL, VK_DELETE, VK_SHIFT},
         Shell::{DefSubclassProc, RemoveWindowSubclass, SetWindowSubclass},
         WindowsAndMessaging::{
-            FlashWindow, GetForegroundWindow, GetParent, PostMessageW, WM_CLOSE, IDCANCEL, KillTimer, LB_ADDSTRING,
-            LB_DELETESTRING, LB_ERR, LB_GETCOUNT, LB_GETCURSEL, LB_GETTEXT, LB_GETTEXTLEN,
-            LB_INSERTSTRING, LB_RESETCONTENT, LB_SETCURSEL, LB_SETITEMHEIGHT, LB_SETTOPINDEX,
-            LBN_SELCHANGE, LBS_HASSTRINGS, LBS_NOINTEGRALHEIGHT, LBS_NOTIFY, LBS_OWNERDRAWVARIABLE,
-            SW_SHOWNOACTIVATE, SetTimer, ShowWindow, WA_INACTIVE, WM_ACTIVATE, WM_DRAWITEM,
-            WM_KEYDOWN, WM_NCDESTROY, WM_TIMER, WS_EX_APPWINDOW, WS_EX_CLIENTEDGE,
-            WS_EX_CONTROLPARENT, WS_CAPTION, WS_CLIPCHILDREN, WS_MINIMIZEBOX, WS_OVERLAPPED,
-            WS_SYSMENU, WS_TABSTOP, WS_VSCROLL,
+            CreatePopupMenu, FlashWindow, GetClientRect, GetForegroundWindow, GetParent, IDCANCEL,
+            KillTimer, LB_ADDSTRING, LB_DELETESTRING, LB_ERR, LB_GETCARETINDEX, LB_GETCOUNT,
+            LB_GETITEMRECT, LB_GETSEL, LB_GETSELCOUNT, LB_GETSELITEMS, LB_GETTEXT, LB_GETTEXTLEN,
+            LB_GETTOPINDEX, LB_INSERTSTRING, LB_ITEMFROMPOINT, LB_RESETCONTENT, LB_SETANCHORINDEX,
+            LB_SETCARETINDEX, LB_SETITEMHEIGHT, LB_SETSEL, LB_SETTOPINDEX, LBS_EXTENDEDSEL,
+            LBN_SELCHANGE, LBS_HASSTRINGS, LBS_NOINTEGRALHEIGHT, LBS_NOTIFY,
+            LBS_OWNERDRAWVARIABLE, PostMessageW,
+            SW_SHOWNOACTIVATE, SetTimer, ShowWindow, WA_INACTIVE, WM_ACTIVATE, WM_CHAR, WM_CLOSE,
+            WM_COMMAND, WM_CONTEXTMENU, WM_DRAWITEM, WM_KEYDOWN, WM_NCDESTROY, WM_TIMER,
+            WS_CAPTION, WS_CLIPCHILDREN, WS_EX_APPWINDOW, WS_EX_CLIENTEDGE, WS_EX_CONTROLPARENT,
+            WS_MINIMIZEBOX, WS_OVERLAPPED, WS_SYSMENU, WS_TABSTOP, WS_VSCROLL,
         },
     },
 };
 
 use super::{
-    accessibility, confirm, confirm_no, crlf, get_text, send, set_text, shell, short_id, sound,
+    accessibility, confirm, confirm_no, crlf, get_text, menu, send, set_text, shell, short_id,
+    sound,
     theme,
     tray::{self, BalloonAction},
     wide,
@@ -53,7 +64,7 @@ use crate::{
     app,
     chat::{Entry, History, MAX_CHARS, Sending},
     config::Contact,
-    i18n::tr,
+    i18n::{tr, trn},
     identity,
     net::Command,
     sound::SoundEvent,
@@ -66,6 +77,10 @@ const ID_ADD: u16 = 13;
 const ID_BLOCK: u16 = 14;
 const ID_DELETE: u16 = 15;
 const ID_SELECTED: u16 = 16;
+/// The commands of the history (its keys and its context menu).
+const ID_COPY: u16 = 17;
+const ID_SELECT_ALL: u16 = 18;
+const ID_DELETE_SELECTED: u16 = 19;
 
 const EN_CHANGE: u16 = 0x0300;
 const EM_LIMITTEXT: u32 = 0x00C5;
@@ -77,10 +92,10 @@ const WIDTH: i32 = 500;
 const MARGIN: i32 = 14;
 const CONTENT_W: i32 = WIDTH - 2 * MARGIN;
 const HISTORY_H: i32 = 230;
-/// The height of the box with the whole text of the selected message.
-const SELECTED_H: i32 = 64;
 /// Room around the text of a message in the history.
 const ITEM_PAD: i32 = 4;
+/// The height of the box with the whole text of the selected message.
+const SELECTED_H: i32 = 64;
 /// Windows allows no higher item in a list: a message that wraps over more
 /// lines than fit shows its beginning there, and all of it in the box below
 /// the history once it is selected.
@@ -142,7 +157,8 @@ struct Chat {
     block: HWND,
     delete: HWND,
     close: HWND,
-    /// What arrived and has not been announced yet.
+    /// What arrived, and the user's messages that arrived at the other
+    /// side, in that order, which have not been announced yet.
     unspoken: Vec<String>,
     /// Whether the status line says that the other person is typing.
     shows_typing: bool,
@@ -254,10 +270,19 @@ pub fn received(from: &str, name: &str, text: &str) -> bool {
     true
 }
 
-/// The message `id` arrived at the other side.
+/// The message `id` arrived at the other side. The sound says so, and the
+/// chat window in front reads it out, as it does the other person's: the
+/// user is there, and nothing else of the window changes. A window that is
+/// not in front, or that asks something, says nothing.
 pub fn sent(id: u64) {
-    if confirmed(id).is_some() {
-        sound::play(SoundEvent::MessageSent);
+    let Some(message) = confirmed(id) else {
+        return;
+    };
+    sound::play(SoundEvent::MessageSent);
+    if let Some(hwnd) = window_of(&message.peer)
+        && unsafe { GetForegroundWindow() } == hwnd
+    {
+        window::with_handler::<Chat, _>(hwnd, |c, w| c.delivered(w, &message.text));
     }
 }
 
@@ -624,7 +649,39 @@ fn draw_history(w: &Window, msg: u32, _wp: WPARAM, lp: LPARAM) -> Option<LRESULT
     Some(1)
 }
 
-/// The history list's own keys: Ctrl+C copies the selected message.
+/// The indices of the selected messages, in their order.
+fn selected(list: HWND) -> Vec<usize> {
+    let count = send(list, LB_GETSELCOUNT, 0, 0);
+    if count <= 0 {
+        return Vec::new();
+    }
+    let mut items = vec![0i32; count as usize];
+    let n = send(
+        list,
+        LB_GETSELITEMS,
+        items.len(),
+        items.as_mut_ptr() as isize,
+    );
+    items.truncate(n.max(0) as usize);
+    items
+        .into_iter()
+        .filter_map(|i| usize::try_from(i).ok())
+        .collect()
+}
+
+/// Selects the message at `index` alone, with the focus rectangle on it,
+/// and Shift with an arrow key goes on from it.
+fn select_only(list: HWND, index: usize) {
+    send(list, LB_SETSEL, 0, -1);
+    send(list, LB_SETSEL, 1, index as isize);
+    send(list, LB_SETANCHORINDEX, index, 0);
+    send(list, LB_SETCARETINDEX, index, 0);
+}
+
+/// The history list's own keys: Ctrl+C copies the selected messages, Ctrl+A
+/// selects all, and Delete deletes the selected ones. Each becomes a command
+/// of the window, which is carried out after this message, outside of the
+/// list's own handling, as the question before a deletion needs.
 unsafe extern "system" fn history_proc(
     hwnd: HWND,
     msg: u32,
@@ -637,11 +694,19 @@ unsafe extern "system" fn history_proc(
         if msg == WM_NCDESTROY {
             RemoveWindowSubclass(hwnd, Some(history_proc), 0);
         }
-        if msg == WM_KEYDOWN && wp == 'C' as usize && GetKeyState(VK_CONTROL as i32) < 0 {
-            let index = send(hwnd, LB_GETCURSEL, 0, 0);
-            if index != LB_ERR as isize {
-                shell::copy_to_clipboard(GetParent(hwnd), &item_text(hwnd, index as usize));
-            }
+        let ctrl = GetKeyState(VK_CONTROL as i32) < 0;
+        let shift = GetKeyState(VK_SHIFT as i32) < 0;
+        let command = match msg {
+            WM_KEYDOWN if ctrl && wp == 'C' as usize => Some(ID_COPY),
+            WM_KEYDOWN if ctrl && wp == 'A' as usize => Some(ID_SELECT_ALL),
+            WM_KEYDOWN if !ctrl && !shift && wp == VK_DELETE as usize => Some(ID_DELETE_SELECTED),
+            // The characters of Ctrl+A and Ctrl+C, which the list would look
+            // for in its items.
+            WM_CHAR if ctrl && (wp == 1 || wp == 3) => return 0,
+            _ => None,
+        };
+        if let Some(id) = command {
+            PostMessageW(GetParent(hwnd), WM_COMMAND, id as usize, 0);
             return 0;
         }
         DefSubclassProc(hwnd, msg, wp, lp)
@@ -679,20 +744,21 @@ impl Chat {
         window::enable(self.delete, !self.history.entries().is_empty());
     }
 
-    /// Selects the last message and brings it into view.
+    /// Selects the last message alone and brings it into view.
     fn to_last(&self) {
         let count = send(self.list, LB_GETCOUNT, 0, 0);
         if count > 0 {
-            send(self.list, LB_SETCURSEL, count as usize - 1, 0);
+            select_only(self.list, count as usize - 1);
             send(self.list, LB_SETTOPINDEX, count as usize - 1, 0);
         }
         self.show_selected();
     }
 
-    /// Shows the whole text of the message that is selected in the history
-    /// in the box below it; nothing when none is.
+    /// Shows the whole text of the message that the user is at in the
+    /// history (the one with the focus rectangle, also among several that
+    /// are selected) in the box below it; nothing in an empty history.
     fn show_selected(&self) {
-        let index = send(self.list, LB_GETCURSEL, 0, 0);
+        let index = send(self.list, LB_GETCARETINDEX, 0, 0);
         let text = usize::try_from(index)
             .ok()
             .and_then(|index| self.history.entries().get(index))
@@ -762,6 +828,20 @@ impl Chat {
         }
     }
 
+    /// The user's message `text` arrived at the other side, while the
+    /// window is in front: it is announced as the other person's are, with
+    /// the user's own name, together with what else arrives by then.
+    fn delivered(&mut self, w: &Window, text: &str) {
+        let me = app::with(|a| a.cfg.my_name.trim().to_string());
+        let me = if me.is_empty() {
+            tr!(unknown_user).to_string()
+        } else {
+            me
+        };
+        self.unspoken.push(tr!(chat_said, name = me, text = text));
+        unsafe { SetTimer(w.hwnd, TIMER_SPEAK, SPEAK_AFTER_MS, None) };
+    }
+
     /// Shows what arrived since the last time in the status line.
     fn speak(&mut self, announce: bool) {
         if self.unspoken.is_empty() {
@@ -775,12 +855,23 @@ impl Chat {
         if let Some(index) = find(&self.history, time, text) {
             let _ = self.history.set_failed(index, true);
             let line = self.line(&self.history.entries()[index]);
-            let selected = send(self.list, LB_GETCURSEL, 0, 0);
+            // The row is replaced: the user who reads the history stays at
+            // the same message, with the same ones selected, and sees the
+            // same part of it.
+            let was_selected = send(self.list, LB_GETSEL, index, 0) > 0;
+            let caret = send(self.list, LB_GETCARETINDEX, 0, 0);
+            let top = send(self.list, LB_GETTOPINDEX, 0, 0);
             send(self.list, LB_DELETESTRING, index, 0);
             send(self.list, LB_INSERTSTRING, index, wide(&line).as_ptr() as isize);
             self.size_item(w, index, &line);
-            if selected >= 0 {
-                send(self.list, LB_SETCURSEL, selected as usize, 0);
+            if was_selected {
+                send(self.list, LB_SETSEL, 1, index as isize);
+            }
+            if caret >= 0 {
+                send(self.list, LB_SETCARETINDEX, caret as usize, 0);
+            }
+            if top >= 0 {
+                send(self.list, LB_SETTOPINDEX, top as usize, 0);
             }
         }
         // Back into the field, to send it again, unless the user is writing
@@ -792,7 +883,9 @@ impl Chat {
     }
 
     /// The other person is typing or has stopped. Returns whether to tell
-    /// the user so with a sound: when it began, in the window in front.
+    /// the user so with a sound: when it began, in the window in front. The
+    /// sound has a setting of its own (Settings, Sounds), so "Announce when
+    /// the other person is typing" decides only what is said.
     fn peer_typing(&mut self, w: &Window, on: bool, front: bool) -> bool {
         if !on {
             unsafe { KillTimer(w.hwnd, TIMER_PEER_TYPING) };
@@ -802,14 +895,14 @@ impl Chat {
             return false;
         }
         unsafe { SetTimer(w.hwnd, TIMER_PEER_TYPING, PEER_TYPING_MS, None) };
-        // Said once, and not over a message that is about to be announced.
+        // Said once, and not over what is about to be announced.
         if self.shows_typing || !self.unspoken.is_empty() {
             return false;
         }
         let announce = front && app::with(|a| a.cfg.announce_typing);
         self.say(&tr!(chat_typing, name = self.name), announce);
         self.shows_typing = true;
-        announce
+        front
     }
 
     fn to(&self) -> Option<iroh::EndpointId> {
@@ -918,6 +1011,124 @@ impl Chat {
         self.say(tr!(chat_deleted), true);
     }
 
+    /// Copies the selected messages, one per line, as the history shows them.
+    fn copy_selected(&mut self, w: &Window) {
+        let indices = selected(self.list);
+        if indices.is_empty() {
+            return;
+        }
+        let lines: Vec<String> = indices.iter().map(|&i| item_text(self.list, i)).collect();
+        let said = if shell::copy_to_clipboard(w.hwnd, &lines.join("\r\n")) {
+            trn!(chat_copied, indices.len())
+        } else {
+            tr!(clipboard_busy).to_string()
+        };
+        self.say(&said, true);
+    }
+
+    fn select_all(&mut self) {
+        let count = send(self.list, LB_GETCOUNT, 0, 0);
+        if count <= 0 {
+            return;
+        }
+        send(self.list, LB_SETSEL, 1, -1);
+        // Nothing else tells a screen reader of it.
+        self.say(&trn!(chat_all_selected, count as usize), true);
+    }
+
+    /// Deletes the selected messages from the chat on this computer, after
+    /// the user confirms it. The other person keeps them. The message that
+    /// followed the first one deleted is selected then; with none left, the
+    /// focus goes to the message field.
+    fn delete_selected(&mut self, w: &Window) {
+        let indices = selected(self.list);
+        if indices.is_empty() {
+            return;
+        }
+        if !confirm_no(w.hwnd, &trn!(chat_delete_messages_confirm, indices.len())) {
+            return;
+        }
+        // The rows are the chat's messages, one for one; nothing changes
+        // them while the question is open (the window is busy then).
+        let saved = self.history.remove(&indices);
+        for &index in indices.iter().rev() {
+            send(self.list, LB_DELETESTRING, index, 0);
+        }
+        let count = send(self.list, LB_GETCOUNT, 0, 0).max(0) as usize;
+        if count == 0 {
+            window::focus(self.input);
+            window::enable(self.delete, false);
+        } else {
+            select_only(self.list, indices[0].min(count - 1));
+        }
+        self.show_selected();
+        let said = match saved {
+            Ok(()) => trn!(chat_messages_deleted, indices.len()),
+            Err(e) => tr!(chat_not_saved, error = e),
+        };
+        self.say(&said, true);
+    }
+
+    /// The context menu of the history, at `at` (screen coordinates) for
+    /// the mouse, or at the message with the focus rectangle for the
+    /// keyboard. A click on a message that is not selected selects it alone,
+    /// as File Explorer does.
+    fn history_menu(&mut self, w: &Window, at: Option<POINT>) {
+        let pt = match at {
+            Some(pt) => {
+                let mut client = pt;
+                unsafe { ScreenToClient(self.list, &mut client) };
+                let xy = ((client.y as u16 as isize) << 16) | client.x as u16 as isize;
+                let hit = send(self.list, LB_ITEMFROMPOINT, 0, xy);
+                let (index, outside) = ((hit & 0xFFFF) as usize, (hit >> 16) & 0xFFFF != 0);
+                if !outside && send(self.list, LB_GETSEL, index, 0) <= 0 {
+                    select_only(self.list, index);
+                    self.show_selected();
+                }
+                window::focus(self.list);
+                pt
+            }
+            None => {
+                let mut list_rect: RECT = unsafe { std::mem::zeroed() };
+                unsafe { GetClientRect(self.list, &mut list_rect) };
+                let mut item: RECT = unsafe { std::mem::zeroed() };
+                let caret = send(self.list, LB_GETCARETINDEX, 0, 0);
+                let found = caret >= 0
+                    && send(
+                        self.list,
+                        LB_GETITEMRECT,
+                        caret as usize,
+                        &mut item as *mut _ as isize,
+                    ) != LB_ERR as isize;
+                // Where the message is in view, or else the top of the list.
+                let y = if found && item.top >= 0 && item.top < list_rect.bottom {
+                    item.top
+                } else {
+                    0
+                };
+                let mut p = POINT {
+                    x: w.px(ITEM_PAD * 4),
+                    y: y + w.px(ITEM_PAD * 4).min(list_rect.bottom - y).max(0),
+                };
+                unsafe { MapWindowPoints(self.list, std::ptr::null_mut(), &mut p, 1) };
+                p
+            }
+        };
+        let count = send(self.list, LB_GETCOUNT, 0, 0);
+        let any = send(self.list, LB_GETSELCOUNT, 0, 0) > 0;
+        let popup = unsafe { CreatePopupMenu() };
+        menu::item_enabled(popup, ID_COPY, tr!(chat_copy), any);
+        menu::item_enabled(popup, ID_SELECT_ALL, tr!(chat_select_all), count > 0);
+        menu::separator(popup);
+        menu::item_enabled(popup, ID_DELETE_SELECTED, tr!(chat_delete_message), any);
+        match menu::track(popup, w.hwnd, pt) {
+            Some(ID_COPY) => self.copy_selected(w),
+            Some(ID_SELECT_ALL) => self.select_all(),
+            Some(ID_DELETE_SELECTED) => self.delete_selected(w),
+            _ => {}
+        }
+    }
+
     /// Shows a chat without messages (they were deleted).
     fn clear(&mut self) {
         // The file is gone already when all chats were deleted at once.
@@ -955,8 +1166,11 @@ impl Handler for Chat {
             "",
             WS_TABSTOP
                 | WS_VSCROLL
-                | (LBS_NOTIFY | LBS_NOINTEGRALHEIGHT | LBS_OWNERDRAWVARIABLE | LBS_HASSTRINGS)
-                    as u32,
+                | (LBS_NOTIFY
+                    | LBS_NOINTEGRALHEIGHT
+                    | LBS_OWNERDRAWVARIABLE
+                    | LBS_HASSTRINGS
+                    | LBS_EXTENDEDSEL) as u32,
             WS_EX_CLIENTEDGE,
             ID_HISTORY,
             (x, y, CONTENT_W, HISTORY_H),
@@ -968,8 +1182,8 @@ impl Handler for Chat {
         y += 20;
         self.selected = w.read_only_text("", ID_SELECTED, (x, y, CONTENT_W, SELECTED_H));
         y += SELECTED_H + 8;
-        // One line: what arrived last, that the other person is typing, or
-        // why a message was not sent.
+        // One line: the message that arrived last (either way), that the
+        // other person is typing, or why a message was not sent.
         self.status = w.add(
             "STATIC",
             "",
@@ -1022,14 +1236,17 @@ impl Handler for Chat {
     fn on_command(&mut self, w: &Window, id: u16, code: u16) -> bool {
         match id {
             ID_SEND => self.send_message(w),
+            ID_HISTORY if code == LBN_SELCHANGE as u16 => self.show_selected(),
             ID_INPUT if code == EN_CHANGE => {
                 let writing = !get_text(self.input).is_empty();
                 self.tell_typing(w, writing);
             }
-            ID_HISTORY if code == LBN_SELCHANGE as u16 => self.show_selected(),
             ID_ADD => self.add_recipient(w),
             ID_BLOCK => self.block_peer(w),
             ID_DELETE => self.delete_conversation(w),
+            ID_COPY => self.copy_selected(w),
+            ID_SELECT_ALL => self.select_all(),
+            ID_DELETE_SELECTED => self.delete_selected(w),
             _ => return false,
         }
         true
@@ -1045,8 +1262,18 @@ impl Handler for Chat {
         }
     }
 
-    fn on_message(&mut self, w: &Window, msg: u32, wp: WPARAM, _lp: LPARAM) -> Option<LRESULT> {
+    fn on_message(&mut self, w: &Window, msg: u32, wp: WPARAM, lp: LPARAM) -> Option<LRESULT> {
         match msg {
+            // From the keyboard (Shift+F10, the Menu key), the position is
+            // -1, -1.
+            WM_CONTEXTMENU if wp as HWND == self.list => {
+                let at = (lp as u32 != u32::MAX).then(|| POINT {
+                    x: (lp & 0xFFFF) as i16 as i32,
+                    y: ((lp >> 16) & 0xFFFF) as i16 as i32,
+                });
+                self.history_menu(w, at);
+                Some(0)
+            }
             WM_TIMER => match wp {
                 TIMER_SPEAK => {
                     unsafe { KillTimer(w.hwnd, TIMER_SPEAK) };

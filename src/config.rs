@@ -246,14 +246,17 @@ pub struct Config {
     pub close_running_transfer: CloseAction,
     /// What happens when the connection is lost during a transfer.
     pub connection_lost: ConnectionLostAction,
-    /// Ask whether to open a received item when its transfer is complete.
-    pub ask_after_receive: bool,
-    /// Show a message when the recipient has received a sent item.
-    pub show_after_send: bool,
+    /// Earlier versions asked whether to open a received item, and told
+    /// that a sent one had arrived, before the window closed. Read from
+    /// their files for `upgrade`, and never written.
+    #[serde(default, skip_serializing, rename = "ask_after_receive")]
+    ask_after_receive_before: Option<bool>,
+    #[serde(default, skip_serializing, rename = "show_after_send")]
+    show_after_send_before: Option<bool>,
     /// Windows: close a transfer's progress window as soon as the transfer
-    /// ends, however it ended, with a notification in place of the question
-    /// after a receive, the message after a send and the window that a
-    /// failed transfer otherwise leaves open.
+    /// ends, however it ended, with a notification in place of the window,
+    /// which otherwise stays and shows the result. Every progress window
+    /// has a check box for it, as the settings have.
     pub close_when_ended: bool,
     /// What is kept of a received folder.
     pub received_folder: ReceivedFolder,
@@ -286,8 +289,8 @@ pub struct Config {
     pub chat_from: ChatFrom,
     /// Tell the other person of a chat when the user is writing a message.
     pub send_typing: bool,
-    /// Announce to screen readers, and with a sound, that the other person
-    /// of the chat in front is writing a message.
+    /// Announce to screen readers that the other person of the chat in
+    /// front is writing a message. The sound for it is in `sounds`.
     pub announce_typing: bool,
     pub sounds: Sounds,
 }
@@ -312,8 +315,8 @@ impl Default for Config {
             start_minimized: false,
             close_running_transfer: CloseAction::Ask,
             connection_lost: ConnectionLostAction::Wait,
-            ask_after_receive: true,
-            show_after_send: true,
+            ask_after_receive_before: None,
+            show_after_send_before: None,
             close_when_ended: false,
             received_folder: ReceivedFolder::Extract,
             tray_hint_shown: false,
@@ -346,7 +349,7 @@ fn temp_dir_in(base: &Path, profile: Option<&str>) -> PathBuf {
 }
 
 /// The version of `Config::settings_version` that this program writes.
-const SETTINGS_VERSION: u32 = 1;
+const SETTINGS_VERSION: u32 = 2;
 
 /// The settings file exists but could not be used.
 #[derive(Debug)]
@@ -409,6 +412,18 @@ impl Config {
             if !self.always_save && self.auto_accept {
                 self.always_save = true;
                 self.always_save_dir = None;
+            }
+        }
+        let ask_after_receive = self.ask_after_receive_before.take();
+        let show_after_send = self.show_after_send_before.take();
+        if self.settings_version < 2 {
+            // Up to 1.0.1, a completed transfer's window asked whether to
+            // open what arrived, or told that it had arrived, and then
+            // closed; without either, it closed at once. Now a window stays
+            // with its result unless every one closes at the end: whoever
+            // had both turned off wanted no window left after a transfer.
+            if ask_after_receive == Some(false) && show_after_send == Some(false) {
+                self.close_when_ended = true;
             }
         }
         self.settings_version = self.settings_version.max(SETTINGS_VERSION);
@@ -723,7 +738,6 @@ mod tests {
         cfg.language = Some("hr".into());
         cfg.close_running_transfer = CloseAction::Background;
         cfg.connection_lost = ConnectionLostAction::Ask;
-        cfg.show_after_send = false;
         cfg.close_when_ended = true;
         cfg.warn_fat_temp = false;
         cfg.received_folder = ReceivedFolder::Both;
@@ -850,8 +864,6 @@ mod tests {
         assert_eq!(cfg.my_name, "X");
         assert!(cfg.minimize_to_tray);
         assert!(!cfg.start_minimized);
-        assert!(cfg.ask_after_receive);
-        assert!(cfg.show_after_send);
         assert!(!cfg.close_when_ended);
         assert!(cfg.warn_fat_temp);
         assert!(cfg.auto_accept);
@@ -1005,6 +1017,41 @@ mod tests {
                 Some(crate::platform::downloads_dir())
             );
         }
+    }
+
+    /// Whoever had turned off both the question after a receive and the
+    /// message after a send had no window left after a completed transfer,
+    /// and has none now; anyone else gets windows that stay with their
+    /// result. The old fields are read once and not written again.
+    #[test]
+    fn no_window_after_a_transfer_stays_so() {
+        let (v1, v2) = (r#""settings_version":1,"#, r#""settings_version":2,"#);
+        for (name, version, ask, show, closes) in [
+            ("both-off-1.0.0", "", false, false, true),
+            ("both-off-1.0.1", v1, false, false, true),
+            ("ask-on", v1, true, false, false),
+            ("show-on", v1, false, true, false),
+            ("both-on", v1, true, true, false),
+            // Written by this version: the fields mean nothing any more.
+            ("current", v2, false, false, false),
+        ] {
+            let cfg = load_json(
+                name,
+                &format!(
+                    r#"{{{version}"my_name":"X","ask_after_receive":{ask},
+                        "show_after_send":{show}}}"#
+                ),
+            );
+            assert_eq!(cfg.close_when_ended, closes, "{name}");
+            assert_eq!(cfg.settings_version, SETTINGS_VERSION, "{name}");
+            let json = serde_json::to_string(&cfg).unwrap();
+            assert!(!json.contains("ask_after_receive"), "{name}");
+            assert!(!json.contains("show_after_send"), "{name}");
+            // A second start reads it as it is.
+            assert_eq!(load_json(&format!("{name}-again"), &json), cfg, "{name}");
+        }
+        // Without the fields (the defaults of then), windows stay.
+        assert!(!load_json("neither", r#"{"my_name":"X"}"#).close_when_ended);
     }
 
     /// Someone who was asked about every transfer still is.

@@ -5,9 +5,10 @@ Promjene u inačici 1.1.0
 - Novo: Slanje većem broju primatelja odjednom. U Windowsu označite potvrdne okvire pored primatelja, a na Macu ih odaberite više na popisu.
 - Novo: Blokiranje pošiljatelja. Nekoga možete blokirati gumbom „Blokiraj pošiljatelja” kad stigne njegova ponuda, a primatelja s popisa tipkama Ctrl+B (na Macu Command-B). Dodavo tada odbija sve što ta osoba pošalje, a ona o tome ne dobiva obavijest. Blokadu možete ukloniti u postavkama.
 - Novo: Mapa za privremene datoteke. Možete je odabrati u postavkama, a Dodavo vas unaprijed upozorava ako bi privremena datoteka bila prevelika za pogon FAT32.
-- Novo: Windows: prozor napretka može se sam zatvoriti kad prijenos završi. To se uključuje u postavkama.
-- Novo: Čavrljanje (na Macu: Dopisivanje). Osobi s popisa primatelja možete napisati poruku: odaberite je i pritisnite Ctrl+M (na Macu Shift-Command-M). Jedna poruka može ići i većem broju osoba odjednom, a u postavkama pod „Čavrljanje” (na Macu „Dopisivanje”) birate tko vam smije pisati. I druga strana treba imati Dodavo 1.1.0.
+- Novo: Windows: prozor napretka može se sam zatvoriti kad prijenos završi. Potvrdite „Zatvori ovaj prozor kada prijenos završi” u bilo kojem prozoru napretka ili to uključite u postavkama.
+- Novo: Čavrljanje (na Macu: Dopisivanje). Osobi s popisa primatelja možete napisati poruku: odaberite je i pritisnite Ctrl+M (na Macu Shift-Command-M). Jedna poruka može ići i većem broju osoba odjednom, a u postavkama pod „Čavrljanje” (na Macu „Dopisivanje”) birate tko vam smije pisati. U Windowsu poruke u prozoru čavrljanja možete odabrati, kopirati i izbrisati, a glavni prozor ima gumb za čavrljanje. I druga strana treba imati Dodavo 1.1.0.
 - Novo: Zvukovi. Dodavo zvukom javlja kad nešto stigne, kad prijenos počne, završi ili ne uspije i kad se veza prekine. U postavkama pod „Zvukovi” svaki zvuk možete zamijeniti svojom zvučnom datotekom (u Windowsu WAV datotekom) ili ga isključiti.
+- Promjena: Windows: kad prijenos završi, njegov prozor napretka ostaje otvoren i prikazuje rezultat, s gumbima koji otvaraju primljenu datoteku ili mapu, umjesto poruke nakon slanja i pitanja nakon primanja.
 - Promjena: Primljena mapa raspakira se na disku na koji je spremate, pa za nju više ne treba mjesta na sistemskom disku.
 - Promjena: Windows: postavke su raspoređene po karticama.
 - Ispravak: Dodavo pri pokretanju više ne javlja da nije povezan dok se još povezuje.
