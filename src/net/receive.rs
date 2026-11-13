@@ -78,6 +78,21 @@ fn held_before_verifying(name: &str) -> bool {
     }
     hold
 }
+
+/// Waits while `hold` says so (see `HOLD_FINALIZE` and `HOLD_VERIFY`). A
+/// task that waits there when its network begins to shut down waits on
+/// until it is dropped, as if the program had ended there: the test lets go
+/// of the hold once `NetHandle::shutdown` has returned, which can be before
+/// the runtime and its tasks are gone, and the task must not go on then
+/// beside the next start.
+#[cfg(test)]
+async fn wait_while(shared: &Shared, hold: impl Fn() -> bool) {
+    let mut held = false;
+    while hold() || held && shared.shutting_down.load(Ordering::SeqCst) {
+        held = true;
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+}
 /// How long to wait for a replacement connection after losing one before
 /// telling the user (the router replaces connections in one go).
 const REPLACEMENT_GRACE: Duration = Duration::from_secs(1);
@@ -1361,9 +1376,7 @@ impl<'a> Receiver<'a> {
         #[cfg(windows)]
         on_disk?;
         #[cfg(test)]
-        while held_before_verifying(&self.name) {
-            tokio::time::sleep(Duration::from_millis(50)).await;
-        }
+        wait_while(&self.shared, || held_before_verifying(&self.name)).await;
 
         // On macOS nothing keeps other programs from writing to the part
         // during a connection (see `archive::macos`), and the hash so far is
@@ -1508,9 +1521,7 @@ impl<'a> Receiver<'a> {
         let step = if self.unpacks() {
             self.status.set(Phase::Unpacking);
             #[cfg(test)]
-            while HOLD_FINALIZE.load(Ordering::SeqCst) {
-                tokio::time::sleep(Duration::from_millis(50)).await;
-            }
+            wait_while(&self.shared, || HOLD_FINALIZE.load(Ordering::SeqCst)).await;
             Phase::Unpacking
         } else {
             self.status.hold();
