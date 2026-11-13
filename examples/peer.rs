@@ -52,6 +52,10 @@ fn main() {
     let out = out.unwrap_or_else(|| dodavo_core::platform::downloads_dir().join("peer"));
     i18n::init(None);
     let data_dir = config::data_dir(Some(&profile));
+    // Its own log, in its profile's folder, as a copy of Dodavo keeps one.
+    if let Some(log) = dodavo_core::logging::init(&data_dir, "test peer", &[]) {
+        println!("Log: {}", log.display());
+    }
     let secret = identity::load_or_create(&data_dir).expect("the identity");
     println!("Contact ID: {}", secret.public());
 
@@ -166,4 +170,5 @@ fn main() {
     if let Some(net) = &*handle.lock().unwrap() {
         net.shutdown(Duration::from_secs(3));
     }
+    dodavo_core::logging::flush(Duration::from_secs(1));
 }

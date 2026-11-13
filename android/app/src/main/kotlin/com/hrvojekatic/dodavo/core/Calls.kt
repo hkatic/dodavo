@@ -131,6 +131,19 @@ sealed interface Call {
     @SerialName("licenses")
     data object Licenses : Call
 
+    /**
+     * A line for Dodavo's log: a text of the app's own, never a name, a path or what the user
+     * wrote. [level] is `error`, `warn`, `info` or `debug`.
+     */
+    @Serializable
+    @SerialName("log")
+    data class Log(val level: String, val message: String) : Call
+
+    /** Waits a moment until the log has all lines before; the answer has its path. */
+    @Serializable
+    @SerialName("flush_log")
+    data object FlushLog : Call
+
     /** Suspends the transfers and closes the network; blocks up to 3 s. */
     @Serializable
     @SerialName("shutdown")

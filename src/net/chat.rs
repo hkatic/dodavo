@@ -502,16 +502,25 @@ async fn dial(
     to: EndpointId,
 ) -> Result<(Connection, SendStream, RecvStream, String), DialError> {
     use iroh::endpoint::{ConnectError, ConnectWithOptsError};
-    let lost = || DialError::passing(tr!(error_connection_lost));
+    let alias = crate::logging::peer(&to);
+    let lost = |what: &str| {
+        crate::log_info!("chat with {alias}: the greeting failed ({what})");
+        DialError::passing(tr!(error_connection_lost))
+    };
     let connecting = endpoint.connect(to, protocol::CHAT_ALPN);
     let conn = match tokio::time::timeout(CONNECT_TIMEOUT, connecting).await {
         Ok(Ok(conn)) => conn,
         // Before anything else: for a transfer the same answer means
         // another version (see `net::connect_error_text`).
         Ok(Err(e)) if super::no_such_protocol(&e) => {
+            crate::log_info!("chat with {alias}: Dodavo there has no chat");
             return Err(DialError::lasting(os_tr!(chat_error_cannot_chat)));
         }
         Ok(Err(e)) => {
+            crate::log_info!(
+                "chat with {alias}: dial failed: {}",
+                crate::logging::connect_error(&e)
+            );
             let text = super::connect_error_text(&e);
             let unknown = matches!(
                 e,
@@ -526,27 +535,47 @@ async fn dial(
                 DialError::passing(text)
             });
         }
-        Err(_) => return Err(DialError::passing(tr!(error_timeout))),
+        Err(_) => {
+            crate::log_info!(
+                "chat with {alias}: no connection in {} s",
+                CONNECT_TIMEOUT.as_secs()
+            );
+            return Err(DialError::passing(tr!(error_timeout)));
+        }
     };
     let greeted = async {
-        let (mut send, mut recv) = conn.open_bi().await.map_err(|_| lost())?;
+        let (mut send, mut recv) = conn
+            .open_bi()
+            .await
+            .map_err(|e| lost(&crate::logging::connection_error(&e)))?;
         let name = chats.policy.lock().unwrap().my_name.clone();
         protocol::write_as(&mut send, &ChatMsg::Hello { name })
             .await
-            .map_err(|_| lost())?;
+            .map_err(|e| lost(&crate::logging::cause(&e)))?;
         match protocol::read_as::<_, ChatMsg>(&mut recv).await {
             Ok(ChatMsg::Welcome { name }) => Ok((send, recv, shown_name(&name))),
-            Ok(ChatMsg::Refused) => Err(DialError::lasting(tr!(chat_error_refused))),
-            _ => Err(lost()),
+            Ok(ChatMsg::Refused) => {
+                crate::log_info!("chat with {alias}: refused there");
+                Err(DialError::lasting(tr!(chat_error_refused)))
+            }
+            Ok(other) => Err(lost(other.kind_name())),
+            Err(e) => Err(lost(&crate::logging::cause(&e))),
         }
     };
     match tokio::time::timeout(ANSWER_TIMEOUT, greeted).await {
-        Ok(Ok((send, recv, name))) => Ok((conn, send, recv, name)),
+        Ok(Ok((send, recv, name))) => {
+            crate::log_info!("chat with {alias}: connected");
+            Ok((conn, send, recv, name))
+        }
         Ok(Err(error)) => {
             conn.close(CLOSE_OK.into(), b"done");
             Err(error)
         }
         Err(_) => {
+            crate::log_info!(
+                "chat with {alias}: no answer to the greeting in {} s",
+                ANSWER_TIMEOUT.as_secs()
+            );
             conn.close(CLOSE_OK.into(), b"done");
             Err(DialError::passing(tr!(error_timeout)))
         }
@@ -559,14 +588,48 @@ pub(crate) async fn accept(shared: Arc<Shared>, conn: Connection) {
         return;
     };
     let peer = conn.remote_id();
+    let alias = crate::logging::peer(&peer);
     let Ok((mut send, mut recv)) = conn.accept_bi().await else {
+        crate::log_info!("chat from {alias}: the connection ended before its stream");
         return;
     };
     let first = protocol::read_as::<_, ChatMsg>(&mut recv);
-    let Ok(Ok(ChatMsg::Hello { name })) = tokio::time::timeout(ANSWER_TIMEOUT, first).await else {
-        return;
+    let name = match tokio::time::timeout(ANSWER_TIMEOUT, first).await {
+        Ok(Ok(ChatMsg::Hello { name })) => name,
+        Ok(Ok(other)) => {
+            crate::log_info!(
+                "chat from {alias}: began with {}; ignored",
+                other.kind_name()
+            );
+            return;
+        }
+        Ok(Err(e)) => {
+            crate::log_info!(
+                "chat from {alias}: no greeting: {}",
+                crate::logging::cause(&e)
+            );
+            return;
+        }
+        Err(_) => {
+            crate::log_info!(
+                "chat from {alias}: no greeting in {} s",
+                ANSWER_TIMEOUT.as_secs()
+            );
+            return;
+        }
     };
-    if shared.shutting_down.load(Ordering::SeqCst) || !takes(&shared, &chats, &peer) {
+    let exiting = shared.shutting_down.load(Ordering::SeqCst);
+    if exiting || !takes(&shared, &chats, &peer) {
+        crate::log_info!(
+            "chat from {alias}: refused ({})",
+            if exiting {
+                "exiting"
+            } else if shared.blocked.lock().unwrap().contains(&peer) {
+                "a blocked sender"
+            } else {
+                "only recipients may write"
+            }
+        );
         // Nothing here sees it; the connection stays until the other side
         // has read the answer.
         let _ = protocol::write_as(&mut send, &ChatMsg::Refused).await;
@@ -575,12 +638,14 @@ pub(crate) async fn accept(shared: Arc<Shared>, conn: Connection) {
         return;
     }
     let my_name = chats.policy.lock().unwrap().my_name.clone();
-    if protocol::write_as(&mut send, &ChatMsg::Welcome { name: my_name })
-        .await
-        .is_err()
-    {
+    if let Err(e) = protocol::write_as(&mut send, &ChatMsg::Welcome { name: my_name }).await {
+        crate::log_info!(
+            "chat from {alias}: the welcome failed: {}",
+            crate::logging::cause(&e)
+        );
         return;
     }
+    crate::log_info!("chat from {alias}: connected");
     let (serial, queue) = chats.join(peer);
     converse(
         shared,
@@ -626,6 +691,8 @@ async fn converse(
     let mut last = Instant::now();
     let mut sending = true;
     let mut tick = tokio::time::interval(Duration::from_secs(1));
+    // Why it ended, for the log.
+    let mut why = "idle".to_string();
     // Why it ended, for the messages that wait; `None` when nothing waits.
     let error: Option<String> = loop {
         tokio::select! {
@@ -643,12 +710,18 @@ async fn converse(
                     Out::Typing(on) => ChatMsg::Typing { on },
                 };
                 last = Instant::now();
-                if protocol::write_as(&mut send, &msg).await.is_err() {
+                if let Err(e) = protocol::write_as(&mut send, &msg).await {
+                    why = format!("a write failed: {}", crate::logging::cause(&e));
                     break Some(tr!(error_connection_lost).into());
                 }
             }
             msg = in_rx.recv() => {
                 let Some(msg) = msg else {
+                    why = format!(
+                        "the other side's stream ended; the connection says {}",
+                        conn.close_reason()
+                            .map_or_else(|| "nothing".into(), |r| crate::logging::connection_error(&r))
+                    );
                     break Some(tr!(error_connection_lost).into());
                 };
                 match msg {
@@ -658,6 +731,7 @@ async fn converse(
                         // The user blocked this person meanwhile, or takes
                         // messages from recipients only now, and has not
                         // written to this one.
+                        why = "refused: blocked, or no longer allowed to write".into();
                         let _ = protocol::write_as(&mut send, &ChatMsg::Refused).await;
                         let _ = send.finish();
                         let _ = tokio::time::timeout(Duration::from_secs(5), conn.closed()).await;
@@ -667,10 +741,15 @@ async fn converse(
                         // Exiting: nobody would see it, so it is not
                         // confirmed, and its sender is told that it failed.
                         if shared.shutting_down.load(Ordering::SeqCst) {
+                            why = "a message came while exiting".into();
                             break None;
                         }
                         last = Instant::now();
                         if text.len() > protocol::MAX_CHAT_TEXT || text.trim().is_empty() {
+                            crate::log_info!(
+                                "chat with {}: a message too long or empty was left out",
+                                crate::logging::peer(&peer)
+                            );
                             continue;
                         }
                         peer_typing = false;
@@ -679,7 +758,8 @@ async fn converse(
                             name: name.clone(),
                             text,
                         });
-                        if protocol::write_as(&mut send, &ChatMsg::Received { id }).await.is_err() {
+                        if let Err(e) = protocol::write_as(&mut send, &ChatMsg::Received { id }).await {
+                            why = format!("a write failed: {}", crate::logging::cause(&e));
                             break Some(tr!(error_connection_lost).into());
                         }
                     }
@@ -694,7 +774,10 @@ async fn converse(
                         peer_typing = on;
                         shared.emit(Event::Typing { from: peer, on });
                     }
-                    ChatMsg::Refused => break Some(tr!(chat_error_refused).into()),
+                    ChatMsg::Refused => {
+                        why = "refused there".into();
+                        break Some(tr!(chat_error_refused).into());
+                    }
                     ChatMsg::Hello { .. } | ChatMsg::Welcome { .. } => {}
                 }
             }
@@ -705,6 +788,11 @@ async fn converse(
                     .map(|(id, _)| *id)
                     .collect();
                 for id in late {
+                    crate::log_info!(
+                        "chat with {}: message {id} not confirmed in {} s",
+                        crate::logging::peer(&peer),
+                        CONFIRM_TIMEOUT.as_secs()
+                    );
                     waiting.remove(&id);
                     shared.emit(Event::ChatFailed {
                         to: peer,
@@ -719,6 +807,10 @@ async fn converse(
         }
     };
     reader.abort();
+    crate::log_info!(
+        "chat with {}: the connection ended ({why})",
+        crate::logging::peer(&peer)
+    );
     // First, so that nothing more waits for this connection.
     let unsent = chats.leave(&peer, serial, &queue);
     let error = error.unwrap_or_else(|| tr!(error_connection_lost).into());

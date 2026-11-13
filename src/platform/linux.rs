@@ -192,18 +192,69 @@ pub fn exclude_from_backups(_path: &Path) {}
 pub fn api_level() -> u32 {
     static LEVEL: OnceLock<u32> = OnceLock::new();
     *LEVEL.get_or_init(|| {
-        let mut value = [0 as std::ffi::c_char; libc::PROP_VALUE_MAX as usize];
-        // SAFETY: a C string for the name, and a buffer of the length that
-        // the call writes at most.
-        let length =
-            unsafe { libc::__system_property_get(c"ro.build.version.sdk".as_ptr(), value.as_mut_ptr()) };
-        if length <= 0 {
-            return 0;
-        }
-        // SAFETY: the call wrote a NUL-terminated string.
-        let text = unsafe { std::ffi::CStr::from_ptr(value.as_ptr()) };
-        text.to_str().ok().and_then(|t| t.trim().parse().ok()).unwrap_or(0)
+        system_property(c"ro.build.version.sdk")
+            .and_then(|t| t.parse().ok())
+            .unwrap_or(0)
     })
+}
+
+/// One of Android's system properties.
+#[cfg(target_os = "android")]
+fn system_property(name: &std::ffi::CStr) -> Option<String> {
+    let mut value = [0 as std::ffi::c_char; libc::PROP_VALUE_MAX as usize];
+    // SAFETY: a C string for the name, and a buffer of the length that the
+    // call writes at most.
+    let length = unsafe { libc::__system_property_get(name.as_ptr(), value.as_mut_ptr()) };
+    if length <= 0 {
+        return None;
+    }
+    // SAFETY: the call wrote a NUL-terminated string.
+    let text = unsafe { std::ffi::CStr::from_ptr(value.as_ptr()) };
+    text.to_str().ok().map(|t| t.trim().to_string())
+}
+
+/// What the log says of this device (see `logging`): the version of Android
+/// and of its API, the maker and the model. Never the device's name, which
+/// the user chose.
+#[cfg(target_os = "android")]
+pub fn os_description() -> Vec<String> {
+    let property = |name| system_property(name).unwrap_or_else(|| "?".into());
+    vec![
+        format!(
+            "Android {}, API {}",
+            property(c"ro.build.version.release"),
+            api_level()
+        ),
+        format!(
+            "device {} {}",
+            property(c"ro.product.manufacturer"),
+            property(c"ro.product.model")
+        ),
+    ]
+}
+
+/// What the log says of this system: the kernel's release and the machine.
+/// Never the computer's name.
+#[cfg(not(target_os = "android"))]
+pub fn os_description() -> Vec<String> {
+    let mut info = std::mem::MaybeUninit::<libc::utsname>::uninit();
+    // SAFETY: a structure for the call to fill.
+    if unsafe { libc::uname(info.as_mut_ptr()) } != 0 {
+        return vec!["Linux".into()];
+    }
+    // SAFETY: filled by the call.
+    let info = unsafe { info.assume_init() };
+    let text = |field: &[std::ffi::c_char]| {
+        // SAFETY: the fields of `utsname` are NUL-terminated.
+        unsafe { std::ffi::CStr::from_ptr(field.as_ptr()) }
+            .to_string_lossy()
+            .into_owned()
+    };
+    vec![format!(
+        "Linux {}, machine {}",
+        text(&info.release),
+        text(&info.machine)
+    )]
 }
 
 /// Gives iroh, and the crates below it, Java's VM and the app's context,

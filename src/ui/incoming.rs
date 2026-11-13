@@ -82,6 +82,8 @@ struct Incoming {
     offers: Vec<Waiting>,
     /// Set once an answer was sent (or is no longer needed).
     answered: bool,
+    /// Why what waits is declined when the window closes, for the log.
+    declined_by: &'static str,
     /// An offer came since the last look, which the user has to be told of.
     arrived: bool,
     /// The height of the client area to take when the window is restored: it
@@ -158,6 +160,7 @@ fn open(id: u64, from: &str, name: &str, known: bool, offer: Offer) -> HWND {
             since: Instant::now(),
         }],
         answered: false,
+        declined_by: "the window was closed",
         arrived: false,
         pending_height: Cell::new(None),
         headline: null,
@@ -237,6 +240,7 @@ pub fn decline_from(from: &str, except: HWND) {
         }
         window::with_handler::<Incoming, _>(hwnd, |s, w| {
             if s.from.eq_ignore_ascii_case(from) && !s.answered {
+                s.declined_by = "the sender was blocked";
                 // Closing declines what waits (see `on_destroy`).
                 w.close();
             }
@@ -253,6 +257,7 @@ pub fn decline_all() {
     for hwnd in open_windows {
         window::with_handler::<Incoming, _>(hwnd, |s, w| {
             if !s.answered {
+                s.declined_by = "the Contact ID changes";
                 // Closing declines what waits (see `on_destroy`).
                 w.close();
             }
@@ -447,6 +452,7 @@ impl Incoming {
             return;
         }
         app::block_sender(&self.name, &self.from, w.hwnd);
+        self.declined_by = "the user blocked the sender";
         // Closing declines what waits here (see `on_destroy`).
         w.close();
     }
@@ -610,7 +616,10 @@ impl Handler for Incoming {
                 self.update_space();
             }
             ID_ACCEPT => self.accept(w),
-            ID_DECLINE => w.close(),
+            ID_DECLINE => {
+                self.declined_by = "the user chose Decline";
+                w.close()
+            }
             ID_BLOCK => self.block(w),
             // To ask the sender what this is, before answering.
             ID_CHAT => {
@@ -641,6 +650,7 @@ impl Handler for Incoming {
     fn on_destroy(&mut self, _w: &Window) {
         for item in &self.offers {
             if !self.answered {
+                dodavo_core::log_info!("#{} declined: {}", item.id, self.declined_by);
                 app::net_send(Command::Respond {
                     id: item.id,
                     accept: None,

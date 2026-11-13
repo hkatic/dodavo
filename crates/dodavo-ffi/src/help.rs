@@ -152,6 +152,7 @@ fn pages_use_the_program_texts() {
             ("menu_check_updates", table.menu_check_updates),
             ("menu_license", table.menu_license),
             ("menu_donate", table.menu_donate),
+            ("menu_show_log", table.menu_show_log),
             ("col_name", table.col_name),
             ("col_contact_id", table.col_contact_id),
             ("col_transfer", table.col_transfer),

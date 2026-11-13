@@ -177,13 +177,16 @@ final class UpdateWindowController: NSWindowController, NSWindowDelegate {
             DispatchQueue.main.async {
                 switch result {
                 case .success(.replaced):
+                    Core.log("info", "update: the app was replaced, and opens again")
                     // This folder is not one that macOS empties.
                     try? FileManager.default.removeItem(atPath: dmg)
                     Installer.relaunch(running, updated: true)
                     app?.quitWithoutAsking()
                 case .success(.leftToTheUser):
+                    Core.log("info", "update: its folder is not writable, so the user installs it")
                     self.fail(L[.update_manual])
                 case .failure(let error):
+                    Core.log("error", "update: installing failed at \(Installer.step(of: error))")
                     self.fail(L.f(.update_err_install, ["detail": "\(error)"]))
                 }
             }
@@ -200,6 +203,17 @@ enum Installer {
 
     struct Failure: Error, CustomStringConvertible {
         let description: String
+        /// Which step failed, for the log: never the description, which can
+        /// hold what a program printed, paths among it.
+        var step = "a program that it runs"
+    }
+
+    /// Which step an error of `replace` comes from, for the log: an error of
+    /// the system by its domain and code only.
+    static func step(of error: Error) -> String {
+        if let failure = error as? Failure { return failure.step }
+        let error = error as NSError
+        return "\(error.domain) \(error.code)"
     }
 
     /// Runs a program, and gives what it printed; fails if it fails.
@@ -250,7 +264,9 @@ enum Installer {
                 "/usr/bin/hdiutil",
                 ["attach", dmg, "-nobrowse", "-readonly", "-noautoopen", "-mountpoint", mount.path])
         } catch {
-            throw Failure(description: L.f(.update_err_mount, ["detail": "\(error)"]))
+            throw Failure(
+                description: L.f(.update_err_mount, ["detail": "\(error)"]),
+                step: "mounting the disk image")
         }
         defer { _ = try? run("/usr/bin/hdiutil", ["detach", mount.path, "-force"]) }
         let source = mount.appendingPathComponent("Dodavo.app")
@@ -260,10 +276,10 @@ enum Installer {
         do {
             try run("/usr/bin/codesign", ["--verify", "--deep", "--strict", source.path])
         } catch {
-            throw Failure(description: L[.update_err_not_signed])
+            throw Failure(description: L[.update_err_not_signed], step: "checking the signature")
         }
         if let mine = team(of: running), team(of: source) != mine {
-            throw Failure(description: L[.update_err_not_signed])
+            throw Failure(description: L[.update_err_not_signed], step: "checking the team")
         }
 
         // Beside the old one, on its volume, so that the swap is one step: the
@@ -277,7 +293,9 @@ enum Installer {
             }
         }
         guard swapped == 0 else {
-            throw Failure(description: String(cString: strerror(errno)))
+            let code = errno
+            throw Failure(
+                description: String(cString: strerror(code)), step: "swapping the app (errno \(code))")
         }
         return .replaced
     }
@@ -356,9 +374,11 @@ enum Relocation {
             }
             do {
                 let moved = try moveToApplications()
+                Core.log("info", "moved to Applications; it opens from there")
                 Installer.relaunch(moved, updated: false, ejecting: diskImageVolume)
                 NSApp.terminate(nil)
             } catch {
+                Core.log("warn", "moving to Applications failed: \(Installer.step(of: error))")
                 showAlert(L.f(.move_failed, ["error": error.localizedDescription]), on: window)
             }
         }

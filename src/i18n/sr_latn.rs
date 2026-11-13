@@ -21,6 +21,7 @@ pub const SR_LATN: Strings = Strings {
     menu_exit: "I&zlaz",
     menu_view_help: "&Prikaži pomoć\tF1",
     menu_how: "&Kako funkcioniše",
+    menu_show_log: "Prikaži &evidenciju",
     menu_about: "&O programu",
     menu_license: "&Licenca",
     menu_donate: "&Doniraj",
@@ -393,8 +394,8 @@ pub const SR_LATN: Strings = Strings {
     network_problem: "Problem sa mrežom: {error} (ponovni pokušaj…)",
     receiving_balloon_title: "Primanje",
     receiving_balloon: "{name} vam šalje „{item}“.",
-    panic_message: "Došlo je do neočekivane greške i program mora da se zatvori.\n\n{info}",
-    panic_message_goes_on: "Došlo je do neočekivane greške. Dodavo nastavlja sa radom, ali ono što je u tom trenutku radio možda nije uspelo.\n\n{info}",
+    panic_message: "Došlo je do neočekivane greške i program mora da se zatvori.\n\nŠta se dogodilo, zapisano je u evidenciji programa Dodavo. Kada Dodavo ponovo bude pokrenut, izaberite Pomoć > Prikaži evidenciju i pošaljite tu datoteku autorima programa.\n\n{info}",
+    panic_message_goes_on: "Došlo je do neočekivane greške. Dodavo nastavlja sa radom, ali ono što je u tom trenutku radio možda nije uspelo.\n\nŠta se dogodilo, zapisano je u evidenciji programa Dodavo: izaberite Pomoć > Prikaži evidenciju i pošaljite tu datoteku autorima programa.\n\n{info}",
     identity_failed: "Vaš identitet nije moguće pročitati ni kreirati u fascikli {path}:\n{error}",
     identity_damaged: "Datoteka secret.key je oštećena: sadrži {size} umesto 32 bajta. \
         Vratite je iz rezervne kopije ili je izbrišite da biste dobili novi ID kontakta.",

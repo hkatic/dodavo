@@ -23,6 +23,8 @@ data class Started(
     val website: String = "",
     /** Each language by its code, with its own name for it. */
     val languages: List<List<String>> = emptyList(),
+    /** Where Dodavo's log is; empty where there is none. */
+    @SerialName("log_path") val logPath: String = "",
 )
 
 /** What the user is told about a transfer. */

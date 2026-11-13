@@ -200,6 +200,7 @@ mod tests {
                 s.menu_help,
                 s.menu_view_help,
                 s.menu_how,
+                s.menu_show_log,
                 s.menu_about,
                 s.menu_license,
                 s.menu_donate,

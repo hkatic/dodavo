@@ -174,6 +174,11 @@
 <p><strong>Prijenosi između uređaja u istoj mreži su spori.</strong> Na Androidu 17 i novijem Dodavo možda ne smije koristiti lokalnu mrežu: dopustite Uređaji u blizini u Androidovim postavkama aplikacije Dodavo, pod Dopuštenja.</p>
 <p><strong>Nema obavijesti.</strong> Uključite ih pomoću stavke Obavijesti u postavkama Dodava.</p>
 <p><strong>Slanje kaže: Dodavo ne može pročitati ovu stavku.</strong> Dodavo možda više ne smije čitati ono što ste odabrali, na primjer zato što se aplikacija koja je to dijelila zatvorila. Ponovno to odaberite ili dijelite.</p>
+<p><strong>Nešto je drugo pošlo po zlu.</strong> Pošaljite zapisnik aplikacije Dodavo njezinim autorima: pogledajte <a href="#log-file">Slanje zapisnika autorima aplikacije</a>.</p>
+<h3 id="log-file">Slanje zapisnika autorima aplikacije</h3>
+<p>Dodavo vodi zapisnik o onome što radi: svoju verziju i verziju Androida, proizvođača i model uređaja, kada se pokreće, kako teče svaki prijenos te pogreške na koje nailazi na mreži i u pohrani. Kada nešto pođe po zlu, a ova pomoć to ne objašnjava, ili kada Dodavo javi neočekivanu pogrešku, zapisnik pomaže autorima aplikacije da otkriju uzrok i otklone ga.</p>
+<p>Zapisnik ne sadrži nazive datoteka ni mapa, putanje, imena osoba ni naziv vašeg uređaja, ID-ove kontakata ni IP adrese. Druga osoba u prijenosu navodi se pod nazivom kao što je <code>peer#4c1e9a</code>, koji se mijenja pri svakom pokretanju Dodava. Prijenos se navodi brojem i kratkim nasumičnim kodom koji zapisuju oba uređaja, tako da se dva zapisnika mogu usporediti. Vremena su navedena u koordiniranom svjetskom vremenu (UTC). Zapisnik ostaje na vašem uređaju, nije uključen u sigurnosne kopije i ne šalje se nikamo osim ako ga sami ne pošaljete. Nikada ne naraste mnogo iznad 2 MB: tada se uklanja njegova starija polovica.</p>
+<p>Da biste ga poslali, otvorite Više opcija &gt; O aplikaciji Dodavo i dodirnite Podijeli zapisnik. Android nudi aplikacije kojima možete poslati datoteku <code>Dodavo.log</code>: odaberite aplikaciju za e-poštu ili neku drugu i dodajte nekoliko riječi o tome što se dogodilo i kada. Problem možete prijaviti i na <a href="https://github.com/hkatic/dodavo/issues">stranici aplikacije Dodavo na GitHubu</a> i ondje priložiti datoteku.</p>
 </section>
 
 <section aria-labelledby="license">

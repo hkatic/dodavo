@@ -145,6 +145,35 @@ pub enum Msg {
     Resumed,
 }
 
+impl Msg {
+    /// The message's name without what it carries, for the log (see
+    /// `logging`): an `Offer` holds names, a `Result` the peer's own text.
+    pub fn kind_name(&self) -> &'static str {
+        match self {
+            Msg::Offer(_) => "Offer",
+            Msg::Continue { .. } => "Continue",
+            Msg::Data { .. } => "Data",
+            Msg::Done { .. } => "Done",
+            Msg::Alive => "Alive",
+            Msg::Accept => "Accept",
+            Msg::Decline => "Decline",
+            Msg::ContinueFrom { .. } => "ContinueFrom",
+            Msg::Query { .. } => "Query",
+            Msg::Verified { .. } => "Verified",
+            Msg::Result { ok: true, .. } => "Result(ok)",
+            Msg::Result { ok: false, .. } => "Result(failed)",
+            Msg::PartInUse { .. } => "PartInUse",
+            Msg::Gone { ended } => match ended {
+                Ended::Completed => "Gone(completed)",
+                Ended::Cancelled => "Gone(cancelled)",
+                Ended::Failed => "Gone(failed)",
+            },
+            Msg::Paused => "Paused",
+            Msg::Resumed => "Resumed",
+        }
+    }
+}
+
 /// What the two sides of a chat connection say to each other
 /// (`CHAT_ALPN`), on its one bidirectional stream, framed as [`Msg`] is:
 ///
@@ -174,6 +203,20 @@ pub enum ChatMsg {
     Received { id: u64 },
     /// The user on this side is writing a message, or has stopped.
     Typing { on: bool },
+}
+
+impl ChatMsg {
+    /// The message's name without its names and text, for the log.
+    pub fn kind_name(&self) -> &'static str {
+        match self {
+            ChatMsg::Hello { .. } => "Hello",
+            ChatMsg::Welcome { .. } => "Welcome",
+            ChatMsg::Refused => "Refused",
+            ChatMsg::Text { .. } => "Text",
+            ChatMsg::Received { .. } => "Received",
+            ChatMsg::Typing { .. } => "Typing",
+        }
+    }
 }
 
 /// The longest text of a chat message, in bytes.

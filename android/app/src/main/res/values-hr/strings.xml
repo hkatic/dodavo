@@ -107,6 +107,7 @@
     <string name="website">"Web-mjesto"</string>
     <string name="privacy_policy">"Pravila o privatnosti"</string>
     <string name="licenses">"Licence"</string>
+    <string name="share_log">"Podijeli zapisnik"</string>
     <string name="license_dodavo">"Dodavo (GNU General Public License, verzija 3)"</string>
     <string name="license_components">"Komponente drugih autora"</string>
     <string name="help_title">"Pomoć"</string>

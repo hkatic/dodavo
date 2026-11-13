@@ -18,6 +18,7 @@ pub const EN: Strings = Strings {
     menu_exit: "E&xit",
     menu_view_help: "&View Help\tF1",
     menu_how: "&How It Works",
+    menu_show_log: "Show Lo&g File",
     menu_about: "&About",
     menu_license: "&License",
     menu_donate: "&Donate",
@@ -391,8 +392,8 @@ pub const EN: Strings = Strings {
     network_problem: "Network problem: {error} (retrying…)",
     receiving_balloon_title: "Receiving",
     receiving_balloon: "{name} is sending you “{item}”.",
-    panic_message: "An unexpected error occurred and the program has to close.\n\n{info}",
-    panic_message_goes_on: "An unexpected error occurred. Dodavo goes on running, but what it was doing at that moment may have failed.\n\n{info}",
+    panic_message: "An unexpected error occurred and the program has to close.\n\nWhat happened is in Dodavo's log. Once Dodavo is running again, choose Help > Show Log File and send that file to the developers.\n\n{info}",
+    panic_message_goes_on: "An unexpected error occurred. Dodavo goes on running, but what it was doing at that moment may have failed.\n\nWhat happened is in Dodavo's log: choose Help > Show Log File and send that file to the developers.\n\n{info}",
     identity_failed: "Your identity could not be read or created in {path}:\n{error}",
     identity_damaged: "The file secret.key is damaged: it contains {size} instead of 32 bytes. \
         Restore it from a backup, or delete it to get a new Contact ID.",

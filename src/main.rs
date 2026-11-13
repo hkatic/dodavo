@@ -11,8 +11,8 @@ mod ui;
 #[cfg(windows)]
 // The Win32 user interface reaches the library through `crate::net` and so on.
 pub(crate) use dodavo_core::{
-    archive, chat, config, format, i18n, identity, limit, net, platform, sound, space, update,
-    view,
+    archive, chat, config, format, i18n, identity, limit, logging, net, platform, sound, space,
+    update, view,
 };
 
 #[cfg(windows)]
@@ -301,6 +301,8 @@ fn show_running_instance(title: &str) {
 #[cfg(windows)]
 fn main() {
     std::panic::set_hook(Box::new(|info| {
+        // First, and on the disk before the program may end.
+        logging::panic(info);
         // One message at a time: several tasks may fail the same way at once.
         static SHOWING: AtomicBool = AtomicBool::new(false);
         match std::thread::current().name() {
@@ -369,6 +371,31 @@ fn main() {
         }
     }
     hold_running_mutex();
+    // The log is this instance's from here on: a second start that hands its
+    // items over never gets here, so only one process writes it.
+    let data_dir = config::data_dir(profile);
+    logging::init(
+        &data_dir,
+        "Windows",
+        &[
+            format!(
+                "profile: {}; installed: {:?}",
+                if profile.is_some() {
+                    "named"
+                } else {
+                    "default"
+                },
+                update::install_mode()
+            ),
+            format!(
+                "start: minimized {}, after an update {}, restarted {}, {} items to send",
+                args.minimized,
+                args.updated,
+                args.restarted,
+                send.len()
+            ),
+        ],
+    );
     unsafe {
         CoInitializeEx(
             std::ptr::null(),
@@ -382,7 +409,6 @@ fn main() {
     unsafe { InitCommonControlsEx(&icc) };
     ui::theme::init();
 
-    let data_dir = config::data_dir(profile);
     // The language comes from the settings, so the message about an unusable
     // settings file has to wait until the language is chosen.
     let (mut cfg, cfg_error) = match config::Config::load(&data_dir) {
@@ -395,6 +421,12 @@ fn main() {
         let _ = cfg.save(&data_dir);
     }
     i18n::init(cfg.language.as_deref());
+    dodavo_core::log_info!(
+        "language {}; dark theme {}; {}",
+        i18n::lang().code(),
+        ui::theme::is_dark(),
+        cfg.log_summary()
+    );
     if let Some(e) = cfg_error {
         let mut text = tr!(settings_unreadable, path = e.path.display(), error = e.error);
         if let Some(backup) = &e.backup {
@@ -406,10 +438,15 @@ fn main() {
     let secret = match identity::load_or_create(&data_dir) {
         Ok(key) => key,
         Err(e) => {
+            dodavo_core::log_error!(
+                "no identity, so Dodavo cannot start: {}",
+                logging::cause(&e)
+            );
             ui::error(
                 std::ptr::null_mut(),
                 &tr!(identity_failed, path = data_dir.display(), error = e),
             );
+            logging::flush(std::time::Duration::from_secs(1));
             return;
         }
     };
@@ -479,6 +516,8 @@ fn main() {
     // Tell peers that running transfers end, then leave: exiting the process
     // also stops the network thread.
     app::with(|a| a.net.shutdown(std::time::Duration::from_secs(3)));
+    dodavo_core::log_info!("exit");
+    logging::flush(std::time::Duration::from_secs(1));
     std::process::exit(0);
 }
 

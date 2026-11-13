@@ -26,18 +26,24 @@ pub fn load_or_create(dir: &Path) -> anyhow::Result<SecretKey> {
     let _ = std::fs::remove_file(dir.join(NEW_KEY_FILE));
     match std::fs::read(&path) {
         Ok(bytes) => {
+            let size = bytes.len();
             let bytes = <[u8; 32]>::try_from(bytes.as_slice()).map_err(|_| {
-                anyhow!(tr!(identity_damaged, size = trn!(bytes, bytes.len() as u64)))
+                crate::log_error!("the identity's key file has {size} bytes, not 32");
+                anyhow!(tr!(identity_damaged, size = trn!(bytes, size as u64)))
             })?;
             Ok(SecretKey::from_bytes(&bytes))
         }
         Err(e) if e.kind() == ErrorKind::NotFound => {
+            crate::log_info!("no identity yet: a new one is made");
             let key = SecretKey::generate();
             std::fs::create_dir_all(dir)?;
             write_new_secret(&path, &key.to_bytes())?;
             Ok(key)
         }
-        Err(e) => Err(e).with_context(|| tr!(error_cannot_read, path = path.display())),
+        Err(e) => {
+            crate::log_error!("the identity cannot be read: {}", crate::logging::io(&e));
+            Err(e).with_context(|| tr!(error_cannot_read, path = path.display()))
+        }
     }
 }
 

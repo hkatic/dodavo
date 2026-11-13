@@ -369,8 +369,12 @@ impl Config {
         let path = dir.join("config.json");
         let bytes = match std::fs::read(&path) {
             Ok(bytes) => bytes,
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Config::default()),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                crate::log_info!("no settings file: the defaults");
+                return Ok(Config::default());
+            }
             Err(e) => {
+                crate::log_error!("the settings cannot be read: {}", crate::logging::io(&e));
                 return Err(LoadError {
                     path,
                     error: e.to_string(),
@@ -380,13 +384,25 @@ impl Config {
         };
         match serde_json::from_slice::<Config>(&bytes) {
             Ok(mut cfg) => {
+                let version = cfg.settings_version;
                 cfg.upgrade();
+                if version != cfg.settings_version {
+                    crate::log_info!(
+                        "settings of version {version} upgraded to {}",
+                        cfg.settings_version
+                    );
+                }
                 Ok(cfg)
             }
             Err(e) => {
                 // Under a free name, never over an earlier one.
                 let backup =
                     crate::archive::move_to_unique(&path, dir, "config.json.bad", false).ok();
+                crate::log_error!(
+                    "the settings cannot be used: {}; set aside: {}",
+                    crate::logging::json(&e),
+                    backup.is_some()
+                );
                 Err(LoadError {
                     path,
                     error: e.to_string(),
@@ -394,6 +410,65 @@ impl Config {
                 })
             }
         }
+    }
+
+    /// The settings for the log (see `logging`): what is on or off, and how
+    /// many recipients and blocked senders there are. Never a name, an ID, a
+    /// folder or a file.
+    pub fn log_summary(&self) -> String {
+        let save_to = match (self.always_save, &self.always_save_dir) {
+            (false, _) => "ask",
+            (true, None) => "Downloads",
+            (true, Some(_)) => "a chosen folder",
+        };
+        let limits = self
+            .contacts
+            .iter()
+            .filter(|c| c.limit != ContactLimit::General)
+            .count();
+        format!(
+            "settings: version {}, {} recipients ({limits} with a limit of their own), {} blocked; \
+             auto-accept {}, save to {save_to}, folders {:?}, limit {} ({:?}), connection lost {:?}, \
+             closing a running transfer {:?}, close when ended {}, chat from {:?}, send typing {}, \
+             sounds {} ({} changed), check updates {}, Explorer menu {}, start with Windows {}, \
+             minimize to tray {}, start minimized {}, temporary folder {}{}, warn of FAT32 {}, \
+             language {}",
+            self.settings_version,
+            self.contacts.len(),
+            self.blocked.len(),
+            self.auto_accept,
+            self.received_folder,
+            if self.limit_size { "on" } else { "off" },
+            self.over_limit,
+            self.connection_lost,
+            self.close_running_transfer,
+            self.close_when_ended,
+            self.chat_from,
+            self.send_typing,
+            if self.sounds.on { "on" } else { "off" },
+            self.sounds.events.len(),
+            self.check_updates,
+            self.explorer_menu,
+            self.start_with_windows,
+            self.minimize_to_tray,
+            self.start_minimized,
+            if self.temp_dir.is_some() {
+                "chosen"
+            } else {
+                "the system's"
+            },
+            if self.temp_dirs_before.is_empty() {
+                String::new()
+            } else {
+                format!(" ({} earlier ones)", self.temp_dirs_before.len())
+            },
+            self.warn_fat_temp,
+            if self.language.is_some() {
+                "chosen"
+            } else {
+                "following the system"
+            },
+        )
     }
 
     /// Gives settings of an earlier version what they mean now. Every field
@@ -658,6 +733,28 @@ pub fn read_language(dir: &Path) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// What the log says of the settings counts and names kinds only.
+    #[test]
+    fn the_summary_of_the_settings_names_nothing() {
+        let mut cfg = Config {
+            my_name: "Ana Kovač".into(),
+            always_save_dir: Some(r"C:\Users\ana\Received".into()),
+            temp_dir: Some(r"D:\Temp of Ana".into()),
+            ..Config::default()
+        };
+        cfg.contacts.push(Contact::new("Marko", "ab".repeat(32)));
+        cfg.blocked.push(Contact::new("Spam", "cd".repeat(32)));
+        let summary = cfg.log_summary();
+        for secret in [
+            "Ana", "Marko", "Spam", "abab", "cdcd", "Users", "Received", "Temp of",
+        ] {
+            assert!(!summary.contains(secret), "{secret}: {summary}");
+        }
+        assert!(summary.contains("1 recipients"), "{summary}");
+        assert!(summary.contains("1 blocked"), "{summary}");
+        assert!(summary.contains("save to a chosen folder"), "{summary}");
+    }
 
     #[test]
     fn reading_the_language_leaves_a_damaged_file_alone() {

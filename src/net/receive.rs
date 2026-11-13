@@ -124,11 +124,12 @@ impl std::error::Error for Reported {}
 /// cancelled if the step stopped because the user cancelled, which it says
 /// with [`Cancelled`]. Any other error is a failure, also one after a cancel
 /// that came too late.
-fn failed_or_cancelled(error: anyhow::Error) -> Outcome {
+fn failed_or_cancelled(id: u64, error: anyhow::Error) -> Outcome {
     if archive::is_cancelled(&error) {
+        crate::log_info!("#{id} the last step stopped for the cancel");
         Outcome::Cancelled
     } else {
-        Outcome::Failed(super::failure_text(&error))
+        Outcome::Failed(super::failed_text(id, "the last step", &error))
     }
 }
 
@@ -326,12 +327,23 @@ pub(super) async fn handle(
 
     // Wait for the user's decision (or for the sender to give up).
     let decision = tokio::select! {
-        answer = rx => answer.ok().flatten(),
-        _ = conn.closed() => {
+        // `None` is the user's decline, which the log has as a command.
+        answer = rx => answer.unwrap_or_else(|_| {
+            crate::log_info!("#{id} the offer lost its answer (the network ends it)");
+            None
+        }),
+        e = conn.closed() => {
+            crate::log_info!(
+                "#{id} the sender stopped waiting for the answer: {}",
+                crate::logging::connection_error(&e)
+            );
             shared.finish(id, Outcome::CancelledByPeer);
             return;
         }
-        _ = ctl.cancel.cancelled() => None,
+        _ = ctl.cancel.cancelled() => {
+            crate::log_info!("#{id} the offer was cancelled before an answer");
+            None
+        }
     };
     let Some(Accept {
         dir: dest_dir,
@@ -416,10 +428,22 @@ fn check_restored(record: TransferRecord, data_dir: &Path) -> Result<Checked, Ou
     // Data beyond the last flush may never have reached the disk.
     let cut = match record.truncate_to_synced() {
         Ok(()) => false,
-        Err(e) if archive::is_busy(&e) => true,
+        Err(e) if archive::is_busy(&e) => {
+            crate::log_info!(
+                "token={} the part is in use; the next connection cuts it back",
+                crate::logging::token(&record.token)
+            );
+            true
+        }
         Err(e) => {
+            let error = anyhow::Error::from(e);
+            crate::log_warn!(
+                "token={} the part could not be cut back: {}",
+                crate::logging::token(&record.token),
+                crate::logging::cause(&error)
+            );
             record.discard(data_dir);
-            return Err(Outcome::Failed(super::failure_text(&e.into())));
+            return Err(Outcome::Failed(super::failure_text(&error)));
         }
     };
     let placed = record.placed_item().map(Path::to_path_buf);
@@ -536,6 +560,13 @@ async fn accept(
             first.clone(),
         );
         tokio::task::spawn_blocking(move || {
+            crate::log_info!(
+                "#{id} receiving onto the file system {}",
+                dir.ancestors()
+                    .find(|d| d.is_dir())
+                    .and_then(archive::file_system)
+                    .unwrap_or_else(|| "unknown".into())
+            );
             let temp_dir = shared.temp_dir_now();
             new_receive(
                 &dir, &temp_dir, &data_dir, &name, offer, from, folder, &paused, &first,
@@ -563,7 +594,7 @@ async fn accept(
         }
         Err(e) => {
             conn.close(CLOSE_FAILED.into(), b"failed");
-            return Outcome::Failed(super::failure_text(&e));
+            return Outcome::Failed(super::failed_text(id, "making the part", &e));
         }
     };
     let (session, session_rx) = Session::new(id, record.token, from, Role::Receive);
@@ -981,6 +1012,7 @@ impl<'a> Receiver<'a> {
             .await
             .is_err()
         {
+            crate::log_warn!("#{} the accept could not be sent", self.id);
             // The sender never learnt that we accepted, so it will not come back.
             self.end(None, Ended::Failed).await;
             return Outcome::Failed(tr!(error_connection_lost).into());
@@ -1062,8 +1094,21 @@ impl<'a> Receiver<'a> {
     async fn take_new(&mut self, mut s: Streams) -> Option<Streams> {
         let answer = Msg::ContinueFrom { have: self.have };
         match protocol::write_msg(&mut s.send, &answer).await {
-            Ok(()) => Some(s),
-            Err(_) => {
+            Ok(()) => {
+                crate::log_info!(
+                    "#{} goes on from byte {} of {}",
+                    self.id,
+                    self.have,
+                    self.size
+                );
+                Some(s)
+            }
+            Err(e) => {
+                crate::log_info!(
+                    "#{} the answer to Continue could not be sent: {}",
+                    self.id,
+                    crate::logging::cause(&e)
+                );
                 s.conn.close(CLOSE_SUSPENDED.into(), b"retry");
                 None
             }
@@ -1101,6 +1146,10 @@ impl<'a> Receiver<'a> {
                 answer = query_answer(&mut query), if asking => {
                     query = None;
                     if let Some(ended) = answer {
+                        crate::log_info!(
+                            "#{} the sender no longer has the transfer ({ended:?})",
+                            self.id
+                        );
                         if ended == Ended::Completed
                             && let Some(hash) = self.done_hash
                             && self.have == self.size
@@ -1138,18 +1187,23 @@ impl<'a> Receiver<'a> {
     async fn complete_alone(&mut self, expected: [u8; 32]) -> Outcome {
         let _turn_away = self.turn_away_new_connections();
         self.hasher = None;
+        crate::log_info!("#{} finishes without the sender", self.id);
         if let Err(e) = self.rehash().await {
             self.end(None, Ended::Failed).await;
-            return Outcome::Failed(super::failure_text(&e));
+            return Outcome::Failed(super::failed_text(self.id, "checking the data again", &e));
         }
         if *self.hasher.as_ref().unwrap().finalize().as_bytes() != expected {
+            crate::log_warn!(
+                "#{} the data on the disk does not match the sender's",
+                self.id
+            );
             self.end(None, Ended::Failed).await;
             return Outcome::Failed(tr!(error_damaged).into());
         }
         match self.finalize(None).await {
             Ok(path) => Outcome::Completed(Some(path)),
             Err(e) => {
-                let outcome = failed_or_cancelled(e);
+                let outcome = failed_or_cancelled(self.id, e);
                 self.end(None, outcome.ended()).await;
                 outcome
             }
@@ -1186,6 +1240,16 @@ impl<'a> Receiver<'a> {
             }
             Err(e) if e.is::<Lost>() => {
                 writer.abort();
+                crate::log_info!(
+                    "#{} the connection ended ({:?}): {}; the connection says {}",
+                    self.id,
+                    peer_close(&conn),
+                    crate::logging::cause(&e),
+                    conn.close_reason().map_or_else(
+                        || "nothing".into(),
+                        |r| crate::logging::connection_error(&r)
+                    )
+                );
                 match peer_close(&conn) {
                     PeerClose::Cancelled => {
                         self.end(None, Ended::Cancelled).await;
@@ -1211,11 +1275,12 @@ impl<'a> Receiver<'a> {
                 let _ = tokio::time::timeout(Duration::from_secs(10), writer).await;
                 let _ = tokio::time::timeout(Duration::from_secs(5), conn.closed()).await;
                 self.end(None, Ended::Failed).await;
+                crate::log_warn!("#{} failed, and the sender was told why", self.id);
                 Err(End::Final(Outcome::Failed(super::failure_text(&e))))
             }
             Err(e) => {
                 writer.abort();
-                let outcome = failed_or_cancelled(e);
+                let outcome = failed_or_cancelled(self.id, e);
                 let code = match outcome {
                     Outcome::Cancelled => CLOSE_CANCELLED,
                     _ => CLOSE_FAILED,
@@ -1388,12 +1453,14 @@ impl<'a> Receiver<'a> {
         }
 
         if hash != *self.hasher.as_ref().unwrap().finalize().as_bytes() {
+            crate::log_warn!("#{} the data does not match the sender's hash", self.id);
             let _ = msgs.send(Msg::Result {
                 ok: false,
                 message: tr!(error_checksum).into(),
             });
             return Err(Reported(tr!(error_damaged).into()).into());
         }
+        crate::log_info!("#{} all data arrived intact", self.id);
         // From here on this side can finish on its own, even after a restart.
         self.done_hash = Some(hash);
         self.session
@@ -1479,11 +1546,26 @@ impl<'a> Receiver<'a> {
                 Msg::Paused => self.status.change(|held| held.peer_paused = true),
                 Msg::Resumed => self.status.change(|held| held.peer_paused = false),
                 Msg::Done { hash } => {
+                    if self.have != self.size {
+                        crate::log_warn!(
+                            "#{} Done after {} of {} bytes",
+                            self.id,
+                            self.have,
+                            self.size
+                        );
+                    }
                     anyhow::ensure!(self.have == self.size, tr!(error_protocol_end));
                     self.status.hold();
                     return Ok(hash);
                 }
-                other => bail!(tr!(error_unexpected_answer, answer = format!("{other:?}"))),
+                other => {
+                    crate::log_warn!(
+                        "#{} the sender sent {} among the data",
+                        self.id,
+                        other.kind_name()
+                    );
+                    bail!(tr!(error_unexpected_answer, answer = format!("{other:?}")))
+                }
             }
         }
     }

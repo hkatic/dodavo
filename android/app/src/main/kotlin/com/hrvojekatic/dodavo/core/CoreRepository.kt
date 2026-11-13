@@ -311,6 +311,15 @@ class CoreRepository(
 
     suspend fun networkChanged() { call(Call.NetworkChanged) }
 
+    /** Writes a line of the app's own into Dodavo's log (see [Call.Log]). */
+    suspend fun log(level: String, message: String) { call(Call.Log(level, message)) }
+
+    /** The path of Dodavo's log once it has all lines before; empty where there is none. */
+    suspend fun flushLog(): String {
+        val reply = coreJson.decodeFromString(JsonObject.serializer(), call(Call.FlushLog))
+        return reply["path"]?.jsonPrimitive?.content.orEmpty()
+    }
+
     private var language: String? = null
 
     /** The core speaks [code] from now on, if it did not already. */

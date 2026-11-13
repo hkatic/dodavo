@@ -21,6 +21,7 @@ pub const SL: Strings = Strings {
     menu_exit: "I&zhod",
     menu_view_help: "Ogled &pomoči\tF1",
     menu_how: "&Kako deluje",
+    menu_show_log: "O&gled dnevnika",
     menu_about: "&O programu",
     menu_license: "&Licenca",
     menu_donate: "&Doniraj",
@@ -394,8 +395,8 @@ pub const SL: Strings = Strings {
     network_problem: "Težava z omrežjem: {error} (vnovični poskus…)",
     receiving_balloon_title: "Prejemanje",
     receiving_balloon: "{name} vam pošilja »{item}«.",
-    panic_message: "Prišlo je do nepričakovane napake in program se mora zapreti.\n\n{info}",
-    panic_message_goes_on: "Prišlo je do nepričakovane napake. Dodavo deluje naprej, vendar to, kar je v tistem trenutku počel, morda ni uspelo.\n\n{info}",
+    panic_message: "Prišlo je do nepričakovane napake in program se mora zapreti.\n\nKaj se je zgodilo, je zapisano v dnevniku programa Dodavo. Ko bo Dodavo spet zagnan, izberite Pomoč > Ogled dnevnika in to datoteko pošljite avtorjem programa.\n\n{info}",
+    panic_message_goes_on: "Prišlo je do nepričakovane napake. Dodavo deluje naprej, vendar to, kar je v tistem trenutku počel, morda ni uspelo.\n\nKaj se je zgodilo, je zapisano v dnevniku programa Dodavo: izberite Pomoč > Ogled dnevnika in to datoteko pošljite avtorjem programa.\n\n{info}",
     identity_failed: "Vaše identitete ni bilo mogoče prebrati ali ustvariti v mapi {path}:\n{error}",
     identity_damaged: "Datoteka secret.key je poškodovana: njena velikost je {size} namesto 32 bajtov. \
         Obnovite jo iz varnostne kopije ali jo izbrišite, da dobite nov ID stika.",

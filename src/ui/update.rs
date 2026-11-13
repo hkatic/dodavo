@@ -137,6 +137,7 @@ pub fn open(info: UpdateInfo, trigger: Trigger) -> HWND {
 pub fn on_start(updated: bool) {
     let main = app::main_window();
     if updated {
+        dodavo_core::log_info!("started by Setup after an update");
         update::remove_pending();
         tray::balloon(
             main,
@@ -147,6 +148,7 @@ pub fn on_start(updated: bool) {
     } else if let Some(version) = update::read_pending() {
         update::remove_pending();
         if Version::parse(&version).is_some_and(|v| v > Version::current()) {
+            dodavo_core::log_warn!("the update to {version} was not installed");
             info(main, &tr!(update_not_installed, version = version));
         }
     }
@@ -471,6 +473,7 @@ impl UpdateWindow {
         update::close_handle(process);
         update::remove_pending();
         self.snooze_on_close = true;
+        dodavo_core::log_warn!("Setup ended with {code} before it asked Dodavo to exit");
         self.fail(w, Error::SetupExit(code));
     }
 }

@@ -1,5 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- What other apps may open or get shared: what Dodavo received. -->
+<!-- What other apps may open or get shared: what Dodavo received, and the copy
+     of the log that the user shares (About, Share log), which is in a folder of
+     its own so that nothing else of Dodavo's data can be named. -->
 <paths>
     <external-path name="received" path="Download/Dodavo/" />
+    <cache-path name="log" path="log/" />
 </paths>

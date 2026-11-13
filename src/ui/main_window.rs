@@ -53,6 +53,7 @@ const ID_DONATE: u16 = 117;
 const ID_BLOCK: u16 = 118;
 const ID_CHANGE_ID: u16 = 119;
 const ID_CHAT: u16 = 120;
+const ID_SHOW_LOG: u16 = 121;
 const ID_LIST: u16 = 200;
 /// The first automatic update check, shortly after the start.
 const TIMER_UPDATE_START: usize = 1;
@@ -149,6 +150,7 @@ fn build_menu() -> (HMENU, HMENU) {
     let help = unsafe { CreatePopupMenu() };
     menu::item(help, ID_VIEW_HELP, tr!(menu_view_help));
     menu::item(help, ID_HELP, tr!(menu_how));
+    menu::item(help, ID_SHOW_LOG, tr!(menu_show_log));
     menu::separator(help);
     menu::item(help, ID_LICENSE, tr!(menu_license));
     menu::item(help, ID_DONATE, tr!(menu_donate));
@@ -782,6 +784,7 @@ impl MainWindow {
             ID_TRAY_OPEN => window::bring_to_front(w.hwnd),
             ID_VIEW_HELP => super::help::show(w.hwnd),
             ID_HELP => info(w.hwnd, tr!(help_text)),
+            ID_SHOW_LOG => show_log(),
             ID_CHECK_UPDATES => super::update::check_now(),
             ID_LICENSE => super::license::show(w.hwnd),
             ID_DONATE => super::about::open_link(w.hwnd, DONATE_URL),
@@ -952,7 +955,29 @@ pub fn confirm_exit(owner: HWND) -> Option<bool> {
     }
 }
 
+/// Help → Show Log File: File Explorer with the log selected, so that the
+/// user can attach it to a message, once all lines before are in it; the
+/// data folder where there is no log yet.
+fn show_log() {
+    crate::logging::flush(std::time::Duration::from_millis(200));
+    let data_dir = app::with(|a| a.data_dir.clone());
+    let path = crate::logging::path().unwrap_or_else(|| data_dir.join(crate::logging::FILE_NAME));
+    if path.is_file() {
+        super::shell::reveal_in_explorer(&path);
+    } else {
+        super::shell::open_path(&data_dir);
+    }
+}
+
 fn exit(main: HWND, cancel_transfers: bool) {
+    dodavo_core::log_info!(
+        "exiting; running transfers are {}",
+        if cancel_transfers {
+            "cancelled"
+        } else {
+            "suspended"
+        }
+    );
     if cancel_transfers {
         app::cancel_all_transfers();
     }
@@ -1012,8 +1037,14 @@ pub fn confirm_restart(owner: HWND) -> bool {
 fn restart(w: &Window) {
     let profile = app::with(|a| a.profile.clone());
     match crate::start_again(profile.as_deref()) {
-        Ok(()) => exit(w.hwnd, false),
-        Err(e) => error(w.hwnd, &tr!(restart_failed, error = net::io_error_text(&e))),
+        Ok(()) => {
+            dodavo_core::log_info!("restarting for the new language");
+            exit(w.hwnd, false)
+        }
+        Err(e) => {
+            dodavo_core::log_error!("the restart failed: {}", crate::logging::io(&e));
+            error(w.hwnd, &tr!(restart_failed, error = net::io_error_text(&e)))
+        }
     }
 }
 
@@ -1245,6 +1276,14 @@ fn urgent_message(w: &Window, msg: u32, wp: WPARAM, lp: LPARAM) -> Option<LRESUL
         // comes from a Setup or an uninstaller the user started: nobody chose
         // anything then, so all transfers are suspended.
         m if m == MSG_EXIT_FOR_UPDATE.get() && m != 0 => {
+            dodavo_core::log_info!(
+                "Setup asks Dodavo to exit ({})",
+                if wp == 0 {
+                    "an update"
+                } else {
+                    "an install or uninstall"
+                }
+            );
             // The mutexes go first, so that Setup never sees them.
             crate::release_instance_mutexes();
             exit(w.hwnd, wp == 0 && app::with(|a| a.update_cancel_transfers));
@@ -1255,10 +1294,12 @@ fn urgent_message(w: &Window, msg: u32, wp: WPARAM, lp: LPARAM) -> Option<LRESUL
         WM_QUERYENDSESSION => Some(1),
         WM_ENDSESSION => {
             if wp != 0 {
+                dodavo_core::log_info!("Windows ends the session");
                 // Tell the peers the transfers are suspended, not lost, while
                 // the process is still allowed to run.
                 tray::remove(w.hwnd);
                 app::with(|a| a.net.shutdown(std::time::Duration::from_secs(2)));
+                crate::logging::flush(std::time::Duration::from_millis(500));
             }
             Some(0)
         }
@@ -1302,7 +1343,8 @@ mod tests {
         }
     }
 
-    /// Donate comes right after License, Check for Updates right before About.
+    /// Show Log File comes with the help, Donate right after License, Check
+    /// for Updates right before About.
     #[test]
     fn help_menu_order() {
         let (bar, _) = build_menu();
@@ -1317,6 +1359,7 @@ mod tests {
             [
                 ID_VIEW_HELP,
                 ID_HELP,
+                ID_SHOW_LOG,
                 separator,
                 ID_LICENSE,
                 ID_DONATE,

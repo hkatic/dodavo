@@ -170,7 +170,28 @@ impl Error {
     /// the system's words, as a failed transfer has them (see
     /// `net::io_error_text`).
     pub fn io(error: &std::io::Error) -> Error {
+        crate::log_warn!("update file: {}", crate::logging::io(error));
         Error::Io(crate::net::io_error_text(error))
+    }
+
+    /// The error for the log (see `logging`): what kind, with its codes and
+    /// numbers, never a path or a text.
+    pub fn kind_name(&self) -> String {
+        match self {
+            Error::Network => "network".into(),
+            Error::Timeout => "timeout".into(),
+            Error::Http(status) => format!("HTTP {status}"),
+            Error::TooLarge => "too large".into(),
+            Error::Manifest(_) => "manifest not valid".into(),
+            Error::Signature => "signature not valid".into(),
+            Error::Size => "size differs".into(),
+            Error::Checksum => "checksum differs".into(),
+            Error::Io(_) => "file error".into(),
+            Error::DiskSpace { needed, free } => format!("disk space: needs {needed}, has {free}"),
+            Error::Cancelled => "cancelled".into(),
+            Error::Launch(_) => "Setup could not be started".into(),
+            Error::SetupExit(code) => format!("Setup ended with {code}"),
+        }
     }
 
     /// The error as a sentence for the user.
@@ -277,6 +298,7 @@ where
 /// Looks for a newer version; `lang` picks the release notes.
 pub fn spawn_check(job: Job, lang: String, sink: fn(Event)) {
     let id = job.id;
+    crate::log_info!("update check ({:?})", job.trigger);
     spawn(id, sink, move || async move {
         let result = async {
             let client = http::client()?;
@@ -290,6 +312,13 @@ pub fn spawn_check(job: Job, lang: String, sink: fn(Event)) {
             .await
         }
         .await;
+        match &result {
+            Ok(None) => crate::log_info!("update check: this is the latest version"),
+            Ok(Some(info)) => {
+                crate::log_info!("update check: version {} is available", info.version)
+            }
+            Err(e) => crate::log_warn!("update check failed: {}", e.kind_name()),
+        }
         Event::Checked { job: id, result }
     });
 }
@@ -318,6 +347,10 @@ pub fn spawn_download(job: Job, info: UpdateInfo, dest: PathBuf, sink: fn(Event)
             Ok(dest)
         }
         .await;
+        match &result {
+            Ok(_) => crate::log_info!("update download: version {} is ready", info.version),
+            Err(e) => crate::log_warn!("update download failed: {}", e.kind_name()),
+        }
         Event::Downloaded { job: id, result }
     });
 }

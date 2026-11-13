@@ -244,8 +244,37 @@ enum Undialed {
     OtherVersion,
 }
 
-async fn dial(endpoint: &Endpoint, to: EndpointId) -> Result<Connection, Undialed> {
-    match tokio::time::timeout(CONNECT_TIMEOUT, endpoint.connect(to, protocol::ALPN)).await {
+/// Dials the receiver of the transfer `id`. The log has why a dial failed,
+/// once for a reason that repeats (see `logging::Repeats`).
+async fn dial(
+    endpoint: &Endpoint,
+    to: EndpointId,
+    id: u64,
+    repeats: &mut crate::logging::Repeats,
+) -> Result<Connection, Undialed> {
+    let began = std::time::Instant::now();
+    let result = tokio::time::timeout(CONNECT_TIMEOUT, endpoint.connect(to, protocol::ALPN)).await;
+    let why = match &result {
+        Ok(Ok(_)) => {
+            repeats.clear();
+            crate::log_info!("#{id} connected in {} ms", began.elapsed().as_millis());
+            None
+        }
+        Ok(Err(e)) if super::no_such_protocol(e) => {
+            Some("the receiver runs another version".into())
+        }
+        Ok(Err(e)) => Some(crate::logging::connect_error(e)),
+        Err(_) => Some(format!("no connection in {} s", CONNECT_TIMEOUT.as_secs())),
+    };
+    if let Some(why) = why
+        && let Some(left_out) = repeats.note(&why)
+    {
+        crate::log_info!(
+            "#{id} dial failed{}: {why}",
+            crate::logging::left_out(left_out)
+        );
+    }
+    match result {
         Ok(Ok(conn)) => Ok(conn),
         Ok(Err(e)) if super::no_such_protocol(&e) => Err(Undialed::OtherVersion),
         Ok(Err(e)) => Err(Undialed::Unreachable(super::connect_error_text(&e))),
@@ -332,6 +361,16 @@ async fn start(
         document,
     } = what;
     let token = protocol::new_token();
+    crate::log_info!(
+        "#{id} send token={} to {} kind={kind:?}{}",
+        crate::logging::token(&token),
+        crate::logging::peer(&to),
+        if document.is_some() {
+            ", a document"
+        } else {
+            ""
+        }
+    );
     let (session, _unused) = Session::new(id, token, to, Role::Send);
     shared.add_session(session.clone());
     let name = match &document {
@@ -382,8 +421,14 @@ async fn start(
     let prepared = prepare(shared, id, what, &token, ctl, &mut temp).await;
     let (data_path, packed, size) = match prepared {
         Ok(p) => p,
-        Err(e) => return Outcome::Failed(super::failure_text(&e)),
+        Err(e) => return Outcome::Failed(super::failed_text(id, "preparing", &e)),
     };
+    crate::log_info!(
+        "#{id} prepared: size={size} files={} content={} largest={}",
+        packed.files,
+        packed.size,
+        packed.largest
+    );
     // A folder's copy is in the zip now, which is the data from here on.
     if kind == Kind::Folder
         && let Some(folder) = staging.clone()
@@ -402,7 +447,7 @@ async fn start(
         id,
         phase: Phase::Connecting,
     });
-    let conn = match dial(endpoint, to).await {
+    let conn = match dial(endpoint, to, id, &mut crate::logging::Repeats::new()).await {
         Ok(conn) => conn,
         Err(Undialed::Unreachable(e)) => return Outcome::Unreachable(e),
         // Not something that being online or starting Dodavo there helps
@@ -441,24 +486,36 @@ async fn start(
                 recv,
             })),
             Msg::Decline => Ok(None),
-            other => bail!(tr!(error_unexpected_answer, answer = format!("{other:?}"))),
+            other => {
+                crate::log_warn!("#{id} the answer to the offer was {}", other.kind_name());
+                bail!(tr!(error_unexpected_answer, answer = format!("{other:?}")))
+            }
         }
     }
     .await;
     let streams = match answer {
         Ok(Some(streams)) => streams,
         Ok(None) => {
+            crate::log_info!("#{id} the receiver declined");
             session.close_current(CLOSE_OK, b"declined");
             return Outcome::Declined;
         }
         // Not accepted yet, so there is nothing to continue later.
         Err(e) => {
-            return match peer_close(&conn) {
+            let how = peer_close(&conn);
+            crate::log_info!(
+                "#{id} no answer to the offer ({how:?}): {}",
+                conn.close_reason().map_or_else(
+                    || "the connection is open".into(),
+                    |r| crate::logging::connection_error(&r)
+                )
+            );
+            return match how {
                 PeerClose::Cancelled => Outcome::CancelledByPeer,
                 PeerClose::Failed => Outcome::Failed(tr!(error_recipient_failed).into()),
                 PeerClose::Suspended | PeerClose::Lost => {
                     session.close_current(CLOSE_FAILED, b"failed");
-                    Outcome::Failed(super::failure_text(&e))
+                    Outcome::Failed(super::failed_text(id, "the offer", &e))
                 }
             };
         }
@@ -505,7 +562,7 @@ async fn start(
                     .end(Some(CLOSE_FAILED), Ended::Failed)
                     .forget(&shared.data_dir)
                     .await;
-                Outcome::Failed(super::failure_text(&e.into()))
+                Outcome::Failed(super::failed_text(id, "saving the record", &e.into()))
             }
         };
     }
@@ -653,6 +710,20 @@ async fn prepare(
             let src = path.clone();
             let zip_dst = zip_path.clone();
             let packed = tokio::task::spawn_blocking(move || {
+                crate::log_info!(
+                    "#{id} packing the folder {} (file system {})",
+                    if beside {
+                        "beside it"
+                    } else {
+                        "in the temporary folder"
+                    },
+                    zip_dst
+                        .ancestors()
+                        .skip(1)
+                        .find(|d| d.is_dir())
+                        .and_then(archive::file_system)
+                        .unwrap_or_else(|| "unknown".into())
+                );
                 let mut throttle = Throttle::new();
                 let mut progress = |done, total| {
                     if throttle.ready() || done == total {
@@ -767,6 +838,7 @@ impl Sender<'_> {
     /// Dials the receiver until it answers `Continue`.
     async fn reconnect(&mut self) -> Result<(Streams, u64), Outcome> {
         let mut delay = RETRY_MIN;
+        let mut repeats = crate::logging::Repeats::new();
         loop {
             if self.shared.shutting_down.load(Ordering::SeqCst) {
                 // Exiting: the transfer continues at the next start, and the
@@ -786,11 +858,12 @@ impl Sender<'_> {
             // matters (and failing would not end the transfer there); it is
             // checked if the receiver turns out not to have it.
             if self.session.running() && !self.source_unchanged().await {
+                crate::log_warn!("#{} what is sent changed since the transfer began", self.id);
                 self.end(None, Ended::Failed).await;
                 return Err(Outcome::Failed(tr!(error_source_changed).into()));
             }
             let dialed = tokio::select! {
-                r = dial(self.endpoint, self.to) => r,
+                r = dial(self.endpoint, self.to, self.id, &mut repeats) => r,
                 _ = self.paused_rx.changed() => {
                     self.pause_changed(false).await;
                     continue;
@@ -825,6 +898,10 @@ impl Sender<'_> {
                                 .update(&self.shared.data_dir, |s, d| s.clear_done_sent(d))
                                 .await;
                             if !self.source_unchanged().await {
+                                crate::log_warn!(
+                                    "#{} the receiver needs the data again, which changed",
+                                    self.id
+                                );
                                 self.end(Some(CLOSE_FAILED), Ended::Failed).await;
                                 return Err(Outcome::Failed(tr!(error_source_changed).into()));
                             }
@@ -886,15 +963,31 @@ impl Sender<'_> {
             Ok((msg, send, recv))
         }
         .await;
+        let id = self.id;
         match answer {
             Ok((Msg::ContinueFrom { have }, send, recv)) if have <= self.size => {
+                crate::log_info!("#{id} the receiver has {have} of {} bytes", self.size);
                 Ok((Streams { conn, send, recv }, have))
             }
             Ok((Msg::Gone { ended }, _, _)) => {
+                crate::log_info!("#{id} the receiver no longer has the transfer ({ended:?})");
                 conn.close(CLOSE_OK.into(), b"gone");
                 Err(Some(ended))
             }
-            _ => {
+            other => {
+                match other {
+                    Ok((Msg::ContinueFrom { have }, ..)) => crate::log_warn!(
+                        "#{id} the receiver says it has {have} bytes of {}",
+                        self.size
+                    ),
+                    Ok((msg, ..)) => {
+                        crate::log_warn!("#{id} the answer to Continue was {}", msg.kind_name())
+                    }
+                    Err(e) => crate::log_info!(
+                        "#{id} no answer to Continue: {}",
+                        crate::logging::cause(&e)
+                    ),
+                }
                 conn.close(CLOSE_SUSPENDED.into(), b"retry");
                 Err(None)
             }
@@ -926,6 +1019,20 @@ impl Sender<'_> {
         self.peer_suspended = false;
 
         let result = self.pump(&mut send, &mut ctl_rx, have).await;
+        if let Err(e) = &result
+            && e.is::<Lost>()
+        {
+            crate::log_info!(
+                "#{} the connection ended ({:?}): {}; the connection says {}",
+                self.id,
+                peer_close(&conn),
+                crate::logging::cause(e),
+                conn.close_reason().map_or_else(
+                    || "nothing".into(),
+                    |r| crate::logging::connection_error(&r)
+                )
+            );
+        }
         match result {
             Ok(outcome) => {
                 self.end(Some(CLOSE_OK), Ended::Completed).await;
@@ -954,7 +1061,9 @@ impl Sender<'_> {
             },
             Err(e) => {
                 self.end(Some(CLOSE_FAILED), Ended::Failed).await;
-                Err(End::Final(Outcome::Failed(super::failure_text(&e))))
+                Err(End::Final(Outcome::Failed(super::failed_text(
+                    self.id, "sending", &e,
+                ))))
             }
         }
     }
@@ -1082,9 +1191,11 @@ impl Sender<'_> {
                         self.emit_pause_phase();
                     }
                     Some(Msg::Result { ok: false, message }) => {
+                        crate::log_warn!("#{} the receiver reports a failure while data flows", self.id);
                         bail!(tr!(error_peer_reported, message = message))
                     }
                     Some(other) => {
+                        crate::log_warn!("#{} the receiver sent {} while data flows", self.id, other.kind_name());
                         bail!(tr!(error_unexpected_answer, answer = format!("{other:?}")))
                     }
                     None => return Err(lost(tr!(error_connection_lost))),
@@ -1117,6 +1228,10 @@ impl Sender<'_> {
             .await
             .map_err(lost)?;
         send.finish().map_err(lost)?;
+        crate::log_info!(
+            "#{} all data sent; waiting for the receiver's verdict",
+            self.id
+        );
 
         // Wait for the receiver's verdict: first that all of it arrived
         // intact, then, once it is saved there, the result. `Some(unpacking)`
@@ -1140,6 +1255,10 @@ impl Sender<'_> {
                 }
                 Some(Msg::Result { ok: true, .. }) => return Ok(Outcome::Completed(None)),
                 Some(Msg::Result { ok: false, message }) => {
+                    crate::log_warn!(
+                        "#{} the receiver reports a failure (verified before: {verified:?})",
+                        self.id
+                    );
                     bail!(tr!(error_peer_reported, message = message))
                 }
                 // A program there keeps the part out, and the receiver waits
@@ -1151,7 +1270,14 @@ impl Sender<'_> {
                     (false, _) => Phase::Transferring,
                 }),
                 Some(Msg::Paused | Msg::Resumed) => {}
-                Some(other) => bail!(tr!(error_unexpected_answer, answer = format!("{other:?}"))),
+                Some(other) => {
+                    crate::log_warn!(
+                        "#{} the receiver sent {} after all data",
+                        self.id,
+                        other.kind_name()
+                    );
+                    bail!(tr!(error_unexpected_answer, answer = format!("{other:?}")))
+                }
                 None => return Err(lost(tr!(error_connection_lost))),
             }
         }

@@ -43,6 +43,7 @@ pub fn client() -> Result<Client, Error> {
 /// words for it ("error sending request", "dns error") are in English and
 /// say no more to who reads them.
 fn network(e: reqwest::Error) -> Error {
+    crate::log_warn!("update request: {}", crate::logging::cause_dyn(&e));
     if e.is_timeout() {
         Error::Timeout
     } else {

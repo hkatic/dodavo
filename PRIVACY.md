@@ -1,6 +1,6 @@
 # Dodavo privacy policy
 
-Effective 12 November 2026. This policy covers Dodavo on every system: Android, Windows and macOS.
+Effective 13 November 2026. This policy covers Dodavo on every system: Android, Windows and macOS.
 
 Dodavo is made by Hrvoje Katić. Questions about this policy go to the project's issues on GitHub: https://github.com/hkatic/dodavo/issues.
 
@@ -15,10 +15,11 @@ Dodavo sends files directly from one device to another, end-to-end encrypted. Th
 - The records of transfers that are under way, so that they can continue after a restart. Each one is deleted when its transfer ends, and what is left of an ended transfer after 30 days at most.
 - What you receive, in the folder where Dodavo saves received items, and temporary copies of what you send, until the transfer no longer needs them.
 - On Windows and on a Mac, your chat conversations: the messages you wrote and received, with their times, until you delete a conversation or all of them.
+- A log of what Dodavo did, `Dodavo.log`, for finding the cause when something goes wrong: the versions of Dodavo and of the system, the device's model, the course of transfers and chats, and the errors that came up. It holds no names of files, folders, people or devices, no paths, no chat messages, no Contact IDs and no IP addresses; the other person of a transfer appears under an alias that changes at every start. It is kept to about 2 MB, its oldest lines going first. It is sent only if you send it yourself (Help > Show Log File on Windows, Help > Show Log in Finder on a Mac, About Dodavo > Share log on Android), to whomever you choose.
 
 Where this is kept: in Dodavo's own storage on Android, in `%APPDATA%\Dodavo` on Windows, and in `~/Library/Application Support/Dodavo` on a Mac. Nobody else receives any of it from Dodavo.
 
-On Android, Android's own backup, if you have turned it on, includes your recipients, blocked senders and settings, but not your secret key, so a restored copy gets a new Contact ID. Google keeps that backup under its own terms.
+On Android, Android's own backup, if you have turned it on, includes your recipients, blocked senders and settings, but not your secret key, so a restored copy gets a new Contact ID, nor the log. Google keeps that backup under its own terms.
 
 ## What others receive
 

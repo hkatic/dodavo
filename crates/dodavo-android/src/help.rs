@@ -200,6 +200,7 @@ fn pages_use_the_program_texts() {
             ("notifications_setting", t.notifications_setting),
             ("about_title", t.about_title),
             ("licenses", t.licenses),
+            ("share_log", t.share_log),
             ("item_unreadable", t.item_unreadable),
         ] {
             assert!(page.contains(text), "{lang:?}: {key}: {text}");

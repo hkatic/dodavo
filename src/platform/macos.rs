@@ -57,6 +57,59 @@ pub fn temp_base() -> PathBuf {
     data_base().join("tmp")
 }
 
+/// A text that `sysctlbyname` gives.
+fn sysctl_text(name: &std::ffi::CStr) -> Option<String> {
+    let mut value = [0 as c_char; 256];
+    let mut length = value.len() - 1;
+    // SAFETY: a C string for the name, and a buffer with its length to fill,
+    // one byte shorter than the buffer so that it ends in a NUL.
+    let status = unsafe {
+        libc::sysctlbyname(
+            name.as_ptr(),
+            value.as_mut_ptr().cast(),
+            &mut length,
+            std::ptr::null_mut(),
+            0,
+        )
+    };
+    (status == 0).then(|| c_text(&value).trim().to_string())
+}
+
+/// What the log says of this Mac (see `logging`): the version and build of
+/// macOS, the model and whether the program runs translated (Rosetta).
+/// Never the computer's name.
+pub fn os_description() -> Vec<String> {
+    let mut translated: i32 = 0;
+    let mut length = std::mem::size_of::<i32>();
+    // SAFETY: a C string for the name, and an integer with its size to fill.
+    let status = unsafe {
+        libc::sysctlbyname(
+            c"sysctl.proc_translated".as_ptr(),
+            (&mut translated as *mut i32).cast(),
+            &mut length,
+            std::ptr::null_mut(),
+            0,
+        )
+    };
+    let unknown = || "?".to_string();
+    vec![
+        format!(
+            "macOS {}, build {}",
+            sysctl_text(c"kern.osproductversion").unwrap_or_else(unknown),
+            sysctl_text(c"kern.osversion").unwrap_or_else(unknown),
+        ),
+        format!(
+            "model {}, {}",
+            sysctl_text(c"hw.model").unwrap_or_else(unknown),
+            if status == 0 && translated == 1 {
+                "translated by Rosetta"
+            } else {
+                "native"
+            },
+        ),
+    ]
+}
+
 /// What Apple calls its settings app on this macOS.
 pub fn settings_app_name() -> &'static str {
     let mut version = [0 as c_char; 32];

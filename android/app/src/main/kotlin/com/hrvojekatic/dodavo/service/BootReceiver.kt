@@ -19,7 +19,10 @@ class BootReceiver : BroadcastReceiver() {
         val container = context.container
         container.scope.launch {
             try {
-                if (container.preferences.receiveInBackground.first()) DodavoService.start(context)
+                val background = container.preferences.receiveInBackground.first()
+                val why = if (intent.action == Intent.ACTION_BOOT_COMPLETED) "the phone started" else "the app was updated"
+                val started = background && DodavoService.start(context)
+                container.repository.log("info", "$why; receive in the background $background, service started $started")
             } finally {
                 pending.finish()
             }

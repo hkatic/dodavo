@@ -21,6 +21,7 @@ pub const HR: Strings = Strings {
     menu_exit: "I&zlaz",
     menu_view_help: "&Prikaži pomoć\tF1",
     menu_how: "&Kako funkcionira",
+    menu_show_log: "Prikaži &zapisnik",
     menu_about: "&O programu",
     menu_license: "&Licenca",
     menu_donate: "&Doniraj",
@@ -393,8 +394,8 @@ pub const HR: Strings = Strings {
     network_problem: "Problem s mrežom: {error} (ponovni pokušaj…)",
     receiving_balloon_title: "Primanje",
     receiving_balloon: "{name} vam šalje „{item}”.",
-    panic_message: "Došlo je do neočekivane pogreške i program se mora zatvoriti.\n\n{info}",
-    panic_message_goes_on: "Došlo je do neočekivane pogreške. Dodavo nastavlja s radom, ali ono što je u tom trenutku radio možda nije uspjelo.\n\n{info}",
+    panic_message: "Došlo je do neočekivane pogreške i program se mora zatvoriti.\n\nŠto se dogodilo, zapisano je u zapisniku programa Dodavo. Kad Dodavo ponovno bude pokrenut, odaberite Pomoć > Prikaži zapisnik i pošaljite tu datoteku autorima programa.\n\n{info}",
+    panic_message_goes_on: "Došlo je do neočekivane pogreške. Dodavo nastavlja s radom, ali ono što je u tom trenutku radio možda nije uspjelo.\n\nŠto se dogodilo, zapisano je u zapisniku programa Dodavo: odaberite Pomoć > Prikaži zapisnik i pošaljite tu datoteku autorima programa.\n\n{info}",
     identity_failed: "Vaš identitet ne može se pročitati ni stvoriti u mapi {path}:\n{error}",
     identity_damaged: "Datoteka secret.key je oštećena: sadrži {size} umjesto 32 bajta. \
         Vratite je iz sigurnosne kopije ili je izbrišite da biste dobili novi ID kontakta.",

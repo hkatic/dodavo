@@ -336,6 +336,15 @@ pub fn change_contact_id(owner: HWND) -> bool {
     let new_id = secret.public().to_string();
     // The UI waits: nothing may begin under the old ID meanwhile.
     let result = ui::busy(|| net.change_identity(secret, Duration::from_secs(20)));
+    dodavo_core::log_info!(
+        "Change My Contact ID: {}",
+        match &result {
+            Ok(()) => "done",
+            Err(net::IdentityError::Busy) => "transfers are still under way",
+            Err(net::IdentityError::Failed(_)) => "the key could not be saved",
+            Err(net::IdentityError::TimedOut) => "the network did not answer",
+        }
+    );
     match result {
         Ok(()) => {
             with(|a| a.my_id = new_id.clone());
@@ -935,13 +944,38 @@ fn handle_net_event(event: Event) -> Option<Event> {
             // archive that its drive cannot hold, or for an item over the
             // sender's limit, ask instead (the window explains why).
             let auto_dir = cfg.auto_save_dir_for(&from, &offer).filter(|d| {
-                std::fs::create_dir_all(d).is_ok() && {
-                    let space = incoming::check_space(&offer, d, cfg.received_folder);
-                    space.fits
-                        && space.enough != Some(false)
-                        && !(cfg.warn_fat_temp && space.temp_warning.is_some())
+                if let Err(e) = std::fs::create_dir_all(d) {
+                    dodavo_core::log_info!(
+                        "#{id} the folder to save to cannot be made: {}",
+                        crate::logging::io(&e)
+                    );
+                    return false;
                 }
+                let space = incoming::check_space(&offer, d, cfg.received_folder);
+                let fat_temp = cfg.warn_fat_temp && space.temp_warning.is_some();
+                let starts = space.fits && space.enough != Some(false) && !fat_temp;
+                if !starts {
+                    dodavo_core::log_info!(
+                        "#{id} the destination holds it {}, enough room {:?}, FAT32 temporary folder {fat_temp}",
+                        space.fits,
+                        space.enough
+                    );
+                }
+                starts
             });
+            dodavo_core::log_info!(
+                "#{id} from {}: {}",
+                if known {
+                    "a recipient"
+                } else {
+                    "someone who is no recipient"
+                },
+                if auto_dir.is_some() {
+                    "it starts by itself"
+                } else {
+                    "the user is asked"
+                }
+            );
             sound::play(SoundEvent::Incoming);
             if let Some(dir) = auto_dir {
                 accept_offer(id, &from, &name, &offer, dir, false);

@@ -99,6 +99,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func applicationDidFinishLaunching(_: Notification) {
         guard let started = started else { return }
+        Core.log(
+            "info",
+            "the app launched (translocated \(Relocation.isTranslocated), can replace itself \(Relocation.canReplaceItself))"
+        )
         let main = MainWindowController(started: started, title: windowTitle)
         mainWindow = main
         if started.showInMenuBar {
@@ -392,15 +396,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         case .open(let path):
             NSWorkspace.shared.open(URL(fileURLWithPath: path))
         case .reveal(let path):
-            NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)])
-            // It does not come to the front when asked by an app that is not there
-            // itself, as with the action of a notification.
-            let configuration = NSWorkspace.OpenConfiguration()
-            configuration.activates = true
-            NSWorkspace.shared.openApplication(
-                at: URL(fileURLWithPath: "/System/Library/CoreServices/Finder.app"),
-                configuration: configuration)
+            revealInFinder(path)
         }
+    }
+
+    /// The Finder, in front, with `path` selected.
+    private func revealInFinder(_ path: String) {
+        NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)])
+        // It does not come to the front when asked by an app that is not there
+        // itself, as with the action of a notification.
+        let configuration = NSWorkspace.OpenConfiguration()
+        configuration.activates = true
+        NSWorkspace.shared.openApplication(
+            at: URL(fileURLWithPath: "/System/Library/CoreServices/Finder.app"),
+            configuration: configuration)
     }
 
     // MARK: Commands
@@ -494,6 +503,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             return
         }
         NSWorkspace.shared.open(url)
+    }
+
+    /// Help > Show Log in Finder: Dodavo's log, selected, once it has all
+    /// lines before, so that the user can send it to the developers.
+    @objc func showLog(_: Any?) {
+        struct Reply: Decodable { let path: String }
+        let reply: Reply? = Core.call("flush_log")
+        guard let path = reply?.path, !path.isEmpty, FileManager.default.fileExists(atPath: path)
+        else {
+            NSSound.beep()
+            return
+        }
+        revealInFinder(path)
     }
 
     @objc func openDonate(_: Any?) {
@@ -733,6 +755,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         // Help.
         add(helpMenu, L[.menu_dodavo_help], #selector(openHelp), "?")
+        add(helpMenu, L[.menu_show_log], #selector(showLog), "")
         helpMenu.addItem(.separator())
         add(helpMenu, L[.menu_license], #selector(showLicense), "")
         add(helpMenu, L[.menu_donate], #selector(openDonate), "")

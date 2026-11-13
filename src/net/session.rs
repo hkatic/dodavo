@@ -1198,11 +1198,39 @@ pub fn load_all(data_dir: &Path) -> Found {
     let read = json
         .into_iter()
         .map(|path| {
-            let record = fs::read_to_string(&path)
-                .ok()
-                .and_then(|text| serde_json::from_str::<TransferRecord>(&text).ok())
-                .filter(|record| is_record_of(&path, &record.token))
-                .map(|mut record| {
+            // For the log: the beginning of the token that names the file.
+            let name = path
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .map_or("?", |s| s.get(..8).unwrap_or(s))
+                .to_string();
+            let record = match fs::read_to_string(&path) {
+                Ok(text) => match serde_json::from_str::<TransferRecord>(&text) {
+                    Ok(record) if is_record_of(&path, &record.token) => Some(record),
+                    Ok(record) => {
+                        crate::log_warn!(
+                            "the record named {name} is of token={}",
+                            crate::logging::token(&record.token)
+                        );
+                        None
+                    }
+                    Err(e) => {
+                        crate::log_warn!(
+                            "the record {name} cannot be read: {}",
+                            crate::logging::json(&e)
+                        );
+                        None
+                    }
+                },
+                Err(e) => {
+                    crate::log_warn!(
+                        "the record {name} cannot be read: {}",
+                        crate::logging::io(&e)
+                    );
+                    None
+                }
+            }
+            .map(|mut record| {
                     let verdict = if tombstone(data_dir, &record.token) == Some(Ended::Completed) {
                         Verdict::Completed
                     } else if record.ended {
@@ -1240,7 +1268,17 @@ pub fn load_all(data_dir: &Path) -> Found {
             // old, for the last time (its tombstone goes then too, and
             // without it the record would look like one that goes on).
             Some((record, Verdict::Completed)) => {
-                if !record.complete(data_dir) && clock.is_old_file(&path) {
+                let completed = record.complete(data_dir);
+                crate::log_info!(
+                    "token={} had completed; its record is {}",
+                    crate::logging::token(&record.token),
+                    if completed {
+                        "done with"
+                    } else {
+                        "kept: a file of it is still to go"
+                    }
+                );
+                if !completed && clock.is_old_file(&path) {
                     record.remove(data_dir);
                 }
             }
@@ -1250,6 +1288,12 @@ pub fn load_all(data_dir: &Path) -> Found {
                 // part went, and its old name may belong to another transfer
                 // by now.
                 let mut changed = record.follow_moved_part(&parts);
+                if changed {
+                    crate::log_info!(
+                        "token={} follows its part to where it was renamed",
+                        crate::logging::token(&record.token)
+                    );
+                }
                 // A cancelled send is never paused (see
                 // `TransferRecord::cancelled`); a record of an earlier
                 // version may say otherwise, and is put right here, before
@@ -1271,12 +1315,20 @@ pub fn load_all(data_dir: &Path) -> Found {
                 }
             }
             None if clock.is_old_file(&path) => {
+                crate::log_info!("an old record that cannot be read is deleted");
                 let _ = fs::remove_file(&path);
             }
             // A damaged record is kept aside instead of being read again at
             // every start.
             None => {
-                let _ = fs::rename(&path, path.with_extension("json.bad"));
+                let moved = fs::rename(&path, path.with_extension("json.bad"));
+                crate::log_warn!(
+                    "a record that cannot be read is set aside as .json.bad{}",
+                    match &moved {
+                        Ok(()) => String::new(),
+                        Err(e) => format!(" (that failed: {})", crate::logging::io(e)),
+                    }
+                );
             }
         }
     }
@@ -2286,19 +2338,28 @@ impl Control {
 
 /// The connection failed in a way that a new connection can recover from.
 #[derive(Debug)]
-pub(crate) struct Lost(pub String);
+pub(crate) struct Lost {
+    text: String,
+    /// What the log says of it (see `logging::cause`): the text may hold
+    /// what the other side gave as the reason of a close.
+    pub(crate) log: String,
+}
 
 impl std::fmt::Display for Lost {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&self.0)
+        f.write_str(&self.text)
     }
 }
 
 impl std::error::Error for Lost {}
 
 /// Wraps a stream or connection error as a lost connection.
-pub(crate) fn lost(e: impl std::fmt::Display) -> anyhow::Error {
-    Lost(e.to_string()).into()
+pub(crate) fn lost<E: std::fmt::Display + 'static>(e: E) -> anyhow::Error {
+    Lost {
+        text: e.to_string(),
+        log: crate::logging::cause_any(&e),
+    }
+    .into()
 }
 
 /// Why a connection ended, as far as the other side's intent goes.

@@ -26,6 +26,7 @@ definitions decide; where they leave a choice, it is marked **Decide**.
 | Approximate location: **Decide** whether the IP address counts (Google counts IP addresses under it only where used for location; Dodavo does not) | Not if it does not count | No | App functionality | No |
 | Files and docs | No: end-to-end encrypted between the two devices, which Google does not count as collected | No | | |
 | Name (the name the user enters, sent to recipients) | No: goes only to the person the user sends to, which Google counts as neither collected nor shared | No | | |
+| Crash logs and diagnostics (`Dodavo.log`, see PRIVACY.md) | No: kept on the device, and sent only where the user shares it (About Dodavo > Share log), to whom the user chooses, which Google counts as neither collected nor shared | No | | |
 
 Not processed ephemerally: the name server keeps a published Contact ID with
 the relay it can be reached through until it is published no more.

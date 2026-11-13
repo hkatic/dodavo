@@ -42,6 +42,7 @@ Remove an item in the commit that settles it. This file is public, so keep secre
 - **Send between two computers on different networks.** Check connecting through real NAT, and falling back to a relay there.
 - **Go through the main tasks with real screen readers.** Use NVDA, JAWS and Narrator, and listen to what is spoken, which scripted checks through MSAA and UI Automation do not cover.
 - **Back up the update signing key.** Keep copies in at least two places besides the PC that signs the releases. If the key is lost, installed copies can never accept an automatic update again.
+- **Try the log by hand on each system.** Windows: Help > Show Log File with NVDA, JAWS and Narrator (File Explorer opens with `Dodavo.log` selected, which was checked by script), the log opened in Notepad while Dodavo runs, and on Windows 7. The Mac: Help > Show Log in Finder with VoiceOver, where it has only been built by CI. Android: About Dodavo > Share log with TalkBack, into an email app, and that `Dodavo.log` is not in a restored backup. On each, read a log of a day of real use for anything that names a person, a file or a place.
 
 ## Medium
 
@@ -85,5 +86,8 @@ Remove an item in the commit that settles it. This file is public, so keep secre
 
 - **Give Dodavo an entry in Windows 11's new File Explorer menu.** It takes a sparse package signed with a trusted certificate, and a COM DLL (`IExplorerCommand`), so it comes after code signing (see `ISSUES.md`). Windows 10 builds 19041 and later could use it too; Windows 7 and 8.1 keep the classic entries.
 - **Show the items of one selection in one window.** Each item opens its own progress window, up to 100 from the context menu and more from Send to.
+- **Log crashes that are not panics.** A panic is in the log (`logging::panic`); an access violation, a stack overflow or an abort is not. On Windows, `SetUnhandledExceptionFilter` could write the exception code and the address relative to the module through a file opened beforehand; on the Mac and Android, a `sigaction` handler the same with `write` only. Release builds are stripped, so their backtraces have no names: keeping the PDB or the dSYM of each release privately and logging module offsets would make them readable.
+- **Tell ARM64 Windows in the log.** An x64 build on ARM64 sees `PROCESSOR_ARCHITECTURE` as AMD64; `IsWow64Process2` (Windows 10 1511 and later, looked up at run time) tells the machine.
+- **Echo the log to logcat in Android debug builds**, so that `adb logcat` shows it while developing.
 - **Have `net::watch_online` wait for changes and report only real ones.** It polls `home_relay_status()` every 250 ms until its first report and every 2 s after it, where the watcher's changes can be awaited (`Watcher::updated` in n0-watcher 1.0), raced against the end of `ONLINE_GRACE`. Each new endpoint also starts from nothing reported, so Change My Contact ID while online reports "online" a second time; pass in what the endpoint before it reported, which is nothing after an `Event::BindFailed`.
 - **Report the zip crate's panic to its authors.** `enclosed_name` panics on ordinary names such as "Kuća.jpg" in zip 9.1 and 9.2, because `is_windows_reserved_device_name` splits a name at a byte index. Dodavo avoids it with its own check (`archive::entry_path`).

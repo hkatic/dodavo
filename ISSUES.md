@@ -28,11 +28,11 @@ A new send to a Dodavo that does not take this version's transfers ends with wor
 
 ### An offer was reported as declined although nobody answered (not explained)
 
-Seen once on 2026-11-01: an offer from a contact waited in the Incoming Transfer window, because there was not enough space, and within 5 minutes the sender was told that the recipient had declined. A repeat that was watched for 5.5 minutes stayed open as it should. `receive::handle` sends `Decline` when the user answers no, when the answer's sender is dropped, and on a cancel; which of these it was is not known.
+Seen once on 2026-11-01: an offer from a contact waited in the Incoming Transfer window, because there was not enough space, and within 5 minutes the sender was told that the recipient had declined. A repeat that was watched for 5.5 minutes stayed open as it should. `receive::handle` sends `Decline` when the user answers no, when the answer's sender is dropped, and on a cancel; which of these it was is not known. Since the log (`Dodavo.log`), the receiving side's log says which: the Incoming window's reason (`declined_by` in `ui/incoming.rs`), a lost answer, a cancel, or a sender that stopped waiting.
 
 ### Free space did not come back after a failed transfer on a full disk (not explained)
 
-Seen once on 2026-11-01: after a 500 MB transfer failed on a 200 MB NTFS volume, the volume stayed at 204 KB free although no files were left on it. FAT32 and exFAT volumes got all their space back. It may be a deleted part that another program, such as Defender or the indexer, still held open; that was not checked.
+Seen once on 2026-11-01: after a 500 MB transfer failed on a 200 MB NTFS volume, the volume stayed at 204 KB free although no files were left on it. FAT32 and exFAT volumes got all their space back. It may be a deleted part that another program, such as Defender or the indexer, still held open; that was not checked. The log now has the failure's cause by its system code; it does not say yet whether a file could not be deleted.
 
 ### In dark mode on Windows 11, the labels of check boxes are hard to read
 

@@ -108,6 +108,7 @@
     <string name="website">"Website"</string>
     <string name="privacy_policy">"Privacy policy"</string>
     <string name="licenses">"Licenses"</string>
+    <string name="share_log">"Share log"</string>
     <string name="license_dodavo">"Dodavo (GNU General Public License, version 3)"</string>
     <string name="license_components">"Components by other authors"</string>
     <string name="help_title">"Help"</string>

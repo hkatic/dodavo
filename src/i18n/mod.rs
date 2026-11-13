@@ -182,6 +182,7 @@ strings! {
         menu_exit,
         menu_view_help,
         menu_how,
+        menu_show_log,
         menu_about,
         menu_license,
         menu_donate,
@@ -965,6 +966,7 @@ mod tests {
                     vec![
                         s.menu_view_help,
                         s.menu_how,
+                        s.menu_show_log,
                         s.menu_license,
                         s.menu_donate,
                         s.menu_check_updates,

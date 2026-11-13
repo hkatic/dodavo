@@ -3,7 +3,12 @@
 use std::path::{Path, PathBuf};
 
 use windows_sys::Win32::{
+    Foundation::ERROR_SUCCESS,
     Storage::FileSystem::{GetDiskFreeSpaceExW, GetVolumePathNameW},
+    System::Registry::{
+        HKEY, HKEY_LOCAL_MACHINE, KEY_READ, KEY_WOW64_64KEY, REG_DWORD, REG_SZ, RegCloseKey,
+        RegOpenKeyExW, RegQueryValueExW,
+    },
     UI::Shell::{FOLDERID_Downloads, SHGetKnownFolderPath},
 };
 
@@ -67,6 +72,111 @@ pub fn downloads_dir() -> PathBuf {
     std::env::var_os("USERPROFILE")
         .map(|p| PathBuf::from(p).join("Downloads"))
         .unwrap_or_else(std::env::temp_dir)
+}
+
+/// What the log says of this Windows (see `logging`): its name, version,
+/// build, release and edition, and the processor's architecture. Nothing of
+/// the user or of the computer's name.
+pub fn os_description() -> Vec<String> {
+    const KEY: &str = r"SOFTWARE\Microsoft\Windows NT\CurrentVersion";
+    let text = |name: &str| match registry_value(HKEY_LOCAL_MACHINE, KEY, name)? {
+        RegistryValue::Text(text) if !text.trim().is_empty() => Some(text.trim().to_string()),
+        _ => None,
+    };
+    let number = |name: &str| match registry_value(HKEY_LOCAL_MACHINE, KEY, name)? {
+        RegistryValue::Number(n) => Some(n),
+        _ => None,
+    };
+    let build: u32 = text("CurrentBuild")
+        .or_else(|| text("CurrentBuildNumber"))
+        .and_then(|b| b.parse().ok())
+        .unwrap_or(0);
+    // Windows 10 and later keep "6.3" in CurrentVersion for old programs.
+    let version = match (
+        number("CurrentMajorVersionNumber"),
+        number("CurrentMinorVersionNumber"),
+    ) {
+        (Some(major), Some(minor)) => format!("{major}.{minor}"),
+        _ => text("CurrentVersion").unwrap_or_else(|| "?".into()),
+    };
+    let name = match version.as_str() {
+        "10.0" if build >= 22000 => "Windows 11",
+        "10.0" => "Windows 10",
+        "6.3" => "Windows 8.1",
+        "6.2" => "Windows 8",
+        "6.1" => "Windows 7",
+        _ => "Windows",
+    };
+    let mut line = format!("{name}, version {version}, build {build}");
+    if let Some(ubr) = number("UBR") {
+        line.push_str(&format!(" update {ubr}"));
+    }
+    if let Some(release) = text("DisplayVersion").or_else(|| text("ReleaseId")) {
+        line.push_str(&format!(", release {release}"));
+    }
+    if let Some(pack) = text("CSDVersion") {
+        line.push_str(&format!(", {pack}"));
+    }
+    if let Some(edition) = text("EditionID") {
+        line.push_str(&format!(", edition {edition}"));
+    }
+    // A 32-bit program on 64-bit Windows sees the native one in the first.
+    let native = std::env::var("PROCESSOR_ARCHITEW6432")
+        .or_else(|_| std::env::var("PROCESSOR_ARCHITECTURE"))
+        .unwrap_or_else(|_| "?".into());
+    vec![line, format!("processor architecture {native}")]
+}
+
+enum RegistryValue {
+    Text(String),
+    Number(u32),
+}
+
+/// A text or number value of the registry, from its 64-bit view.
+fn registry_value(root: HKEY, key: &str, name: &str) -> Option<RegistryValue> {
+    let key = wide(key);
+    let name = wide(name);
+    let mut handle: HKEY = std::ptr::null_mut();
+    // SAFETY: NUL-terminated strings and a handle to fill, closed below.
+    let opened = unsafe {
+        RegOpenKeyExW(
+            root,
+            key.as_ptr(),
+            0,
+            KEY_READ | KEY_WOW64_64KEY,
+            &mut handle,
+        )
+    };
+    if opened != ERROR_SUCCESS {
+        return None;
+    }
+    let mut buf = [0u16; 256];
+    // One unit less than the buffer, so that a text always ends in a NUL.
+    let mut size = ((buf.len() - 1) * 2) as u32;
+    let mut kind = 0u32;
+    // SAFETY: the buffer is as large as `size` says.
+    let read = unsafe {
+        RegQueryValueExW(
+            handle,
+            name.as_ptr(),
+            std::ptr::null(),
+            &mut kind,
+            buf.as_mut_ptr() as *mut u8,
+            &mut size,
+        )
+    };
+    // SAFETY: the handle was opened above.
+    unsafe { RegCloseKey(handle) };
+    if read != ERROR_SUCCESS {
+        return None;
+    }
+    match kind {
+        REG_SZ => Some(RegistryValue::Text(from_wide_ptr(buf.as_ptr()))),
+        REG_DWORD if size == 4 => {
+            Some(RegistryValue::Number(buf[0] as u32 | (buf[1] as u32) << 16))
+        }
+        _ => None,
+    }
 }
 
 /// The root of the volume holding `path` (e.g. `C:\`) and the free space on

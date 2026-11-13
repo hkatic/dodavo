@@ -35,7 +35,8 @@ pub const EN: Strings = Strings {
     invalid_contact_id: "This is not a valid Contact ID.\n\nA Contact ID is a 64 character code made of the digits 0–9 \
         and the letters a–f. Ask the person to send it to you again.",
     enter_recipient_name: "Please enter a name for this recipient.",
-    panic_message: "An unexpected error occurred and Dodavo has to quit.\n\n{info}",
+    panic_message: "An unexpected error occurred and Dodavo has to quit.\n\nWhat happened is in Dodavo's log. Once Dodavo is open again, go to About Dodavo and tap Share log to send it to the developers.\n\n{info}",
+    panic_message_goes_on: "An unexpected error occurred. Dodavo goes on running, but what it was doing at that moment may have failed.\n\nWhat happened is in Dodavo's log: go to About Dodavo and tap Share log to send it to the developers.\n\n{info}",
     add_to_recipients: "Add “{name}” to my recipients",
     wants_folder: "{name} wants to send you a folder",
     wants_file: "{name} wants to send you a file",
@@ -151,6 +152,7 @@ pub const EN: Strings = Strings {
     website: "Website",
     privacy_policy: "Privacy policy",
     licenses: "Licenses",
+    share_log: "Share log",
     license_dodavo: "Dodavo (GNU General Public License, version 3)",
     license_components: "Components by other authors",
     help_title: "Help",

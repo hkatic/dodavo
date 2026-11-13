@@ -171,11 +171,13 @@ pub fn launch_installer(
     let ok = unsafe { ShellExecuteExW(&mut info) } != 0;
     if !ok || info.hProcess.is_null() {
         let code = unsafe { GetLastError() };
+        crate::log_error!("Setup could not be started ({mode:?}): Windows error {code}");
         return Err(Error::Launch(format!(
             "{} (Windows error {code})",
             setup.display()
         )));
     }
+    crate::log_info!("Setup started ({mode:?})");
     Ok(info.hProcess)
 }
 

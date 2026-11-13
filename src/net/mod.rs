@@ -175,6 +175,18 @@ pub enum Outcome {
 }
 
 impl Outcome {
+    /// The outcome without its path or text, for the log (see `logging`).
+    pub fn kind_name(&self) -> &'static str {
+        match self {
+            Outcome::Completed(_) => "completed",
+            Outcome::Declined => "declined",
+            Outcome::Cancelled => "cancelled",
+            Outcome::CancelledByPeer => "cancelled by peer",
+            Outcome::Unreachable(_) => "unreachable",
+            Outcome::Failed(_) => "failed",
+        }
+    }
+
     /// How a transfer that ends here with this outcome ended, for its
     /// tombstone (see `Msg::Gone`).
     fn ended(&self) -> protocol::Ended {
@@ -214,6 +226,14 @@ pub(crate) fn failure_text(error: &anyhow::Error) -> String {
         });
     }
     causes.join(": ")
+}
+
+/// The user's text of the failure of the transfer `id` (see
+/// [`failure_text`]), which the log gets by the error's type at `stage`
+/// (see `logging::cause`).
+pub(crate) fn failed_text(id: u64, stage: &str, error: &anyhow::Error) -> String {
+    crate::log_warn!("#{id} failed at {stage}: {}", crate::logging::cause(error));
+    failure_text(error)
 }
 
 /// Whether `error`, one cause of a failure (see [`failure_text`]), is the
@@ -439,6 +459,166 @@ pub enum Event {
     },
 }
 
+/// The last phase and connection that the log has of each transfer (see
+/// [`describe`]).
+static LOGGED_PHASES: std::sync::LazyLock<Mutex<HashMap<u64, Phase>>> =
+    std::sync::LazyLock::new(Default::default);
+static LOGGED_PATHS: std::sync::LazyLock<Mutex<HashMap<u64, Option<bool>>>> =
+    std::sync::LazyLock::new(Default::default);
+
+/// What the log says of an event (see `logging`): numbers, kinds, outcomes
+/// and aliases, never names, paths, texts or Contact IDs. Every variant is
+/// named here, so that a new one has to be thought of. `None` for those
+/// that come too often to say anything (progress, typing) and for a phase
+/// that the log has already.
+fn describe(event: &Event) -> Option<(crate::logging::Level, String)> {
+    use crate::logging::{Level, peer, peer_str, token};
+    Some(match event {
+        // Logged where it failed, once for failures that repeat (see
+        // `bind_patiently`).
+        Event::BindFailed(_) => return None,
+        Event::Connecting => (Level::Info, "the network is open; connecting".into()),
+        Event::Online(online) => (
+            Level::Info,
+            if *online { "online" } else { "offline" }.into(),
+        ),
+        Event::Offer { id, from, offer } => (
+            Level::Info,
+            format!(
+                "#{id} offer token={} from {} kind={:?} size={} files={} largest={}",
+                token(&offer.token),
+                peer(from),
+                offer.kind,
+                offer.size,
+                offer.file_count,
+                offer.largest_file
+            ),
+        ),
+        Event::OverLimit { from, offer } => (
+            Level::Info,
+            format!(
+                "offer token={} from {} declined, as it is larger than the limit (size={})",
+                token(&offer.token),
+                peer(from),
+                offer.size.max(offer.content_size)
+            ),
+        ),
+        Event::Restored {
+            id,
+            record,
+            have,
+            goes_on,
+        } => (
+            Level::Info,
+            format!(
+                "#{id} restored {:?} token={} peer={} kind={:?} size={} have={have} goes_on={goes_on} \
+                 paused={} cancel_pending={} done_sent={} handed_over={}",
+                record.role(),
+                token(&record.token),
+                peer_str(&record.peer),
+                record.offer.kind,
+                record.offer.size,
+                record.paused,
+                record.cancel_pending(),
+                record.done_sent,
+                record.done_hash.is_some()
+            ),
+        ),
+        Event::Phase { id, phase } => {
+            let mut phases = LOGGED_PHASES.lock().unwrap_or_else(|e| e.into_inner());
+            if phases.insert(*id, *phase) == Some(*phase) {
+                return None;
+            }
+            (Level::Info, format!("#{id} phase {phase:?}"))
+        }
+        Event::HandedOver { id } => (
+            Level::Info,
+            format!("#{id} handed over: the receiver has the item"),
+        ),
+        Event::CancelWaits { id } => (
+            Level::Info,
+            format!("#{id} the cancel waits for the receiver's verdict"),
+        ),
+        Event::Progress { .. } => return None,
+        Event::Path { id, direct } => {
+            let mut paths = LOGGED_PATHS.lock().unwrap_or_else(|e| e.into_inner());
+            if paths.insert(*id, *direct) == Some(*direct) {
+                return None;
+            }
+            (
+                Level::Info,
+                format!(
+                    "#{id} connection {}",
+                    match direct {
+                        Some(true) => "direct",
+                        Some(false) => "through a relay",
+                        None => "gone",
+                    }
+                ),
+            )
+        }
+        Event::Finished { id, outcome } => {
+            LOGGED_PHASES
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .remove(id);
+            LOGGED_PATHS
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .remove(id);
+            let level = match outcome {
+                Outcome::Failed(_) | Outcome::Unreachable(_) => Level::Warn,
+                _ => Level::Info,
+            };
+            (level, format!("#{id} finished: {}", outcome.kind_name()))
+        }
+        Event::Chat { from, .. } => (Level::Info, format!("chat message from {}", peer(from))),
+        Event::ChatSent { to, id } => (
+            Level::Info,
+            format!("chat message {id} to {} arrived", peer(to)),
+        ),
+        // Why is logged where it failed (see `chat`).
+        Event::ChatFailed { to, id, .. } => (
+            Level::Warn,
+            format!("chat message {id} to {} failed", peer(to)),
+        ),
+        Event::Typing { .. } => return None,
+    })
+}
+
+/// What the log says of a command (see [`describe`]). Every variant is
+/// named here.
+fn describe_command(command: &Command) -> Option<String> {
+    use crate::logging::peer;
+    Some(match command {
+        Command::Send { id, to, kind, .. } => format!("#{id} send {kind:?} to {}", peer(to)),
+        Command::SendDocument {
+            id, to, document, ..
+        } => format!(
+            "#{id} send a document to {} ({})",
+            peer(to),
+            match &document.items {
+                Some(items) => format!("a folder of {} items", items.len()),
+                None => "a file".into(),
+            }
+        ),
+        Command::Respond { id, accept } => match accept {
+            Some(accept) => format!("#{id} accepted (a folder is kept as {:?})", accept.folder),
+            None => format!("#{id} declined here"),
+        },
+        Command::Cancel { id } => format!("#{id} cancel"),
+        Command::Pause { id } => format!("#{id} pause"),
+        Command::Resume { id } => format!("#{id} resume"),
+        Command::Chat { to, id, .. } => format!("chat message {id} to {}", peer(to)),
+        Command::Typing { .. } => return None,
+        Command::NetworkChange => "the system says that the network changed".into(),
+        #[cfg(test)]
+        Command::DropConnection { id } => format!("#{id} the test drops the connection"),
+        Command::Shutdown { .. } => "shutting down".into(),
+        Command::NewIdentity { .. } => "a new identity is asked for".into(),
+    })
+}
+
 static NEXT_ID: AtomicU64 = AtomicU64::new(1);
 
 /// Allocates an id for a new transfer (used for both directions).
@@ -535,6 +715,9 @@ impl Limits {
 
 impl Shared {
     pub(crate) fn emit(&self, event: Event) {
+        if let Some((level, text)) = describe(&event) {
+            crate::logging::write(level, module_path!(), format_args!("{text}"));
+        }
         (self.sink)(event)
     }
 
@@ -621,8 +804,15 @@ pub(crate) async fn cancelled(shared: &Shared, id: u64, ctl: &Control) -> sessio
         return session::Ending::nothing();
     };
     match session.cancel() {
-        session::Cancel::Ended(ending) => return ending,
+        session::Cancel::Ended(ending) => {
+            crate::log_info!("#{id} the cancel ends the transfer");
+            return ending;
+        }
         session::Cancel::LeftToStep { to_save, waits } => {
+            crate::log_info!(
+                "#{id} the cancel is left to the transfer's next step (waits for the verdict \
+                 {waits}, to be saved {to_save})"
+            );
             // The last step of a receive stops and ends the transfer soon,
             // and so does a send whose record was being saved for the first
             // time (see `send::start`). A send whose data has all gone out
@@ -654,7 +844,10 @@ pub(crate) async fn cancelled(shared: &Shared, id: u64, ctl: &Control) -> sessio
                 ctl.cancel_waits.store(true, Ordering::Relaxed);
             }
         }
-        session::Cancel::TooLate => ctl.cancel_waits.store(true, Ordering::Relaxed),
+        session::Cancel::TooLate => {
+            crate::log_info!("#{id} the cancel came too late: the item is the receiver's");
+            ctl.cancel_waits.store(true, Ordering::Relaxed)
+        }
     }
     std::future::pending().await
 }
@@ -1002,6 +1195,7 @@ async fn guarded(
     match tokio::spawn(task).await {
         Ok(outcome) => outcome,
         Err(error) if error.is_panic() => {
+            crate::log_error!("#{id} the transfer's task panicked (see the panic above)");
             let Some(session) = shared.session_by_id(id) else {
                 return failed();
             };
@@ -1041,16 +1235,47 @@ fn gone(data_dir: &Path, token: &protocol::Token) -> protocol::Ended {
 /// Handles a new connection: an offer, the continuation of an interrupted
 /// transfer, or a question about one.
 async fn accept(shared: Arc<Shared>, endpoint: Endpoint, conn: Connection) {
+    use crate::logging::{peer as alias, token as token8};
     use protocol::Msg;
-    let Ok((mut send, mut recv)) = conn.accept_bi().await else {
-        return;
+    let peer = conn.remote_id();
+    let (mut send, mut recv) = match conn.accept_bi().await {
+        Ok(streams) => streams,
+        Err(e) => {
+            crate::log_info!(
+                "a connection from {} ended before its stream: {}",
+                alias(&peer),
+                crate::logging::connection_error(&e)
+            );
+            return;
+        }
     };
     let first = tokio::time::timeout(Duration::from_secs(30), protocol::read_msg(&mut recv)).await;
-    let Ok(Ok(first)) = first else { return };
-    let peer = conn.remote_id();
+    let first = match first {
+        Ok(Ok(first)) => first,
+        Ok(Err(e)) => {
+            crate::log_info!(
+                "a connection from {} brought no message: {}",
+                alias(&peer),
+                crate::logging::cause(&e)
+            );
+            return;
+        }
+        Err(_) => {
+            crate::log_info!(
+                "a connection from {} brought no message in 30 s",
+                alias(&peer)
+            );
+            return;
+        }
+    };
     // Short answers, after which the connection is done.
     let answer = match first {
-        Msg::Offer(_) if shared.blocked.lock().unwrap().contains(&peer) => {
+        Msg::Offer(offer) if shared.blocked.lock().unwrap().contains(&peer) => {
+            crate::log_info!(
+                "offer token={} from {} declined unseen: a blocked sender",
+                token8(&offer.token),
+                alias(&peer)
+            );
             // Declined as the user would, so the sender cannot tell; the
             // connection stays until the sender has read it.
             let _ = protocol::write_msg(&mut send, &Msg::Decline).await;
@@ -1069,6 +1294,11 @@ async fn accept(shared: Arc<Shared>, endpoint: Endpoint, conn: Connection) {
                 receive::handle(shared, endpoint, conn, send, recv, offer).await;
                 return;
             };
+            crate::log_info!(
+                "offer token={} from {} declined unseen: larger than the limit ({action:?})",
+                token8(&offer.token),
+                alias(&peer)
+            );
             // Declined as a blocked sender's is. The user is told once the
             // sender has the answer, or has gone.
             let _ = protocol::write_msg(&mut send, &Msg::Decline).await;
@@ -1081,6 +1311,7 @@ async fn accept(shared: Arc<Shared>, endpoint: Endpoint, conn: Connection) {
         }
         Msg::Continue { token } => {
             if shared.shutting_down.load(Ordering::SeqCst) {
+                crate::log_info!("continue token={} turned away: exiting", token8(&token));
                 // Exiting: nothing continues now; the sender tries again later.
                 conn.close(CLOSE_SUSPENDED.into(), b"exiting");
                 return;
@@ -1091,15 +1322,22 @@ async fn accept(shared: Arc<Shared>, endpoint: Endpoint, conn: Connection) {
                 .filter(|s| s.role == Role::Receive && s.peer == peer);
             match session {
                 Some(session) => {
+                    crate::log_info!("#{} continues on a new connection", session.id);
                     // The transfer's task picks the new connection up; an old
                     // one it may still hold is dead from the sender's point of view.
                     session.close_current(CLOSE_SUSPENDED, b"replaced");
                     let _ = session.new_conn.send(Streams { conn, send, recv });
                     return;
                 }
-                None => Msg::Gone {
-                    ended: gone(&shared.data_dir, &token),
-                },
+                None => {
+                    let ended = gone(&shared.data_dir, &token);
+                    crate::log_info!(
+                        "continue token={} from {} answered: gone ({ended:?})",
+                        token8(&token),
+                        alias(&peer)
+                    );
+                    Msg::Gone { ended }
+                }
             }
         }
         Msg::Query { token } => {
@@ -1110,12 +1348,23 @@ async fn accept(shared: Arc<Shared>, endpoint: Endpoint, conn: Connection) {
             if alive {
                 Msg::Alive
             } else {
-                Msg::Gone {
-                    ended: gone(&shared.data_dir, &token),
-                }
+                let ended = gone(&shared.data_dir, &token);
+                crate::log_info!(
+                    "query token={} from {} answered: gone ({ended:?})",
+                    token8(&token),
+                    alias(&peer)
+                );
+                Msg::Gone { ended }
             }
         }
-        _ => return,
+        other => {
+            crate::log_info!(
+                "a connection from {} began with {}; ignored",
+                alias(&peer),
+                other.kind_name()
+            );
+            return;
+        }
     };
     let _ = protocol::write_msg(&mut send, &answer).await;
     let _ = send.finish();
@@ -1243,12 +1492,20 @@ async fn restore_records(shared: &Arc<Shared>) -> Vec<(u64, TransferRecord, Arc<
             outcome: Outcome::Failed(error.into()),
         });
     };
+    let (mut ended, mut given_up, mut expired, mut missing_files) = (0, 0, 0, 0);
     for (record, fate) in over {
         match fate {
-            Fate::Ended => in_background(shared, move |dir| record.discard(dir)),
-            Fate::GivenUp => in_background(shared, move |dir| record.give_up(dir)),
+            Fate::Ended => {
+                ended += 1;
+                in_background(shared, move |dir| record.discard(dir))
+            }
+            Fate::GivenUp => {
+                given_up += 1;
+                in_background(shared, move |dir| record.give_up(dir))
+            }
             // `load_all` has ended it, with its files.
             Fate::Expired => {
+                expired += 1;
                 let error = if record.receiver_may_have_item() {
                     crate::i18n::tr!(error_expired_receiver_may_have)
                 } else {
@@ -1261,6 +1518,11 @@ async fn restore_records(shared: &Arc<Shared>) -> Vec<(u64, TransferRecord, Arc<
     let mut resumed = Vec::new();
     for (have, missing, record) in going_on {
         if let Some(error) = missing {
+            missing_files += 1;
+            crate::log_warn!(
+                "the transfer token={} cannot go on: its files are gone",
+                crate::logging::token(&record.token)
+            );
             report_failed(&record, have, &error);
             shared.restored(&record.token);
             in_background(shared, move |dir| record.discard(dir));
@@ -1282,15 +1544,26 @@ async fn restore_records(shared: &Arc<Shared>) -> Vec<(u64, TransferRecord, Arc<
         }
         resumed.push((id, record, ctl));
     }
+    crate::log_info!(
+        "transfers of the last run: {} go on, {missing_files} cannot, {expired} expired; \
+         the files of {ended} that had ended and {given_up} given up are being deleted",
+        resumed.len()
+    );
     resumed
 }
 
 /// Binds an endpoint for `secret`, trying again for as long as it fails.
 async fn bind_patiently(secret: &SecretKey, shared: &Shared) -> Endpoint {
     let mut failed = false;
+    let mut repeats = crate::logging::Repeats::new();
     loop {
         match bind(secret.clone(), shared.chat.is_some()).await {
             Ok(ep) => {
+                crate::log_info!(
+                    "the network is open (chat {}, relay only {})",
+                    if shared.chat.is_some() { "on" } else { "off" },
+                    relay_only()
+                );
                 // What the status says of the failure holds no more, and
                 // the endpoint says nothing of itself for a while (see
                 // `online_report`).
@@ -1301,6 +1574,13 @@ async fn bind_patiently(secret: &SecretKey, shared: &Shared) -> Endpoint {
             }
             Err(e) => {
                 failed = true;
+                let cause = crate::logging::cause(&e);
+                if let Some(left_out) = repeats.note(&cause) {
+                    crate::log_warn!(
+                        "the network could not be opened{}: {cause}; trying again every 5 s",
+                        crate::logging::left_out(left_out)
+                    );
+                }
                 shared.emit(Event::BindFailed(bind_error_text(&e)));
                 tokio::time::sleep(Duration::from_secs(5)).await;
             }
@@ -1355,10 +1635,26 @@ fn serve(shared: &Arc<Shared>, endpoint: &Endpoint) -> tokio::task::JoinHandle<(
             let shared = shared.clone();
             let endpoint = endpoint.clone();
             tokio::spawn(async move {
-                let Ok(accepting) = incoming.accept() else {
-                    return;
+                let accepting = match incoming.accept() {
+                    Ok(accepting) => accepting,
+                    Err(e) => {
+                        crate::log_info!(
+                            "an incoming connection failed: {}",
+                            crate::logging::connection_error(&e)
+                        );
+                        return;
+                    }
                 };
-                let Ok(conn) = accepting.await else { return };
+                let conn = match accepting.await {
+                    Ok(conn) => conn,
+                    Err(e) => {
+                        crate::log_info!(
+                            "an incoming connection failed: {}",
+                            crate::logging::cause_dyn(&e)
+                        );
+                        return;
+                    }
+                };
                 if conn.alpn() == protocol::CHAT_ALPN {
                     chat::accept(shared, conn).await;
                 } else {
@@ -1377,7 +1673,8 @@ async fn end_all_transfers(shared: &Shared) -> bool {
     loop {
         // Every pass: an offer may have been on its way in.
         let waiting: Vec<_> = shared.pending.lock().unwrap().drain().collect();
-        for (_, answer) in waiting {
+        for (id, answer) in waiting {
+            crate::log_info!("#{id} declined for the change of the identity");
             let _ = answer.send(None);
         }
         let controls: Vec<_> = shared.controls.lock().unwrap().values().cloned().collect();
@@ -1385,6 +1682,11 @@ async fn end_all_transfers(shared: &Shared) -> bool {
             return true;
         }
         if Instant::now() >= deadline {
+            crate::log_info!(
+                "new identity: {} transfers had not ended after {} s",
+                controls.len(),
+                IDENTITY_WAIT.as_secs()
+            );
             return false;
         }
         for ctl in controls.iter().filter(|c| !c.cancelled()) {
@@ -1406,6 +1708,9 @@ async fn run(secret: SecretKey, shared: Arc<Shared>, mut rx: mpsc::UnboundedRece
     shared.up.store(true, Ordering::SeqCst);
 
     while let Some(cmd) = rx.recv().await {
+        if let Some(text) = describe_command(&cmd) {
+            crate::log_info!("{text}");
+        }
         match cmd {
             Command::Send {
                 id,
@@ -1434,22 +1739,32 @@ async fn run(secret: SecretKey, shared: Arc<Shared>, mut rx: mpsc::UnboundedRece
             }
             Command::Respond { id, accept } => {
                 if let Some(tx) = shared.pending.lock().unwrap().remove(&id) {
-                    let _ = tx.send(accept);
+                    if tx.send(accept).is_err() {
+                        crate::log_info!("#{id} the answer came after the offer had ended");
+                    }
+                } else {
+                    crate::log_info!("#{id} the answer found no offer waiting for it");
                 }
             }
             Command::Cancel { id } => {
                 if let Some(ctl) = shared.control(id) {
                     ctl.cancel();
+                } else {
+                    crate::log_info!("#{id} cancel of a transfer that is not under way");
                 }
             }
             Command::Pause { id } => {
                 if let Some(ctl) = shared.control(id) {
                     ctl.paused.send_replace(true);
+                } else {
+                    crate::log_info!("#{id} pause of a transfer that is not under way");
                 }
             }
             Command::Resume { id } => {
                 if let Some(ctl) = shared.control(id) {
                     ctl.paused.send_replace(false);
+                } else {
+                    crate::log_info!("#{id} resume of a transfer that is not under way");
                 }
             }
             Command::Chat { to, id, text } => {
@@ -1475,6 +1790,7 @@ async fn run(secret: SecretKey, shared: Arc<Shared>, mut rx: mpsc::UnboundedRece
                 // their peer and to clean up; the rest is suspended, also
                 // those whose cancel came too late or waits for the
                 // receiver's verdict (once it is in their record).
+                let began = Instant::now();
                 let deadline = Instant::now() + Duration::from_secs(1);
                 while Instant::now() < deadline {
                     let cancelling = shared
@@ -1487,6 +1803,16 @@ async fn run(secret: SecretKey, shared: Arc<Shared>, mut rx: mpsc::UnboundedRece
                         break;
                     }
                     tokio::time::sleep(Duration::from_millis(50)).await;
+                }
+                let cancelling = shared
+                    .controls
+                    .lock()
+                    .unwrap()
+                    .values()
+                    .filter(|c| c.cancelling())
+                    .count();
+                if cancelling > 0 {
+                    crate::log_warn!("shutdown: {cancelling} cancels had not ended after 1 s");
                 }
                 // Let the close reach the peers, and let receivers get what
                 // they have onto the disk and into their records: the next
@@ -1504,11 +1830,19 @@ async fn run(secret: SecretKey, shared: Arc<Shared>, mut rx: mpsc::UnboundedRece
                     let syncing = sessions.iter().any(|s| s.syncing.load(Ordering::Relaxed));
                     let now = Instant::now();
                     if (!syncing && now >= settle) || now >= deadline {
+                        if syncing {
+                            crate::log_warn!("shutdown: data was still being synced after 10 s");
+                        }
+                        crate::log_info!("shutdown: {} transfers suspended", sessions.len());
                         break;
                     }
                     tokio::time::sleep(Duration::from_millis(50)).await;
                 }
                 endpoint.close().await;
+                crate::log_info!(
+                    "shutdown: the network closed after {} ms",
+                    began.elapsed().as_millis()
+                );
                 let _ = done.send(());
                 return;
             }
@@ -1518,12 +1852,16 @@ async fn run(secret: SecretKey, shared: Arc<Shared>, mut rx: mpsc::UnboundedRece
                 done,
             } => {
                 if abandoned.load(Ordering::SeqCst) {
+                    crate::log_info!("new identity: nobody waits for it any more");
                     continue;
                 }
                 // No new offers while the transfers end, and none that
                 // would begin under an identity about to go.
                 serving.abort();
                 if !end_all_transfers(&shared).await || abandoned.load(Ordering::SeqCst) {
+                    crate::log_info!(
+                        "new identity: transfers are still under way; nothing changed"
+                    );
                     serving = serve(&shared, &endpoint);
                     let _ = done.send(Err(IdentityError::Busy));
                     continue;
@@ -1533,11 +1871,16 @@ async fn run(secret: SecretKey, shared: Arc<Shared>, mut rx: mpsc::UnboundedRece
                     session::off_runtime(move || crate::identity::replace(&dir, &secret)).await
                 };
                 if let Err(e) = saved {
+                    crate::log_error!(
+                        "new identity: the key could not be saved: {}",
+                        crate::logging::io(&e)
+                    );
                     serving = serve(&shared, &endpoint);
                     let text = failure_text(&anyhow::Error::new(e));
                     let _ = done.send(Err(IdentityError::Failed(text)));
                     continue;
                 }
+                crate::log_info!("new identity: saved; the network starts again with it");
                 // The key is the new one from here on, whatever the network
                 // does: the old endpoint goes, and the new one comes up as
                 // the first one did at the start. Nothing says that the
@@ -1713,18 +2056,240 @@ mod tests {
             .collect()
     }
 
+    /// What the log says of an event or a command holds nothing of the user:
+    /// no names, paths, texts, Contact IDs or whole tokens. Every variant is
+    /// tried, which the match below holds to.
+    #[test]
+    fn the_log_tells_nothing_of_the_user() {
+        let peer = SecretKey::generate().public();
+        let token: protocol::Token = rand::random();
+        let secrets = [
+            peer.to_string(),
+            peer.fmt_short().to_string(),
+            protocol::token_hex(&token),
+            "Ana Kovač".to_string(),
+            "holiday photo.jpg".to_string(),
+            r"C:\Users\ana\Pictures".to_string(),
+            "/Users/ana/Pictures".to_string(),
+            "a secret message".to_string(),
+        ];
+        let offer = Offer {
+            kind: Kind::Folder,
+            name: secrets[4].clone(),
+            size: 1,
+            file_count: 1,
+            content_size: 1,
+            largest_file: 1,
+            sender_name: secrets[3].clone(),
+            token,
+            modified: None,
+            created: None,
+        };
+        let record = TransferRecord {
+            token,
+            peer: peer.to_string(),
+            offer: offer.clone(),
+            peer_name: secrets[3].clone(),
+            paused: false,
+            created: SystemTime::now(),
+            side: session::Side::Send {
+                source: secrets[5].clone().into(),
+                source_len: 1,
+                source_mtime: None,
+                data_path: secrets[6].clone().into(),
+                sent: 0,
+                staging: None,
+            },
+            done_hash: None,
+            done_sent: false,
+            cancelled: false,
+            ended: false,
+            ended_at: None,
+        };
+        let text = || secrets[7].clone();
+        let events = vec![
+            Event::BindFailed(secrets[5].clone()),
+            Event::Connecting,
+            Event::Online(true),
+            Event::Offer {
+                id: 1,
+                from: peer,
+                offer: offer.clone(),
+            },
+            Event::OverLimit {
+                from: peer,
+                offer: offer.clone(),
+            },
+            Event::Restored {
+                id: 2,
+                record: Box::new(record),
+                have: 0,
+                goes_on: true,
+            },
+            Event::Phase {
+                id: 3,
+                phase: Phase::Transferring,
+            },
+            Event::HandedOver { id: 4 },
+            Event::CancelWaits { id: 5 },
+            Event::Progress {
+                id: 6,
+                done: 1,
+                total: 2,
+            },
+            Event::Path {
+                id: 7,
+                direct: Some(false),
+            },
+            Event::Finished {
+                id: 8,
+                outcome: Outcome::Completed(Some(secrets[5].clone().into())),
+            },
+            Event::Finished {
+                id: 9,
+                outcome: Outcome::Failed(secrets[6].clone()),
+            },
+            Event::Chat {
+                from: peer,
+                name: secrets[3].clone(),
+                text: text(),
+            },
+            Event::ChatSent { to: peer, id: 10 },
+            Event::ChatFailed {
+                to: peer,
+                id: 11,
+                error: text(),
+            },
+            Event::Typing {
+                from: peer,
+                on: true,
+            },
+        ];
+        // A new variant fails to compile here until it is tried above.
+        let tried = |event: &Event| match event {
+            Event::BindFailed(_)
+            | Event::Connecting
+            | Event::Online(_)
+            | Event::Offer { .. }
+            | Event::OverLimit { .. }
+            | Event::Restored { .. }
+            | Event::Phase { .. }
+            | Event::HandedOver { .. }
+            | Event::CancelWaits { .. }
+            | Event::Progress { .. }
+            | Event::Path { .. }
+            | Event::Finished { .. }
+            | Event::Chat { .. }
+            | Event::ChatSent { .. }
+            | Event::ChatFailed { .. }
+            | Event::Typing { .. } => true,
+        };
+        let (done, _) = std::sync::mpsc::channel();
+        let (answer, _) = std::sync::mpsc::channel();
+        let commands = vec![
+            Command::Send {
+                id: 1,
+                to: peer,
+                path: secrets[5].clone().into(),
+                kind: Kind::File,
+                my_name: secrets[3].clone(),
+                peer_name: secrets[3].clone(),
+            },
+            Command::SendDocument {
+                id: 2,
+                to: peer,
+                document: crate::source::Document {
+                    uri: secrets[6].clone(),
+                    name: secrets[4].clone(),
+                    ..Default::default()
+                },
+                my_name: secrets[3].clone(),
+                peer_name: secrets[3].clone(),
+            },
+            Command::Respond {
+                id: 3,
+                accept: Some(Accept {
+                    dir: secrets[5].clone().into(),
+                    folder: ReceivedFolder::Both,
+                }),
+            },
+            Command::Cancel { id: 4 },
+            Command::Pause { id: 5 },
+            Command::Resume { id: 6 },
+            Command::Chat {
+                to: peer,
+                id: 7,
+                text: text(),
+            },
+            Command::Typing { to: peer, on: true },
+            Command::NetworkChange,
+            Command::DropConnection { id: 8 },
+            Command::Shutdown { done },
+            Command::NewIdentity {
+                secret: SecretKey::generate(),
+                abandoned: Arc::default(),
+                done: answer,
+            },
+        ];
+        let tried_command = |command: &Command| match command {
+            Command::Send { .. }
+            | Command::SendDocument { .. }
+            | Command::Respond { .. }
+            | Command::Cancel { .. }
+            | Command::Pause { .. }
+            | Command::Resume { .. }
+            | Command::Chat { .. }
+            | Command::Typing { .. }
+            | Command::NetworkChange
+            | Command::DropConnection { .. }
+            | Command::Shutdown { .. }
+            | Command::NewIdentity { .. } => true,
+        };
+        let mut lines = Vec::new();
+        for event in &events {
+            assert!(tried(event));
+            lines.extend(describe(event).map(|(_, text)| text));
+        }
+        for command in &commands {
+            assert!(tried_command(command));
+            lines.extend(describe_command(command));
+        }
+        // What the log writes is scrubbed too, but this must hold without it.
+        for line in &lines {
+            for secret in &secrets {
+                assert!(!line.contains(secret.as_str()), "{line:?} holds {secret:?}");
+            }
+        }
+        let token8 = crate::logging::token(&token);
+        let alias = crate::logging::peer(&peer);
+        assert!(
+            lines
+                .iter()
+                .any(|l| l.starts_with("#1 offer") && l.contains(&token8))
+        );
+        assert!(
+            lines
+                .iter()
+                .any(|l| l.starts_with("#2 restored") && l.contains(&token8))
+        );
+        assert!(lines.iter().any(|l| l.contains(&alias)));
+    }
+
     /// Two endpoints in one process: sends a file (pausing on both sides on
     /// the way) and a folder from A to B, then checks that a declined offer
-    /// is reported to the sender.
+    /// is reported to the sender. What the log got meanwhile names none of it.
     #[test]
     fn end_to_end() {
+        crate::logging::capture_libraries();
         let base = scratch("e2e");
         let (tx_a, rx_a) = mpsc::channel();
         let (tx_b, rx_b) = mpsc::channel();
+        let key_a = SecretKey::generate();
+        let id_a = key_a.public();
         let key_b = SecretKey::generate();
         let id_b = key_b.public();
         let a = start(
-            SecretKey::generate(),
+            key_a,
             base.join("a"),
             base.join("temp"),
             [],
@@ -1927,6 +2492,38 @@ mod tests {
         assert_eq!(left.len(), 4, "unexpected files: {left:?}");
         assert!(session::records(&base.join("a")).is_empty());
         assert!(session::records(&base.join("b")).is_empty());
+
+        // The log has the transfers, and nothing of who and what they were.
+        let lines = crate::logging::captured();
+        let finished = format!("#{id} finished: declined");
+        assert!(
+            lines.iter().any(|l| l.ends_with(&finished)),
+            "no {finished:?} in the log"
+        );
+        let mut secrets = vec![
+            id_a.to_string(),
+            id_a.fmt_short().to_string(),
+            id_b.to_string(),
+            id_b.fmt_short().to_string(),
+            base.display().to_string(),
+            "hello.bin".to_string(),
+            "My Folder".to_string(),
+            "decline.txt".to_string(),
+        ];
+        secrets.extend(
+            std::env::var("USERNAME")
+                .or_else(|_| std::env::var("USER"))
+                .into_iter()
+                .filter(|name| name.len() >= 4),
+        );
+        for line in &lines {
+            for secret in &secrets {
+                assert!(
+                    !line.contains(secret.as_str()),
+                    "the log line {line:?} holds {secret:?}"
+                );
+            }
+        }
         std::fs::remove_dir_all(&base).ok();
     }
 

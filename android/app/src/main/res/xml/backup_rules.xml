@@ -4,4 +4,5 @@
     <exclude domain="file" path="Dodavo/secret.key" />
     <exclude domain="file" path="Dodavo/transfers" />
     <exclude domain="file" path="Dodavo/running.lock" />
+    <exclude domain="file" path="Dodavo/Dodavo.log" />
 </full-backup-content>

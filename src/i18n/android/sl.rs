@@ -35,7 +35,8 @@ pub const SL: Strings = Strings {
     invalid_contact_id: "To ni veljaven ID stika.\n\nID stika je 64-mestna koda iz števk 0–9 \
         in črk a–f. Prosite osebo, naj vam ga znova pošlje.",
     enter_recipient_name: "Vnesite ime tega prejemnika.",
-    panic_message: "Prišlo je do nepričakovane napake in Dodavo se mora zapreti.\n\n{info}",
+    panic_message: "Prišlo je do nepričakovane napake in Dodavo se mora zapreti.\n\nKaj se je zgodilo, je zapisano v dnevniku aplikacije Dodavo. Ko bo Dodavo spet odprt, odprite O aplikaciji Dodavo in se dotaknite možnosti Deli dnevnik, da ga pošljete avtorjem aplikacije.\n\n{info}",
+    panic_message_goes_on: "Prišlo je do nepričakovane napake. Dodavo deluje naprej, vendar to, kar je v tistem trenutku počel, morda ni uspelo.\n\nKaj se je zgodilo, je zapisano v dnevniku aplikacije Dodavo: odprite O aplikaciji Dodavo in se dotaknite možnosti Deli dnevnik, da ga pošljete avtorjem aplikacije.\n\n{info}",
     add_to_recipients: "Dodaj »{name}« med moje prejemnike",
     wants_folder: "{name} vam želi poslati mapo",
     wants_file: "{name} vam želi poslati datoteko",
@@ -151,6 +152,7 @@ pub const SL: Strings = Strings {
     website: "Spletno mesto",
     privacy_policy: "Pravilnik o zasebnosti",
     licenses: "Licence",
+    share_log: "Deli dnevnik",
     license_dodavo: "Dodavo (GNU General Public License, različica 3)",
     license_components: "Komponente drugih avtorjev",
     help_title: "Pomoč",

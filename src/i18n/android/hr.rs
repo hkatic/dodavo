@@ -35,7 +35,8 @@ pub const HR: Strings = Strings {
     invalid_contact_id: "Ovo nije valjan ID kontakta.\n\nID kontakta kôd je od 64 znaka sastavljen od znamenki 0–9 \
         i slova a–f. Zamolite osobu da vam ga ponovno pošalje.",
     enter_recipient_name: "Unesite ime ovog primatelja.",
-    panic_message: "Došlo je do neočekivane pogreške i Dodavo se mora zatvoriti.\n\n{info}",
+    panic_message: "Došlo je do neočekivane pogreške i Dodavo se mora zatvoriti.\n\nŠto se dogodilo, zapisano je u zapisniku aplikacije Dodavo. Kad Dodavo ponovno bude otvoren, otvorite O aplikaciji Dodavo i dodirnite Podijeli zapisnik da biste ga poslali autorima aplikacije.\n\n{info}",
+    panic_message_goes_on: "Došlo je do neočekivane pogreške. Dodavo nastavlja s radom, ali ono što je u tom trenutku radio možda nije uspjelo.\n\nŠto se dogodilo, zapisano je u zapisniku aplikacije Dodavo: otvorite O aplikaciji Dodavo i dodirnite Podijeli zapisnik da biste ga poslali autorima aplikacije.\n\n{info}",
     add_to_recipients: "Dodaj „{name}” u moje primatelje",
     wants_folder: "{name} vam želi poslati mapu",
     wants_file: "{name} vam želi poslati datoteku",
@@ -151,6 +152,7 @@ pub const HR: Strings = Strings {
     website: "Web-mjesto",
     privacy_policy: "Pravila o privatnosti",
     licenses: "Licence",
+    share_log: "Podijeli zapisnik",
     license_dodavo: "Dodavo (GNU General Public License, verzija 3)",
     license_components: "Komponente drugih autora",
     help_title: "Pomoć",

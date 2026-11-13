@@ -127,6 +127,7 @@ enum K: String {
     case menu_bring_all_to_front
     case menu_help
     case menu_dodavo_help
+    case menu_show_log
     case menu_license
     case menu_donate
     case menu_open_dodavo
@@ -266,6 +267,7 @@ enum K: String {
     case update_checking
     case space_unknown
     case panic_message
+    case panic_message_goes_on
     case language_restart
     case quit_and_reopen
     case reopen_later

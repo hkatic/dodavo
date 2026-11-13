@@ -16,6 +16,7 @@ use dodavo_core::{
     i18n::{self, Lang, tr},
     identity,
     limit::{self, Unit},
+    logging,
     net::{
         self, Accept, Command, Event, Kind, NetHandle, Offer, Outcome, Role, TransferRecord,
         session::Side,
@@ -115,6 +116,9 @@ pub struct Started {
     chat_max_chars: usize,
     /// Each language by its code, with its own name for it.
     languages: Vec<(&'static str, &'static str)>,
+    /// Where the log is (see `dodavo_core::logging`), which the user can
+    /// show or send; empty where there is none.
+    log_path: String,
 }
 
 /// What the status says of the network: its problem while it has no
@@ -571,6 +575,17 @@ enum Call {
     RunningCount,
     CancelAll,
     Licenses,
+    /// A line for the log from the user interface: a text of its own, never
+    /// a name, a path or what the user wrote (see `dodavo_core::logging`).
+    /// `level` is `error`, `warn`, `info` or `debug`.
+    Log {
+        level: String,
+        message: String,
+    },
+    /// Waits a moment until the log has all lines before, so that the user
+    /// can be shown or send it. The answer has its path, empty where there
+    /// is none.
+    FlushLog,
     Shutdown,
     /// Gives this installation a new Contact ID. Every transfer is cancelled
     /// and every waiting offer declined first (`declined`: their windows are
@@ -1054,7 +1069,28 @@ impl Core {
 
         match take_instance_lock(&data_dir) {
             // Kept for the life of the program: it ends with the process.
-            Ok(Some(instance)) => std::mem::forget(instance),
+            Ok(Some(instance)) => {
+                std::mem::forget(instance);
+                // This copy's from here on: another one that finds the lock
+                // taken never writes it. What was logged before is kept.
+                #[cfg(target_os = "macos")]
+                let ui_name = "Mac";
+                #[cfg(not(target_os = "macos"))]
+                let ui_name = "Android";
+                let extra = [format!(
+                    "profile: {}; start hidden: {}",
+                    if profile.is_some() {
+                        "named"
+                    } else {
+                        "default"
+                    },
+                    options.hidden
+                )];
+                if let Some(path) = logging::init(&data_dir, ui_name, &extra) {
+                    started.log_path = path.display().to_string();
+                }
+                dodavo_core::log_info!("language {}; {}", i18n::lang().code(), cfg.log_summary());
+            }
             Ok(None) => started.already_running = true,
             Err(e) => started.fatal = Some(folder_unusable(&data_dir, &e)),
         }
@@ -1081,6 +1117,10 @@ impl Core {
             match identity::load_or_create(&data_dir) {
                 Ok(secret) => Some(secret),
                 Err(e) => {
+                    dodavo_core::log_error!(
+                        "no identity, so Dodavo cannot start: {}",
+                        logging::cause(&e)
+                    );
                     started.fatal = Some(
                         ui()
                             .identity_failed
@@ -1490,6 +1530,16 @@ impl Core {
                 "dodavo": LICENSE,
                 "components": COMPONENTS,
             })),
+            Call::Log { level, message } => {
+                logging::external(&level, &message);
+                "null".into()
+            }
+            Call::FlushLog => {
+                logging::flush(Duration::from_millis(500));
+                json(serde_json::json!({
+                    "path": logging::path().map(|p| p.display().to_string()).unwrap_or_default(),
+                }))
+            }
             #[cfg(target_os = "macos")]
             Call::ChangeContactId => self.change_contact_id(),
             #[cfg(target_os = "macos")]
@@ -1611,9 +1661,11 @@ impl Core {
                 "null".into()
             }
             Call::Shutdown => {
+                dodavo_core::log_info!("the app quits");
                 // Off the lock: closing takes a moment, and events still come.
                 let net = lock(&self.state).net.clone();
                 net.shutdown(Duration::from_secs(3));
+                logging::flush(Duration::from_secs(1));
                 "null".into()
             }
         }
@@ -2115,13 +2167,38 @@ impl Core {
         // it.
         let folder = cfg.received_folder;
         let auto_dir = cfg.auto_save_dir_for(&from, &pending.offer).filter(|d| {
-            std::fs::create_dir_all(d).is_ok() && {
-                let space = space::check_space(&pending.offer, d, &temp_dir, folder, &arriving);
-                space.fits
-                    && space.enough != Some(false)
-                    && !(cfg.warn_fat_temp && space.temp_warning.is_some())
+            if let Err(e) = std::fs::create_dir_all(d) {
+                dodavo_core::log_info!(
+                    "#{id} the folder to save to cannot be made: {}",
+                    logging::io(&e)
+                );
+                return false;
             }
+            let space = space::check_space(&pending.offer, d, &temp_dir, folder, &arriving);
+            let fat_temp = cfg.warn_fat_temp && space.temp_warning.is_some();
+            let starts = space.fits && space.enough != Some(false) && !fat_temp;
+            if !starts {
+                dodavo_core::log_info!(
+                    "#{id} the destination holds it {}, enough room {:?}, FAT32 temporary folder {fat_temp}",
+                    space.fits,
+                    space.enough
+                );
+            }
+            starts
         });
+        dodavo_core::log_info!(
+            "#{id} from {}: {}",
+            if known {
+                "a recipient"
+            } else {
+                "someone who is no recipient"
+            },
+            if auto_dir.is_some() {
+                "it starts by itself"
+            } else {
+                "the user is asked"
+            }
+        );
         // The same goes for an offer that asks where to save.
         let asked = auto_dir.is_none().then(|| {
             let dir = cfg.suggested_save_dir();
@@ -2389,13 +2466,19 @@ fn handle_events(events: mpsc::Receiver<Event>) {
 /// A failure on a thread is told, and the program ends if nothing can go on.
 fn install_panic_hook(outbox: &'static Outbox) {
     std::panic::set_hook(Box::new(move |info| {
-        let text = ui().panic_message.replace("{info}", &info.to_string());
+        // First, and on the disk before the program may end.
+        dodavo_core::logging::panic(info);
+        let info = info.to_string();
         match std::thread::current().name() {
             // The thread of the network, or this library's own: nothing can
             // be sent or received any more.
-            Some("network" | "events" | "main") => outbox.push(Out::Fatal { text }),
+            Some("network" | "events" | "main") => outbox.push(Out::Fatal {
+                text: ui().panic_message.replace("{info}", &info),
+            }),
             // A transfer's task fails, and the program goes on (`net::guarded`).
-            _ => outbox.push(Out::Error { text }),
+            _ => outbox.push(Out::Error {
+                text: ui().panic_message_goes_on.replace("{info}", &info),
+            }),
         }
     }));
 }

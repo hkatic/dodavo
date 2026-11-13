@@ -19,6 +19,8 @@ struct Started: Decodable {
     /// The longest chat message that can be written, in characters.
     let chatMaxChars: Int
     let languages: [[String]]
+    /// Where Dodavo's log is; empty where there is none.
+    let logPath: String
 }
 
 /// How large an item a recipient may send: as for everyone ("general"), any
@@ -380,6 +382,13 @@ enum Core {
     /// Does `call`, whatever the answer.
     static func perform(_ call: String, _ arguments: [String: Any] = [:]) {
         _ = raw(call, arguments)
+    }
+
+    /// A line for Dodavo's log: a text of this app's own, never a name, a
+    /// path or what the user wrote (an error by its domain and code only).
+    /// `level` is "error", "warn", "info" or "debug".
+    static func log(_ level: String, _ message: String) {
+        perform("log", ["level": level, "message": message])
     }
 
     /// `{ "error": … }`, or none.

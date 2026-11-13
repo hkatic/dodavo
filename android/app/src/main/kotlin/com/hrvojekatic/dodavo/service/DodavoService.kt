@@ -78,9 +78,17 @@ class DodavoService : Service() {
             if (need.background || type == 0) type = type or ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE
         }
         runCatching { ServiceCompat.startForeground(this, Notifications.SERVICE_ID, notification(need), type) }
+            .onFailure { log("warn", "the foreground service could not start (${it.javaClass.simpleName}, type $type)") }
+    }
+
+    /** A line of the app's own for Dodavo's log: never a name, a path or a text of the user's. */
+    private fun log(level: String, message: String) {
+        val container = container
+        container.scope.launch { container.repository.log(level, message) }
     }
 
     override fun onTimeout(startId: Int, fgsType: Int) {
+        log("info", "Android ended the time for moving data in the background (type $fgsType)")
         // The day's time for moving data in the background is used up. The
         // transfer waits, as after a lost connection, until Dodavo is in
         // front again, or goes on under "Receive in the background".
