@@ -287,6 +287,9 @@ pub const SR_LATN: Strings = Strings {
     language_label: "&Jezik:",
     language_default: "Podrazumevani jezik sistema Windows",
     language_restart: "Novi jezik će se koristiti nakon ponovnog pokretanja programa Dodavo.",
+    restart_now: "&Ponovo pokreni sada",
+    restart_later: "Ponovo pokreni &kasnije",
+    restart_failed: "Dodavo nije moguće ponovo pokrenuti:\n{error}",
     temp_folder_label: "&Fascikla za privremene datoteke:",
     pick_temp_folder: "Izaberite fasciklu za privremene datoteke",
     invalid_temp_folder: "Fascikla za privremene datoteke ne može da se koristi. Izaberite drugu fasciklu ili ispraznite polje da bi se koristila ona koju daje Windows.",
@@ -539,6 +542,12 @@ pub const SR_LATN: Strings = Strings {
         two: "{n} prenosa je još u toku.",
         few: "{n} prenosa su još u toku.",
         other: "{n} prenosa je još u toku.",
+    },
+    restart_transfers: Plural {
+        one: "{n} prenos je još u toku. Ako sada ponovo pokrenete Dodavo, prenos će se zaustaviti i zatim nastaviti tamo gde je stao. Velikom prenosu može biti potrebno neko vreme da nastavi.",
+        two: "{n} prenosa je još u toku. Ako sada ponovo pokrenete Dodavo, prenosi će se zaustaviti i zatim nastaviti tamo gde su stali. Velikom prenosu može biti potrebno neko vreme da nastavi.",
+        few: "{n} prenosa su još u toku. Ako sada ponovo pokrenete Dodavo, prenosi će se zaustaviti i zatim nastaviti tamo gde su stali. Velikom prenosu može biti potrebno neko vreme da nastavi.",
+        other: "{n} prenosa je još u toku. Ako sada ponovo pokrenete Dodavo, prenosi će se zaustaviti i zatim nastaviti tamo gde su stali. Velikom prenosu može biti potrebno neko vreme da nastavi.",
     },
     change_id_transfers: Plural {
         one: "{n} prenos je u toku ili čeka vaš odgovor. Promenom ID-a kontakta on se otkazuje.",

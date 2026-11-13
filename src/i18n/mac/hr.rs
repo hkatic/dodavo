@@ -106,6 +106,12 @@ pub const HR: Strings = Strings {
         few: "{n} prijenosa još su u tijeku.",
         other: "{n} prijenosa još je u tijeku.",
     },
+    reopen_transfers: Plural {
+        one: "{n} prijenos još je u tijeku. Ako sada zatvorite i ponovno otvorite Dodavo, prijenos će se zaustaviti i zatim nastaviti ondje gdje je stao. Velikom prijenosu može trebati neko vrijeme da nastavi.",
+        two: "{n} prijenosa još je u tijeku. Ako sada zatvorite i ponovno otvorite Dodavo, prijenosi će se zaustaviti i zatim nastaviti ondje gdje su stali. Velikom prijenosu može trebati neko vrijeme da nastavi.",
+        few: "{n} prijenosa još su u tijeku. Ako sada zatvorite i ponovno otvorite Dodavo, prijenosi će se zaustaviti i zatim nastaviti ondje gdje su stali. Velikom prijenosu može trebati neko vrijeme da nastavi.",
+        other: "{n} prijenosa još je u tijeku. Ako sada zatvorite i ponovno otvorite Dodavo, prijenosi će se zaustaviti i zatim nastaviti ondje gdje su stali. Velikom prijenosu može trebati neko vrijeme da nastavi.",
+    },
     change_id_transfers: Plural {
         one: "{n} prijenos je u tijeku ili čeka vaš odgovor. Promjenom ID-a kontakta on se otkazuje.",
         two: "{n} prijenosa je u tijeku ili čeka vaš odgovor. Promjenom ID-a kontakta oni se otkazuju.",
@@ -326,6 +332,8 @@ pub const HR: Strings = Strings {
     space_unknown: "Nije moguće utvrditi koliko je slobodnog prostora na odabranom disku.",
     panic_message: "Došlo je do neočekivane pogreške i Dodavo se mora zatvoriti.\n\n{info}",
     language_restart: "Novi jezik koristit će se kada sljedeći put otvorite Dodavo.",
+    quit_and_reopen: "Zatvori i ponovno otvori",
+    reopen_later: "Kasnije",
     update_latest: "Imate najnoviju verziju aplikacije Dodavo ({version}).",
     update_manual: "Dodavo se ovdje ne može sam zamijeniti. Slika diska je otvorena: kopirajte Dodavo iz nje u mapu Aplikacije.",
     cancelled_text: "Otkazano.",

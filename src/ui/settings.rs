@@ -1,6 +1,10 @@
 //! Settings dialog.
 
-use std::path::{Path, PathBuf};
+use std::{
+    cell::Cell,
+    path::{Path, PathBuf},
+    rc::Rc,
+};
 
 use windows_sys::Win32::{
     Foundation::{HWND, LPARAM, LRESULT},
@@ -139,6 +143,8 @@ struct SettingsDialog {
     /// The file that each event last played here, which its choice of a
     /// file brings back: the arrow keys pass the other choices on their way.
     sound_files: Vec<Option<PathBuf>>,
+    /// Whether the user chose to restart for a new language.
+    restart: Rc<Cell<bool>>,
 }
 
 /// The name of an event that has a sound.
@@ -171,7 +177,10 @@ fn sound_entry(event: SoundEvent, choice: &SoundChoice) -> String {
     tr!(sound_entry, event = sound_name(event), sound = sound)
 }
 
-pub fn show(owner: HWND) {
+/// Shows the settings modally. Returns whether the user chose to restart
+/// Dodavo for a new language, which the caller does.
+pub fn show(owner: HWND) -> bool {
+    let restart = Rc::new(Cell::new(false));
     let handler = SettingsDialog {
         tabs: std::ptr::null_mut(),
         pages: Vec::new(),
@@ -211,6 +220,7 @@ pub fn show(owner: HWND) {
         sound_play: std::ptr::null_mut(),
         sounds: Vec::new(),
         sound_files: Vec::new(),
+        restart: restart.clone(),
     };
     let hwnd = window::create(
         CreateOptions {
@@ -223,6 +233,7 @@ pub fn show(owner: HWND) {
         Box::new(handler),
     );
     window::run_modal(owner, hwnd);
+    restart.get()
 }
 
 /// A path without what only its writing adds (a separator at its end).
@@ -523,8 +534,10 @@ impl SettingsDialog {
         if let Some(on) = close_when_ended {
             super::progress::set_close_at_end(on);
         }
+        // Done once this window has closed (see `show`).
         if language_changed {
-            info(w.hwnd, tr!(language_restart));
+            self.restart
+                .set(super::main_window::confirm_restart(w.hwnd));
         }
         true
     }

@@ -106,6 +106,12 @@ pub const EN: Strings = Strings {
         few: "{n} transfers are still running.",
         other: "{n} transfers are still running.",
     },
+    reopen_transfers: Plural {
+        one: "{n} transfer is still running. If you quit and reopen Dodavo now, it stops and then continues where it left off. A large transfer may take a while to continue.",
+        two: "{n} transfers are still running. If you quit and reopen Dodavo now, they stop and then continue where they left off. A large transfer may take a while to continue.",
+        few: "{n} transfers are still running. If you quit and reopen Dodavo now, they stop and then continue where they left off. A large transfer may take a while to continue.",
+        other: "{n} transfers are still running. If you quit and reopen Dodavo now, they stop and then continue where they left off. A large transfer may take a while to continue.",
+    },
     change_id_transfers: Plural {
         one: "{n} transfer is under way or waiting for your answer. Changing your Contact ID cancels it.",
         two: "{n} transfers are under way or waiting for your answer. Changing your Contact ID cancels them.",
@@ -326,6 +332,8 @@ pub const EN: Strings = Strings {
     space_unknown: "The free space on the selected volume could not be determined.",
     panic_message: "An unexpected error occurred and Dodavo has to quit.\n\n{info}",
     language_restart: "The new language is used the next time you open Dodavo.",
+    quit_and_reopen: "Quit & Reopen",
+    reopen_later: "Later",
     update_latest: "You have the latest version of Dodavo ({version}).",
     update_manual: "Dodavo cannot replace itself here. The disk image is open: copy Dodavo from it to the Applications folder.",
     cancelled_text: "Cancelled.",

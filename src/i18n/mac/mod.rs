@@ -278,6 +278,8 @@ super::strings! {
         space_unknown,
         panic_message,
         language_restart,
+        quit_and_reopen,
+        reopen_later,
         update_latest,
         update_manual,
         cancelled_text,
@@ -344,6 +346,7 @@ super::strings! {
         folder_description,
         wants_items,
         quit_instruction,
+        reopen_transfers,
         change_id_transfers,
         drop_confirm_many,
         drop_confirm_recipients,
@@ -408,12 +411,13 @@ mod tests {
     }
 
     /// What only makes sense on Windows does not come along, nor do its
-    /// access keys.
+    /// access keys. An "&" between spaces is Apple's ("Privacy & Security",
+    /// "Quit & Reopen").
     #[test]
     fn no_windows_in_the_mac_texts() {
         for lang in Lang::ALL {
             for (key, text) in strings(lang).texts() {
-                assert!(!text.contains('&') || text.contains("Privacy & Security"), "{lang:?}: {key}");
+                assert!(!text.replace(" & ", "").contains('&'), "{lang:?}: {key}");
                 assert!(!text.contains('\t'), "{lang:?}: {key}");
                 for word in [
                     "Windows",

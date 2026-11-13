@@ -64,6 +64,11 @@ use ui::wide;
 #[cfg(windows)]
 const FORWARD_TIMEOUT: Duration = Duration::from_secs(30);
 
+/// How long a restart waits for the instance that started it to end, which
+/// first suspends its transfers (see `start_again`).
+#[cfg(windows)]
+const RESTART_TIMEOUT: Duration = Duration::from_secs(30);
+
 #[cfg(windows)]
 #[derive(Debug, Default, PartialEq)]
 struct Args {
@@ -72,6 +77,8 @@ struct Args {
     profile: Option<String>,
     /// Started by Setup right after an automatic update.
     updated: bool,
+    /// Started by the instance of its profile, which is exiting to restart.
+    restarted: bool,
     /// What to send, from File Explorer's menus (everything after `--send`).
     send: Vec<PathBuf>,
 }
@@ -103,6 +110,7 @@ fn parse_args(mut it: impl Iterator<Item = OsString>) -> Args {
         match a.to_str() {
             Some("--minimized") => args.minimized = true,
             Some("--updated") => args.updated = true,
+            Some("--restarted") => args.restarted = true,
             Some("--profile") => {
                 args.profile = it
                     .next()
@@ -148,6 +156,39 @@ fn hold_running_mutex() {
         let name = wide("Local\\DodavoRunning");
         let handle = unsafe { CreateMutexW(std::ptr::null(), 0, name.as_ptr()) };
         RUNNING_MUTEX.store(handle as isize, Ordering::SeqCst);
+    }
+}
+
+/// Starts the program again with the same profile, for an instance that is
+/// about to exit (see `ui::main_window::restart`). The new process waits
+/// until this one has ended (`wait_for_instance`), as the network and the
+/// records of the transfers are this one's until then. Started now, while
+/// the user is at this instance, so that its window may come to the front.
+#[cfg(windows)]
+pub fn start_again(profile: Option<&str>) -> std::io::Result<()> {
+    let mut command = std::process::Command::new(std::env::current_exe()?);
+    command.arg("--restarted");
+    if let Some(profile) = profile {
+        command.args(["--profile", profile]);
+    }
+    let child = command.spawn()?;
+    unsafe { AllowSetForegroundWindow(child.id()) };
+    Ok(())
+}
+
+/// A restart (see `start_again`): whether this process became the instance
+/// of its profile once the one that started it had ended.
+#[cfg(windows)]
+fn wait_for_instance(name: &[u16]) -> bool {
+    let deadline = Instant::now() + RESTART_TIMEOUT;
+    loop {
+        if take_instance_mutex(name) {
+            return true;
+        }
+        if Instant::now() >= deadline {
+            return false;
+        }
+        std::thread::sleep(Duration::from_millis(100));
     }
 }
 
@@ -301,7 +342,15 @@ fn main() {
     // front, or hands it what is to be sent. The mutex handle of the instance is
     // deliberately kept open for the life of the process.
     let instance_mutex = wide(&format!("Local\\Dodavo-{}", profile.unwrap_or("default")));
-    if !take_instance_mutex(&instance_mutex) {
+    let taken = if args.restarted {
+        // It keeps the program's file open meanwhile, as a start that hands
+        // over items does. Should the instance not end, it is a second start.
+        hold_running_mutex();
+        wait_for_instance(&instance_mutex)
+    } else {
+        take_instance_mutex(&instance_mutex)
+    };
+    if !taken {
         if send.is_empty() {
             // A start in the background (autostart) leaves the running instance alone.
             if !args.minimized {
@@ -374,9 +423,11 @@ fn main() {
         ui::shell::set_explorer_menu(cfg.explorer_menu);
     }
     // Started only to send something, Dodavo stays out of the way, unless
-    // nothing but its main window would then show that it is running.
-    let start_hidden =
-        args.minimized || cfg.start_minimized || (!send.is_empty() && cfg.minimize_to_tray);
+    // nothing but its main window would then show that it is running. A
+    // restart comes from Settings, which only the main window opens.
+    let start_hidden = args.minimized
+        || (!args.restarted
+            && (cfg.start_minimized || (!send.is_empty() && cfg.minimize_to_tray)));
     let net = net::start_with_chat(
         secret,
         data_dir.clone(),
@@ -451,9 +502,17 @@ mod tests {
     #[test]
     fn options_are_read_as_before() {
         assert_eq!(parse(&[]), Args::default());
-        let args = parse(&["--minimized", "--updated", "--profile", "al-ice_2!", "other"]);
+        let args = parse(&[
+            "--minimized",
+            "--updated",
+            "--restarted",
+            "--profile",
+            "al-ice_2!",
+            "other",
+        ]);
         assert!(args.minimized);
         assert!(args.updated);
+        assert!(args.restarted);
         assert_eq!(args.profile.as_deref(), Some("al-ice_2"));
         assert!(args.send.is_empty());
         assert_eq!(parse(&["--profile", "!!!"]).profile, None);

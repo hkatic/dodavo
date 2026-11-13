@@ -106,6 +106,12 @@ pub const SL: Strings = Strings {
         few: "{n} prenosi še potekajo.",
         other: "{n} prenosov še poteka.",
     },
+    reopen_transfers: Plural {
+        one: "{n} prenos še poteka. Če zdaj zaprete in znova odprete Dodavo, se prenos ustavi in nato nadaljuje tam, kjer je obstal. Velik prenos lahko potrebuje nekaj časa, da se nadaljuje.",
+        two: "{n} prenosa še potekata. Če zdaj zaprete in znova odprete Dodavo, se prenosa ustavita in nato nadaljujeta tam, kjer sta obstala. Velik prenos lahko potrebuje nekaj časa, da se nadaljuje.",
+        few: "{n} prenosi še potekajo. Če zdaj zaprete in znova odprete Dodavo, se prenosi ustavijo in nato nadaljujejo tam, kjer so obstali. Velik prenos lahko potrebuje nekaj časa, da se nadaljuje.",
+        other: "{n} prenosov še poteka. Če zdaj zaprete in znova odprete Dodavo, se prenosi ustavijo in nato nadaljujejo tam, kjer so obstali. Velik prenos lahko potrebuje nekaj časa, da se nadaljuje.",
+    },
     change_id_transfers: Plural {
         one: "{n} prenos poteka ali čaka na vaš odgovor. S spremembo ID-ja stika se prekliče.",
         two: "{n} prenosa potekata ali čakata na vaš odgovor. S spremembo ID-ja stika se prekličeta.",
@@ -326,6 +332,8 @@ pub const SL: Strings = Strings {
     space_unknown: "Prostega prostora na izbranem disku ni bilo mogoče ugotoviti.",
     panic_message: "Prišlo je do nepričakovane napake in Dodavo se mora zapreti.\n\n{info}",
     language_restart: "Novi jezik bo uporabljen, ko boste naslednjič odprli Dodavo.",
+    quit_and_reopen: "Zapri in znova odpri",
+    reopen_later: "Pozneje",
     update_latest: "Imate najnovejšo različico aplikacije Dodavo ({version}).",
     update_manual: "Dodavo se tukaj ne more sam zamenjati. Slika diska je odprta: kopirajte Dodavo iz nje v mapo Aplikacije.",
     cancelled_text: "Preklicano.",

@@ -20,8 +20,8 @@ use windows_sys::Win32::{
 };
 
 use super::{
-    APP_NAME, DONATE_URL, ask, confirm, info, menu, progress, send, send_to, set_text, shell,
-    short_id, tray, wide,
+    APP_NAME, DONATE_URL, TaskDialog, TaskIcon, ask, confirm, error, info, menu, progress, send,
+    send_to, set_text, shell, short_id, task_dialog, tray, wide,
     window::{self, CreateOptions, Handler, Window},
     without_shortcut,
 };
@@ -29,7 +29,7 @@ use crate::{
     app,
     config::Contact,
     i18n::{tr, trn},
-    net::Kind,
+    net::{self, Kind},
 };
 
 const ID_SEND_FILE: u16 = 101;
@@ -69,6 +69,9 @@ const NIN_BALLOONUSERCLICK: u32 = WM_USER + 5;
 const CHOICE_EXIT_KEEP: i32 = 100;
 const CHOICE_EXIT_CANCEL: i32 = 101;
 const CHOICE_EXIT_STAY: i32 = 102;
+/// Buttons of the question whether to restart.
+const CHOICE_RESTART_NOW: i32 = 103;
+const CHOICE_RESTART_LATER: i32 = 104;
 
 thread_local! {
     static MAIN: Cell<HWND> = const { Cell::new(std::ptr::null_mut()) };
@@ -770,7 +773,10 @@ impl MainWindow {
             ID_TRANSFER_FIRST..=ID_TRANSFER_LAST => self.show_transfer(id),
             id if id == IDOK as u16 => return self.enter_pressed(w),
             ID_SETTINGS => {
-                super::settings::show(w.hwnd);
+                // After the window has closed, as the user asked there.
+                if super::settings::show(w.hwnd) {
+                    restart(w);
+                }
             }
             ID_EXIT => quit(w),
             ID_TRAY_OPEN => window::bring_to_front(w.hwnd),
@@ -964,6 +970,50 @@ fn exit(main: HWND, cancel_transfers: bool) {
 fn quit(w: &Window) {
     if let Some(cancel_transfers) = confirm_exit(w.hwnd) {
         exit(w.hwnd, cancel_transfers);
+    }
+}
+
+/// Asks whether to restart now, for a new language. While transfers run, it
+/// says how many and what a restart does to them, and Enter answers Restart
+/// later, as Don't exit is the default of the exit question.
+pub fn confirm_restart(owner: HWND) -> bool {
+    let active = app::active_transfer_count();
+    let (content, default_button, icon) = if active == 0 {
+        (String::new(), CHOICE_RESTART_NOW, TaskIcon::Information)
+    } else {
+        (
+            trn!(restart_transfers, active),
+            CHOICE_RESTART_LATER,
+            TaskIcon::Warning,
+        )
+    };
+    let answer = task_dialog(&TaskDialog {
+        owner,
+        instruction: tr!(language_restart),
+        content: &content,
+        buttons: &[
+            (CHOICE_RESTART_NOW, tr!(restart_now)),
+            (CHOICE_RESTART_LATER, tr!(restart_later)),
+        ],
+        command_links: false,
+        close_button: false,
+        default_button,
+        icon,
+        verification: None,
+        on_link: None,
+    });
+    // Escape and the title bar's close button leave it for later.
+    answer.is_some_and(|(button, _)| button == CHOICE_RESTART_NOW)
+}
+
+/// Exits and starts again, as `confirm_restart` was answered: the transfers
+/// are suspended, as with "Exit and continue the transfers later", and go on
+/// in the new instance.
+fn restart(w: &Window) {
+    let profile = app::with(|a| a.profile.clone());
+    match crate::start_again(profile.as_deref()) {
+        Ok(()) => exit(w.hwnd, false),
+        Err(e) => error(w.hwnd, &tr!(restart_failed, error = net::io_error_text(&e))),
     }
 }
 

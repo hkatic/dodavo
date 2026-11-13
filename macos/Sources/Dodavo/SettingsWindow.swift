@@ -546,10 +546,30 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSTe
         }
         commit()
         guard let window = window else { return }
+        offerToReopen(on: window)
+    }
+
+    /// Asks whether to quit and reopen now, for the new language. With
+    /// transfers running it says what that does to them, as quitting asks
+    /// about them: they stop and go on in the new copy, as with "Quit and
+    /// Continue Later".
+    private func offerToReopen(on window: NSWindow) {
+        let app = NSApp.delegate as? AppDelegate
+        let running = app?.runningRows.count ?? 0
         let alert = NSAlert()
         alert.messageText = L[.language_restart]
-        alert.addButton(withTitle: L[.close])
-        alert.beginSheetModal(for: window, completionHandler: nil)
+        if running > 0 {
+            alert.alertStyle = .warning
+            alert.informativeText = L.plural(.reopen_transfers, running)
+        }
+        alert.addButton(withTitle: L[.quit_and_reopen])
+        alert.addButton(withTitle: L[.reopen_later])
+        alert.buttons[1].keyEquivalent = "\u{1b}"
+        alert.beginSheetModal(for: window) { response in
+            guard response == .alertFirstButtonReturn else { return }
+            Installer.relaunch(Bundle.main.bundleURL, updated: false)
+            app?.quitWithoutAsking()
+        }
     }
 
     @objc private func pickTempFolder() {

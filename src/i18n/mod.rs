@@ -422,6 +422,9 @@ strings! {
         language_label,
         language_default,
         language_restart,
+        restart_now,
+        restart_later,
+        restart_failed,
         temp_folder_label,
         pick_temp_folder,
         invalid_temp_folder,
@@ -639,6 +642,7 @@ strings! {
         drop_confirm,
         drop_confirm_many,
         exit_instruction,
+        restart_transfers,
         change_id_transfers,
         transfers_in_progress,
         folder_description,
@@ -938,7 +942,7 @@ mod tests {
         }
         for lang in Lang::ALL {
             let s = lang.strings();
-            let groups: [(&str, Vec<&str>); 30] = [
+            let groups: [(&str, Vec<&str>); 31] = [
                 ("menu bar", vec![s.menu_file, s.menu_transfers, s.menu_help]),
                 (
                     "File menu",
@@ -1092,6 +1096,7 @@ mod tests {
                     "exit",
                     vec![s.exit_stay, s.exit_keep, s.exit_cancel_transfers],
                 ),
+                ("restart", vec![s.restart_now, s.restart_later]),
                 (
                     "recipient",
                     vec![

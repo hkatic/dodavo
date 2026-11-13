@@ -27,9 +27,9 @@ use windows_sys::{
         UI::{
             Controls::{
                 TASKDIALOG_BUTTON, TASKDIALOGCONFIG, TASKDIALOGCONFIG_0, TD_INFORMATION_ICON,
-                TDCBF_CLOSE_BUTTON, TDF_ALLOW_DIALOG_CANCELLATION, TDF_ENABLE_HYPERLINKS,
-                TDF_POSITION_RELATIVE_TO_WINDOW, TDF_USE_COMMAND_LINKS, TDF_USE_HICON_MAIN,
-                TDN_HYPERLINK_CLICKED, TaskDialogIndirect,
+                TD_WARNING_ICON, TDCBF_CLOSE_BUTTON, TDF_ALLOW_DIALOG_CANCELLATION,
+                TDF_ENABLE_HYPERLINKS, TDF_POSITION_RELATIVE_TO_WINDOW, TDF_USE_COMMAND_LINKS,
+                TDF_USE_HICON_MAIN, TDN_HYPERLINK_CLICKED, TaskDialogIndirect,
             },
             WindowsAndMessaging::{
                 GetWindowTextLengthW, GetWindowTextW, IDC_WAIT, IDCANCEL, IDYES, LoadCursorW,
@@ -118,6 +118,7 @@ pub fn busy<R>(work: impl FnOnce() -> R) -> R {
 /// The main icon of a task dialog.
 pub enum TaskIcon {
     Information,
+    Warning,
     /// Dodavo's own icon (resource 1, see res/app.rc).
     Program,
 }
@@ -186,7 +187,10 @@ pub fn task_dialog(d: &TaskDialog) -> Option<(i32, bool)> {
         config.dwFlags |= TDF_USE_COMMAND_LINKS;
     }
     config.Anonymous1 = TASKDIALOGCONFIG_0 {
-        pszMainIcon: TD_INFORMATION_ICON,
+        pszMainIcon: match d.icon {
+            TaskIcon::Warning => TD_WARNING_ICON,
+            _ => TD_INFORMATION_ICON,
+        },
     };
     if let TaskIcon::Program = d.icon {
         // Shared, never destroyed; without it the dialog has no icon.

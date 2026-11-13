@@ -323,7 +323,7 @@ fn bind_error_text(error: &anyhow::Error) -> String {
 }
 
 /// The text of an I/O error for the user (see [`failure_text`]).
-pub(crate) fn io_error_text(error: &std::io::Error) -> String {
+pub fn io_error_text(error: &std::io::Error) -> String {
     // The system's own texts are in English here, whatever the user's language.
     #[cfg(unix)]
     if let Some(text) = error.raw_os_error().and_then(crate::platform::error_text) {

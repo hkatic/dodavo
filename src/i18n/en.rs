@@ -285,6 +285,9 @@ pub const EN: Strings = Strings {
     language_label: "&Language:",
     language_default: "Windows default",
     language_restart: "The new language is used after Dodavo is restarted.",
+    restart_now: "&Restart now",
+    restart_later: "Restart &later",
+    restart_failed: "Dodavo could not be restarted:\n{error}",
     temp_folder_label: "Folder for &temporary files:",
     pick_temp_folder: "Choose the folder for temporary files",
     invalid_temp_folder: "The folder for temporary files cannot be used. Choose another folder, or clear the field to use the one that Windows gives.",
@@ -537,6 +540,12 @@ pub const EN: Strings = Strings {
         two: "{n} transfers are still running.",
         few: "{n} transfers are still running.",
         other: "{n} transfers are still running.",
+    },
+    restart_transfers: Plural {
+        one: "{n} transfer is still running. If you restart Dodavo now, it stops and then continues where it left off. A large transfer may take a while to continue.",
+        two: "{n} transfers are still running. If you restart Dodavo now, they stop and then continue where they left off. A large transfer may take a while to continue.",
+        few: "{n} transfers are still running. If you restart Dodavo now, they stop and then continue where they left off. A large transfer may take a while to continue.",
+        other: "{n} transfers are still running. If you restart Dodavo now, they stop and then continue where they left off. A large transfer may take a while to continue.",
     },
     change_id_transfers: Plural {
         one: "{n} transfer is under way or waiting for your answer. Changing your Contact ID cancels it.",

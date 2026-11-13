@@ -267,6 +267,8 @@ enum K: String {
     case space_unknown
     case panic_message
     case language_restart
+    case quit_and_reopen
+    case reopen_later
     case update_latest
     case update_manual
     case cancelled_text
@@ -334,6 +336,7 @@ enum PluralK: String {
     case folder_description
     case wants_items
     case quit_instruction
+    case reopen_transfers
     case change_id_transfers
     case drop_confirm_many
     case drop_confirm_recipients

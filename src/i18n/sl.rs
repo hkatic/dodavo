@@ -288,6 +288,9 @@ pub const SL: Strings = Strings {
     language_label: "&Jezik:",
     language_default: "Privzeto v sistemu Windows",
     language_restart: "Novi jezik bo uporabljen po vnovičnem zagonu programa Dodavo.",
+    restart_now: "&Znova zaženi zdaj",
+    restart_later: "Znova zaženi &pozneje",
+    restart_failed: "Programa Dodavo ni bilo mogoče znova zagnati:\n{error}",
     temp_folder_label: "&Mapa za začasne datoteke:",
     pick_temp_folder: "Izberite mapo za začasne datoteke",
     invalid_temp_folder: "Mape za začasne datoteke ni mogoče uporabiti. Izberite drugo mapo ali izpraznite polje, da se uporabi tista, ki jo da Windows.",
@@ -540,6 +543,12 @@ pub const SL: Strings = Strings {
         two: "{n} prenosa še potekata.",
         few: "{n} prenosi še potekajo.",
         other: "{n} prenosov še poteka.",
+    },
+    restart_transfers: Plural {
+        one: "{n} prenos še poteka. Če zdaj znova zaženete Dodavo, se prenos ustavi in nato nadaljuje tam, kjer je obstal. Velik prenos lahko potrebuje nekaj časa, da se nadaljuje.",
+        two: "{n} prenosa še potekata. Če zdaj znova zaženete Dodavo, se prenosa ustavita in nato nadaljujeta tam, kjer sta obstala. Velik prenos lahko potrebuje nekaj časa, da se nadaljuje.",
+        few: "{n} prenosi še potekajo. Če zdaj znova zaženete Dodavo, se prenosi ustavijo in nato nadaljujejo tam, kjer so obstali. Velik prenos lahko potrebuje nekaj časa, da se nadaljuje.",
+        other: "{n} prenosov še poteka. Če zdaj znova zaženete Dodavo, se prenosi ustavijo in nato nadaljujejo tam, kjer so obstali. Velik prenos lahko potrebuje nekaj časa, da se nadaljuje.",
     },
     change_id_transfers: Plural {
         one: "{n} prenos poteka ali čaka na vaš odgovor. S spremembo ID-ja stika se prekliče.",

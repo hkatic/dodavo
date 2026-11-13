@@ -178,6 +178,8 @@ fn pages_use_the_program_texts() {
             ("dont_warn_again", table.dont_warn_again),
             ("check_updates", table.check_updates),
             ("language_system", table.language_system),
+            ("quit_and_reopen", table.quit_and_reopen),
+            ("reopen_later", table.reopen_later),
             ("always_save", table.always_save),
             ("auto_accept", table.auto_accept),
             ("received_extract", table.received_extract),

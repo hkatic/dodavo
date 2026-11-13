@@ -358,6 +358,8 @@ mod tests {
                 s.close_background,
                 s.close_cancel,
                 s.language_default,
+                s.restart_now,
+                s.restart_later,
                 s.copy,
                 s.close_running_label,
                 s.language_label,

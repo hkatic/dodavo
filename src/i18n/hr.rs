@@ -287,6 +287,9 @@ pub const HR: Strings = Strings {
     language_label: "&Jezik:",
     language_default: "Zadano u sustavu Windows",
     language_restart: "Novi jezik koristit će se nakon ponovnog pokretanja programa Dodavo.",
+    restart_now: "&Ponovno pokreni sada",
+    restart_later: "Ponovno pokreni &kasnije",
+    restart_failed: "Dodavo se ne može ponovno pokrenuti:\n{error}",
     temp_folder_label: "&Mapa za privremene datoteke:",
     pick_temp_folder: "Odaberite mapu za privremene datoteke",
     invalid_temp_folder: "Mapa za privremene datoteke ne može se koristiti. Odaberite drugu mapu ili ispraznite polje da bi se koristila ona koju daje Windows.",
@@ -539,6 +542,12 @@ pub const HR: Strings = Strings {
         two: "{n} prijenosa još je u tijeku.",
         few: "{n} prijenosa još su u tijeku.",
         other: "{n} prijenosa još je u tijeku.",
+    },
+    restart_transfers: Plural {
+        one: "{n} prijenos još je u tijeku. Ako sada ponovno pokrenete Dodavo, prijenos će se zaustaviti i zatim nastaviti ondje gdje je stao. Velikom prijenosu može trebati neko vrijeme da nastavi.",
+        two: "{n} prijenosa još je u tijeku. Ako sada ponovno pokrenete Dodavo, prijenosi će se zaustaviti i zatim nastaviti ondje gdje su stali. Velikom prijenosu može trebati neko vrijeme da nastavi.",
+        few: "{n} prijenosa još su u tijeku. Ako sada ponovno pokrenete Dodavo, prijenosi će se zaustaviti i zatim nastaviti ondje gdje su stali. Velikom prijenosu može trebati neko vrijeme da nastavi.",
+        other: "{n} prijenosa još je u tijeku. Ako sada ponovno pokrenete Dodavo, prijenosi će se zaustaviti i zatim nastaviti ondje gdje su stali. Velikom prijenosu može trebati neko vrijeme da nastavi.",
     },
     change_id_transfers: Plural {
         one: "{n} prijenos je u tijeku ili čeka vaš odgovor. Promjenom ID-a kontakta on se otkazuje.",

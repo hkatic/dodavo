@@ -106,6 +106,12 @@ pub const SR_LATN: Strings = Strings {
         few: "{n} prenosa su još u toku.",
         other: "{n} prenosa je još u toku.",
     },
+    reopen_transfers: Plural {
+        one: "{n} prenos je još u toku. Ako sada zatvorite i ponovo otvorite Dodavo, prenos će se zaustaviti i zatim nastaviti tamo gde je stao. Velikom prenosu može biti potrebno neko vreme da nastavi.",
+        two: "{n} prenosa je još u toku. Ako sada zatvorite i ponovo otvorite Dodavo, prenosi će se zaustaviti i zatim nastaviti tamo gde su stali. Velikom prenosu može biti potrebno neko vreme da nastavi.",
+        few: "{n} prenosa su još u toku. Ako sada zatvorite i ponovo otvorite Dodavo, prenosi će se zaustaviti i zatim nastaviti tamo gde su stali. Velikom prenosu može biti potrebno neko vreme da nastavi.",
+        other: "{n} prenosa je još u toku. Ako sada zatvorite i ponovo otvorite Dodavo, prenosi će se zaustaviti i zatim nastaviti tamo gde su stali. Velikom prenosu može biti potrebno neko vreme da nastavi.",
+    },
     change_id_transfers: Plural {
         one: "{n} prenos je u toku ili čeka vaš odgovor. Promenom ID-a kontakta on se otkazuje.",
         two: "{n} prenosa je u toku ili čeka vaš odgovor. Promenom ID-a kontakta oni se otkazuju.",
@@ -326,6 +332,8 @@ pub const SR_LATN: Strings = Strings {
     space_unknown: "Nije moguće utvrditi koliko slobodnog prostora ima na izabranom disku.",
     panic_message: "Došlo je do neočekivane greške i Dodavo mora da se zatvori.\n\n{info}",
     language_restart: "Novi jezik će se koristiti kada sledeći put otvorite Dodavo.",
+    quit_and_reopen: "Zatvori i ponovo otvori",
+    reopen_later: "Kasnije",
     update_latest: "Imate najnoviju verziju aplikacije Dodavo ({version}).",
     update_manual: "Dodavo ovde ne može sam sebe da zameni. Slika diska je otvorena: kopirajte Dodavo iz nje u fasciklu Aplikacije.",
     cancelled_text: "Otkazano.",
