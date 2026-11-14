@@ -61,6 +61,7 @@ import com.hrvojekatic.dodavo.ui.common.appViewModel
 import com.hrvojekatic.dodavo.ui.common.launchOrTell
 import com.hrvojekatic.dodavo.ui.common.shortId
 import com.hrvojekatic.dodavo.ui.common.startOrTell
+import com.hrvojekatic.dodavo.ui.common.tell
 import com.hrvojekatic.dodavo.ui.waitingOffers
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.rememberCoroutineScope
@@ -80,8 +81,9 @@ fun RecipientsScreen(navigator: Navigator) {
     val context = LocalContext.current
     val clipboard = LocalClipboard.current
     val scope = rememberCoroutineScope()
-    // Who the picker's result goes to.
-    var targets by remember { mutableStateOf<List<Contact>>(emptyList()) }
+    // Who the picker's result goes to, by Contact ID: kept while Android makes the
+    // screen again (a rotation, or the app's process ended while the picker was open).
+    var targets by rememberSaveable { mutableStateOf(listOf<String>()) }
     var pending by remember { mutableStateOf<Pending?>(null) }
     var menuOpen by rememberSaveable { mutableStateOf(false) }
     var sendOpen by rememberSaveable { mutableStateOf(false) }
@@ -112,21 +114,18 @@ fun RecipientsScreen(navigator: Navigator) {
     }
     // Some devices have no picker (a maker's build without Files, Android TV).
     fun sendFiles(to: List<Contact>) {
-        targets = to
-        context.launchOrTell(pickFiles, arrayOf("*/*"), Intent.ACTION_OPEN_DOCUMENT, R.string.no_file_picker)
+        targets = to.map { it.id }
+        context.launchOrTell(pickFiles, arrayOf("*/*"), R.string.no_file_picker)
     }
     fun sendFolder(to: List<Contact>) {
-        targets = to
-        context.launchOrTell(pickFolder, null, Intent.ACTION_OPEN_DOCUMENT_TREE, R.string.no_folder_picker)
+        targets = to.map { it.id }
+        context.launchOrTell(pickFolder, null, R.string.no_folder_picker)
     }
-    val copied = stringResource(R.string.id_copied)
     val shareTitle = stringResource(R.string.share_id_title)
     fun copy(id: String) {
         scope.launch { clipboard.setClipEntry(ClipEntry(ClipData.newPlainText(id, id))) }
         // Android 13 and later say so themselves.
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
-            android.widget.Toast.makeText(context, copied, android.widget.Toast.LENGTH_SHORT).show()
-        }
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) context.tell(R.string.id_copied)
     }
 
     Scaffold(
@@ -166,7 +165,11 @@ fun RecipientsScreen(navigator: Navigator) {
                                     menuOpen = false
                                     val send = Intent(Intent.ACTION_SEND).setType("text/plain")
                                         .putExtra(Intent.EXTRA_TEXT, state.myId)
-                                    context.startOrTell(Intent.createChooser(send, shareTitle), R.string.no_sharing)
+                                    context.startOrTell(
+                                        Intent.createChooser(send, shareTitle),
+                                        R.string.no_sharing,
+                                        what = "sharing the Contact ID",
+                                    )
                                 },
                                 enabled = state.myId.isNotEmpty(),
                             )

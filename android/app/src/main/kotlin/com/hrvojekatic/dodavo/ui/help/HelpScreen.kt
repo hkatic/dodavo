@@ -7,6 +7,7 @@ import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
@@ -24,6 +25,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.webkit.WebViewAssetLoader
 import com.hrvojekatic.dodavo.R
 import com.hrvojekatic.dodavo.ui.Navigator
+import com.hrvojekatic.dodavo.ui.common.AppStatusLine
 import com.hrvojekatic.dodavo.ui.common.startOrTell
 
 /** The help in the app's language (assets/help, from res/help/android). */
@@ -33,14 +35,18 @@ fun HelpScreen(navigator: Navigator) {
     val language = stringResource(R.string.dodavo_lang)
     Scaffold(
         topBar = {
-            TopAppBar(
-                navigationIcon = {
-                    IconButton(onClick = navigator::back) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.navigate_up))
-                    }
-                },
-                title = { Text(stringResource(R.string.help_title)) },
-            )
+            Column {
+                TopAppBar(
+                    navigationIcon = {
+                        IconButton(onClick = navigator::back) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.navigate_up))
+                        }
+                    },
+                    title = { Text(stringResource(R.string.help_title)) },
+                )
+                // Where a link that cannot be opened is said.
+                AppStatusLine()
+            }
         },
     ) { padding ->
         AndroidView(

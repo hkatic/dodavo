@@ -3,7 +3,6 @@ package com.hrvojekatic.dodavo.ui.common
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
-import android.widget.Toast
 import androidx.activity.result.ActivityResultLauncher
 import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.Column
@@ -21,9 +20,11 @@ import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
@@ -35,6 +36,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider.AndroidViewModelFactory.Companion.APPLICATION_KEY
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
@@ -60,42 +62,49 @@ inline fun <reified VM : ViewModel> appViewModel(crossinline create: (AppContain
  * Starts [intent]; false when nothing on the device takes it (no browser in a
  * work profile, a system screen that the maker left out), or when Android does
  * not let Dodavo start what takes it (a screen that its maker keeps to itself).
+ * What kept it from that goes into the log, as [what] where the intent's
+ * action does not tell (the share sheet), and not at all when [quiet]: a
+ * first try that has another way.
  */
-fun Context.tryStart(intent: Intent): Boolean = started(intent.action) { startActivity(intent) }
-
-/** Starts [intent], or says [unavailable]: by default, that no app can open the item. */
-fun Context.startOrTell(intent: Intent, @StringRes unavailable: Int = R.string.no_app_to_open) {
-    if (!tryStart(intent)) tell(unavailable)
+fun Context.tryStart(intent: Intent, what: String? = null, quiet: Boolean = false): Boolean {
+    val why = notStarted { startActivity(intent) } ?: return true
+    if (!quiet) logNotStarted(what, intent.action, why)
+    return false
 }
 
-/**
- * Launches [launcher] with [input], or says [unavailable]. [action] is what
- * the launcher's intent asks for, for the log.
- */
-fun <I> Context.launchOrTell(launcher: ActivityResultLauncher<I>, input: I, action: String, @StringRes unavailable: Int) {
-    if (!started(action) { launcher.launch(input) }) tell(unavailable)
+/** Starts [intent], or says [unavailable]: by default, that no app can open the item. Whether it started. */
+fun Context.startOrTell(intent: Intent, @StringRes unavailable: Int = R.string.no_app_to_open, what: String? = null): Boolean =
+    tryStart(intent, what).also { if (!it) tell(unavailable) }
+
+/** Launches [launcher] with [input], or says [unavailable]. Whether it started. */
+fun <I> Context.launchOrTell(launcher: ActivityResultLauncher<I>, input: I, @StringRes unavailable: Int): Boolean {
+    val why = notStarted { launcher.launch(input) } ?: return true
+    logNotStarted(null, launcher.contract.createIntent(this, input).action, why)
+    tell(unavailable)
+    return false
 }
 
-/** Says [text] in a toast, which TalkBack reads. */
+/** Says [text] in the status line, a polite live region, which TalkBack reads. */
 fun Context.tell(@StringRes text: Int) {
-    Toast.makeText(this, text, Toast.LENGTH_LONG).show()
+    container.repository.tell(getString(text))
 }
 
-/** Whether [start] started an activity for [action]; what kept it from that goes into the log. */
-private inline fun Context.started(action: String?, start: () -> Unit): Boolean {
-    val why = try {
+/** What kept [start] from starting an activity; null when it started one. */
+internal inline fun notStarted(start: () -> Unit): RuntimeException? =
+    try {
         start()
-        return true
+        null
     } catch (e: ActivityNotFoundException) {
         e
     } catch (e: SecurityException) {
         e
     }
+
+private fun Context.logNotStarted(what: String?, action: String?, why: RuntimeException) {
     // VIEW, OPEN_DOCUMENT: the log's scrubber takes a whole action for the name of a host.
-    val what = action?.substringAfterLast('.') ?: "a named activity"
+    val name = what ?: action?.substringAfterLast('.') ?: "a named activity"
     val container = container
-    container.scope.launch { container.repository.log("warn", "nothing started for $what (${why.javaClass.simpleName})") }
-    return false
+    container.scope.launch { container.repository.log("warn", "nothing started for $name (${why.javaClass.simpleName})") }
 }
 
 /** A Contact ID as people read it: `3f8a9c1e…e41b07`. */
@@ -103,8 +112,9 @@ fun shortId(id: String): String = if (id.length <= 16) id else "${id.take(8)}…
 
 /**
  * A line that says what changes without moving the focus: what the core
- * announces, or else the online status. TalkBack reads it when it changes
- * (a polite live region), which Android prefers to announcements since 16.
+ * announces or the app has to say, or else the online status. TalkBack
+ * reads it when it changes (a polite live region), which Android prefers to
+ * announcements since 16.
  */
 @Composable
 fun StatusLine(text: String, modifier: Modifier = Modifier) {
@@ -117,6 +127,17 @@ fun StatusLine(text: String, modifier: Modifier = Modifier) {
             .padding(horizontal = 16.dp, vertical = 8.dp)
             .semantics { liveRegion = LiveRegionMode.Polite },
     )
+}
+
+/**
+ * The status line of the app ([CoreRepository.line]), on a screen that is
+ * not one of the main ones: there the app says what it could not start
+ * ([tell]), and what the core announces meanwhile is said as well.
+ */
+@Composable
+fun AppStatusLine(modifier: Modifier = Modifier) {
+    val line by LocalContext.current.container.repository.line.collectAsStateWithLifecycle()
+    StatusLine(line, modifier)
 }
 
 /**

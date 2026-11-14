@@ -6,6 +6,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -35,6 +36,13 @@ sealed interface CoreState {
 
 /** The online status line. */
 data class Status(val online: Boolean, val text: String)
+
+/**
+ * How long the status line stays empty before the same text comes back:
+ * Compose sends the changes of what accessibility services see at most
+ * every 100 ms, so the empty line reaches TalkBack first.
+ */
+internal const val SAID_AGAIN_AFTER_MS = 300L
 
 /** Something to say aloud, without moving the focus. `serial` tells repeats apart. */
 data class Announcement(val text: String, val serial: Long)
@@ -116,8 +124,14 @@ class CoreRepository(
     private var declined = 0L
 
     private val _line = MutableStateFlow("")
-    /** The status line: the latest of the online status and what the core announces. */
+    /**
+     * The status line: the latest of the online status, what the core
+     * announces and what the app itself has to say ([tell]).
+     */
     val line: StateFlow<String> = _line.asStateFlow()
+    /** Guards the line and the announcements, which the core's thread and the main thread change. */
+    private val lineLock = Any()
+    private var lineChanges = 0L
 
     private val _events = MutableSharedFlow<Event>(
         extraBufferCapacity = 64,
@@ -163,7 +177,7 @@ class CoreRepository(
         when (message) {
             is Message.Status -> {
                 _status.value = Status(message.online, message.text)
-                _line.value = message.text
+                showLine(message.text, again = false)
             }
             is Message.RowChanged -> {
                 _transfers.update { it + (message.row.id to message.row) }
@@ -195,11 +209,42 @@ class CoreRepository(
         }
     }
 
-    private fun announce(text: String) {
-        announcements += 1
-        _announcement.value = Announcement(text, announcements)
-        _line.value = text
+    /** Says [text] in the status line: what the app itself has to say, such as what it could not start. */
+    fun tell(text: String) {
+        announce(text)
     }
+
+    private fun announce(text: String) {
+        synchronized(lineLock) {
+            announcements += 1
+            _announcement.value = Announcement(text, announcements)
+            showLine(text, again = true)
+        }
+    }
+
+    /**
+     * Puts [text] in the status line. TalkBack reads a live region only when
+     * its text changes, so with [again] the same text as before is taken
+     * away for a moment and read once more when it comes back, unless
+     * something newer has come meanwhile.
+     */
+    private fun showLine(text: String, again: Boolean) {
+        synchronized(lineLock) {
+            val change = ++lineChanges
+            if (!again || text.isEmpty() || _line.value != text) {
+                _line.value = text
+            } else {
+                _line.value = ""
+                scope.launch {
+                    delay(SAID_AGAIN_AFTER_MS)
+                    synchronized(lineLock) { if (lineChanges == change) _line.value = text }
+                }
+            }
+        }
+    }
+
+    /** Waits for the core to start; whether it runs. */
+    suspend fun started(): Boolean = state.first { it !is CoreState.Starting } is CoreState.Running
 
     private suspend fun call(call: Call): String = withContext(io) { core.call(call) }
 

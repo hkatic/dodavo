@@ -55,6 +55,7 @@ targets and contrast, not what is actually spoken. Write what fails into
 - [ ] Language opens Android's own choice on 13 and later, Dodavo's list before.
 - [ ] Help reads as a web page: headings with the reading controls, links, and the list of contents.
 - [ ] About reads the version, copyright and the notice; Licenses switches between Dodavo's and the components' licenses.
+- [ ] Settings, Help and About have the status line below the title, which stays while the screen scrolls. With no app that can share (or a link that nothing opens), Share is answered there, read without the focus moving, and a second tap reads it again.
 
 ## Largest text and keyboard
 

@@ -54,19 +54,25 @@ class RecipientsViewModel(
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), RecipientsUiState())
 
-    /** Sends each of the files to each of [contacts], every one as a transfer of its own. */
-    fun sendFiles(contacts: List<Contact>, uris: List<Uri>) {
-        if (uris.isEmpty() || contacts.isEmpty()) return
+    /**
+     * Sends each of the files to each of [peerIds], every one as a transfer of its own.
+     * A picker's answer may come to a process that Android started again, whose core
+     * is still starting: it waits for that.
+     */
+    fun sendFiles(peerIds: List<String>, uris: List<Uri>) {
+        if (uris.isEmpty() || peerIds.isEmpty()) return
         viewModelScope.launch {
-            message.value = runCatching { sending.sendFiles(contacts.map { it.id }, uris) }
+            if (!repository.started()) return@launch
+            message.value = runCatching { sending.sendFiles(peerIds, uris) }
                 .getOrElse { it.message }
         }
     }
 
-    fun sendFolder(contacts: List<Contact>, tree: Uri) {
-        if (contacts.isEmpty()) return
+    fun sendFolder(peerIds: List<String>, tree: Uri) {
+        if (peerIds.isEmpty()) return
         viewModelScope.launch {
-            message.value = runCatching { sending.sendFolder(contacts.map { it.id }, tree) }
+            if (!repository.started()) return@launch
+            message.value = runCatching { sending.sendFolder(peerIds, tree) }
                 .getOrElse { it.message }
         }
     }

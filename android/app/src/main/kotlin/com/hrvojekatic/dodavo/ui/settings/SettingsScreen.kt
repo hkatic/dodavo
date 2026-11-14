@@ -75,10 +75,12 @@ import com.hrvojekatic.dodavo.core.ReceivedFolder
 import com.hrvojekatic.dodavo.core.Settings
 import com.hrvojekatic.dodavo.ui.BlockedKey
 import com.hrvojekatic.dodavo.ui.Navigator
+import com.hrvojekatic.dodavo.ui.common.AppStatusLine
 import com.hrvojekatic.dodavo.ui.common.LimitSizeFields
 import com.hrvojekatic.dodavo.ui.common.MessageDialog
 import com.hrvojekatic.dodavo.ui.common.appViewModel
 import com.hrvojekatic.dodavo.ui.common.startOrTell
+import com.hrvojekatic.dodavo.ui.common.tell
 import com.hrvojekatic.dodavo.ui.common.tryStart
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -158,14 +160,18 @@ fun SettingsScreen(navigator: Navigator) {
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                navigationIcon = {
-                    IconButton(onClick = navigator::back) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.navigate_up))
-                    }
-                },
-                title = { Text(stringResource(R.string.settings_title)) },
-            )
+            Column {
+                TopAppBar(
+                    navigationIcon = {
+                        IconButton(onClick = navigator::back) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.navigate_up))
+                        }
+                    },
+                    title = { Text(stringResource(R.string.settings_title)) },
+                )
+                // Where what cannot be opened from here is said; it stays while the list scrolls.
+                AppStatusLine()
+            }
         },
     ) { padding ->
         Column(
@@ -184,11 +190,13 @@ fun SettingsScreen(navigator: Navigator) {
             Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(onClick = {
                     scope.launch { clipboard.setClipEntry(ClipEntry(ClipData.newPlainText(state.myId, state.myId))) }
+                    // Android 13 and later say so themselves.
+                    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) context.tell(R.string.id_copied)
                 }) { Text(stringResource(R.string.action_copy_id)) }
                 val title = stringResource(R.string.share_id_title)
                 OutlinedButton(onClick = {
                     val send = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, state.myId)
-                    context.startOrTell(Intent.createChooser(send, title), R.string.no_sharing)
+                    context.startOrTell(Intent.createChooser(send, title), R.string.no_sharing, what = "sharing the Contact ID")
                 }) { Text(stringResource(R.string.share)) }
             }
             HorizontalDivider()
@@ -276,6 +284,7 @@ fun SettingsScreen(navigator: Navigator) {
                 if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
                     !context.tryStart(
                         Intent(SystemSettings.ACTION_APP_LOCALE_SETTINGS, Uri.fromParts("package", context.packageName, null)),
+                        quiet = true,
                     )
                 ) {
                     choosingLanguage = true
@@ -284,10 +293,12 @@ fun SettingsScreen(navigator: Navigator) {
             LinkRow(stringResource(R.string.notifications_setting), stringResource(R.string.notifications_setting_help)) {
                 val notifications = Intent(SystemSettings.ACTION_APP_NOTIFICATION_SETTINGS)
                     .putExtra(SystemSettings.EXTRA_APP_PACKAGE, context.packageName)
-                if (!context.tryStart(notifications)) {
+                // One line in the log, once neither could be started.
+                if (!context.tryStart(notifications, quiet = true)) {
                     context.startOrTell(
                         Intent(SystemSettings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", context.packageName, null)),
                         R.string.screen_unavailable,
+                        what = "APP_NOTIFICATION_SETTINGS or APPLICATION_DETAILS_SETTINGS",
                     )
                 }
             }

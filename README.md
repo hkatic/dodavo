@@ -159,6 +159,7 @@ A release therefore consists of three files on the GitHub release `v<version>`: 
 | `src/platform/` | what differs between the systems, below the interface |
 | `crates/dodavo-ffi/` | the state of the Mac program, and what Swift calls |
 | `macos/` | the Mac interface in Swift, its bundle, and scripts to build and publish it |
+| `src/source.rs` | what a send reads, and how it opens it |
 | `src/archive.rs` | zipping and unzipping folders (rejects unsafe paths), safe file names |
 | `src/i18n/` | user interface translations, one string table per language |
 | `src/app.rs` | application state; passes network and update events to the UI thread |

@@ -1,19 +1,25 @@
 package com.hrvojekatic.dodavo
 
 import android.Manifest
+import android.content.ActivityNotFoundException
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.os.Build
 import androidx.activity.result.contract.ActivityResultContract
+import androidx.annotation.StringRes
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.rule.GrantPermissionRule
+import com.hrvojekatic.dodavo.ui.common.container
 import com.hrvojekatic.dodavo.ui.common.launchOrTell
+import com.hrvojekatic.dodavo.ui.common.notStarted
 import com.hrvojekatic.dodavo.ui.common.startOrTell
 import com.hrvojekatic.dodavo.ui.common.tryStart
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -55,27 +61,43 @@ class StartingOtherAppsTest {
         ActivityScenario.launch(MainActivity::class.java).use { it.onActivity(block) }
     }
 
-    @Test
-    fun anIntentThatNothingTakesIsNotStarted() = onActivity { activity ->
-        assertFalse(activity.tryStart(nothingTakes))
+    /** That [start] starts nothing, and that the status line then says [text]. */
+    private fun assertTells(@StringRes text: Int, start: (MainActivity) -> Boolean) = onActivity { activity ->
+        val repository = activity.container.repository
+        val before = repository.announcement.value?.serial ?: 0
+        assertFalse("something was started", start(activity))
+        val said = repository.announcement.value
+        assertTrue("nothing was said", said != null && said.serial > before)
+        assertEquals(activity.getString(text), said?.text)
     }
 
     @Test
+    fun anIntentThatNothingTakesIsNotStarted() = onActivity { activity ->
+        val why = notStarted { activity.startActivity(nothingTakes) }
+        assertTrue("$why", why is ActivityNotFoundException)
+        assertFalse(activity.tryStart(nothingTakes))
+    }
+
+    /** What the SecurityException is caught for: Android finds the activity and does not let the app start it. */
+    @Test
     fun anActivityThatMayNotBeStartedIsNotStarted() = onActivity { activity ->
+        val why = notStarted { activity.startActivity(notExported) }
+        assertTrue("$why", why is SecurityException)
         assertFalse(activity.tryStart(notExported))
     }
 
     @Test
-    fun whatCannotStartIsTold() = onActivity { activity ->
-        activity.startOrTell(nothingTakes)
-        activity.startOrTell(notExported, R.string.screen_unavailable)
-    }
+    fun whatNothingTakesIsTold() = assertTells(R.string.no_app_to_open) { it.startOrTell(nothingTakes) }
 
     @Test
-    fun aMissingPickerIsTold() = onActivity { activity ->
+    fun whatMayNotBeStartedIsTold() =
+        assertTells(R.string.screen_unavailable) { it.startOrTell(notExported, R.string.screen_unavailable) }
+
+    @Test
+    fun aMissingPickerIsTold() = assertTells(R.string.no_file_picker) { activity ->
         val launcher = activity.activityResultRegistry.register("no-picker", NoPicker) {}
         try {
-            activity.launchOrTell(launcher, Unit, Intent.ACTION_OPEN_DOCUMENT, R.string.no_file_picker)
+            activity.launchOrTell(launcher, Unit, R.string.no_file_picker)
         } finally {
             launcher.unregister()
         }

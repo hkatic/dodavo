@@ -35,6 +35,7 @@ import com.hrvojekatic.dodavo.R
 import com.hrvojekatic.dodavo.core.CoreState
 import com.hrvojekatic.dodavo.ui.LicensesKey
 import com.hrvojekatic.dodavo.ui.Navigator
+import com.hrvojekatic.dodavo.ui.common.AppStatusLine
 import com.hrvojekatic.dodavo.ui.common.container
 import com.hrvojekatic.dodavo.ui.common.startOrTell
 import com.hrvojekatic.dodavo.ui.common.tell
@@ -74,7 +75,11 @@ private suspend fun shareLog(context: Context) {
         .putExtra(Intent.EXTRA_STREAM, uri)
         .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
     intent.clipData = ClipData.newRawUri("", uri)
-    context.startOrTell(Intent.createChooser(intent, context.getString(R.string.share_log)), R.string.no_sharing)
+    context.startOrTell(
+        Intent.createChooser(intent, context.getString(R.string.share_log)),
+        R.string.no_sharing,
+        what = "sharing the log",
+    )
 }
 
 /** The name, the version, and the notices that the GPL asks for. */
@@ -88,14 +93,18 @@ fun AboutScreen(navigator: Navigator) {
     fun browse(url: String) = context.startOrTell(Intent(Intent.ACTION_VIEW, url.toUri()), R.string.no_app_for_link)
     Scaffold(
         topBar = {
-            TopAppBar(
-                navigationIcon = {
-                    IconButton(onClick = navigator::back) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.navigate_up))
-                    }
-                },
-                title = { Text(stringResource(R.string.about_title)) },
-            )
+            Column {
+                TopAppBar(
+                    navigationIcon = {
+                        IconButton(onClick = navigator::back) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.navigate_up))
+                        }
+                    },
+                    title = { Text(stringResource(R.string.about_title)) },
+                )
+                // Where a link or Share log that cannot be opened is said.
+                AppStatusLine()
+            }
         },
     ) { padding ->
         Column(
