@@ -2,7 +2,7 @@
 
 *Dodavo* comes from the Croatian *dodati*, "to hand over", and is pronounced "doh-DAH-voh".
 
-Send files and folders directly from one device to another: Windows PCs, Macs with Apple silicon, and Android phones and tablets. You don't need an account, a cloud upload, a ZIP file you made yourself, or a link. What follows is mostly about Windows; [the Mac version](#the-mac-version) and [the Android version](#the-android-version) have their own sections.
+Send files and folders directly from one computer to another, on Windows and on Macs with Apple silicon. You don't need an account, a cloud upload, a ZIP file you made yourself, or a link. What follows is mostly about Windows; [the Mac version](#the-mac-version) has its own section.
 
 - **Send File / Send Folder** to a person in your recipient list (from the File menu, the right-click menu, the buttons, or by dragging items onto a person).
 - **Several recipients at once:** check their boxes in the list (Space) and send as usual; each person gets a transfer of their own.
@@ -26,7 +26,7 @@ Send files and folders directly from one device to another: Windows PCs, Macs wi
 - Minimizes to the notification area so files can be received in the background, with an optional "Start with Windows" and "Always start minimized". Notifications report finished, paused and interrupted transfers, also while their windows are hidden.
 - Checks once a day whether a newer version has been released and installs it on request: the release notes are shown, the setup program is downloaded, checked against its published size, SHA-256 and Ed25519 signature, and run silently, and Dodavo starts again by itself. Help → Check for Updates… checks at any time; the daily check can be turned off in Settings.
 - Full help for keyboard and screen reader users (Help → View Help, or F1), in every supported language.
-- A log for finding out what went wrong (Help → Show Log File, which opens File Explorer with `Dodavo.log` selected; Help → Show Log in Finder on a Mac, About Dodavo → Share log on Android). It says what Dodavo did, on which version of the system, and which errors came up, without the names of files, folders, people or devices, without chat messages, Contact IDs or IP addresses, and with times in UTC. It stays on your device, at about 2 MB at most, until you send it to someone yourself.
+- A log for finding out what went wrong (Help → Show Log File, which opens File Explorer with `Dodavo.log` selected; Help → Show Log in Finder on a Mac). It says what Dodavo did, on which version of the system, and which errors came up, without the names of files, folders, people or devices, without chat messages, Contact IDs or IP addresses, and with times in UTC. It stays on your device, at about 2 MB at most, until you send it to someone yourself.
 - Free software under the GNU General Public License, version 3 or later: Help → License shows the license and the licenses of the components built into Dodavo, and Help → About the version, author and website. Help → Donate opens the author's PayPal page (https://paypal.me/hrvix).
 - Available in English, Croatian, Serbian (Latin) and Slovenian. It follows the Windows display language, and you can choose another one in Settings.
 
@@ -60,20 +60,6 @@ A native Mac app in Swift and AppKit, which follows Apple's terms and interface 
 - Folder names that Windows cannot take (`:`, `?`, …) arrive changed on Windows and as they were on another Mac; items that only mean something to macOS are left out. Finder tags and other extended attributes do not travel.
 
 Building: `macos/build.sh`, which needs Xcode's command line tools and Rust (`rustup`), writes `target/macos/Dodavo.app`. `macos/release.sh` makes the final release in one command: tests, build, signing with a Developer ID certificate, notarization and a check of the result. Two copies side by side: `open -n target/macos/Dodavo.app --args --profile alice`.
-
-## The Android version
-
-A native Android app in Kotlin, with Jetpack Compose and Material 3, on the same Rust core, which follows Android's terms and design and is built for TalkBack. It exchanges transfers with Windows and Mac copies in both directions.
-
-- Android 8.0 or later, on phones and tablets (arm64 and x86_64).
-- Two screens, **Recipients** and **Transfers**. A tap on a recipient opens Android's file picker; its menu has **Send a folder**, **Select** (for sending to several recipients at once, as a long press does), **Edit**, **Copy Contact ID**, **Block** and **Remove**. Other apps can share items to Dodavo.
-- A picked file is read where it is, for as long as its transfer lasts, also after a restart; a picked folder is packed straight from where it is. What another app shares is copied first, and the copy goes with its transfer.
-- Received items go to `Download/Dodavo`. From recipients, transfers can start by themselves.
-- An offer that arrives while Dodavo is not in front comes as a notification, with **Review** and **Decline**. While data moves, a notification shows the transfer. With **Receive in the background** on (off by default), Dodavo stays reachable while it is closed, also after a restart of the device.
-- The Contact ID lives in the app's own storage and is not backed up; Android's backup takes the recipients and settings.
-- Updates come from Google Play: the Android version has no updater of its own, and no Donate link (Google Play's rules for payments). Help, About and the licenses are in the app.
-
-Building: `android/build.sh [--debug]`, which needs JDK 21, the Android SDK with NDK r30, `cargo-ndk` and the Rust targets `aarch64-linux-android` and `x86_64-linux-android`, writes the app bundle (or a debug APK) to `target/android/`, and checks its native library with `android/check-elf.sh`. `android/release.sh` makes the final release in one command, signed with the upload key; `android/play/` has what Play Console asks for. `android/test-on-device.sh` runs the core's tests on a connected device.
 
 ## How connections work
 
@@ -169,13 +155,10 @@ A release therefore consists of three files on the GitHub release `v<version>`: 
 | Path | Purpose |
 | --- | --- |
 | `src/net/` | iroh endpoint, transfer protocol, sending and receiving |
-| `src/view.rs` | what a transfer shows and what can be done with it, for the Mac and Android interfaces so far |
+| `src/view.rs` | what a transfer shows and what can be done with it, for the Mac interface so far |
 | `src/platform/` | what differs between the systems, below the interface |
-| `crates/dodavo-ffi/` | the state of the Mac and Android programs, and what Swift and Kotlin call |
+| `crates/dodavo-ffi/` | the state of the Mac program, and what Swift calls |
 | `macos/` | the Mac interface in Swift, its bundle, and scripts to build and publish it |
-| `crates/dodavo-android/` | the library the Android app loads (JNI), and the Android string resources made from `src/i18n/android` |
-| `android/` | the Android app in Kotlin (Gradle project), and scripts to build, check and release it |
-| `src/source.rs` | what a send reads: paths, and Android's documents, which only the app can open |
 | `src/archive.rs` | zipping and unzipping folders (rejects unsafe paths), safe file names |
 | `src/i18n/` | user interface translations, one string table per language |
 | `src/app.rs` | application state; passes network and update events to the UI thread |
