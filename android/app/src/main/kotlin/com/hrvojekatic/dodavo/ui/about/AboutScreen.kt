@@ -1,10 +1,8 @@
 package com.hrvojekatic.dodavo.ui.about
 
-import android.content.ActivityNotFoundException
 import android.content.ClipData
 import android.content.Context
 import android.content.Intent
-import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -38,6 +36,7 @@ import com.hrvojekatic.dodavo.core.CoreState
 import com.hrvojekatic.dodavo.ui.LicensesKey
 import com.hrvojekatic.dodavo.ui.Navigator
 import com.hrvojekatic.dodavo.ui.common.container
+import com.hrvojekatic.dodavo.ui.common.startOrTell
 import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -66,11 +65,7 @@ private suspend fun shareLog(context: Context) {
         .putExtra(Intent.EXTRA_STREAM, uri)
         .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
     intent.clipData = ClipData.newRawUri("", uri)
-    try {
-        context.startActivity(Intent.createChooser(intent, context.getString(R.string.share_log)))
-    } catch (_: ActivityNotFoundException) {
-        Toast.makeText(context, R.string.no_app_to_open, Toast.LENGTH_LONG).show()
-    }
+    context.startOrTell(Intent.createChooser(intent, context.getString(R.string.share_log)))
 }
 
 /** The name, the version, and the notices that the GPL asks for. */
@@ -81,7 +76,7 @@ fun AboutScreen(navigator: Navigator) {
     val state by context.container.repository.state.collectAsStateWithLifecycle()
     val started = (state as? CoreState.Running)?.started
     val scope = rememberCoroutineScope()
-    fun browse(url: String) = context.startActivity(Intent(Intent.ACTION_VIEW, url.toUri()))
+    fun browse(url: String) = context.startOrTell(Intent(Intent.ACTION_VIEW, url.toUri()))
     Scaffold(
         topBar = {
             TopAppBar(

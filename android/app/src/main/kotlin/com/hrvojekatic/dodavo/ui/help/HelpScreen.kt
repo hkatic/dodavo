@@ -24,6 +24,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.webkit.WebViewAssetLoader
 import com.hrvojekatic.dodavo.R
 import com.hrvojekatic.dodavo.ui.Navigator
+import com.hrvojekatic.dodavo.ui.common.startOrTell
 
 /** The help in the app's language (assets/help, from res/help/android). */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -65,7 +66,7 @@ fun HelpScreen(navigator: Navigator) {
                         /** Other sites open in the browser. */
                         override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
                             if (request.url.host == "appassets.androidplatform.net") return false
-                            context.startActivity(Intent(Intent.ACTION_VIEW, request.url))
+                            context.startOrTell(Intent(Intent.ACTION_VIEW, request.url))
                             return true
                         }
                     }

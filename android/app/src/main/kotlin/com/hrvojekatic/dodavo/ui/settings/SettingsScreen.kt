@@ -78,6 +78,8 @@ import com.hrvojekatic.dodavo.ui.Navigator
 import com.hrvojekatic.dodavo.ui.common.LimitSizeFields
 import com.hrvojekatic.dodavo.ui.common.MessageDialog
 import com.hrvojekatic.dodavo.ui.common.appViewModel
+import com.hrvojekatic.dodavo.ui.common.startOrTell
+import com.hrvojekatic.dodavo.ui.common.tryStart
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -268,20 +270,26 @@ fun SettingsScreen(navigator: Navigator) {
                 HorizontalDivider()
             }
             LinkRow(stringResource(R.string.blocked_senders), null) { navigator.go(BlockedKey) }
+            // Some makers leave these screens of the system out: then the app's own list of
+            // languages, and the app's info, from which its notifications are a tap away.
             LinkRow(stringResource(R.string.language_setting), stringResource(R.string.language_setting_help)) {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                    context.startActivity(
+                val shown = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    context.tryStart(
                         Intent(SystemSettings.ACTION_APP_LOCALE_SETTINGS, Uri.fromParts("package", context.packageName, null)),
                     )
                 } else {
-                    choosingLanguage = true
+                    false
                 }
+                if (!shown) choosingLanguage = true
             }
             LinkRow(stringResource(R.string.notifications_setting), stringResource(R.string.notifications_setting_help)) {
-                context.startActivity(
-                    Intent(SystemSettings.ACTION_APP_NOTIFICATION_SETTINGS)
-                        .putExtra(SystemSettings.EXTRA_APP_PACKAGE, context.packageName),
-                )
+                val notifications = Intent(SystemSettings.ACTION_APP_NOTIFICATION_SETTINGS)
+                    .putExtra(SystemSettings.EXTRA_APP_PACKAGE, context.packageName)
+                if (!context.tryStart(notifications)) {
+                    context.startOrTell(
+                        Intent(SystemSettings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", context.packageName, null)),
+                    )
+                }
             }
         }
     }

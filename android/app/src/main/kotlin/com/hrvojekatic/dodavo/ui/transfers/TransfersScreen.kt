@@ -1,12 +1,10 @@
 package com.hrvojekatic.dodavo.ui.transfers
 
 import android.app.DownloadManager
-import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.os.Environment
 import android.webkit.MimeTypeMap
-import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
@@ -53,6 +51,7 @@ import com.hrvojekatic.dodavo.ui.OfferBanner
 import com.hrvojekatic.dodavo.ui.common.ConfirmDialog
 import com.hrvojekatic.dodavo.ui.common.StatusLine
 import com.hrvojekatic.dodavo.ui.common.appViewModel
+import com.hrvojekatic.dodavo.ui.common.startOrTell
 import com.hrvojekatic.dodavo.ui.waitingOffers
 import java.io.File
 import kotlinx.coroutines.flow.SharingStarted
@@ -237,19 +236,11 @@ private fun uriOf(context: Context, file: File) =
 private fun typeOf(file: File): String =
     MimeTypeMap.getSingleton().getMimeTypeFromExtension(file.extension.lowercase()) ?: "application/octet-stream"
 
-private fun launch(context: Context, intent: Intent) {
-    try {
-        context.startActivity(intent)
-    } catch (_: ActivityNotFoundException) {
-        Toast.makeText(context, context.getString(R.string.no_app_to_open), Toast.LENGTH_LONG).show()
-    }
-}
-
 private fun open(context: Context, file: File) {
     val intent = Intent(Intent.ACTION_VIEW)
         .setDataAndType(uriOf(context, file), typeOf(file))
         .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-    launch(context, intent)
+    context.startOrTell(intent)
 }
 
 private fun share(context: Context, file: File) {
@@ -257,10 +248,10 @@ private fun share(context: Context, file: File) {
         .setType(typeOf(file))
         .putExtra(Intent.EXTRA_STREAM, uriOf(context, file))
         .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-    launch(context, Intent.createChooser(intent, file.name))
+    context.startOrTell(Intent.createChooser(intent, file.name))
 }
 
 /** The system's own view of downloads, where Download/Dodavo is. */
 private fun showDownloads(context: Context) {
-    launch(context, Intent(DownloadManager.ACTION_VIEW_DOWNLOADS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    context.startOrTell(Intent(DownloadManager.ACTION_VIEW_DOWNLOADS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
 }

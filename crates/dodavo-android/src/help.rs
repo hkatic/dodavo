@@ -72,10 +72,12 @@ fn pages_are_well_formed() {
         let unique: BTreeSet<_> = ids.iter().collect();
         assert_eq!(unique.len(), ids.len(), "{name}: ids must be unique");
         for href in attributes(html, "href") {
+            // The assets hold the page and its style; the app opens web
+            // addresses in the browser (`HelpScreen`).
             if let Some(target) = href.strip_prefix('#') {
                 assert!(ids.contains(&target), "{name}: link to missing #{target}");
-            } else {
-                assert_eq!(href, "help.css", "{name}: the page links only to its style");
+            } else if !href.starts_with("https://") {
+                assert_eq!(href, "help.css", "{name}: no such asset: {href}");
             }
         }
         let levels = heading_levels(html);

@@ -1,6 +1,9 @@
 package com.hrvojekatic.dodavo.ui.common
 
+import android.content.ActivityNotFoundException
 import android.content.Context
+import android.content.Intent
+import android.widget.Toast
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -49,6 +52,23 @@ inline fun <reified VM : ViewModel> appViewModel(crossinline create: (AppContain
             initializer { create((this[APPLICATION_KEY] as DodavoApp).container) }
         },
     )
+
+/**
+ * Starts [intent]; false when nothing on the device takes it (no browser in a
+ * work profile, a system screen that the maker left out).
+ */
+fun Context.tryStart(intent: Intent): Boolean =
+    try {
+        startActivity(intent)
+        true
+    } catch (_: ActivityNotFoundException) {
+        false
+    }
+
+/** Starts [intent], or says that no app can open it. */
+fun Context.startOrTell(intent: Intent) {
+    if (!tryStart(intent)) Toast.makeText(this, R.string.no_app_to_open, Toast.LENGTH_LONG).show()
+}
 
 /** A Contact ID as people read it: `3f8a9c1e…e41b07`. */
 fun shortId(id: String): String = if (id.length <= 16) id else "${id.take(8)}…${id.takeLast(6)}"
