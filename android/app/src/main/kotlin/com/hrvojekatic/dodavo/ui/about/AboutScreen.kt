@@ -37,6 +37,7 @@ import com.hrvojekatic.dodavo.ui.LicensesKey
 import com.hrvojekatic.dodavo.ui.Navigator
 import com.hrvojekatic.dodavo.ui.common.container
 import com.hrvojekatic.dodavo.ui.common.startOrTell
+import com.hrvojekatic.dodavo.ui.common.tell
 import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -52,20 +53,28 @@ const val PRIVACY_POLICY_URL = "https://github.com/hkatic/dodavo/blob/master/PRI
  */
 private suspend fun shareLog(context: Context) {
     val path = context.container.repository.flushLog()
-    if (path.isEmpty()) return
-    val copy = withContext(Dispatchers.IO) {
-        runCatching {
-            val folder = File(context.cacheDir, "log").apply { mkdirs() }
-            File(path).copyTo(File(folder, "Dodavo.log"), overwrite = true)
-        }.getOrNull()
-    } ?: return
+    // No log (the core has none), or no room for the copy in the cache.
+    val copy = path.takeIf { it.isNotEmpty() }?.let {
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val folder = File(context.cacheDir, "log").apply { mkdirs() }
+                File(it).copyTo(File(folder, "Dodavo.log"), overwrite = true)
+            }.onFailure { e ->
+                context.container.repository.log("warn", "the log could not be copied for sharing (${e.javaClass.simpleName})")
+            }.getOrNull()
+        }
+    }
+    if (copy == null) {
+        context.tell(R.string.log_not_ready)
+        return
+    }
     val uri = FileProvider.getUriForFile(context, "${context.packageName}.files", copy)
     val intent = Intent(Intent.ACTION_SEND)
         .setType("text/plain")
         .putExtra(Intent.EXTRA_STREAM, uri)
         .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
     intent.clipData = ClipData.newRawUri("", uri)
-    context.startOrTell(Intent.createChooser(intent, context.getString(R.string.share_log)))
+    context.startOrTell(Intent.createChooser(intent, context.getString(R.string.share_log)), R.string.no_sharing)
 }
 
 /** The name, the version, and the notices that the GPL asks for. */
@@ -76,7 +85,7 @@ fun AboutScreen(navigator: Navigator) {
     val state by context.container.repository.state.collectAsStateWithLifecycle()
     val started = (state as? CoreState.Running)?.started
     val scope = rememberCoroutineScope()
-    fun browse(url: String) = context.startOrTell(Intent(Intent.ACTION_VIEW, url.toUri()))
+    fun browse(url: String) = context.startOrTell(Intent(Intent.ACTION_VIEW, url.toUri()), R.string.no_app_for_link)
     Scaffold(
         topBar = {
             TopAppBar(

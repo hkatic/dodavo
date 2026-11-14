@@ -248,10 +248,13 @@ private fun share(context: Context, file: File) {
         .setType(typeOf(file))
         .putExtra(Intent.EXTRA_STREAM, uriOf(context, file))
         .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-    context.startOrTell(Intent.createChooser(intent, file.name))
+    context.startOrTell(Intent.createChooser(intent, file.name), R.string.no_sharing)
 }
 
 /** The system's own view of downloads, where Download/Dodavo is. */
 private fun showDownloads(context: Context) {
-    context.startOrTell(Intent(DownloadManager.ACTION_VIEW_DOWNLOADS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    context.startOrTell(
+        Intent(DownloadManager.ACTION_VIEW_DOWNLOADS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+        R.string.no_app_for_folder,
+    )
 }

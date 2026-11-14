@@ -188,7 +188,7 @@ fun SettingsScreen(navigator: Navigator) {
                 val title = stringResource(R.string.share_id_title)
                 OutlinedButton(onClick = {
                     val send = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, state.myId)
-                    context.startActivity(Intent.createChooser(send, title))
+                    context.startOrTell(Intent.createChooser(send, title), R.string.no_sharing)
                 }) { Text(stringResource(R.string.share)) }
             }
             HorizontalDivider()
@@ -273,14 +273,13 @@ fun SettingsScreen(navigator: Navigator) {
             // Some makers leave these screens of the system out: then the app's own list of
             // languages, and the app's info, from which its notifications are a tap away.
             LinkRow(stringResource(R.string.language_setting), stringResource(R.string.language_setting_help)) {
-                val shown = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                    context.tryStart(
+                if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+                    !context.tryStart(
                         Intent(SystemSettings.ACTION_APP_LOCALE_SETTINGS, Uri.fromParts("package", context.packageName, null)),
                     )
-                } else {
-                    false
+                ) {
+                    choosingLanguage = true
                 }
-                if (!shown) choosingLanguage = true
             }
             LinkRow(stringResource(R.string.notifications_setting), stringResource(R.string.notifications_setting_help)) {
                 val notifications = Intent(SystemSettings.ACTION_APP_NOTIFICATION_SETTINGS)
@@ -288,6 +287,7 @@ fun SettingsScreen(navigator: Navigator) {
                 if (!context.tryStart(notifications)) {
                     context.startOrTell(
                         Intent(SystemSettings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", context.packageName, null)),
+                        R.string.screen_unavailable,
                     )
                 }
             }
@@ -367,7 +367,10 @@ private fun LinkRow(title: String, help: String?, onClick: () -> Unit) {
     )
 }
 
-/** Android 12 and earlier: the app's language, from its own list. */
+/**
+ * The app's language, from its own list: on Android 12 and earlier, and on a
+ * later one whose maker left out the system's screen for it.
+ */
 @Composable
 private fun LanguageDialog(languages: List<Pair<String, String>>, onDismiss: () -> Unit) {
     val current = AppCompatDelegate.getApplicationLocales().toLanguageTags()

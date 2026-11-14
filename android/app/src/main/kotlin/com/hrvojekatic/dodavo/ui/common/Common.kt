@@ -4,6 +4,8 @@ import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.widget.Toast
+import androidx.activity.result.ActivityResultLauncher
+import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -39,6 +41,7 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import com.hrvojekatic.dodavo.AppContainer
 import com.hrvojekatic.dodavo.DodavoApp
 import com.hrvojekatic.dodavo.R
+import kotlinx.coroutines.launch
 
 /** The app's container, from any context. */
 val Context.container: AppContainer
@@ -55,19 +58,44 @@ inline fun <reified VM : ViewModel> appViewModel(crossinline create: (AppContain
 
 /**
  * Starts [intent]; false when nothing on the device takes it (no browser in a
- * work profile, a system screen that the maker left out).
+ * work profile, a system screen that the maker left out), or when Android does
+ * not let Dodavo start what takes it (a screen that its maker keeps to itself).
  */
-fun Context.tryStart(intent: Intent): Boolean =
-    try {
-        startActivity(intent)
-        true
-    } catch (_: ActivityNotFoundException) {
-        false
-    }
+fun Context.tryStart(intent: Intent): Boolean = started(intent.action) { startActivity(intent) }
 
-/** Starts [intent], or says that no app can open it. */
-fun Context.startOrTell(intent: Intent) {
-    if (!tryStart(intent)) Toast.makeText(this, R.string.no_app_to_open, Toast.LENGTH_LONG).show()
+/** Starts [intent], or says [unavailable]: by default, that no app can open the item. */
+fun Context.startOrTell(intent: Intent, @StringRes unavailable: Int = R.string.no_app_to_open) {
+    if (!tryStart(intent)) tell(unavailable)
+}
+
+/**
+ * Launches [launcher] with [input], or says [unavailable]. [action] is what
+ * the launcher's intent asks for, for the log.
+ */
+fun <I> Context.launchOrTell(launcher: ActivityResultLauncher<I>, input: I, action: String, @StringRes unavailable: Int) {
+    if (!started(action) { launcher.launch(input) }) tell(unavailable)
+}
+
+/** Says [text] in a toast, which TalkBack reads. */
+fun Context.tell(@StringRes text: Int) {
+    Toast.makeText(this, text, Toast.LENGTH_LONG).show()
+}
+
+/** Whether [start] started an activity for [action]; what kept it from that goes into the log. */
+private inline fun Context.started(action: String?, start: () -> Unit): Boolean {
+    val why = try {
+        start()
+        return true
+    } catch (e: ActivityNotFoundException) {
+        e
+    } catch (e: SecurityException) {
+        e
+    }
+    // VIEW, OPEN_DOCUMENT: the log's scrubber takes a whole action for the name of a host.
+    val what = action?.substringAfterLast('.') ?: "a named activity"
+    val container = container
+    container.scope.launch { container.repository.log("warn", "nothing started for $what (${why.javaClass.simpleName})") }
+    return false
 }
 
 /** A Contact ID as people read it: `3f8a9c1e…e41b07`. */

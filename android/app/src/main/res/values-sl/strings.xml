@@ -115,6 +115,13 @@
     <string name="cannot_start">"Dodava ni mogoče zagnati"</string>
     <string name="ok">"V redu"</string>
     <string name="no_app_to_open">"Nobena aplikacija ne more odpreti tega elementa."</string>
+    <string name="no_app_for_link">"Nobena aplikacija ne more odpreti te povezave."</string>
+    <string name="no_app_for_folder">"Nobena aplikacija ne more pokazati te mape."</string>
+    <string name="no_sharing">"Deljenje v tej napravi ni na voljo."</string>
+    <string name="screen_unavailable">"Ta zaslon v tej napravi ni na voljo."</string>
+    <string name="no_file_picker">"V tej napravi ni aplikacije za izbiro datotek."</string>
+    <string name="no_folder_picker">"V tej napravi ni aplikacije za izbiro mape."</string>
+    <string name="log_not_ready">"Dnevnika ni mogoče pripraviti za deljenje."</string>
     <string name="item_unreadable">"Dodavo tega elementa ne more prebrati."</string>
     <string name="channel_incoming">"Dohodni elementi"</string>
     <string name="channel_transfers">"Prenosi, ki potekajo"</string>

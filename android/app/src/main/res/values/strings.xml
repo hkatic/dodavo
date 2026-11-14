@@ -116,6 +116,13 @@
     <string name="cannot_start">"Dodavo cannot start"</string>
     <string name="ok">"OK"</string>
     <string name="no_app_to_open">"No app can open this item."</string>
+    <string name="no_app_for_link">"No app can open this link."</string>
+    <string name="no_app_for_folder">"No app can show this folder."</string>
+    <string name="no_sharing">"Sharing is not available on this device."</string>
+    <string name="screen_unavailable">"This screen is not available on this device."</string>
+    <string name="no_file_picker">"This device has no app for choosing files."</string>
+    <string name="no_folder_picker">"This device has no app for choosing a folder."</string>
+    <string name="log_not_ready">"The log could not be prepared for sharing."</string>
     <string name="item_unreadable">"Dodavo cannot read this item."</string>
     <string name="channel_incoming">"Incoming items"</string>
     <string name="channel_transfers">"Running transfers"</string>

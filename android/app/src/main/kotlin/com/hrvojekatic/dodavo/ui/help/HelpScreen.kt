@@ -66,7 +66,7 @@ fun HelpScreen(navigator: Navigator) {
                         /** Other sites open in the browser. */
                         override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
                             if (request.url.host == "appassets.androidplatform.net") return false
-                            context.startOrTell(Intent(Intent.ACTION_VIEW, request.url))
+                            context.startOrTell(Intent(Intent.ACTION_VIEW, request.url), R.string.no_app_for_link)
                             return true
                         }
                     }

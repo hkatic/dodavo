@@ -115,6 +115,13 @@
     <string name="cannot_start">"Dodavo se ne može pokrenuti"</string>
     <string name="ok">"U redu"</string>
     <string name="no_app_to_open">"Nijedna aplikacija ne može otvoriti ovu stavku."</string>
+    <string name="no_app_for_link">"Nijedna aplikacija ne može otvoriti ovu poveznicu."</string>
+    <string name="no_app_for_folder">"Nijedna aplikacija ne može prikazati ovu mapu."</string>
+    <string name="no_sharing">"Dijeljenje nije dostupno na ovom uređaju."</string>
+    <string name="screen_unavailable">"Ovaj zaslon nije dostupan na ovom uređaju."</string>
+    <string name="no_file_picker">"Na ovom uređaju nema aplikacije za odabir datoteka."</string>
+    <string name="no_folder_picker">"Na ovom uređaju nema aplikacije za odabir mape."</string>
+    <string name="log_not_ready">"Zapisnik nije moguće pripremiti za dijeljenje."</string>
     <string name="item_unreadable">"Dodavo ne može pročitati ovu stavku."</string>
     <string name="channel_incoming">"Dolazne stavke"</string>
     <string name="channel_transfers">"Prijenosi u tijeku"</string>

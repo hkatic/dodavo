@@ -173,6 +173,13 @@ super::strings! {
         cannot_start,
         ok,
         no_app_to_open,
+        no_app_for_link,
+        no_app_for_folder,
+        no_sharing,
+        screen_unavailable,
+        no_file_picker,
+        no_folder_picker,
+        log_not_ready,
         item_unreadable,
         // Notifications.
         channel_incoming,

@@ -58,7 +58,9 @@ import com.hrvojekatic.dodavo.ui.common.ConfirmDialog
 import com.hrvojekatic.dodavo.ui.common.MessageDialog
 import com.hrvojekatic.dodavo.ui.common.StatusLine
 import com.hrvojekatic.dodavo.ui.common.appViewModel
+import com.hrvojekatic.dodavo.ui.common.launchOrTell
 import com.hrvojekatic.dodavo.ui.common.shortId
+import com.hrvojekatic.dodavo.ui.common.startOrTell
 import com.hrvojekatic.dodavo.ui.waitingOffers
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.rememberCoroutineScope
@@ -108,13 +110,14 @@ fun RecipientsScreen(navigator: Navigator) {
             viewModel.sendFolder(targets, tree)
         }
     }
+    // Some devices have no picker (a maker's build without Files, Android TV).
     fun sendFiles(to: List<Contact>) {
         targets = to
-        pickFiles.launch(arrayOf("*/*"))
+        context.launchOrTell(pickFiles, arrayOf("*/*"), Intent.ACTION_OPEN_DOCUMENT, R.string.no_file_picker)
     }
     fun sendFolder(to: List<Contact>) {
         targets = to
-        pickFolder.launch(null)
+        context.launchOrTell(pickFolder, null, Intent.ACTION_OPEN_DOCUMENT_TREE, R.string.no_folder_picker)
     }
     val copied = stringResource(R.string.id_copied)
     val shareTitle = stringResource(R.string.share_id_title)
@@ -163,7 +166,7 @@ fun RecipientsScreen(navigator: Navigator) {
                                     menuOpen = false
                                     val send = Intent(Intent.ACTION_SEND).setType("text/plain")
                                         .putExtra(Intent.EXTRA_TEXT, state.myId)
-                                    context.startActivity(Intent.createChooser(send, shareTitle))
+                                    context.startOrTell(Intent.createChooser(send, shareTitle), R.string.no_sharing)
                                 },
                                 enabled = state.myId.isNotEmpty(),
                             )
